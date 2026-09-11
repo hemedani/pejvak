@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 
 import { AnnotationList } from "@/components/annotation-list";
 import { SessionCard } from "@/components/session-card";
+import { StatCell } from "@/components/stat-cell";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -14,19 +15,6 @@ import { computeTrackStats } from "@/lib/trackStats";
 
 function formatLastPlayed(value: number | null): string {
   return value ? new Date(value).toLocaleDateString() : "Never";
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <ThemedView type="backgroundElement" style={styles.stat}>
-      <ThemedText type="smallBold" numberOfLines={1}>
-        {value}
-      </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-    </ThemedView>
-  );
 }
 
 export default function TrackDetailScreen() {
@@ -58,9 +46,17 @@ export default function TrackDetailScreen() {
         </View>
 
         <View style={styles.statsRow}>
-          <Stat label="plays" value={String(stats.playCount)} />
-          <Stat label="listened" value={formatDuration(stats.totalListenTimeSec)} />
-          <Stat label="last played" value={formatLastPlayed(stats.lastPlayedAt)} />
+          <StatCell label="plays" value={String(stats.playCount)} style={styles.statCell} />
+          <StatCell
+            label="listened"
+            value={formatDuration(stats.totalListenTimeSec)}
+            style={styles.statCell}
+          />
+          <StatCell
+            label="last played"
+            value={formatLastPlayed(stats.lastPlayedAt)}
+            style={styles.statCell}
+          />
         </View>
 
         {track ? (
@@ -125,11 +121,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: Spacing.two,
   },
-  stat: {
+  statCell: {
     flex: 1,
-    gap: Spacing.half,
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
   },
   section: {
     gap: Spacing.two,

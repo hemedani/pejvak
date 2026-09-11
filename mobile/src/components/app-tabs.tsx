@@ -21,6 +21,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>History</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="clock.arrow.circlepath" md="history" />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="stats">
+        <NativeTabs.Trigger.Label>Stats</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="chart.bar" md="bar_chart" />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
