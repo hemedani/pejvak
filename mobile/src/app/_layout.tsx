@@ -6,6 +6,7 @@ import { useColorScheme } from "react-native";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useAuthStore } from "@/store/authStore";
+import { useSettingsStore } from "@/store/settingsStore";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -20,6 +21,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     void TrackPlayerService.recoverOrphanedSessions().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    void useSettingsStore.getState().load();
   }, []);
 
   return (
@@ -40,6 +45,10 @@ export default function RootLayout() {
             <Stack.Screen
               name="playlist/[id]"
               options={{ headerShown: true, title: "Playlist" }}
+            />
+            <Stack.Screen
+              name="settings"
+              options={{ headerShown: true, title: "Settings" }}
             />
           </Stack.Protected>
           <Stack.Protected guard={status !== "authenticated"}>

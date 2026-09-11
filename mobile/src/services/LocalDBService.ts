@@ -26,6 +26,7 @@ import type {
   LocalTrack,
   PlaybackCheckpoint,
   PlaylistItem,
+  PendingCounts,
   SaveCheckpointInput,
   SyncStatus,
   TrackDetailData,
@@ -619,6 +620,42 @@ async function deletePlaylist(id: string): Promise<void> {
   await db.runAsync("DELETE FROM playlists WHERE id = ?", [id]);
 }
 
+// --- Settings (key/value) -------------------------------------------------
+
+async function getSetting(key: string): Promise<string | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ value: string }>(
+    "SELECT value FROM settings WHERE key = ?",
+    [key],
+  );
+  return row?.value ?? null;
+}
+
+async function setSetting(key: string, value: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+    [key, value],
+  );
+}
+
+/** Rows queued for sync, per table. Table names are constants, not user input. */
+async function getPendingCounts(): Promise<PendingCounts> {
+  const db = await getDatabase();
+  const count = async (table: string): Promise<number> => {
+    const row = await db.getFirstAsync<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM ${table} WHERE sync_status IN ('pending', 'failed')`,
+    );
+    return row?.n ?? 0;
+  };
+  return {
+    tracks: await count("tracks"),
+    sessions: await count("sessions"),
+    annotations: await count("annotations"),
+    playlists: await count("playlists"),
+  };
+}
+
 async function setPlaylistSyncStatus(
   id: string,
   status: SyncStatus,
@@ -723,6 +760,9 @@ export const LocalDBService = {
   updatePlaylist,
   deletePlaylist,
   setPlaylistSyncStatus,
+  getSetting,
+  setSetting,
+  getPendingCounts,
   saveCheckpoint,
   getCheckpointBySession,
   getOrphanedCheckpoints,

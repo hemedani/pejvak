@@ -10,7 +10,6 @@ import { MaxContentWidth, Spacing } from "@/constants/theme";
 import type { LocalTrack } from "@/lib/db/types";
 import { LocalDBService } from "@/services/LocalDBService";
 import { importAudioFile } from "@/services/LibraryService";
-import { useAuthStore } from "@/store/authStore";
 
 function formatLastPlayed(value: number | null): string {
   if (!value) {
@@ -21,7 +20,6 @@ function formatLastPlayed(value: number | null): string {
 
 export default function LibraryScreen() {
   const router = useRouter();
-  const logout = useAuthStore((state) => state.logout);
   const [tracks, setTracks] = useState<LocalTrack[]>([]);
   const [importing, setImporting] = useState(false);
 
@@ -53,8 +51,10 @@ export default function LibraryScreen() {
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
         <View style={styles.header}>
           <ThemedText type="subtitle">Library</ThemedText>
-          <Pressable onPress={() => void logout()} accessibilityRole="button">
-            <ThemedText type="linkPrimary">Sign out</ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/settings" as Href)}>
+            <ThemedText type="linkPrimary">Settings</ThemedText>
           </Pressable>
         </View>
 

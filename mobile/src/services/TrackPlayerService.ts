@@ -15,6 +15,7 @@ import {
 import { LocalDBService } from "@/services/LocalDBService";
 import { syncPending } from "@/services/SyncService";
 import { usePlayerStore, type PlayerPatch } from "@/store/playerStore";
+import { useSettingsStore } from "@/store/settingsStore";
 
 type ActiveSession = {
   track: LocalTrack;
@@ -206,18 +207,21 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
   nextSessionStartSec = Math.round(startPositionSec);
   pendingSeekSec = startPositionSec > 0 ? startPositionSec : null;
 
+  const defaultSpeed = useSettingsStore.getState().defaultSpeed;
+
   patch({
     status: "loading",
     trackId: track.id,
     title: track.title,
     positionSec: Math.floor(startPositionSec),
     durationSec: track.durationSec,
-    playbackSpeed: 1,
+    playbackSpeed: defaultSpeed,
     error: null,
   });
 
   const instance = getPlayer();
   instance.replace({ uri: track.fileUri });
+  instance.setPlaybackRate(defaultSpeed);
   if (!lockScreenFailed) {
     try {
       instance.setActiveForLockScreen(

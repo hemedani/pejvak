@@ -99,6 +99,14 @@ export type TrackDetailData = {
   annotations: LocalAnnotation[];
 };
 
+/** Rows waiting to sync, per table. */
+export type PendingCounts = {
+  tracks: number;
+  sessions: number;
+  annotations: number;
+  playlists: number;
+};
+
 export type CreateTrackInput = {
   id?: string;
   contentHash: string;

@@ -1,6 +1,13 @@
 import { LATEST_SCHEMA_VERSION, MIGRATIONS } from "@/lib/db/migrations";
 
-const REQUIRED_TABLES = ["tracks", "sessions", "annotations", "playlists", "playback_checkpoints"];
+const REQUIRED_TABLES = [
+  "tracks",
+  "sessions",
+  "annotations",
+  "playlists",
+  "playback_checkpoints",
+  "settings",
+];
 
 function allSql(): string {
   return MIGRATIONS.flatMap((migration) => migration.up).join("\n");

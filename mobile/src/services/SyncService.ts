@@ -18,6 +18,7 @@ import {
   type SyncTransport,
 } from "@/lib/syncEngine";
 import { LocalDBService } from "@/services/LocalDBService";
+import { SettingsService } from "@/services/SettingsService";
 
 type RegisterTrackDetails = BackendActRequest<"main", "track", "registerTrack">["details"];
 type SyncLocalDataDetails = BackendActRequest<"main", "track", "syncLocalData">["details"];
@@ -361,6 +362,7 @@ export async function syncAll(batchSize?: number): Promise<SyncSummary> {
   const summary = await syncPending(batchSize);
   try {
     await pullFromServer();
+    await SettingsService.setLastSyncAt(Date.now());
   } catch {
     // Best-effort: the app stays usable; the next trigger retries.
   }
