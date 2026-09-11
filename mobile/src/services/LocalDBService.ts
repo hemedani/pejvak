@@ -31,6 +31,7 @@ import type {
   TrackDetailData,
 } from "@/lib/db/types";
 import type { HistoryItem } from "@/lib/history";
+import type { AnnotationUpdate, RemoteAnnotation, RemoteSession } from "@/lib/reconcile";
 
 function newId(): string {
   return Crypto.randomUUID();
@@ -265,6 +266,48 @@ async function getPendingSessions(limit = 50): Promise<LocalSession[]> {
   return rows.map(mapSession);
 }
 
+/** All local sessions (used by remote reconciliation). */
+async function getAllSessions(): Promise<LocalSession[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<SessionRow>("SELECT * FROM sessions");
+  return rows.map(mapSession);
+}
+
+/** Inserts a session pulled from the server, keeping its client/server ids. */
+async function insertRemoteSession(input: RemoteSession): Promise<void> {
+  const track = await getTrackByContentHash(input.contentHash);
+  if (!track) {
+    return;
+  }
+  const db = await getDatabase();
+  const id = input.clientId ?? input.serverId;
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT OR IGNORE INTO sessions (
+      id, server_id, track_id, content_hash, started_at, ended_at,
+      start_position_sec, end_position_sec, duration_listened_sec, playback_speed,
+      completed, interrupted, device_info, sync_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)`,
+    [
+      id,
+      input.serverId,
+      track.id,
+      input.contentHash,
+      input.startedAt,
+      input.endedAt,
+      Math.round(input.startPositionSec),
+      input.endPositionSec === null ? null : Math.round(input.endPositionSec),
+      Math.round(input.durationListenedSec),
+      input.playbackSpeed,
+      input.completed ? 1 : 0,
+      input.interrupted ? 1 : 0,
+      null,
+      now,
+      now,
+    ],
+  );
+}
+
 /**
  * Sessions are append-only once finalized/synced: the guard keeps a finalized
  * row from being overwritten after it has been pushed to the server.
@@ -375,6 +418,58 @@ async function getPendingAnnotations(limit = 50): Promise<LocalAnnotation[]> {
     [limit],
   );
   return rows.map(mapAnnotation);
+}
+
+async function getAllAnnotations(): Promise<LocalAnnotation[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<AnnotationRow>("SELECT * FROM annotations");
+  return rows.map(mapAnnotation);
+}
+
+/** Inserts an annotation pulled from the server, preserving `updatedAt` for LWW. */
+async function insertRemoteAnnotation(input: RemoteAnnotation): Promise<void> {
+  const track = await getTrackByContentHash(input.contentHash);
+  if (!track) {
+    return;
+  }
+  const db = await getDatabase();
+  const id = input.clientId ?? input.serverId;
+  await db.runAsync(
+    `INSERT OR IGNORE INTO annotations (
+      id, server_id, track_id, content_hash, position_sec, text, tags, color,
+      times_played_before, deleted_at, sync_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 'synced', ?, ?)`,
+    [
+      id,
+      input.serverId,
+      track.id,
+      input.contentHash,
+      Math.round(input.positionSec),
+      input.text,
+      JSON.stringify(input.tags),
+      input.color,
+      input.updatedAt,
+      input.updatedAt,
+    ],
+  );
+}
+
+/** Applies a server-won annotation edit (LWW) and links the server id. */
+async function applyRemoteAnnotationUpdate(update: AnnotationUpdate): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE annotations
+     SET text = ?, tags = ?, color = ?, server_id = ?, sync_status = 'synced', updated_at = ?
+     WHERE id = ?`,
+    [
+      update.text,
+      JSON.stringify(update.tags),
+      update.color,
+      update.serverId,
+      update.updatedAt,
+      update.id,
+    ],
+  );
 }
 
 async function updateAnnotation(
@@ -607,12 +702,17 @@ export const LocalDBService = {
   getSessionsByTrack,
   getSessionsForHistory,
   getPendingSessions,
+  getAllSessions,
+  insertRemoteSession,
   finalizeSession,
   setSessionSyncStatus,
   insertAnnotation,
   getAnnotationsByTrack,
   getAnnotationById,
   getPendingAnnotations,
+  getAllAnnotations,
+  insertRemoteAnnotation,
+  applyRemoteAnnotationUpdate,
   updateAnnotation,
   softDeleteAnnotation,
   hardDeleteAnnotation,

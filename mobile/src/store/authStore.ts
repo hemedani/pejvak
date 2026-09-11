@@ -5,6 +5,7 @@ import { LesanError } from "@/lib/errors";
 import * as AuthService from "@/services/AuthService";
 import type { AuthUser } from "@/services/AuthService";
 import { clearToken, getToken, setToken } from "@/services/secureStore";
+import { syncAll } from "@/services/SyncService";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -69,6 +70,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       setAuthToken(token);
       const user = await AuthService.getMe();
       set({ status: "authenticated", user, token });
+      void syncAll().catch(() => undefined);
     } catch {
       await clearToken();
       setAuthToken(null);
@@ -83,6 +85,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       await setToken(token);
       setAuthToken(token);
       set({ status: "authenticated", user, token, isSubmitting: false, error: null });
+      void syncAll().catch(() => undefined);
     } catch (error) {
       set({ isSubmitting: false, error: toErrorMessage(error) });
       throw error;
@@ -96,6 +99,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       await setToken(token);
       setAuthToken(token);
       set({ status: "authenticated", user, token, isSubmitting: false, error: null });
+      void syncAll().catch(() => undefined);
     } catch (error) {
       set({ isSubmitting: false, error: toErrorMessage(error) });
       throw error;
