@@ -48,7 +48,7 @@ This backlog is derived from:
 - [x] `syncLocalData` batch ingest of offline sessions + annotations with `$inc` aggregates and `clientId` idempotency. Annotations now **upsert with last-write-wins** (`updatedAt`), process `deleted` tombstones, and return `{ clientId, serverId }` mappings.
 - [x] Session acts: `getTrackSessions` and `getMyListeningHistory` (paginated, date-filterable via `from`/`to`, `startedAt` desc, embedded track).
 - [-] Annotation acts: `updateAnnotation` + `deleteAnnotation` (ownership-checked, LWW) shipped under `src/annotations/`; `createAnnotation`/`getTrackAnnotations` still pending (create/update/delete now flow through `syncLocalData`).
-- [ ] Playlist acts: CRUD, `addToPlaylist`, `reorder`.
+- [x] Playlist acts: `createPlaylist`, `updatePlaylist` (title/description/isPublic + full `items`, so add/remove/reorder), `deletePlaylist`, `getMyPlaylists` — ownership-checked. (No `addToPlaylist`/`reorder` micro-acts; those go through `updatePlaylist`.)
 - [x] A track-detail act (`getTrackDetail`) returning a Track with embedded recent sessions and annotations (deep `relatedRelations` projection, bounded by the model limits), ownership-checked.
 - [ ] Link annotations to their server session (`session` relation) during sync via `sessionClientId`.
 - [ ] Compute `timesPlayedBefore` when an annotation is created; compute/refresh annotation play counts from session ranges.
@@ -64,7 +64,7 @@ This backlog is derived from:
 - [x] Build the typed Lesan client in `src/lib`: wraps the generated standard `lesanApi` fetch client (`back/declarations/selectInp.ts`), typed act transport `{ model, act, details: { set, get } }`, `{ success, body }` envelope parsing, timeout, `token` header, error translation. `npm run gen:api` syncs declarations.
 - [x] Add environment/config loading (`src/constants/env.ts`, `EXPO_PUBLIC_LESAN_URL`/`EXPO_PUBLIC_APP_ENV` with zod) and dev-only error logging that never prints tokens.
 - [x] Auth flow: login/register screens with loading/disabled/error states, secure token storage (`expo-secure-store`, with a web fallback), session restore on launch, and route gating.
-- [-] App shell and routing: Library+History+Stats tabs, Annotation editor on Player, and Track Detail done; Settings pending.
+- [x] App shell and routing: Library+History+Stats+Playlists tabs, Annotation editor on Player, Track Detail, and Playlist Detail done; Settings pending.
 - [x] `LocalDBService` (`expo-sqlite`): versioned schema/migrations (`PRAGMA user_version`) for `tracks`, `sessions`, `annotations`, `playlists`, `playback_checkpoints`; typed DAO with parameterized queries and `sync_status` transitions; checkpoint upsert + orphan-recovery query.
 - [-] `SyncService`: engine + wiring built — pending tracks via `registerTrack`, finalized sessions/annotations batched to `syncLocalData`, `pending -> syncing -> synced/failed`. Triggers (start/foreground/session-end/timer) not wired yet.
 - [x] `TrackPlayerService` (SDK 57 `expo-audio`): background playback + lock-screen via config plugin, `playbackStatusUpdate`-driven session tracking, 10 s checkpoints, orphan-session recovery.
@@ -105,7 +105,7 @@ This backlog is derived from:
 - [x] Global History screen grouped by day + per-track session timeline and stats on Track Detail (local-first).
 - [-] Session cards: start/end time, actual listened time, speed, completed/interrupted done; explicit position range pending.
 - [x] Stats dashboard tab: total hours, sessions, tracks, day streak, most-listened, longest session, recent days, last played (local-first).
-- [ ] Playlist CRUD with drag-reorder (`items[].order`).
+- [-] Playlist CRUD with reorder (`items[].order`): create/rename/delete, add/remove tracks, up/down reorder, and play a track done (local-first); drag-reorder and playlist sync pending.
 - [ ] Smart playlists: Unfinished, Annotated, Listened > 3 times (stretch).
 
 ## 8. Sync robustness
@@ -128,7 +128,7 @@ This backlog is derived from:
 ## 10. Testing and verification
 
 - [ ] Backend: hurl e2e for every act; regression tests for sync/aggregates.
-- [-] Mobile unit tests (Jest + RNTL): client envelope/error/timeout, DB migrations/mappers, `contentHash`, `sessionTracking`/`syncEngine` (incl. id mapping + tombstone removal), annotation marker math/color/clock, `AnnotationService` create/update/delete, history grouping/formatting, `trackStats`/`stats`, and the `useTrackAnnotations`/`useHistory`/`useTrackDetail` hooks covered (90 passing); sync retry/idempotency and checkpoint recovery at the integration level still to come.
+- [-] Mobile unit tests (Jest + RNTL): client envelope/error/timeout, DB migrations/mappers, `contentHash`, `sessionTracking`/`syncEngine` (incl. id mapping + tombstone removal), annotation marker math/color/clock, `AnnotationService` create/update/delete, history grouping/formatting, `trackStats`/`stats`, `playlists` helpers, `PlaylistService`, and the `useTrackAnnotations`/`useHistory`/`useTrackDetail`/`usePlaylists`/`usePlaylistDetail` hooks covered (111 passing); sync retry/idempotency and checkpoint recovery at the integration level still to come.
 - [ ] Persistence tests: draft/session recovery after process termination.
 - [ ] Offline + reinstall survival: after login, history and annotations restore from the server.
 - [ ] `deno check/lint/fmt` (backend) and `npm run lint` + typecheck (mobile) green before each checkpoint.
@@ -160,7 +160,7 @@ This backlog is derived from:
 ## Backend dependencies (blockers for the mobile backlog)
 
 - [x] MongoDB available (local, no Docker) and `../back/declarations/` generated.
-- [-] Sessions + annotations acts exposed (done); playlists acts still pending before the matching mobile screens can persist to the server.
+- [x] Sessions, annotations, and playlists acts exposed (playlist sync/mapping still pending).
 - [ ] Confirmed `syncLocalData` validation/limits (batch size, unknown-hash handling) documented for the mobile SyncService.
 - [ ] Auth contract (token header, envelope, expiry/refresh) pinned and covered by hurl.
 
