@@ -8,11 +8,15 @@ jest.mock("@/services/AnnotationService", () => ({
   AnnotationService: {
     getTrackAnnotations: jest.fn(),
     createAnnotation: jest.fn(),
+    updateAnnotation: jest.fn(),
+    deleteAnnotation: jest.fn(),
   },
 }));
 
 const getTrackAnnotations = jest.mocked(AnnotationService.getTrackAnnotations);
 const createAnnotation = jest.mocked(AnnotationService.createAnnotation);
+const updateAnnotation = jest.mocked(AnnotationService.updateAnnotation);
+const deleteAnnotation = jest.mocked(AnnotationService.deleteAnnotation);
 
 const track: Pick<LocalTrack, "id" | "contentHash"> = {
   id: "track-1",
@@ -30,6 +34,7 @@ function annotation(id: string): LocalAnnotation {
     tags: [],
     color: null,
     timesPlayedBefore: 0,
+    deletedAt: null,
     syncStatus: "pending",
     createdAt: 0,
     updatedAt: 0,
@@ -94,5 +99,46 @@ describe("useTrackAnnotations", () => {
 
     expect(ok).toBe(false);
     expect(result.current.error).toMatch(/text is required/i);
+  });
+
+  it("updates a note and refreshes the list", async () => {
+    getTrackAnnotations
+      .mockResolvedValueOnce([annotation("a1")])
+      .mockResolvedValueOnce([{ ...annotation("a1"), text: "revised" }]);
+    updateAnnotation.mockResolvedValue(undefined);
+
+    const { result } = await renderHook(() => useTrackAnnotations("track-1"));
+    await waitFor(() => expect(getTrackAnnotations).toHaveBeenCalledTimes(1));
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.update({ annotation: annotation("a1"), text: "revised" });
+    });
+
+    expect(ok).toBe(true);
+    expect(updateAnnotation).toHaveBeenCalledWith({
+      annotation: annotation("a1"),
+      text: "revised",
+    });
+    expect(result.current.annotations[0].text).toBe("revised");
+  });
+
+  it("removes a note and refreshes the list", async () => {
+    getTrackAnnotations
+      .mockResolvedValueOnce([annotation("a1")])
+      .mockResolvedValueOnce([]);
+    deleteAnnotation.mockResolvedValue(undefined);
+
+    const { result } = await renderHook(() => useTrackAnnotations("track-1"));
+    await waitFor(() => expect(getTrackAnnotations).toHaveBeenCalledTimes(1));
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.remove(annotation("a1"));
+    });
+
+    expect(ok).toBe(true);
+    expect(deleteAnnotation).toHaveBeenCalledWith(annotation("a1"));
+    expect(result.current.annotations).toHaveLength(0);
   });
 });

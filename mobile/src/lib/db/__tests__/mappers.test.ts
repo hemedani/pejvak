@@ -72,7 +72,7 @@ describe("row mappers", () => {
     expect(session.completed).toBe(false);
   });
 
-  it("parses annotation tags from JSON", () => {
+  it("parses annotation tags from JSON and maps the delete tombstone", () => {
     const row: AnnotationRow = {
       id: "a1",
       server_id: null,
@@ -83,11 +83,14 @@ describe("row mappers", () => {
       tags: JSON.stringify(["important", "chapter"]),
       color: "#fff",
       times_played_before: 0,
+      deleted_at: null,
       sync_status: "pending",
       ...base,
     };
 
     expect(mapAnnotation(row).tags).toEqual(["important", "chapter"]);
+    expect(mapAnnotation(row).deletedAt).toBeNull();
+    expect(mapAnnotation({ ...row, deleted_at: 1234 }).deletedAt).toBe(1234);
   });
 
   it("parses playlist items and drops malformed entries", () => {

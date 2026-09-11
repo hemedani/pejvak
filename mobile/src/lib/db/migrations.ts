@@ -103,6 +103,13 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_checkpoints_session_id ON playback_checkpoints(session_id)`,
     ],
   },
+  {
+    version: 2,
+    up: [
+      `ALTER TABLE annotations ADD COLUMN deleted_at INTEGER`,
+      `CREATE INDEX IF NOT EXISTS idx_annotations_deleted_at ON annotations(deleted_at)`,
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

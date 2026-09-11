@@ -58,6 +58,8 @@ export type LocalAnnotation = {
   tags: string[];
   color: string | null;
   timesPlayedBefore: number;
+  /** Local tombstone timestamp; non-null means pending server-side delete. */
+  deletedAt: number | null;
   syncStatus: SyncStatus;
   createdAt: number;
   updatedAt: number;

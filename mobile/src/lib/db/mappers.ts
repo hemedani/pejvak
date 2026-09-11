@@ -59,9 +59,17 @@ export type AnnotationRow = {
   tags: string;
   color: string | null;
   times_played_before: number;
+  deleted_at: number | null;
   sync_status: string;
   created_at: number;
   updated_at: number;
+};
+
+/** A session row joined with the track columns the history card needs. */
+export type HistoryRow = SessionRow & {
+  track_title: string;
+  track_author: string | null;
+  track_content_hash: string;
 };
 
 export type PlaylistRow = {
@@ -188,6 +196,7 @@ export function mapAnnotation(row: AnnotationRow): LocalAnnotation {
     tags: parseJsonArray(row.tags),
     color: row.color,
     timesPlayedBefore: row.times_played_before,
+    deletedAt: row.deleted_at,
     syncStatus: toSyncStatus(row.sync_status),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

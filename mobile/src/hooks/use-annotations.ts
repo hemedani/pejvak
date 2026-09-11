@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { LocalAnnotation } from "@/lib/db/types";
-import { AnnotationService, type CreateAnnotationArgs } from "@/services/AnnotationService";
+import {
+  AnnotationService,
+  type CreateAnnotationArgs,
+  type UpdateAnnotationArgs,
+} from "@/services/AnnotationService";
 
 export type UseTrackAnnotationsResult = {
   annotations: LocalAnnotation[];
   creating: boolean;
   error: string | null;
   create: (args: CreateAnnotationArgs) => Promise<boolean>;
+  update: (args: UpdateAnnotationArgs) => Promise<boolean>;
+  remove: (annotation: LocalAnnotation) => Promise<boolean>;
   refresh: () => Promise<void>;
 };
 
@@ -68,7 +74,43 @@ export function useTrackAnnotations(
     [refresh],
   );
 
+  const update = useCallback(
+    async (args: UpdateAnnotationArgs): Promise<boolean> => {
+      setCreating(true);
+      setError(null);
+      try {
+        await AnnotationService.updateAnnotation(args);
+        await refresh();
+        return true;
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not update the note");
+        return false;
+      } finally {
+        setCreating(false);
+      }
+    },
+    [refresh],
+  );
+
+  const remove = useCallback(
+    async (annotation: LocalAnnotation): Promise<boolean> => {
+      setCreating(true);
+      setError(null);
+      try {
+        await AnnotationService.deleteAnnotation(annotation);
+        await refresh();
+        return true;
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not delete the note");
+        return false;
+      } finally {
+        setCreating(false);
+      }
+    },
+    [refresh],
+  );
+
   const annotations = loaded && loaded.trackId === trackId ? loaded.rows : [];
 
-  return { annotations, creating, error, create, refresh };
+  return { annotations, creating, error, create, update, remove, refresh };
 }

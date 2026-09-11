@@ -10,6 +10,7 @@ export type RegisterTrackResult = { _id?: string };
 export type SyncLocalDataResult = {
   syncedSessions: number;
   syncedAnnotations: number;
+  annotations: { clientId: string; serverId?: string }[];
 };
 
 export type SyncTransport = {
@@ -28,6 +29,8 @@ export type SyncStore = {
   setTrackSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
   setSessionSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
   setAnnotationSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
+  /** Hard-delete a row (used for acknowledged annotation delete tombstones). */
+  removeAnnotation: (id: string) => Promise<void>;
 };
 
 export type SyncSummary = {
@@ -109,10 +112,19 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
 
   try {
     const result = await transport.syncLocalData(sessions, annotations);
+    const serverIds = new Map(
+      result.annotations.map((mapping) => [mapping.clientId, mapping.serverId]),
+    );
     await Promise.all([
       ...sessions.map((session) => store.setSessionSyncStatus(session.id, "synced")),
       ...annotations.map((annotation) =>
-        store.setAnnotationSyncStatus(annotation.id, "synced"),
+        annotation.deletedAt !== null
+          ? store.removeAnnotation(annotation.id)
+          : store.setAnnotationSyncStatus(
+              annotation.id,
+              "synced",
+              serverIds.get(annotation.id),
+            ),
       ),
     ]);
     summary.sessionsSynced = result.syncedSessions;

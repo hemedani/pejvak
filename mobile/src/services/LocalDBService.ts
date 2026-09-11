@@ -9,6 +9,7 @@ import {
   mapTrack,
   type AnnotationRow,
   type CheckpointRow,
+  type HistoryRow,
   type PlaylistRow,
   type SessionRow,
   type TrackRow,
@@ -27,6 +28,7 @@ import type {
   SaveCheckpointInput,
   SyncStatus,
 } from "@/lib/db/types";
+import type { HistoryItem } from "@/lib/history";
 
 function newId(): string {
   return Crypto.randomUUID();
@@ -213,6 +215,29 @@ async function getSessionsByTrack(trackId: string): Promise<LocalSession[]> {
   return rows.map(mapSession);
 }
 
+/** Newest-first session history joined with each track, for the History screen. */
+async function getSessionsForHistory(limit = 200): Promise<HistoryItem[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<HistoryRow>(
+    `SELECT s.*, t.title AS track_title, t.author AS track_author,
+            t.content_hash AS track_content_hash
+     FROM sessions s
+     JOIN tracks t ON t.id = s.track_id
+     ORDER BY s.started_at DESC
+     LIMIT ?`,
+    [limit],
+  );
+  return rows.map((row) => ({
+    session: mapSession(row),
+    track: {
+      id: row.track_id,
+      title: row.track_title,
+      author: row.track_author,
+      contentHash: row.track_content_hash,
+    },
+  }));
+}
+
 async function getPendingSessions(limit = 50): Promise<LocalSession[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<SessionRow>(
@@ -277,6 +302,7 @@ async function insertAnnotation(input: CreateAnnotationInput): Promise<LocalAnno
     tags: input.tags ?? [],
     color: input.color ?? null,
     timesPlayedBefore: input.timesPlayedBefore ?? 0,
+    deletedAt: null,
     syncStatus: "pending",
     createdAt: now,
     updatedAt: now,
@@ -309,10 +335,19 @@ async function insertAnnotation(input: CreateAnnotationInput): Promise<LocalAnno
 async function getAnnotationsByTrack(trackId: string): Promise<LocalAnnotation[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<AnnotationRow>(
-    "SELECT * FROM annotations WHERE track_id = ? ORDER BY position_sec ASC",
+    "SELECT * FROM annotations WHERE track_id = ? AND deleted_at IS NULL ORDER BY position_sec ASC",
     [trackId],
   );
   return rows.map(mapAnnotation);
+}
+
+async function getAnnotationById(id: string): Promise<LocalAnnotation | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<AnnotationRow>(
+    "SELECT * FROM annotations WHERE id = ?",
+    [id],
+  );
+  return row ? mapAnnotation(row) : null;
 }
 
 async function getPendingAnnotations(limit = 50): Promise<LocalAnnotation[]> {
@@ -340,7 +375,7 @@ async function updateAnnotation(
          color = COALESCE(?, color),
          sync_status = 'pending',
          updated_at = ?
-     WHERE id = ?`,
+     WHERE id = ? AND deleted_at IS NULL`,
     [
       changes.text ?? null,
       changes.tags ? JSON.stringify(changes.tags) : null,
@@ -349,6 +384,26 @@ async function updateAnnotation(
       id,
     ],
   );
+}
+
+/**
+ * Tombstones a server-known annotation so the delete can be pushed later. The
+ * row is hidden from reads but kept queued until the batch sync acknowledges it.
+ */
+async function softDeleteAnnotation(id: string): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    `UPDATE annotations
+     SET deleted_at = ?, sync_status = 'pending', updated_at = ?
+     WHERE id = ?`,
+    [now, now, id],
+  );
+}
+
+async function hardDeleteAnnotation(id: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("DELETE FROM annotations WHERE id = ?", [id]);
 }
 
 async function setAnnotationSyncStatus(
@@ -491,13 +546,17 @@ export const LocalDBService = {
   insertSession,
   getSessionById,
   getSessionsByTrack,
+  getSessionsForHistory,
   getPendingSessions,
   finalizeSession,
   setSessionSyncStatus,
   insertAnnotation,
   getAnnotationsByTrack,
+  getAnnotationById,
   getPendingAnnotations,
   updateAnnotation,
+  softDeleteAnnotation,
+  hardDeleteAnnotation,
   setAnnotationSyncStatus,
   insertPlaylist,
   getPlaylists,

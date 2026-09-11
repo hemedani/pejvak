@@ -60,4 +60,12 @@ describe("schema migrations", () => {
       );
     }
   });
+
+  it("adds an annotation delete tombstone column at version 2", () => {
+    const v2 = MIGRATIONS.find((migration) => migration.version === 2);
+    expect(v2).toBeDefined();
+    expect(v2!.up.join("\n")).toMatch(
+      /ALTER TABLE annotations ADD COLUMN deleted_at INTEGER/i,
+    );
+  });
 });

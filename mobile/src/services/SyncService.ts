@@ -63,10 +63,12 @@ function syncLocalData(
         positionSec: annotation.positionSec,
         text: annotation.text,
         tags: annotation.tags,
+        updatedAt: annotation.updatedAt,
+        deleted: annotation.deletedAt !== null,
         ...(annotation.color ? { color: annotation.color } : {}),
       })),
     },
-    get: { syncedSessions: 1, syncedAnnotations: 1 },
+    get: { syncedSessions: 1, syncedAnnotations: 1, annotations: [] },
   };
   return callTypedAct<"main", "track", "syncLocalData", SyncLocalDataResult>({
     service: "main",
@@ -89,6 +91,7 @@ export const localStore: SyncStore = {
     LocalDBService.setSessionSyncStatus(id, status, serverId),
   setAnnotationSyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
     LocalDBService.setAnnotationSyncStatus(id, status, serverId),
+  removeAnnotation: (id: string) => LocalDBService.hardDeleteAnnotation(id),
 };
 
 /** Push all pending local rows to the backend. Never throws for sync errors. */

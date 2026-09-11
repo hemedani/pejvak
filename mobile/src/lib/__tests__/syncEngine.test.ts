@@ -68,6 +68,7 @@ function annotation(overrides: Partial<LocalAnnotation> = {}): LocalAnnotation {
     tags: [],
     color: null,
     timesPlayedBefore: 0,
+    deletedAt: null,
     syncStatus: "pending",
     createdAt: 1,
     updatedAt: 1,
@@ -120,6 +121,9 @@ function createStore(seed: {
         });
       }
     },
+    removeAnnotation: async (id) => {
+      annotations.delete(id);
+    },
   };
 
   return { store, tracks, sessions, annotations };
@@ -143,6 +147,10 @@ function createTransport(overrides: Partial<SyncTransport> = {}) {
         return {
           syncedSessions: sessions.length,
           syncedAnnotations: annotations.length,
+          annotations: annotations.map((item) => ({
+            clientId: item.id,
+            serverId: `server-${item.id}`,
+          })),
         };
       }),
   };
@@ -175,9 +183,26 @@ describe("runSync", () => {
     expect(summary.sessionsSynced).toBe(1);
     expect(summary.annotationsSynced).toBe(1);
     expect(sessions.get("s1")?.syncStatus).toBe("synced");
-    expect(annotations.get("a1")?.syncStatus).toBe("synced");
+    expect(annotations.get("a1")).toMatchObject({
+      syncStatus: "synced",
+      serverId: "server-a1",
+    });
     expect(calls.syncLocalData).toHaveLength(1);
     expect(calls.syncLocalData[0][0][0]).toMatchObject({ id: "s1", durationListenedSec: 60 });
+  });
+
+  it("hard-removes an acknowledged delete tombstone", async () => {
+    const { store, annotations } = createStore({
+      tracks: [track({ syncStatus: "synced", serverId: "server-t1" })],
+      annotations: [annotation({ deletedAt: 1234 })],
+    });
+    const { transport, calls } = createTransport();
+
+    const summary = await runSync({ store, transport });
+
+    expect(annotations.has("a1")).toBe(false);
+    expect(summary.annotationsSynced).toBe(1);
+    expect(calls.syncLocalData[0][1][0]).toMatchObject({ id: "a1", deletedAt: 1234 });
   });
 
   it("does not send a session that has not ended", async () => {

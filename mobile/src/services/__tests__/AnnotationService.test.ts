@@ -9,6 +9,9 @@ jest.mock("@/services/LocalDBService", () => ({
     getAnnotationsByTrack: jest.fn(),
     getSessionsByTrack: jest.fn(),
     insertAnnotation: jest.fn(),
+    updateAnnotation: jest.fn(),
+    softDeleteAnnotation: jest.fn(),
+    hardDeleteAnnotation: jest.fn(),
   },
 }));
 
@@ -19,6 +22,9 @@ jest.mock("@/services/SyncService", () => ({
 const getAnnotationsByTrack = jest.mocked(LocalDBService.getAnnotationsByTrack);
 const getSessionsByTrack = jest.mocked(LocalDBService.getSessionsByTrack);
 const insertAnnotation = jest.mocked(LocalDBService.insertAnnotation);
+const updateAnnotation = jest.mocked(LocalDBService.updateAnnotation);
+const softDeleteAnnotation = jest.mocked(LocalDBService.softDeleteAnnotation);
+const hardDeleteAnnotation = jest.mocked(LocalDBService.hardDeleteAnnotation);
 const mockedSyncPending = jest.mocked(syncPending);
 
 const track: Pick<LocalTrack, "id" | "contentHash"> = {
@@ -37,6 +43,7 @@ function annotation(id: string, positionSec: number): LocalAnnotation {
     tags: [],
     color: null,
     timesPlayedBefore: 0,
+    deletedAt: null,
     syncStatus: "pending",
     createdAt: 0,
     updatedAt: 0,
@@ -140,6 +147,34 @@ describe("AnnotationService.createAnnotation", () => {
 
     await AnnotationService.createAnnotation({ track, positionSec: 5, text: "note" });
 
+    expect(mockedSyncPending).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AnnotationService.updateAnnotation", () => {
+  it("trims the text, updates it, and kicks off a sync", async () => {
+    const target = annotation("a1", 30);
+
+    await AnnotationService.updateAnnotation({ annotation: target, text: "  revised  " });
+
+    expect(updateAnnotation).toHaveBeenCalledWith("a1", { text: "revised" });
+    expect(mockedSyncPending).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects blank text without updating", async () => {
+    await expect(
+      AnnotationService.updateAnnotation({ annotation: annotation("a1", 30), text: " " }),
+    ).rejects.toThrow(/text is required/i);
+    expect(updateAnnotation).not.toHaveBeenCalled();
+  });
+});
+
+describe("AnnotationService.deleteAnnotation", () => {
+  it("tombstones the note and kicks off a sync", async () => {
+    await AnnotationService.deleteAnnotation(annotation("a1", 30));
+
+    expect(softDeleteAnnotation).toHaveBeenCalledWith("a1");
+    expect(hardDeleteAnnotation).not.toHaveBeenCalled();
     expect(mockedSyncPending).toHaveBeenCalledTimes(1);
   });
 });

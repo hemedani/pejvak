@@ -1,6 +1,7 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -34,6 +35,7 @@ export default function PlayerScreen() {
   const [track, setTrack] = useState<LocalTrack | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [draftPositionSec, setDraftPositionSec] = useState(0);
 
@@ -48,6 +50,8 @@ export default function PlayerScreen() {
     creating,
     error: noteError,
     create,
+    update,
+    remove,
   } = useTrackAnnotations(track?.id ?? null);
 
   useEffect(() => {
@@ -92,13 +96,22 @@ export default function PlayerScreen() {
   };
 
   const openComposer = () => {
+    setEditingId(null);
     setDraftPositionSec(positionSec);
     setDraft("");
     setComposerOpen(true);
   };
 
+  const startEdit = (annotation: LocalAnnotation) => {
+    setEditingId(annotation.id);
+    setDraftPositionSec(annotation.positionSec);
+    setDraft(annotation.text);
+    setComposerOpen(true);
+  };
+
   const closeComposer = () => {
     setComposerOpen(false);
+    setEditingId(null);
     setDraft("");
   };
 
@@ -106,10 +119,36 @@ export default function PlayerScreen() {
     if (!track) {
       return;
     }
-    const ok = await create({ track, positionSec: draftPositionSec, text: draft });
-    if (ok) {
+    if (editingId) {
+      const target = annotations.find((annotation) => annotation.id === editingId);
+      if (!target) {
+        closeComposer();
+        return;
+      }
+      if (await update({ annotation: target, text: draft })) {
+        closeComposer();
+      }
+      return;
+    }
+    if (await create({ track, positionSec: draftPositionSec, text: draft })) {
       closeComposer();
     }
+  };
+
+  const deleteNote = async (annotation: LocalAnnotation) => {
+    if (await remove(annotation)) {
+      setSelectedId(null);
+      if (editingId === annotation.id) {
+        closeComposer();
+      }
+    }
+  };
+
+  const confirmDelete = (annotation: LocalAnnotation) => {
+    Alert.alert("Delete note?", "This removes the note and syncs the deletion.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => void deleteNote(annotation) },
+    ]);
   };
 
   return (
@@ -166,9 +205,23 @@ export default function PlayerScreen() {
 
             {selected ? (
               <ThemedView type="backgroundSelected" style={styles.selectedCard}>
-                <ThemedText type="smallBold">
-                  {formatClock(selected.positionSec)}
-                </ThemedText>
+                <View style={styles.selectedHeader}>
+                  <ThemedText type="smallBold">
+                    {formatClock(selected.positionSec)}
+                  </ThemedText>
+                  <View style={styles.selectedActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => startEdit(selected)}>
+                      <ThemedText type="linkPrimary">Edit</ThemedText>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => confirmDelete(selected)}>
+                      <ThemedText type="linkPrimary">Delete</ThemedText>
+                    </Pressable>
+                  </View>
+                </View>
                 <ThemedText type="small">{selected.text}</ThemedText>
               </ThemedView>
             ) : null}
@@ -213,7 +266,7 @@ export default function PlayerScreen() {
             {composerOpen ? (
               <ThemedView type="backgroundElement" style={styles.composer}>
                 <TextField
-                  label={`Note at ${formatClock(draftPositionSec)}`}
+                  label={`${editingId ? "Edit" : "Note"} at ${formatClock(draftPositionSec)}`}
                   value={draft}
                   onChangeText={setDraft}
                   placeholder="What stood out here?"
@@ -225,7 +278,7 @@ export default function PlayerScreen() {
                     <ThemedText type="linkPrimary">Cancel</ThemedText>
                   </Pressable>
                   <PrimaryButton
-                    label="Save note"
+                    label={editingId ? "Save changes" : "Save note"}
                     loading={creating}
                     disabled={draft.trim().length === 0}
                     onPress={() => void saveNote()}
@@ -311,6 +364,16 @@ const styles = StyleSheet.create({
     gap: Spacing.half,
     padding: Spacing.three,
     borderRadius: Spacing.three,
+  },
+  selectedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  selectedActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.three,
   },
   controls: {
     flexDirection: "row",
