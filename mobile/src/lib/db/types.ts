@@ -99,7 +99,8 @@ export type TrackDetailData = {
   annotations: LocalAnnotation[];
 };
 
-export type CreateTrackInput = {  id?: string;
+export type CreateTrackInput = {
+  id?: string;
   contentHash: string;
   title: string;
   fileName?: string | null;

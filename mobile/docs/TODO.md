@@ -49,7 +49,7 @@ This backlog is derived from:
 - [x] Session acts: `getTrackSessions` and `getMyListeningHistory` (paginated, date-filterable via `from`/`to`, `startedAt` desc, embedded track).
 - [-] Annotation acts: `updateAnnotation` + `deleteAnnotation` (ownership-checked, LWW) shipped under `src/annotations/`; `createAnnotation`/`getTrackAnnotations` still pending (create/update/delete now flow through `syncLocalData`).
 - [ ] Playlist acts: CRUD, `addToPlaylist`, `reorder`.
-- [ ] A track-detail act returning a Track with embedded recent sessions and annotations (deep `relatedRelations` projection, bounded limit).
+- [x] A track-detail act (`getTrackDetail`) returning a Track with embedded recent sessions and annotations (deep `relatedRelations` projection, bounded by the model limits), ownership-checked.
 - [ ] Link annotations to their server session (`session` relation) during sync via `sessionClientId`.
 - [ ] Compute `timesPlayedBefore` when an annotation is created; compute/refresh annotation play counts from session ranges.
 - [ ] Stats aggregations: total listened time, per-track counts, streaks, date buckets.
@@ -64,7 +64,7 @@ This backlog is derived from:
 - [x] Build the typed Lesan client in `src/lib`: wraps the generated standard `lesanApi` fetch client (`back/declarations/selectInp.ts`), typed act transport `{ model, act, details: { set, get } }`, `{ success, body }` envelope parsing, timeout, `token` header, error translation. `npm run gen:api` syncs declarations.
 - [x] Add environment/config loading (`src/constants/env.ts`, `EXPO_PUBLIC_LESAN_URL`/`EXPO_PUBLIC_APP_ENV` with zod) and dev-only error logging that never prints tokens.
 - [x] Auth flow: login/register screens with loading/disabled/error states, secure token storage (`expo-secure-store`, with a web fallback), session restore on launch, and route gating.
-- [-] App shell and routing: Library (home)+Player+History tabs, Annotation editor on Player done; Track Detail and Settings pending.
+- [-] App shell and routing: Library+Player+History tabs, Annotation editor on Player, and Track Detail done; Settings pending.
 - [x] `LocalDBService` (`expo-sqlite`): versioned schema/migrations (`PRAGMA user_version`) for `tracks`, `sessions`, `annotations`, `playlists`, `playback_checkpoints`; typed DAO with parameterized queries and `sync_status` transitions; checkpoint upsert + orphan-recovery query.
 - [-] `SyncService`: engine + wiring built — pending tracks via `registerTrack`, finalized sessions/annotations batched to `syncLocalData`, `pending -> syncing -> synced/failed`. Triggers (start/foreground/session-end/timer) not wired yet.
 - [x] `TrackPlayerService` (SDK 57 `expo-audio`): background playback + lock-screen via config plugin, `playbackStatusUpdate`-driven session tracking, 10 s checkpoints, orphan-session recovery.
@@ -94,7 +94,7 @@ This backlog is derived from:
 - [x] Create an annotation at the current position (one-tap quick add): “+ Note” opens a composer anchored at the live position; `AnnotationService` rounds to integer seconds, trims text, and assigns a palette color.
 - [x] Edit/delete annotations; last-write-wins on `updatedAt` (backend upsert compares timestamps; dedicated `updateAnnotation`/`deleteAnnotation` acts).
 - [x] Render annotation markers (colored by `color`/tags) on the player progress bar; tap to seek and show the note (selected card + highlighted list row).
-- [-] Annotation list on the Player (built); Track Detail list still pending.
+- [x] Annotation list on the Player and on Track Detail (sorted by `positionSec`).
 - [x] Offline annotation create/update/delete with a `clientId`; server id mapped back after sync and acknowledged deletes hard-removed (tombstone queue).
 - [-] `timesPlayedBefore` snapshot stored at creation (approximate: count of finalized local sessions); server-range computation and play-count display pending.
 - [-] Annotation editor: text composer built; tags, color picker pending.
@@ -102,7 +102,7 @@ This backlog is derived from:
 
 ## 7. History, stats, and playlists
 
-- [-] Global History screen grouped by day (built, local-first); per-track session timeline still pending (Track Detail).
+- [x] Global History screen grouped by day + per-track session timeline and stats on Track Detail (local-first).
 - [-] Session cards: start/end time, actual listened time, speed, completed/interrupted done; explicit position range pending.
 - [ ] Stats dashboard: total hours, most-listened files, longest sessions, last played, streaks.
 - [ ] Playlist CRUD with drag-reorder (`items[].order`).
@@ -128,7 +128,7 @@ This backlog is derived from:
 ## 10. Testing and verification
 
 - [ ] Backend: hurl e2e for every act; regression tests for sync/aggregates.
-- [-] Mobile unit tests (Jest + RNTL): client envelope/error/timeout, DB migrations/mappers, `contentHash`, `sessionTracking`/`syncEngine` (incl. id mapping + tombstone removal), annotation marker math/color/clock, `AnnotationService` create/update/delete, history grouping/formatting, and the `useTrackAnnotations`/`useHistory` hooks covered (76 passing); sync retry/idempotency and checkpoint recovery at the integration level still to come.
+- [-] Mobile unit tests (Jest + RNTL): client envelope/error/timeout, DB migrations/mappers, `contentHash`, `sessionTracking`/`syncEngine` (incl. id mapping + tombstone removal), annotation marker math/color/clock, `AnnotationService` create/update/delete, history grouping/formatting, `trackStats`, and the `useTrackAnnotations`/`useHistory`/`useTrackDetail` hooks covered (82 passing); sync retry/idempotency and checkpoint recovery at the integration level still to come.
 - [ ] Persistence tests: draft/session recovery after process termination.
 - [ ] Offline + reinstall survival: after login, history and annotations restore from the server.
 - [ ] `deno check/lint/fmt` (backend) and `npm run lint` + typecheck (mobile) green before each checkpoint.
@@ -138,7 +138,7 @@ This backlog is derived from:
 - [ ] Sign up, log in, and see the library.
 - [ ] Register an audio file and play it with background playback.
 - [ ] Every session records `startedAt`, `endedAt`, `startPositionSec`, `endPositionSec`, `durationListenedSec`.
-- [ ] Chronological session history per track (global History screen built; per-track timeline pending).
+- [x] Chronological session history per track (Track Detail session timeline; global History grouped by day).
 - [ ] `totalPlayCount` and `totalListenTimeSec` update after each session.
 - [x] Create an annotation at any position with `positionSec`, `createdAt`, `text`.
 - [x] Annotations appear as markers on the progress bar (tap to seek/show; edit/delete from the selected note).
