@@ -47,7 +47,7 @@ This backlog is derived from:
 - [x] Track acts: `registerTrack`, `getMyTracks`.
 - [x] `syncLocalData` batch ingest of offline sessions + annotations with `$inc` aggregates and `clientId` idempotency. Annotations now **upsert with last-write-wins** (`updatedAt`), process `deleted` tombstones, and return `{ clientId, serverId }` mappings.
 - [x] Session acts: `getTrackSessions` and `getMyListeningHistory` (paginated, date-filterable via `from`/`to`, `startedAt` desc, embedded track).
-- [-] Annotation acts: `updateAnnotation` + `deleteAnnotation` (ownership-checked, LWW) shipped under `src/annotations/`; `createAnnotation`/`getTrackAnnotations` still pending (create/update/delete now flow through `syncLocalData`).
+- [-] Annotation acts: `updateAnnotation` + `deleteAnnotation` (ownership-checked, LWW) and `getMyAnnotations` (paginated pull) shipped under `src/annotations/`; `createAnnotation`/`getTrackAnnotations` still pending (create/update/delete flow through `syncLocalData`).
 - [x] Playlist acts: `createPlaylist`, `updatePlaylist` (title/description/isPublic + full `items`, so add/remove/reorder), `deletePlaylist`, `getMyPlaylists` — ownership-checked. (No `addToPlaylist`/`reorder` micro-acts; those go through `updatePlaylist`.)
 - [x] A track-detail act (`getTrackDetail`) returning a Track with embedded recent sessions and annotations (deep `relatedRelations` projection, bounded by the model limits), ownership-checked.
 - [ ] Link annotations to their server session (`session` relation) during sync via `sessionClientId`.
@@ -110,9 +110,9 @@ This backlog is derived from:
 
 ## 8. Sync robustness
 
-- [ ] Batch pending sessions/annotations, bounded retries with backoff, connectivity triggers.
+- [-] Batch pending sessions/annotations (done), bounded retries with exponential backoff + foreground/periodic triggers (done); explicit connectivity-change listener still pending (needs NetInfo, not installed).
 - [x] Idempotent re-sync (server keys on `clientId`); annotation upserts return the same `serverId` on replay, so a timeout never duplicates or resets local state.
-- [-] Temp-id → server-id mapping: tracks (register) and annotations (syncLocalData mapping) done; sessions are append-only and need no mapping.
+- [x] Temp-id → server-id mapping: tracks/annotations/sessions backfill `server_id` on push and pull; server pulls are deduped by `contentHash`/`clientId`.
 - [x] Conflict handling: sessions append-only; annotation edits LWW (server compares `updatedAt`); deletes are tombstoned and acknowledged.
 - [ ] Sync status surface (queue counts, last successful sync, "Sync Now"); never block UI on sync errors.
 - [ ] Tests: offline→online recovery, airplane mode, interrupted upload, app kill mid-sync.
@@ -128,9 +128,9 @@ This backlog is derived from:
 ## 10. Testing and verification
 
 - [ ] Backend: hurl e2e for every act; regression tests for sync/aggregates.
-- [-] Mobile unit tests (Jest + RNTL): client envelope/error/timeout, DB migrations/mappers, `contentHash`, `sessionTracking`/`syncEngine` (incl. id mapping + tombstone removal), annotation marker math/color/clock, `AnnotationService` create/update/delete, history grouping/formatting, `trackStats`/`stats`, `playlists` helpers, `PlaylistService`, and the `useTrackAnnotations`/`useHistory`/`useTrackDetail`/`usePlaylists`/`usePlaylistDetail` hooks covered (111 passing); sync retry/idempotency and checkpoint recovery at the integration level still to come.
+- [-] Mobile unit tests (Jest + RNTL): client envelope/error/timeout, DB migrations/mappers, `contentHash`, `sessionTracking`/`syncEngine` (incl. id mapping + tombstone removal), the pull reconciler + `retryDelayMs`, annotation marker math/color/clock, `AnnotationService` create/update/delete, history grouping/formatting, `trackStats`/`stats`, `playlists` helpers, `PlaylistService`, and the `useTrackAnnotations`/`useHistory`/`useTrackDetail`/`usePlaylists`/`usePlaylistDetail` hooks covered (125 passing); sync retry/idempotency and checkpoint recovery at the integration level still to come.
 - [ ] Persistence tests: draft/session recovery after process termination.
-- [ ] Offline + reinstall survival: after login, history and annotations restore from the server.
+- [x] Offline + reinstall survival: after login the app pulls tracks/sessions/annotations and reconciles by `contentHash`/`clientId` (`pullFromServer`); device verification pending.
 - [ ] `deno check/lint/fmt` (backend) and `npm run lint` + typecheck (mobile) green before each checkpoint.
 
 ## Acceptance criteria (from `../docs/DEEPSEEK.md` §10)
