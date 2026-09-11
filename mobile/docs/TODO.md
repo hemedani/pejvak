@@ -52,7 +52,7 @@ This backlog is derived from:
 - [x] A track-detail act (`getTrackDetail`) returning a Track with embedded recent sessions and annotations (deep `relatedRelations` projection, bounded by the model limits), ownership-checked.
 - [ ] Link annotations to their server session (`session` relation) during sync via `sessionClientId`.
 - [ ] Compute `timesPlayedBefore` when an annotation is created; compute/refresh annotation play counts from session ranges.
-- [ ] Stats aggregations: total listened time, per-track counts, streaks, date buckets.
+- [x] Stats aggregations (`getMyStats`): total listened time, session/track counts, first/last listened, and top tracks by time (day buckets/streaks computed client-side).
 - [ ] Run `http/e2e.hurl` against Mongo; add hurl coverage for every new act.
 - [ ] Add regression tests for aggregate increments, sync idempotency (replayed batch), and projection correctness.
 - [ ] Document backend open questions as product decisions when settled (see "Open decisions").
@@ -64,7 +64,7 @@ This backlog is derived from:
 - [x] Build the typed Lesan client in `src/lib`: wraps the generated standard `lesanApi` fetch client (`back/declarations/selectInp.ts`), typed act transport `{ model, act, details: { set, get } }`, `{ success, body }` envelope parsing, timeout, `token` header, error translation. `npm run gen:api` syncs declarations.
 - [x] Add environment/config loading (`src/constants/env.ts`, `EXPO_PUBLIC_LESAN_URL`/`EXPO_PUBLIC_APP_ENV` with zod) and dev-only error logging that never prints tokens.
 - [x] Auth flow: login/register screens with loading/disabled/error states, secure token storage (`expo-secure-store`, with a web fallback), session restore on launch, and route gating.
-- [-] App shell and routing: Library+Player+History tabs, Annotation editor on Player, and Track Detail done; Settings pending.
+- [-] App shell and routing: Library+History+Stats tabs, Annotation editor on Player, and Track Detail done; Settings pending.
 - [x] `LocalDBService` (`expo-sqlite`): versioned schema/migrations (`PRAGMA user_version`) for `tracks`, `sessions`, `annotations`, `playlists`, `playback_checkpoints`; typed DAO with parameterized queries and `sync_status` transitions; checkpoint upsert + orphan-recovery query.
 - [-] `SyncService`: engine + wiring built — pending tracks via `registerTrack`, finalized sessions/annotations batched to `syncLocalData`, `pending -> syncing -> synced/failed`. Triggers (start/foreground/session-end/timer) not wired yet.
 - [x] `TrackPlayerService` (SDK 57 `expo-audio`): background playback + lock-screen via config plugin, `playbackStatusUpdate`-driven session tracking, 10 s checkpoints, orphan-session recovery.
@@ -104,7 +104,7 @@ This backlog is derived from:
 
 - [x] Global History screen grouped by day + per-track session timeline and stats on Track Detail (local-first).
 - [-] Session cards: start/end time, actual listened time, speed, completed/interrupted done; explicit position range pending.
-- [ ] Stats dashboard: total hours, most-listened files, longest sessions, last played, streaks.
+- [x] Stats dashboard tab: total hours, sessions, tracks, day streak, most-listened, longest session, recent days, last played (local-first).
 - [ ] Playlist CRUD with drag-reorder (`items[].order`).
 - [ ] Smart playlists: Unfinished, Annotated, Listened > 3 times (stretch).
 
@@ -128,7 +128,7 @@ This backlog is derived from:
 ## 10. Testing and verification
 
 - [ ] Backend: hurl e2e for every act; regression tests for sync/aggregates.
-- [-] Mobile unit tests (Jest + RNTL): client envelope/error/timeout, DB migrations/mappers, `contentHash`, `sessionTracking`/`syncEngine` (incl. id mapping + tombstone removal), annotation marker math/color/clock, `AnnotationService` create/update/delete, history grouping/formatting, `trackStats`, and the `useTrackAnnotations`/`useHistory`/`useTrackDetail` hooks covered (82 passing); sync retry/idempotency and checkpoint recovery at the integration level still to come.
+- [-] Mobile unit tests (Jest + RNTL): client envelope/error/timeout, DB migrations/mappers, `contentHash`, `sessionTracking`/`syncEngine` (incl. id mapping + tombstone removal), annotation marker math/color/clock, `AnnotationService` create/update/delete, history grouping/formatting, `trackStats`/`stats`, and the `useTrackAnnotations`/`useHistory`/`useTrackDetail` hooks covered (90 passing); sync retry/idempotency and checkpoint recovery at the integration level still to come.
 - [ ] Persistence tests: draft/session recovery after process termination.
 - [ ] Offline + reinstall survival: after login, history and annotations restore from the server.
 - [ ] `deno check/lint/fmt` (backend) and `npm run lint` + typecheck (mobile) green before each checkpoint.
