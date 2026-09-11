@@ -1,0 +1,33 @@
+{
+  "name": "pejvak-backend",
+  "version": "0.1.0",
+  "exports": "./mod.ts",
+  "tasks": {
+    "start": "deno run --allow-all mod.ts",
+    "dev": "deno run --allow-all --watch mod.ts",
+    "seed": "deno run --allow-all utils/seed.ts",
+    "test": "hurl --test --variables-file http/vars.env http/e2e.hurl"
+  },
+  "fmt": {
+    "include": ["src/", "models/", "utils/", "mod.ts"],
+    "semiColons": true,
+    "singleQuote": false,
+    "indentWidth": 2
+  },
+  "lint": {
+    "include": ["src/", "models/", "utils/", "mod.ts"],
+    "rules": {
+      "tags": ["recommended"]
+    }
+  },
+  "imports": {
+    "@da/bcrypt": "jsr:@da/bcrypt@^1.0.1",
+    "lesan": "jsr:@hemedani/lesan@^0.2.3",
+    "djwt": "https://deno.land/x/djwt@v2.8/mod.ts",
+    "@lib": "./utils/mod.ts",
+    "@model": "./models/mod.ts"
+  },
+  "compilerOptions": {
+    "strict": true
+  }
+}
