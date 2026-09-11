@@ -37,6 +37,10 @@ export default function RootLayout() {
               name="track/[id]"
               options={{ headerShown: true, title: "Track" }}
             />
+            <Stack.Screen
+              name="playlist/[id]"
+              options={{ headerShown: true, title: "Playlist" }}
+            />
           </Stack.Protected>
           <Stack.Protected guard={status !== "authenticated"}>
             <Stack.Screen name="(auth)" />

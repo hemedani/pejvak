@@ -25,6 +25,7 @@ import type {
   LocalSession,
   LocalTrack,
   PlaybackCheckpoint,
+  PlaylistItem,
   SaveCheckpointInput,
   SyncStatus,
   TrackDetailData,
@@ -480,6 +481,49 @@ async function getPlaylists(): Promise<LocalPlaylist[]> {
   return rows.map(mapPlaylist);
 }
 
+async function getPlaylistById(id: string): Promise<LocalPlaylist | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<PlaylistRow>("SELECT * FROM playlists WHERE id = ?", [
+    id,
+  ]);
+  return row ? mapPlaylist(row) : null;
+}
+
+async function updatePlaylist(
+  id: string,
+  changes: {
+    title?: string;
+    description?: string | null;
+    isPublic?: boolean;
+    items?: PlaylistItem[];
+  },
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE playlists
+     SET title = COALESCE(?, title),
+         description = COALESCE(?, description),
+         is_public = COALESCE(?, is_public),
+         items = COALESCE(?, items),
+         sync_status = 'pending',
+         updated_at = ?
+     WHERE id = ?`,
+    [
+      changes.title ?? null,
+      changes.description ?? null,
+      changes.isPublic === undefined ? null : changes.isPublic ? 1 : 0,
+      changes.items ? JSON.stringify(changes.items) : null,
+      Date.now(),
+      id,
+    ],
+  );
+}
+
+async function deletePlaylist(id: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("DELETE FROM playlists WHERE id = ?", [id]);
+}
+
 async function setPlaylistSyncStatus(
   id: string,
   status: SyncStatus,
@@ -575,6 +619,9 @@ export const LocalDBService = {
   setAnnotationSyncStatus,
   insertPlaylist,
   getPlaylists,
+  getPlaylistById,
+  updatePlaylist,
+  deletePlaylist,
   setPlaylistSyncStatus,
   saveCheckpoint,
   getCheckpointBySession,

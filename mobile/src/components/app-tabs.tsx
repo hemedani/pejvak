@@ -26,6 +26,11 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Label>Stats</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="chart.bar" md="bar_chart" />
       </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="playlists">
+        <NativeTabs.Trigger.Label>Playlists</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="music.note.list" md="playlist_play" />
+      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }

@@ -31,6 +31,9 @@ export default function AppTabs() {
           <TabTrigger name="stats" href={'/stats' as Href} asChild>
             <TabButton>Stats</TabButton>
           </TabTrigger>
+          <TabTrigger name="playlists" href={'/playlists' as Href} asChild>
+            <TabButton>Playlists</TabButton>
+          </TabTrigger>
         </CustomTabList>
       </TabList>
     </Tabs>
