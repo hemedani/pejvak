@@ -1,0 +1,88 @@
+# CONTINUE — Pejvak
+
+One-page next-task prompt. The authoritative status backlog is `docs/TODO.md`. Product specs are `../docs/DEEPSEEK.md` (models, session math, sync, acceptance), `../docs/GROK.md` (vision, flows, testing), and `../docs/QWEN.md` (Lesan schemas, offline sync, roadmap). Architecture and rules are in `../AGENTS.md`, `../back/AGENTS.md`, and `AGENTS.md`.
+
+---
+
+## Brief history (current state)
+
+- **Specs + rules:** the three AI-generated product descriptions are consolidated in `../docs/`; `../AGENTS.md` fixes the architecture (Deno + Lesan + MongoDB backend, Expo + React Native mobile, future `../web/`), the stack (`expo-audio`, `expo-sqlite`, Zustand, the standard Lesan fetch client), and the non-negotiable domain rules (integer seconds, `contentHash` identity, wall-clock `durationListenedSec`, 10 s checkpoints, append-only sessions, LWW annotations, local-first sync).
+- **Backend (`../back/`):** Deno + Lesan scaffold is in place following lesanSatek conventions (`mod.ts`, `models/`, `src/`, `utils/`, `@model`/`@lib`). Five models (User, Track, PlaybackSession, Annotation, Playlist), simple JWT auth (`register`/`login`/`getMe`), track acts (`registerTrack`/`getMyTracks`), and an idempotent `syncLocalData` batch act that inserts sessions/annotations by `clientId` and `$inc`s track aggregates. `deno check mod.ts`, `deno lint`, and `deno fmt --check` all pass. **Ran against MongoDB and generated `../back/declarations/selectInp.ts` (the standard `lesanApi` fetch client + `ReqType`); hurl suite not yet executed.**
+- **Mobile:** Expo SDK 57 scaffold (`create-expo-app` default template) — Expo Router, React 19.2, RN 0.86, TypeScript strict, source under `src/` with the `@/*` alias. Built: typed Lesan client (`src/lib`, wrapping the generated `lesanApi`), env/config, auth (service, secure token storage, Zustand store, login/register screens with route gating), `LocalDBService` (`expo-sqlite`, versioned schema/migrations), `contentHash` (SHA-256 first 1 MB + size), the pure `sessionTracking` state machine, `syncEngine`/`SyncService`, and the `expo-audio`-based `TrackPlayerService` (background audio, lock-screen controls, 10 s checkpoints, orphan-session recovery) with Library + Player screens. **Annotations slice:** `AnnotationService` + `useTrackAnnotations`, colored markers on the player progress bar (tap to seek), a note composer anchored at the current position, and a tappable note list on the Player. Installed: `expo-audio`, `expo-document-picker`, `expo-sqlite`, `expo-secure-store`, `expo-crypto`, `expo-file-system`, `zustand`, `zod`, Jest + RNTL. Device verification in Expo Go is the remaining step.
+
+---
+
+## Next task
+
+**Steps 1 and 2 are complete (contract frozen, mobile foundation built). The next step is Step 3 — the first vertical slice.**
+
+The audio engine is decided: **`expo-audio`** (SDK 57 first-party) — it runs in Expo Go and has first-class New-Architecture support, unlike `react-native-track-player`. The Library + Player screens and `TrackPlayerService` are implemented; verify the vertical slice on a real device in Expo Go (import a file → play → session recorded → synced).
+
+### Step 1 — Backend online + contract frozen ✅
+
+1. Add `docker-compose.dev.yml` — **skipped by request; the backend runs locally via `deno task start`.**
+2. Run `deno task dev` (or `start`) in `../back/` so `typeGeneration: true` emits `../back/declarations/`.
+3. Run `deno task seed`, then `deno task test` (hurl) and confirm the register → login → getMe → registerTrack → getMyTracks → syncLocalData flow is green. *(hurl still pending)*
+4. Verify the aggregates: after `syncLocalData`, the track's `totalPlayCount`/`totalListenTimeSec`/`lastPlayedAt` reflect the ingested session, and a replayed batch does not double-insert (`clientId`). *(verified — see below)*
+5. Freeze the mobile-relevant contract: act names, `set`/`get` shapes, `token` header, and the `{ success, body }` envelope. Document any deviations from `../back/AGENTS.md`. *(verified)*
+
+### Step 2 — Mobile foundation ✅
+
+1. Install and version-check the stack against Expo SDK 57 docs: `expo-sqlite`, `expo-secure-store`, `expo-crypto`, `zustand`; plus `zod` and Jest + RNTL for tests.
+2. Add `src/lib` typed Lesan client wrapping the generated standard `lesanApi` fetch client (act transport, envelope parsing, timeout, `token` header, error translation); run `npm run gen:api` to sync `back/declarations/`.
+3. Add config/env loading (`EXPO_PUBLIC_LESAN_URL`, `EXPO_PUBLIC_APP_ENV`).
+4. Build `LocalDBService` (`expo-sqlite`) with a versioned schema for `tracks`, `sessions`, `annotations`, `playlists`, and `playback_checkpoints`.
+5. Build the auth flow (login/register, secure token storage, session restore).
+
+### Step 3 — First vertical slice (next)
+
+Register one track (hash + metadata) and play it end-to-end: `TrackPlayerService` records a session with correct `durationListenedSec`, checkpoints it, and `SyncService` pushes it through `syncLocalData`. This is the smallest proof that the audio → local DB → sync loop works.
+
+---
+
+## Condensed roadmap (full detail in `TODO.md`)
+
+1. **Backend core completion** — sessions, annotations, playlists acts; track-detail projection; stats.
+2. **Mobile foundation** — client, env, local DB, auth.
+3. **Library + registration** — device scan, `contentHash`, metadata, `registerTrack`.
+4. **Player + sessions** — event-driven tracking, delta duration, checkpoints/recovery, background/lock-screen.
+5. **Annotations + timeline** — create/edit/delete, progress-bar markers, jump-to-annotation, offline temp-id mapping.
+6. **History + stats + playlists.**
+7. **Sync robustness** — bounded retries, id mapping, LWW, offline recovery.
+8. **Polish** — settings, export, lock-screen/Android Auto, accessibility.
+
+## Outstanding verification
+
+- [ ] Backend hurl suite green against a real MongoDB.
+- [x] `../back/declarations/` generated and consumed by mobile types (`npm run gen:api`).
+- [x] Contract smoke-verified live: `register → login → getMe → registerTrack → syncLocalData`; replayed batch is idempotent (`syncedSessions: 0`) and aggregates are not double-counted.
+- [ ] Mobile unit tests for `durationListenedSec` and session transitions.
+- [ ] Offline → online sync recovery with no duplicate rows.
+- [ ] App-kill mid-session loses no data (checkpoint recovery).
+
+## Exit criteria (this session)
+
+- Backend runs against MongoDB; `deno task test` passes; `../back/declarations/` generated.
+- The mobile stack is installed and SDK-57-compatible; `npm run lint` and typecheck pass.
+- The typed Lesan client, `LocalDBService`, and auth flow exist and are wired to the backend contract.
+- One track registered and one session synced end-to-end, verified.
+- Results recorded in `TODO.md` statuses.
+
+## Open decisions (do not silently assume)
+
+- Multi-device annotations: LWW editing vs. append-only for v1.
+- Server file storage: metadata only vs. S3/MinIO.
+- Playback-rate change mid-session: new session (current assumption) vs. separate event.
+- Annotation play-count granularity.
+- Offline annotation temp→server id mapping.
+- Whether `registerTrack` is metadata-only or expects an uploaded file.
+
+## Working rules
+
+- Follow `../AGENTS.md` first, then `../back/AGENTS.md` / `AGENTS.md`. Where `../docs/` conflict, `../AGENTS.md` wins.
+- Read the exact Expo SDK 57 docs (https://docs.expo.dev/versions/v57.0.0/) before adding native/Expo APIs; confirm package versions before installing.
+- Strict TypeScript, no `any`; consume generated Lesan types end-to-end.
+- Local-first: every write goes to SQLite before the network; never block the UI on a call.
+- Integer seconds everywhere; identify tracks by `contentHash`; never recompute `durationListenedSec` from position deltas.
+- Do not auto-start dev servers, emulators, watchers, or builds unless explicitly asked.
+- Do not commit/reset/revert user changes unless explicitly asked. Backend commits (when asked): Conventional Commits + Gitmoji; never `git reset`.
