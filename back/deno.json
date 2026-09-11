@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "exports": "./mod.ts",
   "tasks": {
-    "start": "deno run --allow-all mod.ts",
+    "start": "deno run --allow-all --watch --watch-exclude=declarations --no-clear-screen mod.ts",
     "dev": "deno run --allow-all --watch mod.ts",
     "seed": "deno run --allow-all utils/seed.ts",
     "test": "hurl --test --variables-file http/vars.env http/e2e.hurl"
