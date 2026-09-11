@@ -9,17 +9,17 @@ import { formatClock } from "@/lib/time";
 
 export type AnnotationListProps = {
   annotations: LocalAnnotation[];
-  selectedId: string | null;
-  onSelect: (annotation: LocalAnnotation) => void;
+  selectedId?: string | null;
+  onSelect?: (annotation: LocalAnnotation) => void;
 };
 
-export function AnnotationList({ annotations, selectedId, onSelect }: AnnotationListProps) {
+export function AnnotationList({ annotations, selectedId = null, onSelect }: AnnotationListProps) {
   const theme = useTheme();
 
   if (annotations.length === 0) {
     return (
       <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-        No notes yet. Tap “+ Note” to add one at the current position.
+        No notes yet.
       </ThemedText>
     );
   }
@@ -31,9 +31,9 @@ export function AnnotationList({ annotations, selectedId, onSelect }: Annotation
         return (
           <Pressable
             key={annotation.id}
-            accessibilityRole="button"
+            accessibilityRole={onSelect ? "button" : undefined}
             accessibilityState={{ selected }}
-            onPress={() => onSelect(annotation)}>
+            onPress={onSelect ? () => onSelect(annotation) : undefined}>
             <ThemedView
               type={selected ? "backgroundSelected" : "backgroundElement"}
               style={styles.row}>

@@ -33,6 +33,10 @@ export default function RootLayout() {
               name="player"
               options={{ headerShown: true, title: "Now Playing" }}
             />
+            <Stack.Screen
+              name="track/[id]"
+              options={{ headerShown: true, title: "Track" }}
+            />
           </Stack.Protected>
           <Stack.Protected guard={status !== "authenticated"}>
             <Stack.Screen name="(auth)" />

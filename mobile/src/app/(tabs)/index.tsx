@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { useCallback, useState } from "react";
 import { FlatList, Pressable, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -74,12 +74,13 @@ export default function LibraryScreen() {
             </ThemedText>
           }
           renderItem={({ item }) => (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() =>
-                router.push({ pathname: "/player", params: { trackId: item.id } })
-              }>
-              <ThemedView type="backgroundElement" style={styles.row}>
+            <ThemedView type="backgroundElement" style={styles.row}>
+              <Pressable
+                accessibilityRole="button"
+                style={styles.rowMain}
+                onPress={() =>
+                  router.push({ pathname: "/player", params: { trackId: item.id } })
+                }>
                 <ThemedText type="smallBold" numberOfLines={1}>
                   {item.title}
                 </ThemedText>
@@ -87,8 +88,16 @@ export default function LibraryScreen() {
                   {item.totalPlayCount} play{item.totalPlayCount === 1 ? "" : "s"} ·{" "}
                   {formatLastPlayed(item.lastPlayedAt)}
                 </ThemedText>
-              </ThemedView>
-            </Pressable>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={() =>
+                  router.push(`/track/${item.id}` as Href)
+                }>
+                <ThemedText type="linkPrimary">Details</ThemedText>
+              </Pressable>
+            </ThemedView>
           )}
         />
       </SafeAreaView>
@@ -121,8 +130,14 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.five,
   },
   row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.three,
     padding: Spacing.three,
     borderRadius: Spacing.three,
+  },
+  rowMain: {
+    flex: 1,
     gap: Spacing.one,
   },
 });

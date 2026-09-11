@@ -27,6 +27,7 @@ import type {
   PlaybackCheckpoint,
   SaveCheckpointInput,
   SyncStatus,
+  TrackDetailData,
 } from "@/lib/db/types";
 import type { HistoryItem } from "@/lib/history";
 
@@ -111,6 +112,19 @@ async function getTrackByContentHash(contentHash: string): Promise<LocalTrack | 
     contentHash,
   ]);
   return row ? mapTrack(row) : null;
+}
+
+/** Track plus its sessions and annotations, for the Track Detail screen. */
+async function getTrackDetailData(trackId: string): Promise<TrackDetailData | null> {
+  const track = await getTrackById(trackId);
+  if (!track) {
+    return null;
+  }
+  const [sessions, annotations] = await Promise.all([
+    getSessionsByTrack(trackId),
+    getAnnotationsByTrack(trackId),
+  ]);
+  return { track, sessions, annotations };
 }
 
 async function getAllTracks(): Promise<LocalTrack[]> {
@@ -540,6 +554,7 @@ export const LocalDBService = {
   insertTrack,
   getTrackById,
   getTrackByContentHash,
+  getTrackDetailData,
   getAllTracks,
   getPendingTracks,
   setTrackSyncStatus,

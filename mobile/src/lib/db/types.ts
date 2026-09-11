@@ -92,8 +92,14 @@ export type PlaybackCheckpoint = {
   deviceInfo: string | null;
 };
 
-export type CreateTrackInput = {
-  id?: string;
+/** Everything the Track Detail screen needs, read locally. */
+export type TrackDetailData = {
+  track: LocalTrack;
+  sessions: LocalSession[];
+  annotations: LocalAnnotation[];
+};
+
+export type CreateTrackInput = {  id?: string;
   contentHash: string;
   title: string;
   fileName?: string | null;
