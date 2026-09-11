@@ -11,6 +11,7 @@ export const syncLocalDataFn: ActFn = async (body) => {
   const userId = new ObjectId(user._id);
   let syncedSessions = 0;
   let syncedAnnotations = 0;
+  const annotationMappings: { clientId: string; serverId?: string }[] = [];
 
   for (const session of sessions) {
     const parentTrack = await track.findOne({
@@ -77,19 +78,59 @@ export const syncLocalDataFn: ActFn = async (body) => {
     });
     if (!parentTrack) continue;
 
-    const alreadySynced = await annotation.findOne({
+    const existing = await annotation.findOne({
       filters: { clientId: note.clientId },
-      projection: { _id: 1 },
+      projection: { _id: 1, updatedAt: 1 },
     });
-    if (alreadySynced) continue;
 
-    await annotation.insertOne({
+    // Tombstone from a local hard/soft delete: remove the server row if present.
+    if (note.deleted) {
+      if (existing) {
+        await annotation.deleteOne({ filter: { _id: existing._id } });
+        syncedAnnotations += 1;
+      }
+      continue;
+    }
+
+    const incomingUpdatedAt = note.updatedAt ?? Date.now();
+
+    if (existing) {
+      const existingUpdatedAt = existing.updatedAt
+        ? new Date(existing.updatedAt).getTime()
+        : 0;
+
+      // Last-write-wins: only overwrite when the local edit is newer.
+      if (incomingUpdatedAt > existingUpdatedAt) {
+        await annotation.findOneAndUpdate({
+          filter: { _id: existing._id },
+          update: {
+            $set: {
+              text: note.text,
+              tags: note.tags,
+              color: note.color,
+              updatedAt: new Date(incomingUpdatedAt),
+            },
+          },
+          projection: { _id: 1 },
+        });
+      }
+
+      annotationMappings.push({
+        clientId: note.clientId,
+        serverId: String(existing._id),
+      });
+      syncedAnnotations += 1;
+      continue;
+    }
+
+    const inserted = await annotation.insertOne({
       doc: {
         clientId: note.clientId,
         positionSec: note.positionSec,
         text: note.text,
         tags: note.tags,
         color: note.color,
+        updatedAt: new Date(incomingUpdatedAt),
       },
       relations: {
         track: {
@@ -104,8 +145,14 @@ export const syncLocalDataFn: ActFn = async (body) => {
       projection: { _id: 1 },
     });
 
-    syncedAnnotations += 1;
+    if (inserted) {
+      annotationMappings.push({
+        clientId: note.clientId,
+        serverId: String(inserted._id),
+      });
+      syncedAnnotations += 1;
+    }
   }
 
-  return { syncedSessions, syncedAnnotations };
+  return { syncedSessions, syncedAnnotations, annotations: annotationMappings };
 };

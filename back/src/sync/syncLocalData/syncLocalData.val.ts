@@ -38,6 +38,8 @@ export const syncLocalDataValidator = () =>
             text: string(),
             tags: defaulted(array(string()), []),
             color: optional(string()),
+            updatedAt: optional(number()),
+            deleted: defaulted(boolean(), false),
           }),
         ),
         [],
@@ -46,5 +48,14 @@ export const syncLocalDataValidator = () =>
     get: object({
       syncedSessions: number(),
       syncedAnnotations: number(),
+      annotations: defaulted(
+        array(
+          object({
+            clientId: string(),
+            serverId: optional(string()),
+          }),
+        ),
+        [],
+      ),
     }),
   });
