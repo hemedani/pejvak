@@ -9,7 +9,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { MaxContentWidth, Spacing } from "@/constants/theme";
 import type { LocalTrack } from "@/lib/db/types";
 import { LocalDBService } from "@/services/LocalDBService";
-import { importAudioFile } from "@/services/LibraryService";
+import { importAudioFiles } from "@/services/LibraryService";
 
 function formatLastPlayed(value: number | null): string {
   if (!value) {
@@ -21,10 +21,16 @@ function formatLastPlayed(value: number | null): string {
 export default function LibraryScreen() {
   const router = useRouter();
   const [tracks, setTracks] = useState<LocalTrack[]>([]);
+  const [annotationCounts, setAnnotationCounts] = useState<Record<string, number>>({});
   const [importing, setImporting] = useState(false);
 
   const refresh = useCallback(async () => {
-    setTracks(await LocalDBService.getAllTracks());
+    const [allTracks, counts] = await Promise.all([
+      LocalDBService.getAllTracks(),
+      LocalDBService.getAnnotationCounts(),
+    ]);
+    setTracks(allTracks);
+    setAnnotationCounts(counts);
   }, []);
 
   useFocusEffect(
@@ -36,10 +42,12 @@ export default function LibraryScreen() {
   const onImport = useCallback(async () => {
     setImporting(true);
     try {
-      const track = await importAudioFile();
+      const imported = await importAudioFiles();
       await refresh();
-      if (track) {
-        router.push({ pathname: "/player", params: { trackId: track.id } });
+      // Open the player only when a single file was picked; batch imports
+      // land back on the library.
+      if (imported.length === 1) {
+        router.push({ pathname: "/player", params: { trackId: imported[0].id } });
       }
     } finally {
       setImporting(false);
@@ -59,7 +67,7 @@ export default function LibraryScreen() {
         </View>
 
         <PrimaryButton
-          label={importing ? "Importing…" : "Add audio file"}
+          label={importing ? "Importing…" : "Add audio files"}
           loading={importing}
           onPress={() => void onImport()}
         />
@@ -84,13 +92,16 @@ export default function LibraryScreen() {
                 <ThemedText type="smallBold" numberOfLines={1}>
                   {item.title}
                 </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
+                <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
                   {item.totalPlayCount} play{item.totalPlayCount === 1 ? "" : "s"} ·{" "}
+                  {annotationCounts[item.id] ?? 0} note
+                  {(annotationCounts[item.id] ?? 0) === 1 ? "" : "s"} ·{" "}
                   {formatLastPlayed(item.lastPlayedAt)}
                 </ThemedText>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={`Details for ${item.title}`}
                 hitSlop={8}
                 onPress={() =>
                   router.push(`/track/${item.id}` as Href)
