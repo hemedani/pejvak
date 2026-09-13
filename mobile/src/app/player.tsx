@@ -18,9 +18,12 @@ import { ThemedView } from "@/components/themed-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
 import { MaxContentWidth, Spacing } from "@/constants/theme";
+import { useSleepTimer } from "@/hooks/use-sleep-timer";
 import { useTheme } from "@/hooks/use-theme";
 import { useTrackAnnotations } from "@/hooks/use-annotations";
 import type { LocalAnnotation, LocalTrack } from "@/lib/db/types";
+import { resumePositionSec } from "@/lib/resume";
+import { formatRemaining, SLEEP_TIMER_CHOICES } from "@/lib/sleepTimer";
 import { formatClock } from "@/lib/time";
 import { LocalDBService } from "@/services/LocalDBService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
@@ -45,6 +48,8 @@ export default function PlayerScreen() {
   const playbackSpeed = usePlayerStore((state) => state.playbackSpeed);
   const error = usePlayerStore((state) => state.error);
 
+  const sleep = useSleepTimer();
+
   const {
     annotations,
     creating,
@@ -66,7 +71,14 @@ export default function PlayerScreen() {
       }
       setTrack(loaded);
       if (loaded && usePlayerStore.getState().trackId !== loaded.id) {
-        await TrackPlayerService.loadAndPlay(loaded);
+        const sessions = await LocalDBService.getSessionsByTrack(loaded.id);
+        if (!mounted) {
+          return;
+        }
+        await TrackPlayerService.loadAndPlay(
+          loaded,
+          resumePositionSec(sessions, loaded.durationSec),
+        );
       }
     })();
     return () => {
@@ -93,6 +105,20 @@ export default function PlayerScreen() {
     const index = SPEEDS.indexOf(playbackSpeed);
     const next = SPEEDS[(index + 1) % SPEEDS.length] ?? 1;
     void TrackPlayerService.setPlaybackRate(next);
+  };
+
+  const openSleepTimer = () => {
+    if (sleep.active) {
+      sleep.cancel();
+      return;
+    }
+    Alert.alert("Sleep timer", "Pause playback after…", [
+      ...SLEEP_TIMER_CHOICES.map((minutes) => ({
+        text: `${minutes} min`,
+        onPress: () => sleep.start(minutes),
+      })),
+      { text: "Cancel", style: "cancel" as const },
+    ]);
   };
 
   const openComposer = () => {
@@ -229,12 +255,15 @@ export default function PlayerScreen() {
             <View style={styles.controls}>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Seek back 30 seconds"
+                hitSlop={8}
                 onPress={() => void TrackPlayerService.seekTo(Math.max(0, positionSec - 30))}>
                 <ThemedText type="smallBold">-30s</ThemedText>
               </Pressable>
 
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={isPlaying ? "Pause" : "Play"}
                 style={styles.playButton}
                 onPress={() => TrackPlayerService.togglePlayPause()}>
                 <ThemedText style={styles.playGlyph}>{isPlaying ? "❚❚" : "▶"}</ThemedText>
@@ -242,6 +271,8 @@ export default function PlayerScreen() {
 
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Seek forward 30 seconds"
+                hitSlop={8}
                 onPress={() => void TrackPlayerService.seekTo(positionSec + 30)}>
                 <ThemedText type="smallBold">+30s</ThemedText>
               </Pressable>
@@ -250,12 +281,24 @@ export default function PlayerScreen() {
             <View style={styles.secondaryRow}>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel={`Playback speed ${playbackSpeed} times`}
                 style={styles.speedButton}
                 onPress={cycleSpeed}>
                 <ThemedText type="smallBold">{playbackSpeed}x speed</ThemedText>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
+                accessibilityLabel="Sleep timer"
+                accessibilityState={{ selected: sleep.active }}
+                style={[styles.sleepButton, { borderColor: theme.backgroundSelected }]}
+                onPress={openSleepTimer}>
+                <ThemedText type="smallBold">
+                  {sleep.active ? formatRemaining(sleep.remainingMs) : "Sleep"}
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Add note"
                 disabled={!track}
                 onPress={openComposer}
                 style={[styles.noteButton, { borderColor: theme.backgroundSelected }]}>
@@ -401,12 +444,27 @@ const styles = StyleSheet.create({
     gap: Spacing.two,
   },
   speedButton: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     borderRadius: Spacing.three,
     backgroundColor: "#F0F0F3",
   },
+  sleepButton: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.three,
+    borderWidth: 1,
+  },
   noteButton: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
     borderRadius: Spacing.three,
