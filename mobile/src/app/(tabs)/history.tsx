@@ -1,6 +1,6 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo } from "react";
-import { RefreshControl, SectionList, StyleSheet, View } from "react-native";
+import { Pressable, RefreshControl, SectionList, Share, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { SessionCard } from "@/components/session-card";
@@ -8,6 +8,7 @@ import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { MaxContentWidth, Spacing } from "@/constants/theme";
 import { useHistory } from "@/hooks/use-history";
+import { historyToMarkdown } from "@/lib/exportHistory";
 import { groupSessionsByDay, type HistoryItem } from "@/lib/history";
 
 type HistorySection = {
@@ -35,11 +36,31 @@ export default function HistoryScreen() {
     [items],
   );
 
+  const exportHistory = async () => {
+    try {
+      await Share.share({
+        title: "Listening history",
+        message: historyToMarkdown(items),
+      });
+    } catch {
+      // The share sheet was dismissed or sharing is unavailable.
+    }
+  };
+
   return (
     <ThemedView style={styles.container}>
       <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
         <View style={styles.header}>
           <ThemedText type="subtitle">History</ThemedText>
+          {items.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Export listening history"
+              hitSlop={8}
+              onPress={() => void exportHistory()}>
+              <ThemedText type="linkPrimary">Export</ThemedText>
+            </Pressable>
+          ) : null}
         </View>
         <SectionList
           sections={sections}
@@ -81,6 +102,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
   },
   header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingTop: Spacing.three,
     paddingBottom: Spacing.two,
   },

@@ -1,4 +1,5 @@
 import type { LocalSession, LocalTrack } from "@/lib/db/types";
+import { formatClock } from "@/lib/time";
 
 export type HistoryItem = {
   session: LocalSession;
@@ -108,4 +109,14 @@ export function formatTimeRange(startedAt: number, endedAt: number | null): stri
 
 export function describeSpeed(speed: number): string {
   return `${speed}×`;
+}
+
+/** Position range within the track: "12:30 – 45:10", or "– in progress". */
+export function formatPositionRange(
+  startPositionSec: number,
+  endPositionSec: number | null,
+): string {
+  return endPositionSec === null
+    ? `${formatClock(startPositionSec)} – in progress`
+    : `${formatClock(startPositionSec)} – ${formatClock(endPositionSec)}`;
 }

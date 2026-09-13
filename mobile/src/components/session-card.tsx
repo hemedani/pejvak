@@ -3,7 +3,13 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { ThemedText } from "@/components/themed-text";
 import { ThemedView } from "@/components/themed-view";
 import { Spacing } from "@/constants/theme";
-import { describeSpeed, formatDuration, formatTimeRange, type HistoryItem } from "@/lib/history";
+import {
+  describeSpeed,
+  formatDuration,
+  formatPositionRange,
+  formatTimeRange,
+  type HistoryItem,
+} from "@/lib/history";
 
 export type SessionCardProps = {
   item: HistoryItem;
@@ -34,6 +40,12 @@ export function SessionCard({ item, onPress }: SessionCardProps) {
           </ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
             {formatTimeRange(item.session.startedAt, item.session.endedAt)}
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>
+            {formatPositionRange(
+              item.session.startPositionSec,
+              item.session.endPositionSec,
+            )}
           </ThemedText>
         </View>
         <View style={styles.meta}>

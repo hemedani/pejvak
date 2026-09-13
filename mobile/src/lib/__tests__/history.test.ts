@@ -2,6 +2,7 @@ import {
   dayKey,
   describeSpeed,
   formatDuration,
+  formatPositionRange,
   formatTimeRange,
   groupSessionsByDay,
   type HistoryItem,
@@ -101,5 +102,16 @@ describe("describeSpeed", () => {
     expect(describeSpeed(1)).toBe("1×");
     expect(describeSpeed(1.25)).toBe("1.25×");
     expect(describeSpeed(2)).toBe("2×");
+  });
+});
+
+describe("formatPositionRange", () => {
+  it("formats the position range within the track", () => {
+    expect(formatPositionRange(0, 60)).toBe("0:00 – 1:00");
+    expect(formatPositionRange(3661, 3720)).toBe("1:01:01 – 1:02:00");
+  });
+
+  it("marks an unfinished session", () => {
+    expect(formatPositionRange(120, null)).toBe("2:00 – in progress");
   });
 });

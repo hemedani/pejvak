@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, Share, StyleSheet, View } from "react-native";
 
 import { AnnotationList } from "@/components/annotation-list";
 import { SessionCard } from "@/components/session-card";
@@ -10,6 +10,7 @@ import { ThemedView } from "@/components/themed-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { MaxContentWidth, Spacing } from "@/constants/theme";
 import { useTrackDetail } from "@/hooks/use-track-detail";
+import { annotationsToMarkdown } from "@/lib/exportAnnotations";
 import { formatDuration, type HistoryItem } from "@/lib/history";
 import { computeTrackStats } from "@/lib/trackStats";
 
@@ -29,7 +30,22 @@ export default function TrackDetailScreen() {
   );
 
   const track = data?.track ?? null;
-  const stats = computeTrackStats(data?.sessions ?? [], data?.annotations ?? []);
+  const annotations = data?.annotations ?? [];
+  const stats = computeTrackStats(data?.sessions ?? [], annotations);
+
+  const exportNotes = async () => {
+    if (!track) {
+      return;
+    }
+    try {
+      await Share.share({
+        title: `${track.title} — annotations`,
+        message: annotationsToMarkdown(track, annotations),
+      });
+    } catch {
+      // The share sheet was dismissed or sharing is unavailable.
+    }
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -66,6 +82,15 @@ export default function TrackDetailScreen() {
               router.push({ pathname: "/player", params: { trackId: track.id } })
             }
           />
+        ) : null}
+
+        {track && annotations.length > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void exportNotes()}
+            style={styles.exportButton}>
+            <ThemedText type="linkPrimary">Export notes as Markdown</ThemedText>
+          </Pressable>
         ) : null}
 
         <View style={styles.section}>
@@ -120,6 +145,11 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     gap: Spacing.two,
+  },
+  exportButton: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   statCell: {
     flex: 1,
