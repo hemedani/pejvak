@@ -1,3 +1,4 @@
+import * as Network from "expo-network";
 import { useEffect } from "react";
 import { AppState } from "react-native";
 
@@ -6,8 +7,9 @@ import { syncAll } from "@/services/SyncService";
 
 /**
  * Pushes pending local rows and pulls server state on mount, whenever the app
- * returns to the foreground, and on a timer. Consecutive failures back off
- * exponentially. All failures are swallowed — the app stays usable offline.
+ * returns to the foreground, when connectivity is regained, and on a timer.
+ * Consecutive failures back off exponentially. All failures are swallowed —
+ * the app stays usable offline.
  */
 export function useSyncLifecycle(): void {
   useEffect(() => {
@@ -15,6 +17,13 @@ export function useSyncLifecycle(): void {
     let running = false;
     let failures = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const schedule = (delayMs: number) => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      timer = setTimeout(() => void run(), delayMs);
+    };
 
     const run = async () => {
       if (running) {
@@ -29,15 +38,22 @@ export function useSyncLifecycle(): void {
       } finally {
         running = false;
         if (!cancelled) {
-          timer = setTimeout(() => void run(), retryDelayMs(failures));
+          schedule(retryDelayMs(failures));
         }
       }
     };
 
     void run();
 
-    const subscription = AppState.addEventListener("change", (state) => {
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
       if (state === "active") {
+        void run();
+      }
+    });
+
+    // Reconnected: push the queued rows now instead of waiting for the backoff.
+    const networkSubscription = Network.addNetworkStateListener((state) => {
+      if (state.isConnected && state.isInternetReachable !== false) {
         void run();
       }
     });
@@ -47,7 +63,8 @@ export function useSyncLifecycle(): void {
       if (timer) {
         clearTimeout(timer);
       }
-      subscription.remove();
+      appStateSubscription.remove();
+      networkSubscription.remove();
     };
   }, []);
 }
