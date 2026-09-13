@@ -79,6 +79,7 @@ export type PlaylistRow = {
   description: string | null;
   is_public: number;
   items: string;
+  deleted_at: number | null;
   sync_status: string;
   created_at: number;
   updated_at: number;
@@ -211,6 +212,7 @@ export function mapPlaylist(row: PlaylistRow): LocalPlaylist {
     description: row.description,
     isPublic: toBoolean(row.is_public),
     items: parsePlaylistItems(row.items),
+    deletedAt: row.deleted_at,
     syncStatus: toSyncStatus(row.sync_status),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

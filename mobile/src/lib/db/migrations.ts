@@ -119,6 +119,13 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    version: 4,
+    up: [
+      `ALTER TABLE playlists ADD COLUMN deleted_at INTEGER`,
+      `CREATE INDEX IF NOT EXISTS idx_playlists_deleted_at ON playlists(deleted_at)`,
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

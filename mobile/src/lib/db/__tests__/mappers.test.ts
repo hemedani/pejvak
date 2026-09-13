@@ -104,6 +104,7 @@ describe("row mappers", () => {
         { trackId: "t1", order: 0 },
         { trackId: 5, order: 1 },
       ]),
+      deleted_at: null,
       sync_status: "pending",
       ...base,
     };

@@ -66,12 +66,15 @@ export type LocalAnnotation = {
 };
 
 export type LocalPlaylist = {
+  /** Local id; doubles as the `clientId` used for idempotent sync. */
   id: string;
   serverId: string | null;
   title: string;
   description: string | null;
   isPublic: boolean;
   items: PlaylistItem[];
+  /** Local tombstone timestamp; non-null means pending server-side delete. */
+  deletedAt: number | null;
   syncStatus: SyncStatus;
   createdAt: number;
   updatedAt: number;
@@ -162,6 +165,18 @@ export type CreatePlaylistInput = {
   description?: string | null;
   isPublic?: boolean;
   items?: PlaylistItem[];
+};
+
+export type InsertRemotePlaylistInput = {
+  /** Local id: the server `clientId`, or the server id when none exists. */
+  id: string;
+  serverId: string;
+  title: string;
+  description: string | null;
+  isPublic: boolean;
+  /** Items already resolved to local track ids via the track serverId map. */
+  items: PlaylistItem[];
+  updatedAt: number;
 };
 
 export type SaveCheckpointInput = {

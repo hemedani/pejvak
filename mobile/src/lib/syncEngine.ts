@@ -1,5 +1,6 @@
 import type {
   LocalAnnotation,
+  LocalPlaylist,
   LocalSession,
   LocalTrack,
   SyncStatus,
@@ -8,9 +9,22 @@ import type {
 export type RegisterTrackResult = { _id?: string };
 
 export type SyncLocalDataResult = {
-  syncedSessions: number;
-  syncedAnnotations: number;
-  annotations: { clientId: string; serverId?: string }[];
+  syncedSessions?: number;
+  syncedAnnotations?: number;
+  syncedPlaylists?: number;
+  annotations?: { clientId: string; serverId?: string }[];
+  playlists?: { clientId: string; serverId?: string }[];
+};
+
+/** A playlist ready for the wire: item track ids replaced by content hashes. */
+export type PlaylistSyncPayload = {
+  clientId: string;
+  title: string;
+  description: string | null;
+  isPublic: boolean;
+  items: { contentHash: string; order: number }[];
+  updatedAt: number;
+  deleted: boolean;
 };
 
 export type SyncTransport = {
@@ -18,6 +32,7 @@ export type SyncTransport = {
   syncLocalData: (
     sessions: LocalSession[],
     annotations: LocalAnnotation[],
+    playlists: PlaylistSyncPayload[],
   ) => Promise<SyncLocalDataResult>;
 };
 
@@ -26,17 +41,21 @@ export type SyncStore = {
   getAllTracks: () => Promise<LocalTrack[]>;
   getPendingSessions: (limit: number) => Promise<LocalSession[]>;
   getPendingAnnotations: (limit: number) => Promise<LocalAnnotation[]>;
+  getPendingPlaylists: (limit: number) => Promise<LocalPlaylist[]>;
   setTrackSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
   setSessionSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
   setAnnotationSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
-  /** Hard-delete a row (used for acknowledged annotation delete tombstones). */
+  setPlaylistSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
+  /** Hard-delete a row (used for acknowledged delete tombstones). */
   removeAnnotation: (id: string) => Promise<void>;
+  removePlaylist: (id: string) => Promise<void>;
 };
 
 export type SyncSummary = {
   tracksRegistered: number;
   sessionsSynced: number;
   annotationsSynced: number;
+  playlistsSynced: number;
   failed: number;
 };
 
@@ -68,6 +87,7 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     tracksRegistered: 0,
     sessionsSynced: 0,
     annotationsSynced: 0,
+    playlistsSynced: 0,
     failed: 0,
   };
 
@@ -84,13 +104,15 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     }
   }
 
-  // Only send sessions/annotations whose track now exists server-side; the
-  // backend skips unknown content hashes.
+  // Only send rows whose track now exists server-side; the backend skips
+  // unknown content hashes.
+  const allTracks = await store.getAllTracks();
   const syncedHashes = new Set(
-    (await store.getAllTracks())
+    allTracks
       .filter((track) => track.syncStatus === "synced" || track.serverId !== null)
       .map((track) => track.contentHash),
   );
+  const trackByLocalId = new Map(allTracks.map((track) => [track.id, track]));
 
   const sessions = (await store.getPendingSessions(limit)).filter(
     (session) => isFinalized(session) && syncedHashes.has(session.contentHash),
@@ -99,7 +121,49 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     syncedHashes.has(annotation.contentHash),
   );
 
-  if (sessions.length === 0 && annotations.length === 0) {
+  // Playlists go last; defer any whose referenced tracks are not registered yet.
+  const pendingPlaylists = await store.getPendingPlaylists(limit);
+  const playlistPayloads: PlaylistSyncPayload[] = [];
+  for (const playlist of pendingPlaylists) {
+    if (playlist.deletedAt !== null) {
+      playlistPayloads.push({
+        clientId: playlist.id,
+        title: playlist.title,
+        description: playlist.description,
+        isPublic: playlist.isPublic,
+        items: [],
+        updatedAt: playlist.deletedAt,
+        deleted: true,
+      });
+      continue;
+    }
+
+    const items: { contentHash: string; order: number }[] = [];
+    let resolvedAll = true;
+    for (const item of playlist.items) {
+      const track = trackByLocalId.get(item.trackId);
+      if (!track || !syncedHashes.has(track.contentHash)) {
+        resolvedAll = false;
+        break;
+      }
+      items.push({ contentHash: track.contentHash, order: item.order });
+    }
+    if (!resolvedAll) {
+      continue;
+    }
+
+    playlistPayloads.push({
+      clientId: playlist.id,
+      title: playlist.title,
+      description: playlist.description,
+      isPublic: playlist.isPublic,
+      items,
+      updatedAt: playlist.updatedAt,
+      deleted: false,
+    });
+  }
+
+  if (sessions.length === 0 && annotations.length === 0 && playlistPayloads.length === 0) {
     return summary;
   }
 
@@ -108,12 +172,18 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     ...annotations.map((annotation) =>
       store.setAnnotationSyncStatus(annotation.id, "syncing"),
     ),
+    ...playlistPayloads.map((playlist) =>
+      store.setPlaylistSyncStatus(playlist.clientId, "syncing"),
+    ),
   ]);
 
   try {
-    const result = await transport.syncLocalData(sessions, annotations);
-    const serverIds = new Map(
-      result.annotations.map((mapping) => [mapping.clientId, mapping.serverId]),
+    const result = await transport.syncLocalData(sessions, annotations, playlistPayloads);
+    const annotationServerIds = new Map(
+      (result.annotations ?? []).map((mapping) => [mapping.clientId, mapping.serverId]),
+    );
+    const playlistServerIds = new Map(
+      (result.playlists ?? []).map((mapping) => [mapping.clientId, mapping.serverId]),
     );
     await Promise.all([
       ...sessions.map((session) => store.setSessionSyncStatus(session.id, "synced")),
@@ -123,20 +193,33 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
           : store.setAnnotationSyncStatus(
               annotation.id,
               "synced",
-              serverIds.get(annotation.id),
+              annotationServerIds.get(annotation.id),
+            ),
+      ),
+      ...playlistPayloads.map((playlist) =>
+        playlist.deleted
+          ? store.removePlaylist(playlist.clientId)
+          : store.setPlaylistSyncStatus(
+              playlist.clientId,
+              "synced",
+              playlistServerIds.get(playlist.clientId),
             ),
       ),
     ]);
-    summary.sessionsSynced = result.syncedSessions;
-    summary.annotationsSynced = result.syncedAnnotations;
+    summary.sessionsSynced = result.syncedSessions ?? 0;
+    summary.annotationsSynced = result.syncedAnnotations ?? 0;
+    summary.playlistsSynced = result.syncedPlaylists ?? 0;
   } catch {
     await Promise.all([
       ...sessions.map((session) => store.setSessionSyncStatus(session.id, "failed")),
       ...annotations.map((annotation) =>
         store.setAnnotationSyncStatus(annotation.id, "failed"),
       ),
+      ...playlistPayloads.map((playlist) =>
+        store.setPlaylistSyncStatus(playlist.clientId, "failed"),
+      ),
     ]);
-    summary.failed += sessions.length + annotations.length;
+    summary.failed += sessions.length + annotations.length + playlistPayloads.length;
   }
 
   return summary;

@@ -20,6 +20,7 @@ import type {
   CreateSessionInput,
   CreateTrackInput,
   FinalizeSessionInput,
+  InsertRemotePlaylistInput,
   LocalAnnotation,
   LocalPlaylist,
   LocalSession,
@@ -32,7 +33,12 @@ import type {
   TrackDetailData,
 } from "@/lib/db/types";
 import type { HistoryItem } from "@/lib/history";
-import type { AnnotationUpdate, RemoteAnnotation, RemoteSession } from "@/lib/reconcile";
+import type {
+  AnnotationUpdate,
+  PlaylistUpdate,
+  RemoteAnnotation,
+  RemoteSession,
+} from "@/lib/reconcile";
 
 function newId(): string {
   return Crypto.randomUUID();
@@ -400,6 +406,22 @@ async function getAnnotationsByTrack(trackId: string): Promise<LocalAnnotation[]
   return rows.map(mapAnnotation);
 }
 
+/** Live annotation count per track id (excludes tombstoned rows). */
+async function getAnnotationCounts(): Promise<Record<string, number>> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ track_id: string; n: number }>(
+    `SELECT track_id, COUNT(*) AS n
+     FROM annotations
+     WHERE deleted_at IS NULL
+     GROUP BY track_id`,
+  );
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    counts[row.track_id] = row.n;
+  }
+  return counts;
+}
+
 async function getAnnotationById(id: string): Promise<LocalAnnotation | null> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<AnnotationRow>(
@@ -543,6 +565,7 @@ async function insertPlaylist(input: CreatePlaylistInput): Promise<LocalPlaylist
     description: input.description ?? null,
     isPublic: input.isPublic ?? false,
     items: input.items ?? [],
+    deletedAt: null,
     syncStatus: "pending",
     createdAt: now,
     updatedAt: now,
@@ -572,17 +595,36 @@ async function insertPlaylist(input: CreatePlaylistInput): Promise<LocalPlaylist
 async function getPlaylists(): Promise<LocalPlaylist[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<PlaylistRow>(
-    "SELECT * FROM playlists ORDER BY updated_at DESC",
+    "SELECT * FROM playlists WHERE deleted_at IS NULL ORDER BY updated_at DESC",
   );
+  return rows.map(mapPlaylist);
+}
+
+async function getAllPlaylists(): Promise<LocalPlaylist[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<PlaylistRow>("SELECT * FROM playlists");
   return rows.map(mapPlaylist);
 }
 
 async function getPlaylistById(id: string): Promise<LocalPlaylist | null> {
   const db = await getDatabase();
-  const row = await db.getFirstAsync<PlaylistRow>("SELECT * FROM playlists WHERE id = ?", [
-    id,
-  ]);
+  const row = await db.getFirstAsync<PlaylistRow>(
+    "SELECT * FROM playlists WHERE id = ? AND deleted_at IS NULL",
+    [id],
+  );
   return row ? mapPlaylist(row) : null;
+}
+
+async function getPendingPlaylists(limit = 50): Promise<LocalPlaylist[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<PlaylistRow>(
+    `SELECT * FROM playlists
+     WHERE sync_status IN ('pending', 'failed')
+     ORDER BY updated_at ASC
+     LIMIT ?`,
+    [limit],
+  );
+  return rows.map(mapPlaylist);
 }
 
 async function updatePlaylist(
@@ -615,9 +657,66 @@ async function updatePlaylist(
   );
 }
 
+/**
+ * Tombstones a playlist so the delete can be pushed later. The row is hidden
+ * from reads but kept queued until the batch sync acknowledges it.
+ */
+async function softDeletePlaylist(id: string): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    `UPDATE playlists
+     SET deleted_at = ?, sync_status = 'pending', updated_at = ?
+     WHERE id = ?`,
+    [now, now, id],
+  );
+}
+
 async function deletePlaylist(id: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync("DELETE FROM playlists WHERE id = ?", [id]);
+}
+
+/** Stores a playlist pulled from the server (already synced, items local). */
+async function insertRemotePlaylist(input: InsertRemotePlaylistInput): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT OR REPLACE INTO playlists (
+      id, server_id, title, description, is_public, items, deleted_at,
+      sync_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, NULL, 'synced', ?, ?)`,
+    [
+      input.id,
+      input.serverId,
+      input.title,
+      input.description,
+      input.isPublic ? 1 : 0,
+      JSON.stringify(input.items),
+      now,
+      input.updatedAt,
+    ],
+  );
+}
+
+/** Applies a server-won playlist edit (LWW) and links the server id. */
+async function applyRemotePlaylistUpdate(update: PlaylistUpdate): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE playlists
+     SET title = ?, description = ?, is_public = ?, items = ?, server_id = ?,
+         sync_status = 'synced', updated_at = ?
+     WHERE id = ? AND deleted_at IS NULL`,
+    [
+      update.title,
+      update.description,
+      update.isPublic ? 1 : 0,
+      JSON.stringify(update.items),
+      update.serverId,
+      update.updatedAt,
+      update.id,
+    ],
+  );
 }
 
 // --- Settings (key/value) -------------------------------------------------
@@ -745,6 +844,7 @@ export const LocalDBService = {
   setSessionSyncStatus,
   insertAnnotation,
   getAnnotationsByTrack,
+  getAnnotationCounts,
   getAnnotationById,
   getPendingAnnotations,
   getAllAnnotations,
@@ -756,9 +856,14 @@ export const LocalDBService = {
   setAnnotationSyncStatus,
   insertPlaylist,
   getPlaylists,
+  getAllPlaylists,
   getPlaylistById,
+  getPendingPlaylists,
   updatePlaylist,
+  softDeletePlaylist,
   deletePlaylist,
+  insertRemotePlaylist,
+  applyRemotePlaylistUpdate,
   setPlaylistSyncStatus,
   getSetting,
   setSetting,

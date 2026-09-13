@@ -1,4 +1,10 @@
-import type { LocalAnnotation, LocalSession, LocalTrack } from "@/lib/db/types";
+import type {
+  LocalAnnotation,
+  LocalPlaylist,
+  LocalSession,
+  LocalTrack,
+  PlaylistItem,
+} from "@/lib/db/types";
 
 export type RemoteTrack = {
   serverId: string;
@@ -43,6 +49,28 @@ export type AnnotationUpdate = {
   text: string;
   tags: string[];
   color: string | null;
+  updatedAt: number;
+};
+
+export type RemotePlaylist = {
+  serverId: string;
+  /** Original local id; the dedupe key against local rows. */
+  clientId: string | null;
+  title: string;
+  description: string | null;
+  isPublic: boolean;
+  /** Server track ids already resolved to local track ids by the caller. */
+  items: PlaylistItem[];
+  updatedAt: number;
+};
+
+export type PlaylistUpdate = {
+  id: string;
+  serverId: string;
+  title: string;
+  description: string | null;
+  isPublic: boolean;
+  items: PlaylistItem[];
   updatedAt: number;
 };
 
@@ -125,6 +153,54 @@ export function reconcileAnnotations(
         text: item.text,
         tags: item.tags,
         color: item.color,
+        updatedAt: item.updatedAt,
+      });
+      continue;
+    }
+    if (!existing.serverId) {
+      backfill.push({ id, serverId: item.serverId });
+    }
+  }
+
+  return { inserts, updates, backfill };
+}
+
+/**
+ * Playlists dedupe by `clientId` (falling back to the server id for
+ * server-created rows). Edits use last-write-wins on `updatedAt`; a local
+ * tombstone is never resurrected by a pull.
+ */
+export function reconcilePlaylists(
+  local: LocalPlaylist[],
+  remote: RemotePlaylist[],
+): {
+  inserts: RemotePlaylist[];
+  updates: PlaylistUpdate[];
+  backfill: Backfill[];
+} {
+  const byId = new Map(local.map((playlist) => [playlist.id, playlist]));
+  const inserts: RemotePlaylist[] = [];
+  const updates: PlaylistUpdate[] = [];
+  const backfill: Backfill[] = [];
+
+  for (const item of remote) {
+    const id = remoteLocalId(item);
+    const existing = byId.get(id);
+    if (!existing) {
+      inserts.push(item);
+      continue;
+    }
+    if (existing.deletedAt !== null) {
+      continue;
+    }
+    if (item.updatedAt > existing.updatedAt) {
+      updates.push({
+        id,
+        serverId: item.serverId,
+        title: item.title,
+        description: item.description,
+        isPublic: item.isPublic,
+        items: item.items,
         updatedAt: item.updatedAt,
       });
       continue;

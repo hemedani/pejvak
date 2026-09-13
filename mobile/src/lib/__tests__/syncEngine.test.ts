@@ -1,11 +1,13 @@
 import type {
   LocalAnnotation,
+  LocalPlaylist,
   LocalSession,
   LocalTrack,
   SyncStatus,
 } from "@/lib/db/types";
 import {
   runSync,
+  type PlaylistSyncPayload,
   type SyncStore,
   type SyncTransport,
 } from "@/lib/syncEngine";
@@ -76,14 +78,32 @@ function annotation(overrides: Partial<LocalAnnotation> = {}): LocalAnnotation {
   };
 }
 
+function playlist(overrides: Partial<LocalPlaylist> = {}): LocalPlaylist {
+  return {
+    id: "p1",
+    serverId: null,
+    title: "Focus",
+    description: null,
+    isPublic: false,
+    items: [],
+    deletedAt: null,
+    syncStatus: "pending",
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides,
+  };
+}
+
 function createStore(seed: {
   tracks?: LocalTrack[];
   sessions?: LocalSession[];
   annotations?: LocalAnnotation[];
+  playlists?: LocalPlaylist[];
 }) {
   const tracks = new Map((seed.tracks ?? []).map((item) => [item.id, item]));
   const sessions = new Map((seed.sessions ?? []).map((item) => [item.id, item]));
   const annotations = new Map((seed.annotations ?? []).map((item) => [item.id, item]));
+  const playlists = new Map((seed.playlists ?? []).map((item) => [item.id, item]));
 
   const pending = <T extends { syncStatus: SyncStatus }>(map: Map<string, T>, limit: number) =>
     [...map.values()]
@@ -95,6 +115,7 @@ function createStore(seed: {
     getAllTracks: async () => [...tracks.values()],
     getPendingSessions: async (limit) => pending(sessions, limit),
     getPendingAnnotations: async (limit) => pending(annotations, limit),
+    getPendingPlaylists: async (limit) => pending(playlists, limit),
     setTrackSyncStatus: async (id, status, serverId) => {
       const current = tracks.get(id);
       if (current) {
@@ -121,17 +142,32 @@ function createStore(seed: {
         });
       }
     },
+    setPlaylistSyncStatus: async (id, status, serverId) => {
+      const current = playlists.get(id);
+      if (current) {
+        playlists.set(id, {
+          ...current,
+          syncStatus: status,
+          serverId: serverId ?? current.serverId,
+        });
+      }
+    },
     removeAnnotation: async (id) => {
       annotations.delete(id);
     },
+    removePlaylist: async (id) => {
+      playlists.delete(id);
+    },
   };
 
-  return { store, tracks, sessions, annotations };
+  return { store, tracks, sessions, annotations, playlists };
 }
 
 function createTransport(overrides: Partial<SyncTransport> = {}) {
-  const calls: { registerTrack: LocalTrack[]; syncLocalData: [LocalSession[], LocalAnnotation[]][] } =
-    { registerTrack: [], syncLocalData: [] };
+  const calls: {
+    registerTrack: LocalTrack[];
+    syncLocalData: [LocalSession[], LocalAnnotation[], PlaylistSyncPayload[]][];
+  } = { registerTrack: [], syncLocalData: [] };
 
   const transport: SyncTransport = {
     registerTrack:
@@ -142,14 +178,19 @@ function createTransport(overrides: Partial<SyncTransport> = {}) {
       }),
     syncLocalData:
       overrides.syncLocalData ??
-      (async (sessions, annotations) => {
-        calls.syncLocalData.push([sessions, annotations]);
+      (async (sessions, annotations, playlists) => {
+        calls.syncLocalData.push([sessions, annotations, playlists]);
         return {
           syncedSessions: sessions.length,
           syncedAnnotations: annotations.length,
+          syncedPlaylists: playlists.length,
           annotations: annotations.map((item) => ({
             clientId: item.id,
             serverId: `server-${item.id}`,
+          })),
+          playlists: playlists.map((item) => ({
+            clientId: item.clientId,
+            serverId: `server-${item.clientId}`,
           })),
         };
       }),
@@ -253,6 +294,60 @@ describe("runSync", () => {
     expect(summary.failed).toBe(2);
     expect(sessions.get("s1")?.syncStatus).toBe("failed");
     expect(annotations.get("a1")?.syncStatus).toBe("failed");
+  });
+
+  it("syncs a playlist, mapping its items to content hashes", async () => {
+    const { store, playlists } = createStore({
+      tracks: [track({ syncStatus: "synced", serverId: "server-t1" })],
+      playlists: [playlist({ items: [{ trackId: "t1", order: 0 }] })],
+    });
+    const { transport, calls } = createTransport();
+
+    const summary = await runSync({ store, transport });
+
+    expect(summary.playlistsSynced).toBe(1);
+    expect(playlists.get("p1")).toMatchObject({
+      syncStatus: "synced",
+      serverId: "server-p1",
+    });
+    expect(calls.syncLocalData[0][2][0]).toMatchObject({
+      clientId: "p1",
+      deleted: false,
+      items: [{ contentHash: "hash-1", order: 0 }],
+    });
+  });
+
+  it("defers a playlist whose tracks are not registered yet", async () => {
+    const { store, playlists } = createStore({
+      tracks: [track()],
+      playlists: [playlist({ items: [{ trackId: "t1", order: 0 }] })],
+    });
+    const { transport, calls } = createTransport({
+      registerTrack: async () => {
+        throw new Error("offline");
+      },
+    });
+
+    await runSync({ store, transport });
+
+    expect(calls.syncLocalData).toHaveLength(0);
+    expect(playlists.get("p1")?.syncStatus).toBe("pending");
+  });
+
+  it("hard-removes an acknowledged playlist delete tombstone", async () => {
+    const { store, playlists } = createStore({
+      tracks: [track({ syncStatus: "synced", serverId: "server-t1" })],
+      playlists: [playlist({ deletedAt: 5000 })],
+    });
+    const { transport, calls } = createTransport();
+
+    await runSync({ store, transport });
+
+    expect(playlists.has("p1")).toBe(false);
+    expect(calls.syncLocalData[0][2][0]).toMatchObject({
+      clientId: "p1",
+      deleted: true,
+    });
   });
 
   it("keeps a track queued when registration fails", async () => {

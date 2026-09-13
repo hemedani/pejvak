@@ -9,7 +9,7 @@ jest.mock("@/services/LocalDBService", () => ({
     getAllTracks: jest.fn(),
     insertPlaylist: jest.fn(),
     updatePlaylist: jest.fn(),
-    deletePlaylist: jest.fn(),
+    softDeletePlaylist: jest.fn(),
   },
 }));
 
@@ -17,7 +17,7 @@ const getPlaylistById = jest.mocked(LocalDBService.getPlaylistById);
 const getAllTracks = jest.mocked(LocalDBService.getAllTracks);
 const insertPlaylist = jest.mocked(LocalDBService.insertPlaylist);
 const updatePlaylist = jest.mocked(LocalDBService.updatePlaylist);
-const deletePlaylist = jest.mocked(LocalDBService.deletePlaylist);
+const softDeletePlaylist = jest.mocked(LocalDBService.softDeletePlaylist);
 
 function playlist(ids: string[]): LocalPlaylist {
   return {
@@ -27,6 +27,7 @@ function playlist(ids: string[]): LocalPlaylist {
     description: null,
     isPublic: false,
     items: ids.map((trackId, order) => ({ trackId, order })),
+    deletedAt: null,
     syncStatus: "pending",
     createdAt: 0,
     updatedAt: 0,
@@ -117,9 +118,9 @@ describe("PlaylistService.moveTrack", () => {
 });
 
 describe("PlaylistService.remove", () => {
-  it("deletes by id", async () => {
+  it("tombstones by id so the delete can sync", async () => {
     await PlaylistService.remove("p1");
-    expect(deletePlaylist).toHaveBeenCalledWith("p1");
+    expect(softDeletePlaylist).toHaveBeenCalledWith("p1");
   });
 });
 

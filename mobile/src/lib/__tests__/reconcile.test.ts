@@ -1,12 +1,19 @@
 import {
   reconcileAnnotations,
+  reconcilePlaylists,
   reconcileSessions,
   reconcileTracks,
   type RemoteAnnotation,
+  type RemotePlaylist,
   type RemoteSession,
   type RemoteTrack,
 } from "@/lib/reconcile";
-import type { LocalAnnotation, LocalSession, LocalTrack } from "@/lib/db/types";
+import type {
+  LocalAnnotation,
+  LocalPlaylist,
+  LocalSession,
+  LocalTrack,
+} from "@/lib/db/types";
 
 function localTrack(overrides: Partial<LocalTrack> = {}): LocalTrack {
   return {
@@ -99,6 +106,32 @@ const remoteSession: RemoteSession = {
   interrupted: false,
 };
 
+function localPlaylist(overrides: Partial<LocalPlaylist> = {}): LocalPlaylist {
+  return {
+    id: "lp1",
+    serverId: null,
+    title: "Local",
+    description: null,
+    isPublic: false,
+    items: [{ trackId: "lt1", order: 0 }],
+    deletedAt: null,
+    syncStatus: "synced",
+    createdAt: 0,
+    updatedAt: 100,
+    ...overrides,
+  };
+}
+
+const remotePlaylist: RemotePlaylist = {
+  serverId: "srv-p",
+  clientId: "lp1",
+  title: "Remote",
+  description: null,
+  isPublic: false,
+  items: [{ trackId: "lt1", order: 0 }],
+  updatedAt: 200,
+};
+
 const remoteAnnotation: RemoteAnnotation = {
   serverId: "srv-a",
   clientId: "la1",
@@ -185,5 +218,43 @@ describe("reconcileAnnotations", () => {
     );
     expect(result.updates).toEqual([]);
     expect(result.backfill).toEqual([{ id: "la1", serverId: "srv-a" }]);
+  });
+});
+
+describe("reconcilePlaylists", () => {
+  it("inserts playlists missing locally", () => {
+    expect(reconcilePlaylists([], [remotePlaylist]).inserts).toEqual([remotePlaylist]);
+  });
+
+  it("updates when the remote edit is newer (LWW)", () => {
+    const result = reconcilePlaylists([localPlaylist({ updatedAt: 50 })], [remotePlaylist]);
+    expect(result.updates).toEqual([
+      {
+        id: "lp1",
+        serverId: "srv-p",
+        title: "Remote",
+        description: null,
+        isPublic: false,
+        items: [{ trackId: "lt1", order: 0 }],
+        updatedAt: 200,
+      },
+    ]);
+  });
+
+  it("keeps a newer local edit", () => {
+    const result = reconcilePlaylists([localPlaylist({ updatedAt: 500 })], [remotePlaylist]);
+    expect(result.updates).toEqual([]);
+  });
+
+  it("does not resurrect a locally deleted playlist", () => {
+    const result = reconcilePlaylists([localPlaylist({ deletedAt: 999 })], [remotePlaylist]);
+    expect(result.inserts).toEqual([]);
+    expect(result.updates).toEqual([]);
+  });
+
+  it("backfills the server id when unchanged", () => {
+    const result = reconcilePlaylists([localPlaylist({ updatedAt: 200 })], [remotePlaylist]);
+    expect(result.updates).toEqual([]);
+    expect(result.backfill).toEqual([{ id: "lp1", serverId: "srv-p" }]);
   });
 });

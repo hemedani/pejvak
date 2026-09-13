@@ -18,6 +18,7 @@ function playlist(id: string): LocalPlaylist {
     description: null,
     isPublic: false,
     items: [],
+    deletedAt: null,
     syncStatus: "pending",
     createdAt: 0,
     updatedAt: 0,

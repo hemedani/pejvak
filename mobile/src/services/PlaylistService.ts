@@ -16,9 +16,9 @@ export type PlaylistDetailData = {
 };
 
 /**
- * Local-first playlist management. Playlists live in SQLite; server sync is not
- * wired yet (the `items[].trackId` values are local track ids and would need
- * mapping to server ids first).
+ * Local-first playlist management. Playlists live in SQLite and sync through
+ * `SyncService` (items are sent by `contentHash` and resolved to server ids
+ * server-side); deletes are tombstoned locally and pushed by `clientId`.
  */
 export const PlaylistService = {
   list: () => LocalDBService.getPlaylists(),
@@ -56,7 +56,7 @@ export const PlaylistService = {
     await LocalDBService.updatePlaylist(id, { title: trimmed });
   },
 
-  remove: (id: string) => LocalDBService.deletePlaylist(id),
+  remove: (id: string) => LocalDBService.softDeletePlaylist(id),
 
   async addTrack(id: string, trackId: string): Promise<void> {
     const playlist = await LocalDBService.getPlaylistById(id);

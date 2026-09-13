@@ -3,14 +3,17 @@ import { callTypedAct } from "@/lib/client";
 import type { LocalAnnotation, LocalSession, LocalTrack, SyncStatus } from "@/lib/db/types";
 import {
   reconcileAnnotations,
+  reconcilePlaylists,
   reconcileSessions,
   reconcileTracks,
   type RemoteAnnotation,
+  type RemotePlaylist,
   type RemoteSession,
   type RemoteTrack,
 } from "@/lib/reconcile";
 import {
   runSync,
+  type PlaylistSyncPayload,
   type RegisterTrackResult,
   type SyncLocalDataResult,
   type SyncStore,
@@ -50,9 +53,19 @@ function registerTrack(track: LocalTrack): Promise<RegisterTrackResult> {
 function syncLocalData(
   sessions: LocalSession[],
   annotations: LocalAnnotation[],
+  playlists: PlaylistSyncPayload[],
 ): Promise<SyncLocalDataResult> {
   const details: SyncLocalDataDetails = {
     set: {
+      playlists: playlists.map((playlist) => ({
+        clientId: playlist.clientId,
+        title: playlist.title,
+        description: playlist.description ?? undefined,
+        isPublic: playlist.isPublic,
+        items: playlist.items,
+        updatedAt: playlist.updatedAt,
+        deleted: playlist.deleted,
+      })),
       sessions: sessions.map((session) => ({
         clientId: session.id,
         contentHash: session.contentHash,
@@ -77,7 +90,13 @@ function syncLocalData(
         ...(annotation.color ? { color: annotation.color } : {}),
       })),
     },
-    get: { syncedSessions: 1, syncedAnnotations: 1, annotations: [] },
+    get: {
+      syncedSessions: 1,
+      syncedAnnotations: 1,
+      syncedPlaylists: 1,
+      annotations: [],
+      playlists: [],
+    },
   };
   return callTypedAct<"main", "track", "syncLocalData", SyncLocalDataResult>({
     service: "main",
@@ -94,13 +113,17 @@ export const localStore: SyncStore = {
   getAllTracks: () => LocalDBService.getAllTracks(),
   getPendingSessions: (limit) => LocalDBService.getPendingSessions(limit),
   getPendingAnnotations: (limit) => LocalDBService.getPendingAnnotations(limit),
+  getPendingPlaylists: (limit) => LocalDBService.getPendingPlaylists(limit),
   setTrackSyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
     LocalDBService.setTrackSyncStatus(id, status, serverId),
   setSessionSyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
     LocalDBService.setSessionSyncStatus(id, status, serverId),
   setAnnotationSyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
     LocalDBService.setAnnotationSyncStatus(id, status, serverId),
+  setPlaylistSyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
+    LocalDBService.setPlaylistSyncStatus(id, status, serverId),
   removeAnnotation: (id: string) => LocalDBService.hardDeleteAnnotation(id),
+  removePlaylist: (id: string) => LocalDBService.deletePlaylist(id),
 };
 
 /** Push all pending local rows to the backend. Never throws for sync errors. */
@@ -147,6 +170,16 @@ type RemoteAnnotationRow = {
   color?: string;
   updatedAt?: string | number;
   track?: { contentHash?: string };
+};
+
+type RemotePlaylistRow = {
+  _id?: string;
+  clientId?: string;
+  title?: string;
+  description?: string;
+  isPublic?: boolean;
+  items?: { trackId?: string; order?: number }[];
+  updatedAt?: string | number;
 };
 
 function toMillis(value: string | number | undefined): number {
@@ -292,10 +325,37 @@ async function fetchRemoteAnnotations(): Promise<RemoteAnnotation[]> {
   });
 }
 
+async function fetchRemotePlaylists(): Promise<RemotePlaylistRow[]> {
+  const details: BackendActRequest<"main", "playlist", "getMyPlaylists">["details"] = {
+    set: { page: 1, limit: PULL_PAGE_SIZE },
+    get: {
+      _id: 1,
+      clientId: 1,
+      title: 1,
+      description: 1,
+      isPublic: 1,
+      items: 1,
+      updatedAt: 1,
+    },
+  };
+  return await callTypedAct<
+    "main",
+    "playlist",
+    "getMyPlaylists",
+    RemotePlaylistRow[]
+  >({
+    service: "main",
+    model: "playlist",
+    act: "getMyPlaylists",
+    details,
+  });
+}
+
 export type PullSummary = {
   tracks: number;
   sessions: number;
   annotations: number;
+  playlists: number;
 };
 
 /**
@@ -304,11 +364,13 @@ export type PullSummary = {
  * annotations by `clientId`. Best-effort: throws only if a fetch fails.
  */
 export async function pullFromServer(): Promise<PullSummary> {
-  const [remoteTracks, remoteSessions, remoteAnnotations] = await Promise.all([
-    fetchRemoteTracks(),
-    fetchRemoteSessions(),
-    fetchRemoteAnnotations(),
-  ]);
+  const [remoteTracks, remoteSessions, remoteAnnotations, remotePlaylists] =
+    await Promise.all([
+      fetchRemoteTracks(),
+      fetchRemoteSessions(),
+      fetchRemoteAnnotations(),
+      fetchRemotePlaylists(),
+    ]);
 
   const trackPlan = reconcileTracks(await LocalDBService.getAllTracks(), remoteTracks);
   for (const item of trackPlan.inserts) {
@@ -349,11 +411,63 @@ export async function pullFromServer(): Promise<PullSummary> {
     await LocalDBService.setAnnotationSyncStatus(item.id, "synced", item.serverId);
   }
 
+  // Playlist items carry server track ids; resolve them to local track ids.
+  const tracksById = new Map(
+    (await LocalDBService.getAllTracks())
+      .filter((track) => track.serverId !== null)
+      .map((track) => [track.serverId as string, track.id]),
+  );
+  const resolvedPlaylists: RemotePlaylist[] = remotePlaylists.flatMap((row) => {
+    if (!row._id || !row.title) {
+      return [];
+    }
+    const items = (row.items ?? []).flatMap((item) => {
+      const trackId = item.trackId ? tracksById.get(item.trackId) : undefined;
+      return trackId !== undefined && item.order !== undefined
+        ? [{ trackId, order: item.order }]
+        : [];
+    });
+    return [
+      {
+        serverId: row._id,
+        clientId: row.clientId ?? null,
+        title: row.title,
+        description: row.description ?? null,
+        isPublic: row.isPublic ?? false,
+        items,
+        updatedAt: toMillis(row.updatedAt),
+      },
+    ];
+  });
+
+  const playlistPlan = reconcilePlaylists(
+    await LocalDBService.getAllPlaylists(),
+    resolvedPlaylists,
+  );
+  for (const item of playlistPlan.inserts) {
+    await LocalDBService.insertRemotePlaylist({
+      id: item.clientId ?? item.serverId,
+      serverId: item.serverId,
+      title: item.title,
+      description: item.description,
+      isPublic: item.isPublic,
+      items: item.items,
+      updatedAt: item.updatedAt,
+    });
+  }
+  for (const item of playlistPlan.updates) {
+    await LocalDBService.applyRemotePlaylistUpdate(item);
+  }
+  for (const item of playlistPlan.backfill) {
+    await LocalDBService.setPlaylistSyncStatus(item.id, "synced", item.serverId);
+  }
+
   return {
     tracks: trackPlan.inserts.length,
     sessions: sessionPlan.inserts.length,
     annotations:
       annotationPlan.inserts.length + annotationPlan.updates.length,
+    playlists: playlistPlan.inserts.length + playlistPlan.updates.length,
   };
 }
 
