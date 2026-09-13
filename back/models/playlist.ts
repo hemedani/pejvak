@@ -15,6 +15,8 @@ import { createUpdateAt } from "../utils/createUpdateAt.ts";
 import { user_excludes } from "./excludes.ts";
 
 export const playlist_pure = {
+  /** Stable per-device id so offline upserts stay idempotent across retries. */
+  clientId: optional(string()),
   title: string(),
   description: optional(string()),
   isPublic: defaulted(boolean(), false),
@@ -45,4 +47,9 @@ export const playlist_relations = {
 };
 
 export const playlists = () =>
-  coreApp.odm.newModel("playlist", playlist_pure, playlist_relations);
+  coreApp.odm.newModel("playlist", playlist_pure, playlist_relations, {
+    createIndex: {
+      indexSpec: { clientId: 1 },
+      options: {},
+    },
+  });

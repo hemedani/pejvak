@@ -11,7 +11,7 @@ import {
 export const syncLocalDataValidator = () =>
   object({
     set: object({
-      sessions: defaulted(
+      sessions: optional(
         array(
           object({
             clientId: string(),
@@ -27,9 +27,8 @@ export const syncLocalDataValidator = () =>
             deviceInfo: optional(string()),
           }),
         ),
-        [],
       ),
-      annotations: defaulted(
+      annotations: optional(
         array(
           object({
             clientId: string(),
@@ -42,20 +41,42 @@ export const syncLocalDataValidator = () =>
             deleted: defaulted(boolean(), false),
           }),
         ),
-        [],
+      ),
+      playlists: optional(
+        array(
+          object({
+            clientId: string(),
+            title: string(),
+            description: optional(string()),
+            isPublic: optional(boolean()),
+            items: optional(
+              array(object({ contentHash: string(), order: number() })),
+            ),
+            updatedAt: optional(number()),
+            deleted: optional(boolean()),
+          }),
+        ),
       ),
     }),
     get: object({
-      syncedSessions: number(),
-      syncedAnnotations: number(),
-      annotations: defaulted(
+      syncedSessions: optional(number()),
+      syncedAnnotations: optional(number()),
+      syncedPlaylists: optional(number()),
+      annotations: optional(
         array(
           object({
             clientId: string(),
             serverId: optional(string()),
           }),
         ),
-        [],
+      ),
+      playlists: optional(
+        array(
+          object({
+            clientId: string(),
+            serverId: optional(string()),
+          }),
+        ),
       ),
     }),
   });
