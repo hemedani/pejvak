@@ -1,58 +1,77 @@
 /**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://reactnativeunistyles.vercel.app), etc.
+ * Compatibility layer over `@/theme`.
+ *
+ * The canonical design system lives in `src/theme/tokens.ts` and
+ * `src/theme/motion.ts`. This module keeps the original import surface working
+ * (`Colors`, `Fonts`, `Spacing`, `MaxContentWidth`, `ThemeColor`) so existing
+ * screens and the `useTheme()` hook keep resolving, while adding the richer
+ * semantic names (`accent`, `glass`, `canvas`, …) on top.
+ *
+ * New code should prefer importing from `@/theme` directly.
  */
 
-import '@/global.css';
+import "@/global.css";
 
-import { Platform } from 'react-native';
+import { Platform } from "react-native";
 
-export const Colors = {
-  light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
-    tint: '#208AEF',
-  },
-  dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
-    tint: '#4DA3FF',
-  },
-} as const;
+import { colors, layout, type SemanticColors } from "@/theme/tokens";
 
-export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
+/** The semantic palette plus the original shorthand keys. */
+export type AppColors = SemanticColors & {
+  /** @deprecated use `canvas` */
+  background: string;
+  /** @deprecated use `glass` */
+  backgroundElement: string;
+  /** @deprecated use `glassStrong` */
+  backgroundSelected: string;
+  /** @deprecated use `accent` */
+  tint: string;
+};
+
+function build(scheme: "light" | "dark"): AppColors {
+  const semantic = colors[scheme];
+  return {
+    ...semantic,
+    background: semantic.canvas,
+    backgroundElement: semantic.glass,
+    backgroundSelected: semantic.glassStrong,
+    tint: semantic.accent,
+  };
+}
+
+export const Colors: Record<"light" | "dark", AppColors> = {
+  light: build("light"),
+  dark: build("dark"),
+};
+
+export type ThemeColor = keyof AppColors;
 
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
+    sans: "system-ui",
     /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
+    serif: "ui-serif",
     /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
+    rounded: "ui-rounded",
     /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
+    mono: "ui-monospace",
   },
   default: {
-    sans: 'normal',
-    serif: 'serif',
-    rounded: 'normal',
-    mono: 'monospace',
+    sans: "normal",
+    serif: "serif",
+    rounded: "normal",
+    mono: "monospace",
   },
   web: {
-    sans: 'var(--font-display)',
-    serif: 'var(--font-serif)',
-    rounded: 'var(--font-rounded)',
-    mono: 'var(--font-mono)',
+    sans: "var(--font-display)",
+    serif: "var(--font-serif)",
+    rounded: "var(--font-rounded)",
+    mono: "var(--font-mono)",
   },
 });
 
+/** Legacy spacing scale. New code should use `spacing` from `@/theme`. */
 export const Spacing = {
   half: 2,
   one: 4,
@@ -63,5 +82,5 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
+export const BottomTabInset = layout.tabBarInset;
+export const MaxContentWidth = layout.maxContentWidth;

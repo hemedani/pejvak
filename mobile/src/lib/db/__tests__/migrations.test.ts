@@ -75,4 +75,12 @@ describe("schema migrations", () => {
       /ALTER TABLE annotations ADD COLUMN deleted_at INTEGER/i,
     );
   });
+
+  it("adds a session delete tombstone column at version 5", () => {
+    const v5 = MIGRATIONS.find((migration) => migration.version === 5);
+    expect(v5).toBeDefined();
+    expect(v5!.up.join("\n")).toMatch(
+      /ALTER TABLE sessions ADD COLUMN deleted_at INTEGER/i,
+    );
+  });
 });

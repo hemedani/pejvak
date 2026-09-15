@@ -1,16 +1,19 @@
 import { Appearance } from "react-native";
 import { create } from "zustand";
 
+import type { HistorySort } from "@/lib/history";
 import { DEFAULT_SETTINGS, type ThemePreference } from "@/lib/settings";
 import { SettingsService } from "@/services/SettingsService";
 
 type SettingsState = {
   themePreference: ThemePreference;
   defaultSpeed: number;
+  historySort: HistorySort;
   loaded: boolean;
   load: () => Promise<void>;
   setTheme: (preference: ThemePreference) => Promise<void>;
   setDefaultSpeed: (speed: number) => Promise<void>;
+  setHistorySort: (sort: HistorySort) => Promise<void>;
 };
 
 /** Forces RN's color scheme so `useColorScheme`/`useTheme` reflect the choice. */
@@ -37,5 +40,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setDefaultSpeed: async (speed) => {
     set({ defaultSpeed: speed });
     await SettingsService.setDefaultSpeed(speed);
+  },
+
+  setHistorySort: async (sort) => {
+    set({ historySort: sort });
+    await SettingsService.setHistorySort(sort);
   },
 }));

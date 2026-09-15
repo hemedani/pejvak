@@ -126,6 +126,18 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_playlists_deleted_at ON playlists(deleted_at)`,
     ],
   },
+  {
+    // Removing a history entry has to be a tombstone, not a DELETE. Sessions
+    // sync up and are pulled back by `getMyListeningHistory`, and
+    // `insertRemoteSession` uses INSERT OR IGNORE keyed on the client id — so a
+    // hard-deleted session is simply re-inserted by the next pull. Keeping the
+    // row and hiding it is the only durable removal.
+    version: 5,
+    up: [
+      `ALTER TABLE sessions ADD COLUMN deleted_at INTEGER`,
+      `CREATE INDEX IF NOT EXISTS idx_sessions_deleted_at ON sessions(deleted_at)`,
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

@@ -7,6 +7,7 @@ import {
 import Constants, { ExecutionEnvironment } from "expo-constants";
 
 import type { LocalTrack } from "@/lib/db/types";
+import { resumePositionSec } from "@/lib/resume";
 import {
   applyProgress,
   createSessionTracker,
@@ -213,6 +214,10 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
     status: "loading",
     trackId: track.id,
     title: track.title,
+    artist: track.author,
+    artworkUrl: track.artworkUrl,
+    contentHash: track.contentHash,
+    isAudiobook: track.isAudiobook,
     positionSec: Math.floor(startPositionSec),
     durationSec: track.durationSec,
     playbackSpeed: defaultSpeed,
@@ -288,6 +293,84 @@ export async function setPlaybackRate(rate: number): Promise<void> {
     nextSessionStartSec = Math.round(instance.currentTime);
     instance.play();
   }
+}
+
+/**
+ * Start a queue at `index`. The queue is just an ordered list of track ids; the
+ * player resolves them lazily so a long library does not need to be hydrated.
+ */
+export async function playQueueAt(
+  trackIds: string[],
+  index: number,
+  startPositionSec?: number,
+): Promise<void> {
+  const trackId = trackIds[index];
+  if (!trackId) {
+    return;
+  }
+  usePlayerStore.getState().setQueue(trackIds, index);
+  // Mark the track as current synchronously so any screen that reads the store
+  // immediately after this call (and would otherwise decide to load the track
+  // itself) sees the right one.
+  patch({ trackId });
+  await playTrackById(trackId, startPositionSec);
+}
+
+/**
+ * Load and play a single track.
+ *
+ * Without an explicit position this resumes where the listener left off. An
+ * explicit one wins — that is how tapping a history entry lands on *that*
+ * session's position rather than the most recent one. The position has to reach
+ * `loadAndPlay`, which seeks before the first frame; seeking afterwards would
+ * briefly play from the wrong place.
+ */
+async function playTrackById(trackId: string, startPositionSec?: number): Promise<void> {
+  const track = await LocalDBService.getTrackById(trackId);
+  if (!track) {
+    patch({ status: "error", error: "That track is no longer in your library." });
+    return;
+  }
+  const sessions = await LocalDBService.getSessionsByTrack(track.id);
+  const start =
+    startPositionSec !== undefined
+      ? startPositionSec
+      : resumePositionSec(sessions, track.durationSec);
+  await loadAndPlay(track, start);
+}
+
+/**
+ * Advance to the next queued track. At the end of the queue we restart the
+ * current track rather than wrapping, which is what a listener expects from an
+ * audiobook or an album.
+ */
+export async function next(): Promise<void> {
+  const { queue, queueIndex } = usePlayerStore.getState();
+  usePlayerStore.getState().signalSkip(1);
+
+  const targetIndex = queueIndex + 1;
+  const targetId = queue[targetIndex];
+  if (!targetId) {
+    await seekTo(0);
+    return;
+  }
+  usePlayerStore.getState().setQueue(queue, targetIndex);
+  await playTrackById(targetId);
+}
+
+/** Step back a track, or restart the current one if we are at the head. */
+export async function previous(): Promise<void> {
+  const { queue, queueIndex } = usePlayerStore.getState();
+  usePlayerStore.getState().signalSkip(-1);
+
+  const targetIndex = queueIndex - 1;
+  const targetId = queue[targetIndex];
+  if (!targetId) {
+    await seekTo(0);
+    return;
+  }
+  usePlayerStore.getState().setQueue(queue, targetIndex);
+  await playTrackById(targetId);
 }
 
 /** Clean up any checkpoint whose session was killed before it ended. */

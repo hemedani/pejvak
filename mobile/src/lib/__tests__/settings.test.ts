@@ -3,11 +3,16 @@ import {
   formatBytes,
   isThemePreference,
   parseDefaultSpeed,
+  parseHistorySort,
 } from "@/lib/settings";
 
 describe("DEFAULT_SETTINGS", () => {
-  it("defaults to the system theme at 1x", () => {
-    expect(DEFAULT_SETTINGS).toEqual({ themePreference: "system", defaultSpeed: 1 });
+  it("defaults to the system theme, 1x speed, and newest-first history", () => {
+    expect(DEFAULT_SETTINGS).toEqual({
+      themePreference: "system",
+      defaultSpeed: 1,
+      historySort: "newest",
+    });
   });
 });
 
@@ -29,6 +34,20 @@ describe("parseDefaultSpeed", () => {
     expect(parseDefaultSpeed(null)).toBe(1);
     expect(parseDefaultSpeed("3")).toBe(1);
     expect(parseDefaultSpeed("nope")).toBe(1);
+  });
+});
+
+describe("parseHistorySort", () => {
+  it("accepts every offered sort", () => {
+    expect(parseHistorySort("newest")).toBe("newest");
+    expect(parseHistorySort("oldest")).toBe("oldest");
+    expect(parseHistorySort("longest")).toBe("longest");
+  });
+
+  it("falls back to newest for missing or unknown values", () => {
+    expect(parseHistorySort(null)).toBe("newest");
+    expect(parseHistorySort("")).toBe("newest");
+    expect(parseHistorySort("alphabetical")).toBe("newest");
   });
 });
 

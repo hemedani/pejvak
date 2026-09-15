@@ -14,6 +14,28 @@ export type HistoryDay = {
   items: HistoryItem[];
 };
 
+/** Chronological order of the day buckets. */
+export type HistoryOrder = "newest" | "oldest";
+
+/** How the History screen orders its entries. */
+export type HistorySort = HistoryOrder | "longest";
+
+export const HISTORY_SORT_OPTIONS: { value: HistorySort; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "longest", label: "Longest" },
+];
+
+/**
+ * A rendered block of the History list. `title` is `null` for sorts that are not
+ * chronological, where a day heading would be meaningless.
+ */
+export type HistorySection = {
+  key: string;
+  title: string | null;
+  data: HistoryItem[];
+};
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
   "Jan",
@@ -40,10 +62,15 @@ export function dayKey(timestampMs: number): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
-/** Groups sessions into day buckets, newest day and newest session first. */
+/**
+ * Groups sessions into day buckets, newest day and newest session first by
+ * default. Pass `order: "oldest"` to flip both the days and the sessions inside
+ * them; the grouping itself is unaffected.
+ */
 export function groupSessionsByDay(
   items: HistoryItem[],
   now: number = Date.now(),
+  order: HistoryOrder = "newest",
 ): HistoryDay[] {
   const buckets = new Map<string, HistoryItem[]>();
   for (const item of items) {
@@ -61,8 +88,11 @@ export function groupSessionsByDay(
   previous.setDate(previous.getDate() - 1);
   const yesterdayKey = dayKey(previous.getTime());
 
+  // Keys are `YYYY-MM-DD`, so a string compare is already chronological.
+  const direction = order === "oldest" ? -1 : 1;
+
   return [...buckets.entries()]
-    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .sort((a, b) => (a[0] < b[0] ? direction : -direction))
     .map(([key, bucket]) => {
       const date = new Date(`${key}T00:00:00`);
       const label =
@@ -74,9 +104,60 @@ export function groupSessionsByDay(
       return {
         key,
         label,
-        items: [...bucket].sort((a, b) => b.session.startedAt - a.session.startedAt),
+        items: [...bucket].sort(
+          (a, b) => (b.session.startedAt - a.session.startedAt) * direction,
+        ),
       };
     });
+}
+
+/**
+ * The History screen's list model.
+ *
+ * Chronological sorts keep their day headings. "Longest" is deliberately flat —
+ * how long a session ran has nothing to do with the day it happened, so a
+ * section header there would be noise.
+ */
+export function buildHistorySections(
+  items: HistoryItem[],
+  sort: HistorySort = "newest",
+  now: number = Date.now(),
+): HistorySection[] {
+  if (sort === "longest") {
+    return [
+      {
+        key: "longest",
+        title: null,
+        data: [...items].sort(
+          (a, b) =>
+            b.session.durationListenedSec - a.session.durationListenedSec ||
+            b.session.startedAt - a.session.startedAt,
+        ),
+      },
+    ];
+  }
+
+  return groupSessionsByDay(items, now, sort).map((day) => ({
+    key: day.key,
+    title: day.label,
+    data: day.items,
+  }));
+}
+
+/**
+ * Where tapping a history entry should drop the playhead.
+ *
+ * A finished session has nothing left to resume — seeking to its end would
+ * complete the track the instant it started — so a completed entry replays from
+ * the point that session began. Anything else continues from where it stopped,
+ * falling back to the start position while a session is still in progress.
+ */
+export function resumeTargetSec(item: HistoryItem): number {
+  const { completed, endPositionSec, startPositionSec } = item.session;
+  if (completed) {
+    return Math.max(0, startPositionSec);
+  }
+  return Math.max(0, endPositionSec ?? startPositionSec);
 }
 
 /** Compact listened-time label: "45s", "1m 30s", "2h 2m". */

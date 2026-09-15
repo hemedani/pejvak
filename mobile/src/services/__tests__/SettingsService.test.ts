@@ -19,6 +19,7 @@ describe("SettingsService.load", () => {
     expect(await SettingsService.load()).toEqual({
       themePreference: "system",
       defaultSpeed: 1,
+      historySort: "newest",
     });
   });
 
@@ -29,7 +30,14 @@ describe("SettingsService.load", () => {
     expect(await SettingsService.load()).toEqual({
       themePreference: "dark",
       defaultSpeed: 1.5,
+      // "1.5" is not a valid sort, so it falls back rather than propagating.
+      historySort: "newest",
     });
+  });
+
+  it("restores a stored history sort", async () => {
+    getSetting.mockImplementation(async (key) => (key === "historySort" ? "longest" : null));
+    expect((await SettingsService.load()).historySort).toBe("longest");
   });
 });
 
@@ -40,6 +48,11 @@ describe("SettingsService setters", () => {
 
     expect(setSetting).toHaveBeenCalledWith("themePreference", "light");
     expect(setSetting).toHaveBeenCalledWith("defaultSpeed", "2");
+  });
+
+  it("persists the history sort", async () => {
+    await SettingsService.setHistorySort("oldest");
+    expect(setSetting).toHaveBeenCalledWith("historySort", "oldest");
   });
 });
 

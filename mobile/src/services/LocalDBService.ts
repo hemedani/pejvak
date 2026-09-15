@@ -229,10 +229,15 @@ async function getSessionById(id: string): Promise<LocalSession | null> {
   return row ? mapSession(row) : null;
 }
 
+/**
+ * Sessions for one track, newest first. Tombstoned rows are excluded so a
+ * history entry the listener removed no longer decides where playback resumes
+ * or how many times a track was heard.
+ */
 async function getSessionsByTrack(trackId: string): Promise<LocalSession[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<SessionRow>(
-    "SELECT * FROM sessions WHERE track_id = ? ORDER BY started_at DESC",
+    "SELECT * FROM sessions WHERE track_id = ? AND deleted_at IS NULL ORDER BY started_at DESC",
     [trackId],
   );
   return rows.map(mapSession);
@@ -246,6 +251,7 @@ async function getSessionsForHistory(limit = 200): Promise<HistoryItem[]> {
             t.content_hash AS track_content_hash
      FROM sessions s
      JOIN tracks t ON t.id = s.track_id
+     WHERE s.deleted_at IS NULL
      ORDER BY s.started_at DESC
      LIMIT ?`,
     [limit],
@@ -265,7 +271,7 @@ async function getPendingSessions(limit = 50): Promise<LocalSession[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<SessionRow>(
     `SELECT * FROM sessions
-     WHERE sync_status IN ('pending', 'failed')
+     WHERE sync_status IN ('pending', 'failed') AND deleted_at IS NULL
      ORDER BY created_at ASC
      LIMIT ?`,
     [limit],
@@ -273,7 +279,28 @@ async function getPendingSessions(limit = 50): Promise<LocalSession[]> {
   return rows.map(mapSession);
 }
 
-/** All local sessions (used by remote reconciliation). */
+/**
+ * Removes a history entry by tombstoning it.
+ *
+ * The row stays so the next `getMyListeningHistory` pull cannot re-insert it
+ * (see the v5 migration), and it is filtered out of history, per-track reads
+ * and the push queue. There is no server-side delete act, so this is a
+ * local-only removal: the session still exists on the server and on any other
+ * device that already pulled it.
+ */
+async function softDeleteSession(id: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    "UPDATE sessions SET deleted_at = ?, updated_at = ? WHERE id = ?",
+    [Date.now(), Date.now(), id],
+  );
+}
+
+/**
+ * All local sessions, **including tombstones** — used by remote reconciliation.
+ * This one deliberately does not filter `deleted_at`: reconcile needs to see the
+ * tombstoned row so it does not treat the remote session as missing locally.
+ */
 async function getAllSessions(): Promise<LocalSession[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<SessionRow>("SELECT * FROM sessions");
@@ -842,6 +869,7 @@ export const LocalDBService = {
   insertRemoteSession,
   finalizeSession,
   setSessionSyncStatus,
+  softDeleteSession,
   insertAnnotation,
   getAnnotationsByTrack,
   getAnnotationCounts,
