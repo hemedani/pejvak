@@ -1,36 +1,48 @@
-import { ActivityIndicator, Pressable, StyleSheet, type PressableProps } from "react-native";
+import { ActivityIndicator, StyleSheet, type PressableProps, type StyleProp, type ViewStyle } from "react-native";
 
+import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
-import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
+import { radius as radii, spacing } from "@/theme/tokens";
 
-export type PrimaryButtonProps = Omit<PressableProps, "children"> & {
+export type PrimaryButtonProps = Omit<PressableProps, "children" | "style"> & {
   label: string;
   loading?: boolean;
+  style?: StyleProp<ViewStyle>;
 };
 
+/**
+ * The one filled, accent-coloured action on a screen. Presses bounce like every
+ * other control, and the accent doubles as the button's glow so it reads as lit
+ * rather than lifted.
+ */
 export function PrimaryButton({ label, loading, disabled, style, ...rest }: PrimaryButtonProps) {
   const theme = useTheme();
   const isDisabled = disabled || loading;
 
   return (
-    <Pressable
+    <ElasticPressable
+      {...rest}
       accessibilityRole="button"
       disabled={isDisabled}
-      style={(state) => [
+      haptic="medium"
+      style={[
         styles.button,
-        { backgroundColor: theme.tint, opacity: isDisabled ? 0.5 : state.pressed ? 0.85 : 1 },
-        typeof style === "function" ? style(state) : style,
-      ]}
-      {...rest}>
+        {
+          backgroundColor: theme.accent,
+          shadowColor: theme.accent,
+        },
+        isDisabled && styles.disabled,
+        style,
+      ]}>
       {loading ? (
-        <ActivityIndicator color="#ffffff" />
+        <ActivityIndicator color={theme.onAccent} />
       ) : (
-        <ThemedText type="smallBold" style={styles.label}>
+        <ThemedText type="bodyStrong" style={{ color: theme.onAccent }}>
           {label}
         </ThemedText>
       )}
-    </Pressable>
+    </ElasticPressable>
   );
 }
 
@@ -38,12 +50,17 @@ const styles = StyleSheet.create({
   button: {
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: Spacing.three,
-    paddingVertical: Spacing.three,
-    minHeight: 52,
+    borderRadius: radii.lg,
+    paddingVertical: spacing.lg,
+    minHeight: 54,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 8,
   },
-  label: {
-    color: "#ffffff",
-    fontSize: 16,
+  disabled: {
+    opacity: 0.5,
+    shadowOpacity: 0,
+    elevation: 0,
   },
 });

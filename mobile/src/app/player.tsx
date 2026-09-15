@@ -1,52 +1,67 @@
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Alert, Pressable, StyleSheet, View } from "react-native";
 
-import { AnnotationList } from "@/components/annotation-list";
-import { AnnotationMarker } from "@/components/annotation-marker";
+import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
+import { PlayerContent } from "@/components/player/PlayerContent";
 import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
+import { GlassSheet } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
-import { MaxContentWidth, Spacing } from "@/constants/theme";
-import { useSleepTimer } from "@/hooks/use-sleep-timer";
-import { useTheme } from "@/hooks/use-theme";
 import { useTrackAnnotations } from "@/hooks/use-annotations";
+import { useSleepTimer } from "@/hooks/use-sleep-timer";
 import type { LocalAnnotation, LocalTrack } from "@/lib/db/types";
-import { resumePositionSec } from "@/lib/resume";
+import { paletteFor } from "@/lib/palette";
 import { formatRemaining, SLEEP_TIMER_CHOICES } from "@/lib/sleepTimer";
 import { formatClock } from "@/lib/time";
 import { LocalDBService } from "@/services/LocalDBService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { usePlayerStore } from "@/store/playerStore";
+import { spacing } from "@/theme/tokens";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3];
 
-export default function PlayerScreen() {
-  const { trackId } = useLocalSearchParams<{ trackId?: string }>();
-  const theme = useTheme();
+/**
+ * The resume position carried by the route (`/player?trackId=…&positionSec=…`),
+ * used when the player is opened from a history entry.
+ *
+ * Expo Router hands params over as strings, and a malformed one must not become
+ * `NaN` and reach the audio engine — anything unparseable is treated as absent,
+ * which falls back to the normal "resume where you left off" behaviour.
+ */
+function parsePositionParam(raw: string | undefined): number | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
 
+export default function PlayerScreen() {
+  const params = useLocalSearchParams<{ trackId?: string; positionSec?: string }>();
+  const paramTrackId = params.trackId ?? null;
+  const paramPositionSec = parsePositionParam(params.positionSec);
+
+  const storeTrackId = usePlayerStore((state) => state.trackId);
+  const title = usePlayerStore((state) => state.title);
+  const artist = usePlayerStore((state) => state.artist);
+  const artworkUrl = usePlayerStore((state) => state.artworkUrl);
+  const contentHash = usePlayerStore((state) => state.contentHash);
+  const isAudiobook = usePlayerStore((state) => state.isAudiobook);
+  const status = usePlayerStore((state) => state.status);
+  const positionSec = usePlayerStore((state) => state.positionSec);
+  const durationSec = usePlayerStore((state) => state.durationSec);
+  const playbackSpeed = usePlayerStore((state) => state.playbackSpeed);
+  const error = usePlayerStore((state) => state.error);
+  const skip = usePlayerStore((state) => state.skip);
+
+  const activeTrackId = paramTrackId ?? storeTrackId;
   const [track, setTrack] = useState<LocalTrack | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [draftPositionSec, setDraftPositionSec] = useState(0);
-
-  const status = usePlayerStore((state) => state.status);
-  const positionSec = usePlayerStore((state) => state.positionSec);
-  const durationSec = usePlayerStore((state) => state.durationSec);
-  const playbackSpeed = usePlayerStore((state) => state.playbackSpeed);
-  const error = usePlayerStore((state) => state.error);
 
   const sleep = useSleepTimer();
 
@@ -57,43 +72,55 @@ export default function PlayerScreen() {
     create,
     update,
     remove,
-  } = useTrackAnnotations(track?.id ?? null);
+  } = useTrackAnnotations(activeTrackId);
 
   useEffect(() => {
     let mounted = true;
     void (async () => {
-      if (!trackId) {
+      if (!activeTrackId) {
         return;
       }
-      const loaded = await LocalDBService.getTrackById(trackId);
-      if (!mounted) {
+      const loaded = await LocalDBService.getTrackById(activeTrackId);
+      if (!mounted || !loaded) {
         return;
       }
       setTrack(loaded);
-      if (loaded && usePlayerStore.getState().trackId !== loaded.id) {
-        const sessions = await LocalDBService.getSessionsByTrack(loaded.id);
-        if (!mounted) {
-          return;
-        }
-        await TrackPlayerService.loadAndPlay(
-          loaded,
-          resumePositionSec(sessions, loaded.durationSec),
+
+      // Only take over playback when this is a different track from the one
+      // already loaded — opening the sheet from the mini-player must not restart.
+      if (usePlayerStore.getState().trackId !== loaded.id) {
+        const { queue } = usePlayerStore.getState();
+        const existingIndex = queue.indexOf(loaded.id);
+        await TrackPlayerService.playQueueAt(
+          existingIndex >= 0 ? queue : [loaded.id],
+          existingIndex >= 0 ? existingIndex : 0,
+          // Explicit, so a history entry lands on *its* session's position
+          // rather than the most recent one.
+          paramPositionSec,
         );
+        return;
+      }
+
+      // The requested track is already loaded. Reloading it would restart the
+      // audio, so just move the playhead — and resume, because "resume from this
+      // entry" means play, even if the player was paused.
+      if (paramPositionSec !== undefined) {
+        await TrackPlayerService.seekTo(paramPositionSec);
+        TrackPlayerService.resume();
       }
     })();
     return () => {
       mounted = false;
     };
-  }, [trackId]);
+  }, [activeTrackId, paramPositionSec]);
 
-  const selected = useMemo(
-    () => annotations.find((annotation) => annotation.id === selectedId) ?? null,
-    [annotations, selectedId],
+  const ramp = useMemo(
+    () => paletteFor(contentHash ?? track?.contentHash ?? title ?? activeTrackId),
+    [activeTrackId, contentHash, title, track?.contentHash],
   );
 
   const isPlaying = status === "playing";
-  const progress = durationSec > 0 ? Math.min(1, positionSec / durationSec) : 0;
-  const title = track?.title ?? "Now Playing";
+  const resolvedTitle = title ?? track?.title ?? "Now Playing";
   const statusMessage = error ?? noteError;
 
   const onSelect = (annotation: LocalAnnotation) => {
@@ -125,13 +152,6 @@ export default function PlayerScreen() {
     setEditingId(null);
     setDraftPositionSec(positionSec);
     setDraft("");
-    setComposerOpen(true);
-  };
-
-  const startEdit = (annotation: LocalAnnotation) => {
-    setEditingId(annotation.id);
-    setDraftPositionSec(annotation.positionSec);
-    setDraft(annotation.text);
     setComposerOpen(true);
   };
 
@@ -177,236 +197,118 @@ export default function PlayerScreen() {
     ]);
   };
 
+  const selected = useMemo(
+    () => annotations.find((annotation) => annotation.id === selectedId) ?? null,
+    [annotations, selectedId],
+  );
+
+  const composer = composerOpen ? (
+    <GlassSheet open tone="surfaceStrong" style={styles.composer}>
+      <TextField
+        label={`${editingId ? "Edit" : "Note"} at ${formatClock(draftPositionSec)}`}
+        value={draft}
+        onChangeText={setDraft}
+        placeholder="What stood out here?"
+        multiline
+        autoFocus
+      />
+      <View style={styles.composerActions}>
+        <Pressable accessibilityRole="button" onPress={closeComposer}>
+          <ThemedText type="linkPrimary">Cancel</ThemedText>
+        </Pressable>
+        <PrimaryButton
+          label={editingId ? "Save changes" : "Save note"}
+          loading={creating}
+          disabled={draft.trim().length === 0}
+          onPress={() => void saveNote()}
+          style={styles.saveButton}
+        />
+      </View>
+    </GlassSheet>
+  ) : selected ? (
+    <GlassSheet open tone="surfaceStrong" style={styles.composer}>
+      <View style={styles.selectedHeader}>
+        <ThemedText type="smallBold">{formatClock(selected.positionSec)}</ThemedText>
+        <View style={styles.selectedActions}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              setEditingId(selected.id);
+              setDraftPositionSec(selected.positionSec);
+              setDraft(selected.text);
+              setComposerOpen(true);
+            }}>
+            <ThemedText type="linkPrimary">Edit</ThemedText>
+          </Pressable>
+          <Pressable accessibilityRole="button" onPress={() => confirmDelete(selected)}>
+            <ThemedText type="linkPrimary">Delete</ThemedText>
+          </Pressable>
+        </View>
+      </View>
+      <ThemedText type="small">{selected.text}</ThemedText>
+    </GlassSheet>
+  ) : null;
+
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={["left", "right", "bottom"]}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.flex}>
-          <ScrollView
-            contentContainerStyle={styles.content}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-            <View style={styles.artwork}>
-              <ThemedText style={styles.artworkGlyph}>♪</ThemedText>
-            </View>
-
-            <View style={styles.meta}>
-              <ThemedText type="smallBold" numberOfLines={2} style={styles.title}>
-                {title}
-              </ThemedText>
-              <ThemedText type="small" themeColor="textSecondary">
-                {track?.isAudiobook ? "Audiobook" : "Track"}
-                {track?.author ? ` · ${track.author}` : ""}
-              </ThemedText>
-            </View>
-
-            <View style={styles.progressRow}>
-              <ThemedView type="backgroundElement" style={styles.progressTrack}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${Math.round(progress * 100)}%`, backgroundColor: theme.tint },
-                  ]}
-                />
-                {annotations.map((annotation) => (
-                  <AnnotationMarker
-                    key={annotation.id}
-                    annotation={annotation}
-                    durationSec={durationSec}
-                    selected={annotation.id === selectedId}
-                    onPress={onSelect}
-                  />
-                ))}
-              </ThemedView>
-              <View style={styles.times}>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {formatClock(positionSec)}
-                </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
-                  {formatClock(durationSec)}
-                </ThemedText>
-              </View>
-            </View>
-
-            {selected ? (
-              <ThemedView type="backgroundSelected" style={styles.selectedCard}>
-                <View style={styles.selectedHeader}>
-                  <ThemedText type="smallBold">
-                    {formatClock(selected.positionSec)}
-                  </ThemedText>
-                  <View style={styles.selectedActions}>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => startEdit(selected)}>
-                      <ThemedText type="linkPrimary">Edit</ThemedText>
-                    </Pressable>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={() => confirmDelete(selected)}>
-                      <ThemedText type="linkPrimary">Delete</ThemedText>
-                    </Pressable>
-                  </View>
-                </View>
-                <ThemedText type="small">{selected.text}</ThemedText>
-              </ThemedView>
-            ) : null}
-
-            <View style={styles.controls}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Seek back 30 seconds"
-                hitSlop={8}
-                onPress={() => void TrackPlayerService.seekTo(Math.max(0, positionSec - 30))}>
-                <ThemedText type="smallBold">-30s</ThemedText>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={isPlaying ? "Pause" : "Play"}
-                style={styles.playButton}
-                onPress={() => TrackPlayerService.togglePlayPause()}>
-                <ThemedText style={styles.playGlyph}>{isPlaying ? "❚❚" : "▶"}</ThemedText>
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Seek forward 30 seconds"
-                hitSlop={8}
-                onPress={() => void TrackPlayerService.seekTo(positionSec + 30)}>
-                <ThemedText type="smallBold">+30s</ThemedText>
-              </Pressable>
-            </View>
-
-            <View style={styles.secondaryRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Playback speed ${playbackSpeed} times`}
-                style={styles.speedButton}
-                onPress={cycleSpeed}>
-                <ThemedText type="smallBold">{playbackSpeed}x speed</ThemedText>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Sleep timer"
-                accessibilityState={{ selected: sleep.active }}
-                style={[styles.sleepButton, { borderColor: theme.backgroundSelected }]}
-                onPress={openSleepTimer}>
-                <ThemedText type="smallBold">
-                  {sleep.active ? formatRemaining(sleep.remainingMs) : "Sleep"}
-                </ThemedText>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Add note"
-                disabled={!track}
-                onPress={openComposer}
-                style={[styles.noteButton, { borderColor: theme.backgroundSelected }]}>
-                <ThemedText type="smallBold">+ Note</ThemedText>
-              </Pressable>
-            </View>
-
-            {composerOpen ? (
-              <ThemedView type="backgroundElement" style={styles.composer}>
-                <TextField
-                  label={`${editingId ? "Edit" : "Note"} at ${formatClock(draftPositionSec)}`}
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder="What stood out here?"
-                  multiline
-                  autoFocus
-                />
-                <View style={styles.composerActions}>
-                  <Pressable accessibilityRole="button" onPress={closeComposer}>
-                    <ThemedText type="linkPrimary">Cancel</ThemedText>
-                  </Pressable>
-                  <PrimaryButton
-                    label={editingId ? "Save changes" : "Save note"}
-                    loading={creating}
-                    disabled={draft.trim().length === 0}
-                    onPress={() => void saveNote()}
-                    style={styles.saveButton}
-                  />
-                </View>
-              </ThemedView>
-            ) : null}
-
-            {statusMessage ? (
-              <ThemedText type="small" themeColor="textSecondary" style={styles.error}>
-                {statusMessage}
-              </ThemedText>
-            ) : null}
-
-            <View style={styles.notes}>
-              <ThemedText type="smallBold" themeColor="textSecondary">
-                Notes
-              </ThemedText>
-              <AnnotationList
-                annotations={annotations}
-                selectedId={selectedId}
-                onSelect={onSelect}
-              />
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </ThemedView>
+    <NowPlayingSheet ramp={ramp}>
+      {({ gesture, reveal, close }) => (
+        <PlayerContent
+          reveal={reveal}
+          headerGesture={gesture}
+          title={resolvedTitle}
+          artist={artist ?? track?.author ?? null}
+          artworkUrl={artworkUrl ?? track?.artworkUrl ?? null}
+          isAudiobook={isAudiobook || (track?.isAudiobook ?? false)}
+          ramp={ramp}
+          isPlaying={isPlaying}
+          positionSec={positionSec}
+          durationSec={durationSec}
+          playbackSpeed={playbackSpeed}
+          sleepActive={sleep.active}
+          sleepLabel={sleep.active ? formatRemaining(sleep.remainingMs) : "Sleep"}
+          error={statusMessage}
+          annotations={annotations}
+          selectedId={selectedId}
+          skipNonce={skip?.nonce}
+          skipDirection={skip?.direction}
+          onSelectAnnotation={onSelect}
+          onClose={() => {
+            // Clear the transient panels first, then run the sheet's own exit:
+            // it morphs the frame back down to the mini-player and pops the
+            // route once that finishes. Popping directly would skip the morph.
+            setComposerOpen(false);
+            setSelectedId(null);
+            close();
+          }}
+          onToggle={() => TrackPlayerService.togglePlayPause()}
+          onNext={() => void TrackPlayerService.next()}
+          onPrevious={() => void TrackPlayerService.previous()}
+          onRewind={() => void TrackPlayerService.seekTo(Math.max(0, positionSec - 30))}
+          onForward={() => void TrackPlayerService.seekTo(positionSec + 30)}
+          onSeek={(target) => void TrackPlayerService.seekTo(target)}
+          onCycleSpeed={cycleSpeed}
+          onOpenSleepTimer={openSleepTimer}
+          onAddNote={openComposer}
+          composer={composer}
+        />
+      )}
+    </NowPlayingSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  safeArea: {
-    flex: 1,
-    width: "100%",
-    maxWidth: MaxContentWidth,
-    alignSelf: "center",
+  composer: {
+    gap: spacing.lg,
+    padding: spacing.lg,
   },
-  flex: { flex: 1 },
-  content: {
-    paddingHorizontal: Spacing.four,
-    paddingBottom: Spacing.five,
-    paddingTop: Spacing.four,
-    gap: Spacing.four,
-  },
-  artwork: {
-    height: 220,
-    borderRadius: Spacing.four,
-    backgroundColor: "#208AEF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  artworkGlyph: {
-    color: "#ffffff",
-    fontSize: 72,
-    lineHeight: 84,
-  },
-  meta: {
-    gap: Spacing.one,
-  },
-  title: {
-    fontSize: 22,
-    lineHeight: 28,
-  },
-  progressRow: {
-    gap: Spacing.two,
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-  },
-  progressFill: {
-    height: 6,
-    borderRadius: 3,
-  },
-  times: {
+  composerActions: {
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
+    gap: spacing.lg,
   },
-  selectedCard: {
-    gap: Spacing.half,
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
+  saveButton: {
+    flex: 1,
   },
   selectedHeader: {
     flexDirection: "row",
@@ -416,78 +318,6 @@ const styles = StyleSheet.create({
   selectedActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.three,
-  },
-  controls: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.four,
-  },
-  playButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#208AEF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  playGlyph: {
-    color: "#ffffff",
-    fontSize: 24,
-    lineHeight: 28,
-  },
-  secondaryRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: Spacing.two,
-  },
-  speedButton: {
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.three,
-    backgroundColor: "#F0F0F3",
-  },
-  sleepButton: {
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.three,
-    borderWidth: 1,
-  },
-  noteButton: {
-    minHeight: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.three,
-    borderWidth: 1,
-  },
-  composer: {
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
-  },
-  composerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: Spacing.three,
-  },
-  saveButton: {
-    flex: 1,
-  },
-  error: {
-    textAlign: "center",
-  },
-  notes: {
-    gap: Spacing.two,
+    gap: spacing.lg,
   },
 });

@@ -1,12 +1,13 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Reveal } from "@/components/motion/Reveal";
+import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { StatCell } from "@/components/stat-cell";
 import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { MaxContentWidth, Spacing } from "@/constants/theme";
+import { GlassSurface } from "@/components/ui/glass";
+import { useTheme } from "@/hooks/use-theme";
 import { useHistory } from "@/hooks/use-history";
 import { formatDuration } from "@/lib/history";
 import {
@@ -15,6 +16,7 @@ import {
   computeListeningStats,
   computeTrackLeaders,
 } from "@/lib/stats";
+import { spacing } from "@/theme/tokens";
 
 function formatDay(key: string): string {
   return new Date(`${key}T00:00:00`).toLocaleDateString(undefined, {
@@ -29,6 +31,7 @@ function formatLastPlayed(value: number | null): string {
 }
 
 export default function StatsScreen() {
+  const theme = useTheme();
   const { items, loading, refresh } = useHistory();
 
   useFocusEffect(
@@ -41,151 +44,209 @@ export default function StatsScreen() {
   const leaders = computeTrackLeaders(items, 5);
   const streak = computeDayStreak(items);
   const recentDays = computeDailyListen(items).slice(-7).reverse();
+  const peakDaySec = recentDays.reduce((max, day) => Math.max(max, day.listenTimeSec), 0);
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.header}>
-            <ThemedText type="subtitle">Stats</ThemedText>
-          </View>
+    <Screen wash={theme.accent}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}>
+        <ScreenHeader
+          overline="A QUIET RECORD OF YOUR TIME"
+          title="Stats"
+          subtitle={items.length > 0 ? `Last played ${formatLastPlayed(stats.lastPlayedAt)}` : undefined}
+        />
 
-          {!loading && items.length === 0 ? (
-            <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-              Play something and your listening stats will appear here.
+        {!loading && items.length === 0 ? (
+          <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
+            Play something and your listening stats will appear here.
+          </ThemedText>
+        ) : null}
+
+        <View style={styles.grid}>
+          <StatCell
+            index={0}
+            icon="stats"
+            label="listened"
+            value={formatDuration(stats.totalListenTimeSec)}
+            style={styles.gridCell}
+          />
+          <StatCell
+            index={1}
+            icon="history"
+            label="sessions"
+            value={String(stats.sessionCount)}
+            style={styles.gridCell}
+          />
+          <StatCell
+            index={2}
+            icon="music"
+            label="tracks"
+            value={String(stats.trackCount)}
+            style={styles.gridCell}
+          />
+          <StatCell
+            index={3}
+            icon="sparkle"
+            label="day streak"
+            value={String(streak)}
+            style={styles.gridCell}
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Reveal index={4}>
+            <ThemedText type="overline" themeColor="textTertiary">
+              MOST LISTENED
             </ThemedText>
-          ) : null}
-
-          <View style={styles.grid}>
-            <StatCell
-              label="listened"
-              value={formatDuration(stats.totalListenTimeSec)}
-              style={styles.gridCell}
-            />
-            <StatCell label="sessions" value={String(stats.sessionCount)} style={styles.gridCell} />
-            <StatCell label="tracks" value={String(stats.trackCount)} style={styles.gridCell} />
-            <StatCell label="day streak" value={String(streak)} style={styles.gridCell} />
-          </View>
-
-          <View style={styles.section}>
-            <ThemedText type="smallBold" themeColor="textSecondary">
-              Most listened
-            </ThemedText>
-            {leaders.length > 0 ? (
-              leaders.map((leader) => (
-                <ThemedView key={leader.contentHash} type="backgroundElement" style={styles.row}>
-                  <ThemedText type="smallBold" numberOfLines={1} style={styles.rowTitle}>
+          </Reveal>
+          {leaders.length > 0 ? (
+            leaders.map((leader, index) => (
+              <Reveal key={leader.contentHash} index={5 + index}>
+                <GlassSurface style={styles.row}>
+                  <ThemedText type="bodyStrong" numberOfLines={1} style={styles.rowTitle}>
                     {leader.title}
                   </ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
+                  <ThemedText type="caption" themeColor="textSecondary">
                     {formatDuration(leader.listenTimeSec)} · {leader.playCount} play
                     {leader.playCount === 1 ? "" : "s"}
                   </ThemedText>
-                </ThemedView>
-              ))
-            ) : (
-              <ThemedText type="small" themeColor="textSecondary">
-                Nothing yet.
-              </ThemedText>
-            )}
-          </View>
-
-          <View style={styles.section}>
-            <ThemedText type="smallBold" themeColor="textSecondary">
-              Longest session
+                </GlassSurface>
+              </Reveal>
+            ))
+          ) : (
+            <ThemedText type="caption" themeColor="textTertiary">
+              Nothing yet.
             </ThemedText>
-            {stats.longestSessionTitle ? (
-              <ThemedView type="backgroundElement" style={styles.row}>
-                <ThemedText type="smallBold" numberOfLines={1} style={styles.rowTitle}>
+          )}
+        </View>
+
+        <View style={styles.section}>
+          <Reveal index={10}>
+            <ThemedText type="overline" themeColor="textTertiary">
+              LONGEST SESSION
+            </ThemedText>
+          </Reveal>
+          {stats.longestSessionTitle ? (
+            <Reveal index={11}>
+              <GlassSurface style={styles.row}>
+                <ThemedText type="bodyStrong" numberOfLines={1} style={styles.rowTitle}>
                   {stats.longestSessionTitle}
                 </ThemedText>
-                <ThemedText type="small" themeColor="textSecondary">
+                <ThemedText type="caption" style={{ color: theme.accent }}>
                   {formatDuration(stats.longestSessionSec)}
                 </ThemedText>
-              </ThemedView>
-            ) : (
-              <ThemedText type="small" themeColor="textSecondary">
-                Nothing yet.
-              </ThemedText>
-            )}
-          </View>
-
-          <View style={styles.section}>
-            <ThemedText type="smallBold" themeColor="textSecondary">
-              Recent days
+              </GlassSurface>
+            </Reveal>
+          ) : (
+            <ThemedText type="caption" themeColor="textTertiary">
+              Nothing yet.
             </ThemedText>
-            {recentDays.length > 0 ? (
-              recentDays.map((day) => (
-                <View key={day.key} style={styles.dayRow}>
-                  <ThemedText type="small">{formatDay(day.key)}</ThemedText>
-                  <ThemedText type="small" themeColor="textSecondary">
-                    {formatDuration(day.listenTimeSec)}
-                  </ThemedText>
-                </View>
-              ))
-            ) : (
-              <ThemedText type="small" themeColor="textSecondary">
-                Nothing yet.
-              </ThemedText>
-            )}
-          </View>
+          )}
+        </View>
 
-          <ThemedText type="small" themeColor="textSecondary">
-            Last played: {formatLastPlayed(stats.lastPlayedAt)}
-          </ThemedText>
-        </ScrollView>
-      </SafeAreaView>
-    </ThemedView>
+        <View style={styles.section}>
+          <Reveal index={12}>
+            <ThemedText type="overline" themeColor="textTertiary">
+              RECENT DAYS
+            </ThemedText>
+          </Reveal>
+          {recentDays.length > 0 ? (
+            <Reveal index={13}>
+              <GlassSurface flat style={styles.daysCard}>
+                {recentDays.map((day) => {
+                  const ratio = peakDaySec > 0 ? day.listenTimeSec / peakDaySec : 0;
+                  return (
+                    <View key={day.key} style={styles.dayRow}>
+                      <ThemedText type="caption" style={styles.dayLabel} numberOfLines={1}>
+                        {formatDay(day.key)}
+                      </ThemedText>
+                      <View style={styles.dayTrack}>
+                        <View
+                          style={[
+                            styles.dayFill,
+                            { width: `${Math.max(ratio * 100, day.listenTimeSec > 0 ? 4 : 0)}%`, backgroundColor: theme.accent },
+                          ]}
+                        />
+                      </View>
+                      <ThemedText type="numeric" themeColor="textSecondary" style={styles.dayValue}>
+                        {formatDuration(day.listenTimeSec)}
+                      </ThemedText>
+                    </View>
+                  );
+                })}
+              </GlassSurface>
+            </Reveal>
+          ) : (
+            <ThemedText type="caption" themeColor="textTertiary">
+              Nothing yet.
+            </ThemedText>
+          )}
+        </View>
+      </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  safeArea: {
-    flex: 1,
-    width: "100%",
-    maxWidth: MaxContentWidth,
-    alignSelf: "center",
-  },
   content: {
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
-    paddingBottom: Spacing.six,
-    gap: Spacing.four,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.giant + 96,
+    gap: spacing.xl,
   },
-  header: {
-    paddingBottom: Spacing.half,
+  empty: {
+    textAlign: "center",
+    paddingVertical: spacing.xl,
   },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: Spacing.two,
+    gap: spacing.sm,
   },
   gridCell: {
     flexGrow: 1,
     flexBasis: "45%",
   },
   section: {
-    gap: Spacing.two,
+    gap: spacing.sm,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
+    gap: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: 20,
   },
   rowTitle: {
     flex: 1,
   },
+  daysCard: {
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: 20,
+  },
   dayRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    gap: spacing.md,
   },
-  empty: {
-    textAlign: "center",
-    paddingVertical: Spacing.five,
+  dayLabel: {
+    width: 92,
+  },
+  dayTrack: {
+    flex: 1,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "rgba(127,137,153,0.2)",
+    overflow: "hidden",
+  },
+  dayFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+  dayValue: {
+    width: 62,
+    textAlign: "right",
   },
 });

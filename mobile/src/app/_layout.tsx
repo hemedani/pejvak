@@ -1,15 +1,25 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { useColorScheme } from "react-native";
+import { StyleSheet, useColorScheme } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
+import { duration } from "@/theme/motion";
 
 SplashScreen.preventAutoHideAsync();
 
+/**
+ * Navigation graph.
+ *
+ * Deliberately shallow and predictable: tabs at the root, detail screens pushed
+ * from the right with a single 420 ms ease-out slide, and the now-playing sheet
+ * presented as a transparent modal that animates itself (so it can grow out of
+ * the mini-player instead of sliding in from the screen edge).
+ */
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const status = useAuthStore((state) => state.status);
@@ -28,34 +38,43 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      {status === "loading" ? null : (
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Protected guard={status === "authenticated"}>
-            <Stack.Screen name="(tabs)" />
-            <Stack.Screen
-              name="player"
-              options={{ headerShown: true, title: "Now Playing" }}
-            />
-            <Stack.Screen
-              name="track/[id]"
-              options={{ headerShown: true, title: "Track" }}
-            />
-            <Stack.Screen
-              name="playlist/[id]"
-              options={{ headerShown: true, title: "Playlist" }}
-            />
-            <Stack.Screen
-              name="settings"
-              options={{ headerShown: true, title: "Settings" }}
-            />
-          </Stack.Protected>
-          <Stack.Protected guard={status !== "authenticated"}>
-            <Stack.Screen name="(auth)" />
-          </Stack.Protected>
-        </Stack>
-      )}
-    </ThemeProvider>
+    <GestureHandlerRootView style={styles.root}>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <AnimatedSplashOverlay />
+        {status === "loading" ? null : (
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "slide_from_right",
+              animationDuration: duration.screen,
+              gestureEnabled: true,
+            }}>
+            <Stack.Protected guard={status === "authenticated"}>
+              <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+              <Stack.Screen name="track/[id]" />
+              <Stack.Screen name="playlist/[id]" />
+              <Stack.Screen name="settings" />
+              <Stack.Screen
+                name="player"
+                options={{
+                  presentation: "transparentModal",
+                  animation: "none",
+                  contentStyle: { backgroundColor: "transparent" },
+                }}
+              />
+            </Stack.Protected>
+            <Stack.Protected guard={status !== "authenticated"}>
+              <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+            </Stack.Protected>
+          </Stack>
+        )}
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
+});

@@ -1,20 +1,29 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, ScrollView, StyleSheet, View } from "react-native";
 
+import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
+import { ElasticPressable } from "@/components/motion/ElasticPressable";
+import { PaletteTile } from "@/components/motion/PaletteTile";
+import { Reveal } from "@/components/motion/Reveal";
+import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
+import { GlassSurface } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
-import { MaxContentWidth, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { usePlaylistDetail } from "@/hooks/use-playlist-detail";
 import type { LocalTrack } from "@/lib/db/types";
+import { paletteFor } from "@/lib/palette";
 import { PlaylistService } from "@/services/PlaylistService";
+import * as TrackPlayerService from "@/services/TrackPlayerService";
+import { spacing } from "@/theme/tokens";
 
 export default function PlaylistDetailScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const params = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
-  const playlistId = id ?? null;
+  const theme = useTheme();
+  const playlistId = params.id ?? null;
   const { data, loading, refresh } = usePlaylistDetail(playlistId);
 
   const [renaming, setRenaming] = useState(false);
@@ -32,7 +41,17 @@ export default function PlaylistDetailScreen() {
     await refresh();
   };
 
-  const play = (track: LocalTrack) => {
+  const tracks = data?.tracks ?? [];
+
+  const play = (index: number) => {
+    const track = tracks[index];
+    if (!track) {
+      return;
+    }
+    void TrackPlayerService.playQueueAt(
+      tracks.map((item) => item.id),
+      index,
+    );
     router.push({ pathname: "/player", params: { trackId: track.id } });
   };
 
@@ -60,28 +79,32 @@ export default function PlaylistDetailScreen() {
     ]);
   };
 
-  const tracks = data?.tracks ?? [];
   const addedIds = new Set(tracks.map((track) => track.id));
-  const addable = (data?.library ?? []).filter((track) => !addedIds.has(track.id));
+  const addable = (data?.library ?? []).filter((track: LocalTrack) => !addedIds.has(track.id));
+  const ramp = paletteFor(data?.playlist.title ?? playlistId);
 
   return (
-    <ThemedView style={styles.container}>
+    <Screen wash={ramp[1]}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {data ? (
           <>
             {renaming ? (
-              <View style={styles.renameRow}>
+              <Reveal index={0} style={styles.renameBlock}>
                 <TextField
                   label="Playlist name"
                   value={titleDraft}
                   onChangeText={setTitleDraft}
                   autoFocus
-                  style={styles.renameInput}
                 />
                 <View style={styles.renameActions}>
-                  <Pressable accessibilityRole="button" onPress={() => setRenaming(false)}>
-                    <ThemedText type="linkPrimary">Cancel</ThemedText>
-                  </Pressable>
+                  <ElasticPressable
+                    accessibilityRole="button"
+                    onPress={() => setRenaming(false)}
+                    style={styles.textButton}>
+                    <ThemedText type="label" themeColor="textSecondary">
+                      Cancel
+                    </ThemedText>
+                  </ElasticPressable>
                   <PrimaryButton
                     label="Save"
                     disabled={titleDraft.trim().length === 0}
@@ -89,189 +112,237 @@ export default function PlaylistDetailScreen() {
                     style={styles.renameButton}
                   />
                 </View>
-              </View>
+              </Reveal>
             ) : (
-              <View style={styles.header}>
-                <ThemedText type="subtitle" numberOfLines={2} style={styles.title}>
-                  {data.playlist.title}
-                </ThemedText>
-                <Pressable accessibilityRole="button" onPress={() => {
-                  setTitleDraft(data.playlist.title);
-                  setRenaming(true);
-                }}>
-                  <ThemedText type="linkPrimary">Rename</ThemedText>
-                </Pressable>
-              </View>
+              <ScreenHeader
+                onBack={() => router.back()}
+                overline="PLAYLIST"
+                title={data.playlist.title}
+                subtitle={`${tracks.length} track${tracks.length === 1 ? "" : "s"}`}
+                action={
+                  <BouncyIconButton
+                    name="edit"
+                    accessibilityLabel="Rename playlist"
+                    size={42}
+                    iconSize={18}
+                    tone="glass"
+                    onPress={() => {
+                      setTitleDraft(data.playlist.title);
+                      setRenaming(true);
+                    }}
+                  />
+                }
+              />
             )}
 
             <View style={styles.section}>
-              <ThemedText type="smallBold" themeColor="textSecondary">
-                Tracks
-              </ThemedText>
+              <Reveal index={1}>
+                <ThemedText type="overline" themeColor="textTertiary">
+                  TRACKS
+                </ThemedText>
+              </Reveal>
               {tracks.length === 0 ? (
-                <ThemedText type="small" themeColor="textSecondary">
+                <ThemedText type="caption" themeColor="textTertiary">
                   {loading ? "Loading…" : "No tracks yet."}
                 </ThemedText>
               ) : (
                 tracks.map((track, index) => (
-                  <ThemedView key={track.id} type="backgroundElement" style={styles.row}>
-                    <Pressable
-                      accessibilityRole="button"
-                      style={styles.rowMain}
-                      onPress={() => play(track)}>
-                      <ThemedText type="smallBold" numberOfLines={1}>
-                        {index + 1}. {track.title}
-                      </ThemedText>
-                    </Pressable>
-                    <View style={styles.rowActions}>
-                      <Pressable
+                  <Reveal key={track.id} index={index + 2}>
+                    <GlassSurface style={styles.row}>
+                      <ElasticPressable
                         accessibilityRole="button"
-                        disabled={index === 0}
-                        hitSlop={6}
-                        onPress={() =>
-                          playlistId &&
-                          void run(() => PlaylistService.moveTrack(playlistId, index, index - 1))
-                        }>
-                        <ThemedText
-                          type="smallBold"
-                          themeColor={index === 0 ? "textSecondary" : "text"}>
-                          ↑
-                        </ThemedText>
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        disabled={index === tracks.length - 1}
-                        hitSlop={6}
-                        onPress={() =>
-                          playlistId &&
-                          void run(() => PlaylistService.moveTrack(playlistId, index, index + 1))
-                        }>
-                        <ThemedText
-                          type="smallBold"
-                          themeColor={index === tracks.length - 1 ? "textSecondary" : "text"}>
-                          ↓
-                        </ThemedText>
-                      </Pressable>
-                      <Pressable
-                        accessibilityRole="button"
-                        hitSlop={6}
-                        onPress={() =>
-                          playlistId &&
-                          void run(() => PlaylistService.removeTrack(playlistId, track.id))
-                        }>
-                        <ThemedText type="linkPrimary">Remove</ThemedText>
-                      </Pressable>
-                    </View>
-                  </ThemedView>
+                        accessibilityLabel={`Play ${track.title}`}
+                        onPress={() => play(index)}
+                        style={styles.rowMain}>
+                        <PaletteTile
+                          ramp={paletteFor(track.contentHash)}
+                          label={track.title}
+                          size={40}
+                          radius={12}
+                        />
+                        <View style={styles.rowCopy}>
+                          <ThemedText type="bodyStrong" numberOfLines={1}>
+                            {index + 1}. {track.title}
+                          </ThemedText>
+                        </View>
+                      </ElasticPressable>
+
+                      <View style={styles.rowActions}>
+                        <BouncyIconButton
+                          name="arrowUp"
+                          accessibilityLabel="Move up"
+                          size={34}
+                          iconSize={15}
+                          tone="ghost"
+                          disabled={index === 0}
+                          onPress={() =>
+                            playlistId &&
+                            void run(() => PlaylistService.moveTrack(playlistId, index, index - 1))
+                          }
+                        />
+                        <BouncyIconButton
+                          name="arrowDown"
+                          accessibilityLabel="Move down"
+                          size={34}
+                          iconSize={15}
+                          tone="ghost"
+                          disabled={index === tracks.length - 1}
+                          onPress={() =>
+                            playlistId &&
+                            void run(() => PlaylistService.moveTrack(playlistId, index, index + 1))
+                          }
+                        />
+                        <BouncyIconButton
+                          name="close"
+                          accessibilityLabel={`Remove ${track.title}`}
+                          size={34}
+                          iconSize={15}
+                          tone="ghost"
+                          onPress={() =>
+                            playlistId &&
+                            void run(() => PlaylistService.removeTrack(playlistId, track.id))
+                          }
+                        />
+                      </View>
+                    </GlassSurface>
+                  </Reveal>
                 ))
               )}
             </View>
 
             <View style={styles.section}>
-              <Pressable accessibilityRole="button" onPress={() => setAdding((value) => !value)}>
-                <ThemedText type="linkPrimary">{adding ? "Done" : "Add tracks"}</ThemedText>
-              </Pressable>
+              <Reveal index={20}>
+                <ElasticPressable
+                  accessibilityRole="button"
+                  onPress={() => setAdding((value) => !value)}
+                  style={styles.textButton}>
+                  <ThemedText type="label" style={{ color: theme.accent }}>
+                    {adding ? "Done" : "Add tracks"}
+                  </ThemedText>
+                </ElasticPressable>
+              </Reveal>
               {adding ? (
                 addable.length === 0 ? (
-                  <ThemedText type="small" themeColor="textSecondary">
+                  <ThemedText type="caption" themeColor="textTertiary">
                     Every library track is already here.
                   </ThemedText>
                 ) : (
-                  addable.map((track) => (
-                    <ThemedView key={track.id} type="backgroundElement" style={styles.row}>
-                      <ThemedText type="small" numberOfLines={1} style={styles.rowMain}>
-                        {track.title}
-                      </ThemedText>
-                      <Pressable
-                        accessibilityRole="button"
-                        hitSlop={6}
-                        onPress={() =>
-                          playlistId &&
-                          void run(() => PlaylistService.addTrack(playlistId, track.id))
-                        }>
-                        <ThemedText type="linkPrimary">Add</ThemedText>
-                      </Pressable>
-                    </ThemedView>
+                  addable.map((track: LocalTrack, index: number) => (
+                    <Reveal key={track.id} index={21 + index}>
+                      <GlassSurface flat style={styles.row}>
+                        <View style={styles.rowMain}>
+                          <PaletteTile
+                            ramp={paletteFor(track.contentHash)}
+                            label={track.title}
+                            size={40}
+                            radius={12}
+                          />
+                          <ThemedText
+                            type="bodyStrong"
+                            numberOfLines={1}
+                            style={styles.rowCopy}>
+                            {track.title}
+                          </ThemedText>
+                        </View>
+                        <BouncyIconButton
+                          name="add"
+                          accessibilityLabel={`Add ${track.title}`}
+                          size={36}
+                          iconSize={18}
+                          tone="glass"
+                          onPress={() =>
+                            playlistId &&
+                            void run(() => PlaylistService.addTrack(playlistId, track.id))
+                          }
+                        />
+                      </GlassSurface>
+                    </Reveal>
                   ))
                 )
               ) : null}
             </View>
 
-            <Pressable
-              accessibilityRole="button"
-              style={styles.dangerRow}
-              onPress={confirmDelete}>
-              <ThemedText type="linkPrimary">Delete playlist</ThemedText>
-            </Pressable>
+            <Reveal index={40}>
+              <ElasticPressable
+                accessibilityRole="button"
+                onPress={confirmDelete}
+                style={styles.dangerRow}>
+                <ThemedText type="label" style={{ color: theme.danger }}>
+                  Delete playlist
+                </ThemedText>
+              </ElasticPressable>
+            </Reveal>
           </>
         ) : (
-          <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
+          <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
             {loading ? "Loading…" : "Playlist not found."}
           </ThemedText>
         )}
       </ScrollView>
-    </ThemedView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
   content: {
-    width: "100%",
-    maxWidth: MaxContentWidth,
-    alignSelf: "center",
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.four,
-    paddingBottom: Spacing.six,
-    gap: Spacing.four,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.giant,
+    gap: spacing.xl,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: Spacing.three,
-  },
-  title: {
-    flex: 1,
-  },
-  renameRow: {
-    gap: Spacing.three,
-  },
-  renameInput: {
-    width: "100%",
+  renameBlock: {
+    gap: spacing.lg,
+    paddingTop: spacing.lg,
   },
   renameActions: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
-    gap: Spacing.three,
+    gap: spacing.lg,
   },
   renameButton: {
-    paddingHorizontal: Spacing.four,
+    paddingHorizontal: spacing.xl,
   },
   section: {
-    gap: Spacing.two,
+    gap: spacing.sm,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: 20,
   },
   rowMain: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    minWidth: 0,
+  },
+  rowCopy: {
     flex: 1,
   },
   rowActions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.three,
+    // 8 rather than 4: these buttons are 34 pt and pad their touch area out to
+    // 44, so a tighter gap would let neighbouring hit areas overlap and turn a
+    // missed "move down" into an accidental "remove".
+    gap: spacing.sm,
+  },
+  textButton: {
+    minHeight: 44,
+    justifyContent: "center",
+    paddingHorizontal: spacing.xs,
   },
   dangerRow: {
-    paddingVertical: Spacing.two,
+    minHeight: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
   },
   empty: {
     textAlign: "center",
-    paddingVertical: Spacing.five,
+    paddingVertical: spacing.huge,
   },
 });

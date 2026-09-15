@@ -1,32 +1,43 @@
 import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 
+import { Reveal } from "@/components/motion/Reveal";
 import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { Spacing } from "@/constants/theme";
+import { Icon, type IconName } from "@/components/ui/icon";
+import { GlassSurface } from "@/components/ui/glass";
+import { useTheme } from "@/hooks/use-theme";
+import { spacing } from "@/theme/tokens";
 
 export type StatCellProps = {
   label: string;
   value: string;
+  icon?: IconName;
+  /** Position in its grid, for the staggered entrance. */
+  index?: number;
   style?: StyleProp<ViewStyle>;
 };
 
-export function StatCell({ label, value, style }: StatCellProps) {
+export function StatCell({ label, value, icon, index = 0, style }: StatCellProps) {
+  const theme = useTheme();
+
   return (
-    <ThemedView type="backgroundElement" style={[styles.cell, style]}>
-      <ThemedText type="smallBold" numberOfLines={1}>
-        {value}
-      </ThemedText>
-      <ThemedText type="small" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-    </ThemedView>
+    <Reveal index={index} style={style}>
+      <GlassSurface flat style={styles.cell}>
+        {icon ? <Icon name={icon} size={16} color={theme.accent} /> : null}
+        <ThemedText type="heading" numberOfLines={1}>
+          {value}
+        </ThemedText>
+        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+          {label}
+        </ThemedText>
+      </GlassSurface>
+    </Reveal>
   );
 }
 
 const styles = StyleSheet.create({
   cell: {
-    gap: Spacing.half,
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
+    gap: spacing.xs,
+    padding: spacing.lg,
+    borderRadius: 20,
   },
 });

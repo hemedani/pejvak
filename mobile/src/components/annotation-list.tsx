@@ -1,11 +1,13 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
+import { ElasticPressable } from "@/components/motion/ElasticPressable";
+import { Reveal } from "@/components/motion/Reveal";
 import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
-import { Spacing } from "@/constants/theme";
+import { GlassSurface } from "@/components/ui/glass";
 import { useTheme } from "@/hooks/use-theme";
 import type { LocalAnnotation } from "@/lib/db/types";
 import { formatClock } from "@/lib/time";
+import { spacing } from "@/theme/tokens";
 
 export type AnnotationListProps = {
   annotations: LocalAnnotation[];
@@ -18,36 +20,42 @@ export function AnnotationList({ annotations, selectedId = null, onSelect }: Ann
 
   if (annotations.length === 0) {
     return (
-      <ThemedText type="small" themeColor="textSecondary" style={styles.empty}>
-        No notes yet.
+      <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
+        No notes yet. Tap “Note” to capture the moment.
       </ThemedText>
     );
   }
 
   return (
     <View style={styles.list}>
-      {annotations.map((annotation) => {
+      {annotations.map((annotation, index) => {
         const selected = annotation.id === selectedId;
+        const dotColor = annotation.color ?? theme.accent;
+
         return (
-          <Pressable
-            key={annotation.id}
-            accessibilityRole={onSelect ? "button" : undefined}
-            accessibilityState={{ selected }}
-            onPress={onSelect ? () => onSelect(annotation) : undefined}>
-            <ThemedView
-              type={selected ? "backgroundSelected" : "backgroundElement"}
-              style={styles.row}>
-              <View
-                style={[styles.dot, { backgroundColor: annotation.color ?? theme.tint }]}
-              />
-              <View style={styles.body}>
-                <ThemedText type="smallBold">{formatClock(annotation.positionSec)}</ThemedText>
-                <ThemedText type="small" themeColor="textSecondary" numberOfLines={2}>
-                  {annotation.text}
-                </ThemedText>
-              </View>
-            </ThemedView>
-          </Pressable>
+          <Reveal key={annotation.id} index={index} from="below">
+            <ElasticPressable
+              accessibilityRole={onSelect ? "button" : undefined}
+              accessibilityState={{ selected }}
+              haptic="selection"
+              onPress={onSelect ? () => onSelect(annotation) : undefined}
+              style={styles.pressable}>
+              <GlassSurface
+                flat
+                tone={selected ? "surfaceStrong" : "surface"}
+                style={[styles.row, selected && { borderColor: dotColor }]}>
+                <View style={[styles.dot, { backgroundColor: dotColor, shadowColor: dotColor }]} />
+                <View style={styles.body}>
+                  <ThemedText type="numeric" style={{ color: dotColor }}>
+                    {formatClock(annotation.positionSec)}
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary" numberOfLines={2}>
+                    {annotation.text}
+                  </ThemedText>
+                </View>
+              </GlassSurface>
+            </ElasticPressable>
+          </Reveal>
         );
       })}
     </View>
@@ -56,26 +64,33 @@ export function AnnotationList({ annotations, selectedId = null, onSelect }: Ann
 
 const styles = StyleSheet.create({
   list: {
-    gap: Spacing.two,
+    gap: spacing.sm,
+  },
+  pressable: {
+    borderRadius: 20,
   },
   empty: {
-    paddingVertical: Spacing.two,
+    paddingVertical: spacing.sm,
   },
   row: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderRadius: Spacing.three,
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: 20,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 6,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    marginTop: 5,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
+    elevation: 3,
   },
   body: {
     flex: 1,
-    gap: Spacing.half,
+    gap: spacing.xxs,
   },
 });

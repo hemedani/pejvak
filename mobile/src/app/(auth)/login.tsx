@@ -1,16 +1,20 @@
 import { Link } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Reveal } from "@/components/motion/Reveal";
+import { Screen } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { ThemedView } from "@/components/themed-view";
+import { GlassSurface } from "@/components/ui/glass";
+import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
-import { MaxContentWidth, Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/use-theme";
 import { useAuthStore } from "@/store/authStore";
+import { radius as radii, spacing } from "@/theme/tokens";
 
 export default function LoginScreen() {
+  const theme = useTheme();
   const login = useAuthStore((state) => state.login);
   const isSubmitting = useAuthStore((state) => state.isSubmitting);
   const error = useAuthStore((state) => state.error);
@@ -28,100 +32,118 @@ export default function LoginScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.flex}>
-          <ScrollView
-            contentContainerStyle={styles.content}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}>
-            <View style={styles.header}>
-              <ThemedText type="subtitle">Welcome back</ThemedText>
-              <ThemedText themeColor="textSecondary">
-                Sign in to keep your listening history and notes in sync.
-              </ThemedText>
+    <Screen wash={theme.accent} edges={["top", "bottom", "left", "right"]}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.flex}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}>
+          <Reveal index={0} style={styles.brand}>
+            <View style={[styles.mark, { backgroundColor: theme.accent }]}>
+              <Icon name="music" size={26} color={theme.onAccent} />
             </View>
+            <ThemedText type="overline" themeColor="textTertiary">
+              PEJVAK
+            </ThemedText>
+          </Reveal>
 
-            <View style={styles.form}>
-              <TextField
-                label="Email"
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                autoComplete="email"
-                keyboardType="email-address"
-                placeholder="you@example.com"
-                returnKeyType="next"
-                textContentType="emailAddress"
-              />
-              <TextField
-                label="Password"
-                value={password}
-                onChangeText={setPassword}
-                autoCapitalize="none"
-                autoComplete="current-password"
-                placeholder="••••••••"
-                secureTextEntry
-                returnKeyType="go"
-                onSubmitEditing={onSubmit}
-              />
-
-              {error ? (
-                <ThemedText type="small" themeColor="textSecondary">
-                  {error}
+          <Reveal index={1}>
+            <GlassSurface tone="surfaceStrong" style={styles.card}>
+              <View style={styles.header}>
+                <ThemedText type="title">Welcome back</ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Sign in to keep your listening history and notes in sync.
                 </ThemedText>
-              ) : null}
+              </View>
 
-              <PrimaryButton label="Sign in" loading={isSubmitting} onPress={onSubmit} />
-            </View>
+              <View style={styles.form}>
+                <TextField
+                  label="Email"
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  keyboardType="email-address"
+                  placeholder="you@example.com"
+                  returnKeyType="next"
+                  textContentType="emailAddress"
+                />
+                <TextField
+                  label="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                  autoComplete="current-password"
+                  placeholder="••••••••"
+                  secureTextEntry
+                  returnKeyType="go"
+                  onSubmitEditing={onSubmit}
+                />
 
-            <View style={styles.footer}>
-              <ThemedText type="small" themeColor="textSecondary">
-                New to Pejvak?
-              </ThemedText>
-              <Link href="/register">
-                <ThemedText type="linkPrimary">Create an account</ThemedText>
-              </Link>
-            </View>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </ThemedView>
+                {error ? (
+                  <ThemedText type="caption" style={{ color: theme.danger }}>
+                    {error}
+                  </ThemedText>
+                ) : null}
+
+                <PrimaryButton label="Sign in" loading={isSubmitting} onPress={onSubmit} />
+              </View>
+            </GlassSurface>
+          </Reveal>
+
+          <Reveal index={2} style={styles.footer}>
+            <ThemedText type="caption" themeColor="textSecondary">
+              New to Pejvak?
+            </ThemedText>
+            <Link href="/register">
+              <ThemedText type="linkPrimary">Create an account</ThemedText>
+            </Link>
+          </Reveal>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-    width: "100%",
-    maxWidth: MaxContentWidth,
-    alignSelf: "center",
-  },
   flex: {
     flex: 1,
   },
   content: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.five,
-    gap: Spacing.five,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxxl,
+    gap: spacing.xxl,
+  },
+  brand: {
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  mark: {
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  card: {
+    gap: spacing.xxl,
+    padding: spacing.xxl,
+    borderRadius: radii.xl,
   },
   header: {
-    gap: Spacing.two,
+    gap: spacing.sm,
   },
   form: {
-    gap: Spacing.three,
+    gap: spacing.lg,
   },
   footer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.two,
+    gap: spacing.sm,
   },
 });
