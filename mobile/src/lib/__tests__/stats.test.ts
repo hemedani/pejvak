@@ -1,8 +1,11 @@
 import {
+  computeBestStreak,
   computeDailyListen,
   computeDayStreak,
   computeListeningStats,
+  computeMediaBreakdown,
   computeTrackLeaders,
+  sessionsOnDay,
 } from "@/lib/stats";
 import type { HistoryItem } from "@/lib/history";
 import type { LocalSession } from "@/lib/db/types";
@@ -31,11 +34,21 @@ function session(overrides: Partial<LocalSession> = {}): LocalSession {
   };
 }
 
-function item(overrides: Partial<LocalSession> = {}, title = "Book"): HistoryItem {
+function item(
+  overrides: Partial<LocalSession> = {},
+  title = "Book",
+  isAudiobook = true,
+): HistoryItem {
   const s = session(overrides);
   return {
     session: s,
-    track: { id: s.trackId, title, author: null, contentHash: s.contentHash },
+    track: {
+      id: s.trackId,
+      title,
+      author: null,
+      contentHash: s.contentHash,
+      isAudiobook,
+    },
   };
 }
 
@@ -58,6 +71,40 @@ describe("computeListeningStats", () => {
     expect(stats.lastPlayedAt).toBe(5000);
   });
 
+  it("carries what the card needs to route to the longest session", () => {
+    const stats = computeListeningStats([
+      item(
+        {
+          id: "long",
+          trackId: "t-long",
+          startedAt: at(2026, 8, 11),
+          durationListenedSec: 900,
+          completed: false,
+          startPositionSec: 60,
+          endPositionSec: 960,
+        },
+        "Long",
+      ),
+      item({ id: "short", durationListenedSec: 30 }, "Short"),
+    ]);
+
+    expect(stats.longestSessionTrackId).toBe("t-long");
+    // Unfinished, so it resumes where it stopped rather than at the start.
+    expect(stats.longestSessionPositionSec).toBe(960);
+  });
+
+  it("averages over finalized sessions and counts distinct listening days", () => {
+    const stats = computeListeningStats([
+      item({ id: "a", startedAt: at(2026, 8, 11), durationListenedSec: 100 }),
+      item({ id: "b", startedAt: at(2026, 8, 11, 20), durationListenedSec: 200 }),
+      item({ id: "c", startedAt: at(2026, 8, 9), durationListenedSec: 90 }),
+      item({ id: "open", startedAt: at(2026, 8, 8), endedAt: null, durationListenedSec: 0 }),
+    ]);
+
+    expect(stats.averageSessionSec).toBe(130);
+    expect(stats.activeDayCount).toBe(2);
+  });
+
   it("returns zeros when there is no history", () => {
     expect(computeListeningStats([])).toEqual({
       totalListenTimeSec: 0,
@@ -66,6 +113,10 @@ describe("computeListeningStats", () => {
       lastPlayedAt: null,
       longestSessionSec: 0,
       longestSessionTitle: null,
+      longestSessionTrackId: null,
+      longestSessionPositionSec: 0,
+      averageSessionSec: 0,
+      activeDayCount: 0,
     });
   });
 });
@@ -92,6 +143,72 @@ describe("computeTrackLeaders", () => {
     );
     expect(leaders).toHaveLength(1);
     expect(leaders[0].title).toBe("B");
+  });
+
+  it("carries the track id so a leader row can be opened", () => {
+    const [leader] = computeTrackLeaders([item({ id: "a", trackId: "t-9" }, "A")]);
+    expect(leader.trackId).toBe("t-9");
+  });
+});
+
+describe("computeMediaBreakdown", () => {
+  it("splits listened time between audiobooks and music", () => {
+    const split = computeMediaBreakdown([
+      item({ id: "a", durationListenedSec: 600 }, "Book", true),
+      item({ id: "b", durationListenedSec: 120 }, "Song", false),
+      item({ id: "c", durationListenedSec: 60 }, "Book two", true),
+    ]);
+
+    expect(split).toEqual({ audiobookSec: 660, musicSec: 120 });
+  });
+
+  it("ignores sessions that have not finished", () => {
+    const split = computeMediaBreakdown([
+      item({ id: "a", durationListenedSec: 600 }, "Book", true),
+      item({ id: "open", endedAt: null, durationListenedSec: 0 }, "Book", true),
+    ]);
+
+    expect(split).toEqual({ audiobookSec: 600, musicSec: 0 });
+  });
+});
+
+describe("computeBestStreak", () => {
+  it("finds the longest run ever, not just the current one", () => {
+    // A four-day run in August, then a two-day run in September.
+    const items = [
+      item({ id: "a", startedAt: at(2026, 7, 1) }),
+      item({ id: "b", startedAt: at(2026, 7, 2) }),
+      item({ id: "c", startedAt: at(2026, 7, 3) }),
+      item({ id: "d", startedAt: at(2026, 7, 4) }),
+      item({ id: "e", startedAt: at(2026, 8, 10) }),
+      item({ id: "f", startedAt: at(2026, 8, 11) }),
+    ];
+
+    expect(computeBestStreak(items)).toBe(4);
+  });
+
+  it("counts a single day as a streak of one", () => {
+    expect(computeBestStreak([item({ startedAt: at(2026, 8, 11) })])).toBe(1);
+  });
+
+  it("is zero with no history", () => {
+    expect(computeBestStreak([])).toBe(0);
+  });
+});
+
+describe("sessionsOnDay", () => {
+  it("returns that day's finalized sessions, newest first", () => {
+    const items = [
+      item({ id: "morning", startedAt: at(2026, 8, 11, 9) }),
+      item({ id: "evening", startedAt: at(2026, 8, 11, 21) }),
+      item({ id: "other", startedAt: at(2026, 8, 10, 9) }),
+      item({ id: "open", startedAt: at(2026, 8, 11, 23), endedAt: null }),
+    ];
+
+    expect(sessionsOnDay(items, "2026-09-11").map((entry) => entry.session.id)).toEqual([
+      "evening",
+      "morning",
+    ]);
   });
 });
 
