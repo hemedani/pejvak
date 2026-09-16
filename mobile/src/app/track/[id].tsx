@@ -17,7 +17,9 @@ import { useTheme } from "@/hooks/use-theme";
 import { annotationsToMarkdown } from "@/lib/exportAnnotations";
 import { formatDuration, type HistoryItem } from "@/lib/history";
 import { paletteFor } from "@/lib/palette";
+import { confirmRemoveSession, sessionResumeParams } from "@/lib/sessionActions";
 import { computeTrackStats } from "@/lib/trackStats";
+import { LocalDBService } from "@/services/LocalDBService";
 import { spacing } from "@/theme/tokens";
 
 function formatLastPlayed(value: number | null): string {
@@ -56,6 +58,20 @@ export default function TrackDetailScreen() {
     } catch {
       // The share sheet was dismissed or sharing is unavailable.
     }
+  };
+
+  /** Replays a session from where it left off — the same rule History uses. */
+  const replay = (item: HistoryItem) => {
+    router.push({ pathname: "/player", params: sessionResumeParams(item) });
+  };
+
+  const remove = async (item: HistoryItem) => {
+    await LocalDBService.softDeleteSession(item.session.id);
+    await refresh();
+  };
+
+  const confirmRemove = (item: HistoryItem) => {
+    confirmRemoveSession(item, () => void remove(item));
   };
 
   return (
@@ -134,9 +150,18 @@ export default function TrackDetailScreen() {
                   title: data.track.title,
                   author: data.track.author,
                   contentHash: data.track.contentHash,
+                  isAudiobook: data.track.isAudiobook,
                 },
               };
-              return <SessionCard key={session.id} item={item} />;
+              return (
+                <SessionCard
+                  key={session.id}
+                  item={item}
+                  onPress={replay}
+                  // A session still being written has nothing to tombstone yet.
+                  onDelete={session.endedAt === null ? undefined : confirmRemove}
+                />
+              );
             })
           ) : (
             <ThemedText type="caption" themeColor="textTertiary">

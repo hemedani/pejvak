@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
-import { Alert, RefreshControl, SectionList, Share, StyleSheet, View } from "react-native";
+import { RefreshControl, SectionList, Share, StyleSheet, View } from "react-native";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
@@ -13,9 +13,9 @@ import { historyToMarkdown } from "@/lib/exportHistory";
 import {
   buildHistorySections,
   HISTORY_SORT_OPTIONS,
-  resumeTargetSec,
   type HistoryItem,
 } from "@/lib/history";
+import { confirmRemoveSession, sessionResumeParams } from "@/lib/sessionActions";
 import { LocalDBService } from "@/services/LocalDBService";
 import { useSettingsStore } from "@/store/settingsStore";
 import { spacing } from "@/theme/tokens";
@@ -37,13 +37,7 @@ export default function HistoryScreen() {
 
   /** Tapping an entry picks up where that session left off. */
   const resume = (item: HistoryItem) => {
-    router.push({
-      pathname: "/player",
-      params: {
-        trackId: item.track.id,
-        positionSec: String(resumeTargetSec(item)),
-      },
-    });
+    router.push({ pathname: "/player", params: sessionResumeParams(item) });
   };
 
   const remove = async (item: HistoryItem) => {
@@ -52,17 +46,7 @@ export default function HistoryScreen() {
   };
 
   const confirmRemove = (item: HistoryItem) => {
-    // There is no server-side delete act, so this is a local removal. Saying so
-    // up front beats the listener discovering the entry again on another device.
-    Alert.alert(
-      "Remove from history?",
-      `Hides the session for "${item.track.title}" on this device. ` +
-        "Copies already synced to your other devices are not affected.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Remove", style: "destructive", onPress: () => void remove(item) },
-      ],
-    );
+    confirmRemoveSession(item, () => void remove(item));
   };
 
   const exportHistory = async () => {

@@ -33,10 +33,21 @@ function session(overrides: Partial<LocalSession> = {}): LocalSession {
   };
 }
 
+function track(overrides: Partial<HistoryItem["track"]> = {}): HistoryItem["track"] {
+  return {
+    id: "t1",
+    title: "Book",
+    author: "Author",
+    contentHash: "hash-1",
+    isAudiobook: true,
+    ...overrides,
+  };
+}
+
 function item(startedAt: number, id = "s1"): HistoryItem {
   return {
     session: session({ id, startedAt }),
-    track: { id: "t1", title: "Book", author: "Author", contentHash: "hash-1" },
+    track: track(),
   };
 }
 
@@ -44,7 +55,7 @@ function item(startedAt: number, id = "s1"): HistoryItem {
 function itemWith(overrides: Partial<LocalSession>): HistoryItem {
   return {
     session: session(overrides),
-    track: { id: "t1", title: "Book", author: "Author", contentHash: "hash-1" },
+    track: track(),
   };
 }
 

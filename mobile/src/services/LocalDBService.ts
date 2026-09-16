@@ -248,7 +248,7 @@ async function getSessionsForHistory(limit = 200): Promise<HistoryItem[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<HistoryRow>(
     `SELECT s.*, t.title AS track_title, t.author AS track_author,
-            t.content_hash AS track_content_hash
+            t.content_hash AS track_content_hash, t.is_audiobook AS track_is_audiobook
      FROM sessions s
      JOIN tracks t ON t.id = s.track_id
      WHERE s.deleted_at IS NULL
@@ -263,6 +263,7 @@ async function getSessionsForHistory(limit = 200): Promise<HistoryItem[]> {
       title: row.track_title,
       author: row.track_author,
       contentHash: row.track_content_hash,
+      isAudiobook: row.track_is_audiobook === 1,
     },
   }));
 }

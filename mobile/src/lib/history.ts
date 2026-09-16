@@ -3,7 +3,7 @@ import { formatClock } from "@/lib/time";
 
 export type HistoryItem = {
   session: LocalSession;
-  track: Pick<LocalTrack, "id" | "title" | "author" | "contentHash">;
+  track: Pick<LocalTrack, "id" | "title" | "author" | "contentHash" | "isAudiobook">;
 };
 
 export type HistoryDay = {

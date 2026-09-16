@@ -25,7 +25,13 @@ function item(overrides: Partial<LocalSession> = {}): HistoryItem {
       updatedAt: 0,
       ...overrides,
     },
-    track: { id: "t1", title: "Moby Dick", author: null, contentHash: "hash-1" },
+    track: {
+      id: "t1",
+      title: "Moby Dick",
+      author: null,
+      contentHash: "hash-1",
+      isAudiobook: true,
+    },
   };
 }
 

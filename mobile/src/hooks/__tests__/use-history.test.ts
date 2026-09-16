@@ -32,7 +32,13 @@ function item(id: string): HistoryItem {
       createdAt: 0,
       updatedAt: 0,
     },
-    track: { id: "t1", title: "Book", author: null, contentHash: "hash-1" },
+    track: {
+      id: "t1",
+      title: "Book",
+      author: null,
+      contentHash: "hash-1",
+      isAudiobook: true,
+    },
   };
 }
 
