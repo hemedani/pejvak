@@ -1,0 +1,66 @@
+# EAS Build archives the project using this file INSTEAD of .gitignore whenever it
+# exists. It must therefore repeat every rule from .gitignore — anything omitted
+# here gets uploaded, node_modules/ included. Keep the two files in sync.
+# See https://docs.expo.dev/build-reference/easignore/
+
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env*.local
+
+# generated Lesan declarations (run `npm run gen:api`)
+src/lib/generated/
+
+# typescript
+*.tsbuildinfo
+
+example
+
+# generated native folders
+/ios
+/android
+
+# --- Re-included for the build; these MUST stay last so they win ---
+#
+# `src/lib/client.ts` imports `lesanApi` from `src/lib/generated/selectInp.ts` as a
+# RUNTIME import, not a type-only one. The file is gitignored, so without these
+# negations EAS never uploads it, Metro cannot resolve the import, and
+# `npx expo export:embed --platform android --dev false` exits 1 — which surfaces
+# only as "Unknown error" in the Bundle JavaScript build phase.
+#
+# It cannot be generated during the build either: `scripts/sync-declarations.mjs`
+# copies it from `../../back/declarations/`, which sits outside this project root
+# and is therefore not present on the build server.
+!src/lib/generated/
+!src/lib/generated/selectInp.ts
