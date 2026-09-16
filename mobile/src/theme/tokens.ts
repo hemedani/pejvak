@@ -106,11 +106,11 @@ const light: SemanticColors = {
   shadow: "rgba(20, 32, 39, 0.16)",
   text: "#101B22",
   textSecondary: "#5A6B74",
-  textTertiary: "#8B9AA3",
-  accent: "#0F8F84",
-  accentSoft: "rgba(15, 143, 132, 0.14)",
+  textTertiary: "#646F75",
+  accent: "#0D7B72",
+  accentSoft: "rgba(13, 123, 114, 0.14)",
   onAccent: "#FFFFFF",
-  danger: "#D6455D",
+  danger: "#C23E54",
   scrim: "rgba(12, 18, 24, 0.38)",
   track: "rgba(90, 107, 116, 0.22)",
   icon: "#2C3A43",
@@ -126,7 +126,7 @@ const dark: SemanticColors = {
   shadow: "rgba(0, 0, 0, 0.55)",
   text: "#F2F7F5",
   textSecondary: "#A4B6BC",
-  textTertiary: "#6E808A",
+  textTertiary: "#70838D",
   accent: "#5FD9C6",
   accentSoft: "rgba(95, 217, 198, 0.16)",
   onAccent: "#04231F",
@@ -144,7 +144,7 @@ export const colors: Record<ColorScheme, SemanticColors> = { light, dark };
  * stay behind text without washing it out.
  */
 export const aurora: readonly (readonly [string, string, string])[] = [
-  ["#0F8F84", "#1FB6A6", "#0B4F52"],
+  ["#0D7B72", "#1FB6A6", "#0B4F52"],
   ["#3B6FF5", "#6AA8FF", "#182B6B"],
   ["#8A4DFF", "#C48CFF", "#2C1656"],
   ["#F0625C", "#FF9E7A", "#5A1D24"],
