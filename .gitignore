@@ -1,1 +1,11 @@
 ignore-scripts
+
+# Agent working state (daily logs + curated notes). Personal, not repo content.
+# Scoped to memory/ on purpose: `.workbuddy-ai/skills/` holds project-level skills
+# and is meant to be shared, so do not ignore the whole directory.
+#
+# This also matters for EAS: the upload root is the git root, and EAS filters the
+# working tree by the `.gitignore` files it finds, so anything untracked and not
+# ignored here is shipped to the build servers on every build.
+.workbuddy-ai/memory/
+back/dump.rdb
