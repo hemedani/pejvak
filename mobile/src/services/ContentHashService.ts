@@ -2,6 +2,7 @@ import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
 import { readAsStringAsync } from "expo-file-system/legacy";
 
+import { readAudioTags, type AudioTags } from "@/lib/audioTags";
 import {
   CONTENT_HASH_CHUNK_BYTES,
   computeContentHashFromChunk,
@@ -45,16 +46,30 @@ function decodeBase64(input: string): Uint8Array {
 export type FileHashResult = {
   contentHash: string;
   fileSizeBytes: number;
+  /** ID3v2 tags read from the very same buffer. Empty when the file has none. */
+  tags: AudioTags;
 };
 
 /**
- * Computes a track's identity from a local file. Reads only the first 1 MB via
- * the legacy `expo-file-system` API: the new File API's `bytes`/`slice` gate
- * reads behind a canonical-path permission check that fails for picker cache
- * paths inside Expo Go, whereas the legacy reader opens the stream directly.
+ * Computes a track's identity from a local file, and reads its ID3 tags on the
+ * way past.
+ *
+ * Reads only the first 1 MB via the legacy `expo-file-system` API: the new File
+ * API's `bytes`/`slice` gate reads behind a canonical-path permission check that
+ * fails for picker cache paths inside Expo Go, whereas the legacy reader opens
+ * the stream directly. That also makes it the one read that can serve both
+ * purposes — an ID3v2 tag sits at offset 0 of the same buffer — so identifying a
+ * file costs a single pass rather than one read per concern.
+ *
+ * `sizeBytes` should be supplied by callers that already know it (the media
+ * index reports it, and `new File(uri).size` is not reliable for `content://`
+ * URIs).
  */
-export async function computeFileContentHash(uri: string): Promise<FileHashResult> {
-  const fileSizeBytes = new File(uri).size;
+export async function computeFileContentHash(
+  uri: string,
+  sizeBytes?: number,
+): Promise<FileHashResult> {
+  const fileSizeBytes = sizeBytes ?? new File(uri).size;
   const readLength = Math.min(Math.max(fileSizeBytes, 0), CONTENT_HASH_CHUNK_BYTES);
   const base64 = await readAsStringAsync(uri, {
     position: 0,
@@ -63,5 +78,5 @@ export async function computeFileContentHash(uri: string): Promise<FileHashResul
   });
   const chunk = decodeBase64(base64);
   const contentHash = await computeContentHashFromChunk(chunk, fileSizeBytes, sha256);
-  return { contentHash, fileSizeBytes };
+  return { contentHash, fileSizeBytes, tags: readAudioTags(chunk) };
 }

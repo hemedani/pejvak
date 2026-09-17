@@ -52,7 +52,10 @@ export default function RootLayout() {
             <Stack.Protected guard={status === "authenticated"}>
               <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
               <Stack.Screen name="track/[id]" />
+              <Stack.Screen name="folder/[key]" />
               <Stack.Screen name="playlist/[id]" />
+              <Stack.Screen name="smart/[rule]" />
+              <Stack.Screen name="import" />
               <Stack.Screen name="settings" />
               <Stack.Screen
                 name="player"
