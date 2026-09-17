@@ -340,6 +340,28 @@ async function playTrackById(trackId: string, startPositionSec?: number): Promis
 }
 
 /**
+ * Append tracks to the end of the current queue without touching playback.
+ *
+ * Deliberately separate from `playQueueAt`, which *replaces* the queue: "add to
+ * queue" means the listener is mid-album and wants a lecture after it, not that
+ * they want the lecture now. With nothing playing there is no queue to extend,
+ * so this becomes an ordinary queue load that still does not auto-play — the
+ * mini-player then offers the first added track.
+ */
+export function enqueue(trackIds: string[]): void {
+  if (trackIds.length === 0) {
+    return;
+  }
+  const { queue, queueIndex } = usePlayerStore.getState();
+  const appended = [...queue, ...trackIds];
+  if (queue.length === 0) {
+    usePlayerStore.getState().setQueue(appended, 0);
+    return;
+  }
+  usePlayerStore.getState().setQueue(appended, queueIndex);
+}
+
+/**
  * Advance to the next queued track. At the end of the queue we restart the
  * current track rather than wrapping, which is what a listener expects from an
  * audiobook or an album.

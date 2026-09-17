@@ -8,22 +8,30 @@ import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { GlassChip, GlassProgress, GlassSurface } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { useFolders } from "@/hooks/use-folders";
 import { useTheme } from "@/hooks/use-theme";
-import type { LocalTrack } from "@/lib/db/types";
+import type { FolderSummary, LocalTrack } from "@/lib/db/types";
+import { describeFolderProgress, folderProgressRatio } from "@/lib/folderPlay";
+import { formatDuration } from "@/lib/history";
+import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
 import { paletteFor } from "@/lib/palette";
-import { importAudioFiles } from "@/services/LibraryService";
+import { FolderService } from "@/services/FolderService";
 import { LocalDBService } from "@/services/LocalDBService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { radius as radii, spacing } from "@/theme/tokens";
 
 /**
- * The header block occupies reveal indices 1 and 2, so list rows start at 3.
- * Only the opening screenful staggers in — recycled rows past this limit render
- * immediately instead of replaying a 320 ms-delayed fade. See `Reveal`'s `limit`.
+ * The header block occupies reveal indices 1–3 (view toggle, continue card,
+ * add-audio button), so list rows start at 4. Only the opening screenful
+ * staggers in — recycled rows past this limit render immediately instead of
+ * replaying a 320 ms-delayed fade. See `Reveal`'s `limit`.
  */
 const ROW_REVEAL_LIMIT = 12;
+const FIRST_ROW_REVEAL_INDEX = 4;
+
+type LibraryView = "tracks" | "folders";
 
 function formatLastPlayed(value: number | null): string {
   if (!value) {
@@ -35,9 +43,10 @@ function formatLastPlayed(value: number | null): string {
 export default function LibraryScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const [view, setView] = useState<LibraryView>("tracks");
   const [tracks, setTracks] = useState<LocalTrack[]>([]);
   const [annotationCounts, setAnnotationCounts] = useState<Record<string, number>>({});
-  const [importing, setImporting] = useState(false);
+  const { folders, refresh: refreshFolders } = useFolders();
 
   const continueTrack = useMemo(
     () =>
@@ -56,7 +65,10 @@ export default function LibraryScreen() {
     ]);
     setTracks(allTracks);
     setAnnotationCounts(counts);
-  }, []);
+    // Folders are derived from the tracks table, so a rescan or an import can
+    // add one without any screen noticing; re-read on focus alongside them.
+    await refreshFolders();
+  }, [refreshFolders]);
 
   useFocusEffect(
     useCallback(() => {
@@ -78,20 +90,39 @@ export default function LibraryScreen() {
     [router, tracks],
   );
 
-  const onImport = useCallback(async () => {
-    setImporting(true);
-    try {
-      const imported = await importAudioFiles();
-      await refresh();
-      const first = imported[0];
-      if (imported.length === 1 && first) {
-        void TrackPlayerService.playQueueAt([first.id], 0);
-        router.push({ pathname: "/player", params: { trackId: first.id } });
+  const openFolder = useCallback(
+    (folderKey: string) => {
+      // Param object rather than an interpolated path: a folder key contains
+      // slashes (`Lectures/Physics`) and has to be encoded as one segment. The
+      // storage-root folder needs a stand-in too, since its key is empty.
+      router.push({
+        pathname: "/folder/[key]",
+        params: { key: folderKeyToRouteSegment(folderKey) },
+      });
+    },
+    [router],
+  );
+
+  /**
+   * Plays a folder straight from its card, without opening it. This is the
+   * whole point of folder play — one tap continues the course from wherever the
+   * listener stopped, so it must not cost a navigation first.
+   */
+  const playFolder = useCallback(
+    async (folderKey: string) => {
+      const entryId = await FolderService.play(folderKey, "resume");
+      if (entryId) {
+        router.push({ pathname: "/player", params: { trackId: entryId } });
       }
-    } finally {
-      setImporting(false);
-    }
-  }, [refresh, router]);
+    },
+    [router],
+  );
+
+  // Importing happens on its own screen; `useFocusEffect` above refreshes the
+  // list when the user comes back from it.
+  const onImport = useCallback(() => {
+    router.push("/import");
+  }, [router]);
 
   const header = (
     <View style={styles.headerBlock}>
@@ -111,8 +142,25 @@ export default function LibraryScreen() {
         }
       />
 
+      <Reveal index={1}>
+        <View style={styles.viewToggle}>
+          <GlassChip
+            label="Tracks"
+            icon="music"
+            selected={view === "tracks"}
+            onPress={() => setView("tracks")}
+          />
+          <GlassChip
+            label="Folders"
+            icon="folder"
+            selected={view === "folders"}
+            onPress={() => setView("folders")}
+          />
+        </View>
+      </Reveal>
+
       {continueTrack ? (
-        <Reveal index={1}>
+        <Reveal index={2}>
           <GlassSurface tone="surfaceStrong" style={styles.continueCard}>
             <ElasticPressable
               accessibilityRole="button"
@@ -158,72 +206,132 @@ export default function LibraryScreen() {
         </Reveal>
       ) : null}
 
-      <Reveal index={2}>
-        <PrimaryButton
-          label={importing ? "Importing…" : "Add audio files"}
-          loading={importing}
-          onPress={() => void onImport()}
-        />
+      <Reveal index={3}>
+        <PrimaryButton label="Add audio" onPress={onImport} />
       </Reveal>
     </View>
   );
 
+  const renderFolder = (folder: FolderSummary, index: number) => {
+    const ramp = paletteFor(folder.key);
+    return (
+      <Reveal
+        index={FIRST_ROW_REVEAL_INDEX + index}
+        from="below"
+        limit={ROW_REVEAL_LIMIT}>
+        <GlassSurface flat style={styles.row}>
+          <ElasticPressable
+            accessibilityRole="button"
+            accessibilityLabel={`Open folder ${folder.name}`}
+            onPress={() => openFolder(folder.key)}
+            style={styles.rowMain}>
+            <PaletteTile ramp={ramp} label={folder.name} size={44} radius={13} />
+            <View style={styles.rowCopy}>
+              <ThemedText type="bodyStrong" numberOfLines={1}>
+                {folder.name}
+              </ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                {describeFolderProgress(folder.finishedCount, folder.trackCount)}
+                {folder.totalDurationSec > 0 ? ` · ${formatDuration(folder.totalDurationSec)}` : ""}
+              </ThemedText>
+              <GlassProgress
+                progress={folderProgressRatio(folder.finishedCount, folder.trackCount)}
+                tint={ramp[1]}
+                thickness={4}
+                style={styles.folderBar}
+              />
+            </View>
+          </ElasticPressable>
+
+          <BouncyIconButton
+            name="play"
+            accessibilityLabel={`Play folder ${folder.name}`}
+            size={40}
+            iconSize={18}
+            tone="glass"
+            onPress={() => void playFolder(folder.key)}
+          />
+        </GlassSurface>
+      </Reveal>
+    );
+  };
+
   return (
     <Screen wash={wash}>
-      <FlatList
-        data={tracks}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={header}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-            No tracks yet. Add an audio file to start listening.
-          </ThemedText>
-        }
-        renderItem={({ item, index }) => {
-          const notes = annotationCounts[item.id] ?? 0;
-          return (
-            <Reveal index={index + 3} from="below" limit={ROW_REVEAL_LIMIT}>
-              <GlassSurface flat style={styles.row}>
-                <ElasticPressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Play ${item.title}`}
-                  onPress={() => playAt(index)}
-                  style={styles.rowMain}>
-                  <PaletteTile
-                    ramp={paletteFor(item.contentHash)}
-                    label={item.title}
-                    size={44}
-                    radius={13}
-                  />
-                  <View style={styles.rowCopy}>
-                    <ThemedText type="bodyStrong" numberOfLines={1}>
-                      {item.title}
-                    </ThemedText>
-                    <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                      {item.totalPlayCount} play{item.totalPlayCount === 1 ? "" : "s"} · {notes} note
-                      {notes === 1 ? "" : "s"}
-                    </ThemedText>
-                    <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
-                      {formatLastPlayed(item.lastPlayedAt)}
-                    </ThemedText>
-                  </View>
-                </ElasticPressable>
+      {view === "tracks" ? (
+        <FlatList
+          data={tracks}
+          keyExtractor={(item) => item.id}
+          ListHeaderComponent={header}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
+              No tracks yet. Add an audio file to start listening.
+            </ThemedText>
+          }
+          renderItem={({ item, index }) => {
+            const notes = annotationCounts[item.id] ?? 0;
+            return (
+              <Reveal
+                index={FIRST_ROW_REVEAL_INDEX + index}
+                from="below"
+                limit={ROW_REVEAL_LIMIT}>
+                <GlassSurface flat style={styles.row}>
+                  <ElasticPressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Play ${item.title}`}
+                    onPress={() => playAt(index)}
+                    style={styles.rowMain}>
+                    <PaletteTile
+                      ramp={paletteFor(item.contentHash)}
+                      label={item.title}
+                      size={44}
+                      radius={13}
+                    />
+                    <View style={styles.rowCopy}>
+                      <ThemedText type="bodyStrong" numberOfLines={1}>
+                        {item.title}
+                      </ThemedText>
+                      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                        {item.totalPlayCount} play{item.totalPlayCount === 1 ? "" : "s"} · {notes}{" "}
+                        note{notes === 1 ? "" : "s"}
+                      </ThemedText>
+                      <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
+                        {formatLastPlayed(item.lastPlayedAt)}
+                      </ThemedText>
+                    </View>
+                  </ElasticPressable>
 
-                <BouncyIconButton
-                  name="chevronRight"
-                  accessibilityLabel={`Details for ${item.title}`}
-                  size={36}
-                  iconSize={16}
-                  tone="ghost"
-                  onPress={() => router.push(`/track/${item.id}`)}
-                />
-              </GlassSurface>
-            </Reveal>
-          );
-        }}
-      />
+                  <BouncyIconButton
+                    name="chevronRight"
+                    accessibilityLabel={`Details for ${item.title}`}
+                    size={36}
+                    iconSize={16}
+                    tone="ghost"
+                    onPress={() => router.push(`/track/${item.id}`)}
+                  />
+                </GlassSurface>
+              </Reveal>
+            );
+          }}
+        />
+      ) : (
+        <FlatList
+          data={folders}
+          keyExtractor={(item) => item.key || "root"}
+          ListHeaderComponent={header}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
+              No folders yet. They appear automatically once your audio sits in folders on the
+              device.
+            </ThemedText>
+          }
+          renderItem={({ item, index }) => renderFolder(item, index)}
+        />
+      )}
     </Screen>
   );
 }
@@ -237,6 +345,10 @@ const styles = StyleSheet.create({
   headerBlock: {
     gap: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  viewToggle: {
+    flexDirection: "row",
+    gap: spacing.sm,
   },
   continueCard: {
     flexDirection: "row",
@@ -274,6 +386,9 @@ const styles = StyleSheet.create({
   rowCopy: {
     flex: 1,
     gap: spacing.xxs,
+  },
+  folderBar: {
+    marginTop: spacing.xs,
   },
   empty: {
     textAlign: "center",

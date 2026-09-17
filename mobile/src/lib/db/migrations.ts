@@ -138,6 +138,47 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_sessions_deleted_at ON sessions(deleted_at)`,
     ],
   },
+  {
+    // Device import. Tracks are no longer necessarily *owned* by the app: a
+    // device-scanned track is referenced in place by URI, so the columns below
+    // record where it came from and what it looked like when we last hashed it.
+    //
+    // `source_size` + `source_mtime` are the rescan key. Phase 2 of a scan only
+    // reads files whose (size, mtime) pair changed, so re-scanning a 300-file
+    // library costs zero file reads. That is also why they are nullable: a
+    // legacy copied track has no device-side original to compare against.
+    //
+    // `folder_key` is a normalised, root-stripped path ('Lectures/Physics'), not
+    // a real filesystem path, so it survives a move between storage volumes.
+    version: 6,
+    up: [
+      `ALTER TABLE tracks ADD COLUMN source TEXT`,
+      `ALTER TABLE tracks ADD COLUMN source_uri TEXT`,
+      `ALTER TABLE tracks ADD COLUMN source_path TEXT`,
+      `ALTER TABLE tracks ADD COLUMN source_size INTEGER`,
+      `ALTER TABLE tracks ADD COLUMN source_mtime INTEGER`,
+      `ALTER TABLE tracks ADD COLUMN folder_key TEXT`,
+      `ALTER TABLE tracks ADD COLUMN folder_name TEXT`,
+      `ALTER TABLE tracks ADD COLUMN album TEXT`,
+      `ALTER TABLE tracks ADD COLUMN track_number INTEGER`,
+      `ALTER TABLE tracks ADD COLUMN disc_number INTEGER`,
+      `ALTER TABLE tracks ADD COLUMN year INTEGER`,
+      `ALTER TABLE tracks ADD COLUMN availability TEXT NOT NULL DEFAULT 'present'`,
+      `CREATE INDEX IF NOT EXISTS idx_tracks_folder_key ON tracks(folder_key)`,
+      `CREATE INDEX IF NOT EXISTS idx_tracks_source_path ON tracks(source_path)`,
+      // A SAF tree grant has to outlive the scan that created it, otherwise
+      // folder play breaks on every relaunch. `tree_uri` is that persisted
+      // grant; `track_count` is deliberately *not* stored, it is counted from
+      // `tracks.folder_key` so the two can never drift apart.
+      `CREATE TABLE IF NOT EXISTS folders (
+        key TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        tree_uri TEXT,
+        added_at INTEGER NOT NULL,
+        last_played_at INTEGER
+      )`,
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

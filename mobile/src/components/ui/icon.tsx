@@ -40,6 +40,7 @@ const glyphs = {
   more: { family: "ionicons", name: "ellipsis-horizontal" },
 
   library: { family: "ionicons", name: "library-outline" },
+  folder: { family: "ionicons", name: "folder-outline" },
   history: { family: "ionicons", name: "time-outline" },
   stats: { family: "ionicons", name: "stats-chart-outline" },
   playlists: { family: "ionicons", name: "list-outline" },

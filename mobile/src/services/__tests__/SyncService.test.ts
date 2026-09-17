@@ -165,6 +165,18 @@ function track(overrides: Partial<LocalTrack> = {}): LocalTrack {
     syncStatus: "pending",
     createdAt: 1,
     updatedAt: 1,
+    source: null,
+    sourceUri: null,
+    sourcePath: null,
+    sourceSize: null,
+    sourceMtime: null,
+    folderKey: null,
+    folderName: null,
+    album: null,
+    trackNumber: null,
+    discNumber: null,
+    year: null,
+    availability: "present",
     ...overrides,
   };
 }

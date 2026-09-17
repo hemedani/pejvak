@@ -32,6 +32,18 @@ const track: LocalTrack = {
   syncStatus: "pending",
   createdAt: 0,
   updatedAt: 0,
+  source: null,
+  sourceUri: null,
+  sourcePath: null,
+  sourceSize: null,
+  sourceMtime: null,
+  folderKey: null,
+  folderName: null,
+  album: null,
+  trackNumber: null,
+  discNumber: null,
+  year: null,
+  availability: "present",
 };
 
 beforeEach(() => {

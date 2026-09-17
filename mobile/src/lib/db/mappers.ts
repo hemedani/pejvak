@@ -1,11 +1,14 @@
 import type {
   LocalAnnotation,
+  LocalFolder,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
   PlaybackCheckpoint,
   PlaylistItem,
   SyncStatus,
+  TrackAvailability,
+  TrackSource,
 } from "@/lib/db/types";
 
 export type TrackRow = {
@@ -28,6 +31,26 @@ export type TrackRow = {
   sync_status: string;
   created_at: number;
   updated_at: number;
+  source: string | null;
+  source_uri: string | null;
+  source_path: string | null;
+  source_size: number | null;
+  source_mtime: number | null;
+  folder_key: string | null;
+  folder_name: string | null;
+  album: string | null;
+  track_number: number | null;
+  disc_number: number | null;
+  year: number | null;
+  availability: string;
+};
+
+export type FolderRow = {
+  key: string;
+  name: string;
+  tree_uri: string | null;
+  added_at: number;
+  last_played_at: number | null;
 };
 
 export type SessionRow = {
@@ -102,11 +125,24 @@ export type CheckpointRow = {
 };
 
 const SYNC_STATUSES: readonly SyncStatus[] = ["pending", "syncing", "synced", "failed"];
+const TRACK_SOURCES: readonly TrackSource[] = ["mediastore", "saf", "picker"];
 
 export function toSyncStatus(value: string): SyncStatus {
   return (SYNC_STATUSES as readonly string[]).includes(value)
     ? (value as SyncStatus)
     : "pending";
+}
+
+/** Rows imported before device scanning existed have a null source, not a bogus one. */
+export function toTrackSource(value: string | null): TrackSource | null {
+  if (value === null) {
+    return null;
+  }
+  return (TRACK_SOURCES as readonly string[]).includes(value) ? (value as TrackSource) : null;
+}
+
+export function toTrackAvailability(value: string): TrackAvailability {
+  return value === "missing" ? "missing" : "present";
 }
 
 export function toBoolean(value: number): boolean {
@@ -164,6 +200,28 @@ export function mapTrack(row: TrackRow): LocalTrack {
     syncStatus: toSyncStatus(row.sync_status),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    source: toTrackSource(row.source),
+    sourceUri: row.source_uri,
+    sourcePath: row.source_path,
+    sourceSize: row.source_size,
+    sourceMtime: row.source_mtime,
+    folderKey: row.folder_key,
+    folderName: row.folder_name,
+    album: row.album,
+    trackNumber: row.track_number,
+    discNumber: row.disc_number,
+    year: row.year,
+    availability: toTrackAvailability(row.availability),
+  };
+}
+
+export function mapFolder(row: FolderRow): LocalFolder {
+  return {
+    key: row.key,
+    name: row.name,
+    treeUri: row.tree_uri,
+    addedAt: row.added_at,
+    lastPlayedAt: row.last_played_at,
   };
 }
 

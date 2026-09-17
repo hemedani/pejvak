@@ -36,6 +36,18 @@ describe("row mappers", () => {
       total_listen_time_sec: 120,
       last_played_at: 999,
       sync_status: "synced",
+      source: null,
+      source_uri: null,
+      source_path: null,
+      source_size: null,
+      source_mtime: null,
+      folder_key: null,
+      folder_name: null,
+      album: null,
+      track_number: null,
+      disc_number: null,
+      year: null,
+      availability: "present",
       ...base,
     };
 

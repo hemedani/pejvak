@@ -1,5 +1,20 @@
 export type SyncStatus = "pending" | "syncing" | "synced" | "failed";
 
+/** Where a track's audio actually lives. */
+export type TrackSource =
+  /** Discovered through the Android media index; referenced by `content://` URI. */
+  | "mediastore"
+  /** Inside a folder the user granted access to; referenced by tree/document URI. */
+  | "saf"
+  /** Handed to us by the document picker, with only a transient read grant. */
+  | "picker";
+
+/**
+ * Whether the bytes are still where we left them. Only referenced tracks can go
+ * missing — a copied track is inside app storage and cannot be moved by anyone else.
+ */
+export type TrackAvailability = "present" | "missing";
+
 export type PlaylistItem = {
   trackId: string;
   order: number;
@@ -25,6 +40,40 @@ export type LocalTrack = {
   syncStatus: SyncStatus;
   createdAt: number;
   updatedAt: number;
+  /** Null on rows imported before device scanning existed. */
+  source: TrackSource | null;
+  /** The URI handed to the player. `content://` for MediaStore, `file://` otherwise. */
+  sourceUri: string | null;
+  /** Filesystem path when one is known; the folder key is derived from this. */
+  sourcePath: string | null;
+  /** Size of the device-side original when it was last identified. */
+  sourceSize: number | null;
+  /** Modification time of the device-side original when it was last identified. */
+  sourceMtime: number | null;
+  /** Normalised, root-stripped container path, e.g. `Lectures/Physics`. */
+  folderKey: string | null;
+  /** Display name of the containing folder, e.g. `Physics`. */
+  folderName: string | null;
+  album: string | null;
+  trackNumber: number | null;
+  discNumber: number | null;
+  year: number | null;
+  availability: TrackAvailability;
+};
+
+/** A container the user has access to. `treeUri` persists the SAF grant. */
+export type LocalFolder = {
+  key: string;
+  name: string;
+  treeUri: string | null;
+  addedAt: number;
+  lastPlayedAt: number | null;
+};
+
+export type FolderSummary = LocalFolder & {
+  trackCount: number;
+  finishedCount: number;
+  totalDurationSec: number;
 };
 
 export type LocalSession = {
@@ -123,6 +172,17 @@ export type CreateTrackInput = {
   author?: string | null;
   narrator?: string | null;
   artworkUrl?: string | null;
+  source?: TrackSource | null;
+  sourceUri?: string | null;
+  sourcePath?: string | null;
+  sourceSize?: number | null;
+  sourceMtime?: number | null;
+  folderKey?: string | null;
+  folderName?: string | null;
+  album?: string | null;
+  trackNumber?: number | null;
+  discNumber?: number | null;
+  year?: number | null;
 };
 
 export type CreateSessionInput = {

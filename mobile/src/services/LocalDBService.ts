@@ -4,11 +4,13 @@ import { getDatabase } from "@/lib/db/database";
 import {
   mapAnnotation,
   mapCheckpoint,
+  mapFolder,
   mapPlaylist,
   mapSession,
   mapTrack,
   type AnnotationRow,
   type CheckpointRow,
+  type FolderRow,
   type HistoryRow,
   type PlaylistRow,
   type SessionRow,
@@ -20,8 +22,10 @@ import type {
   CreateSessionInput,
   CreateTrackInput,
   FinalizeSessionInput,
+  FolderSummary,
   InsertRemotePlaylistInput,
   LocalAnnotation,
+  LocalFolder,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
@@ -30,9 +34,12 @@ import type {
   PendingCounts,
   SaveCheckpointInput,
   SyncStatus,
+  TrackAvailability,
   TrackDetailData,
 } from "@/lib/db/types";
+import type { FolderTrackProgress } from "@/lib/folderPlay";
 import type { HistoryItem } from "@/lib/history";
+import { clampResumePosition } from "@/lib/resume";
 import type {
   AnnotationUpdate,
   PlaylistUpdate,
@@ -74,6 +81,18 @@ async function insertTrack(input: CreateTrackInput): Promise<LocalTrack> {
     syncStatus: "pending",
     createdAt: now,
     updatedAt: now,
+    source: input.source ?? null,
+    sourceUri: input.sourceUri ?? null,
+    sourcePath: input.sourcePath ?? null,
+    sourceSize: input.sourceSize ?? null,
+    sourceMtime: input.sourceMtime ?? null,
+    folderKey: input.folderKey ?? null,
+    folderName: input.folderName ?? null,
+    album: input.album ?? null,
+    trackNumber: input.trackNumber ?? null,
+    discNumber: input.discNumber ?? null,
+    year: input.year ?? null,
+    availability: "present",
   };
 
   await db.runAsync(
@@ -81,8 +100,11 @@ async function insertTrack(input: CreateTrackInput): Promise<LocalTrack> {
       id, server_id, content_hash, title, file_name, file_uri, duration_sec,
       file_size_bytes, mime_type, is_audiobook, author, narrator, artwork_url,
       total_play_count, total_listen_time_sec, last_played_at, sync_status,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      created_at, updated_at,
+      source, source_uri, source_path, source_size, source_mtime,
+      folder_key, folder_name, album, track_number, disc_number, year, availability
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       track.id,
       track.serverId,
@@ -103,6 +125,18 @@ async function insertTrack(input: CreateTrackInput): Promise<LocalTrack> {
       track.syncStatus,
       track.createdAt,
       track.updatedAt,
+      track.source,
+      track.sourceUri,
+      track.sourcePath,
+      track.sourceSize,
+      track.sourceMtime,
+      track.folderKey,
+      track.folderName,
+      track.album,
+      track.trackNumber,
+      track.discNumber,
+      track.year,
+      track.availability,
     ],
   );
 
@@ -120,6 +154,16 @@ async function getTrackByContentHash(contentHash: string): Promise<LocalTrack | 
   const row = await db.getFirstAsync<TrackRow>("SELECT * FROM tracks WHERE content_hash = ?", [
     contentHash,
   ]);
+  return row ? mapTrack(row) : null;
+}
+
+/** Finds the track previously imported from a given device location. */
+async function getTrackBySourceUri(sourceUri: string): Promise<LocalTrack | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<TrackRow>(
+    "SELECT * FROM tracks WHERE source_uri = ? ORDER BY updated_at DESC LIMIT 1",
+    [sourceUri],
+  );
   return row ? mapTrack(row) : null;
 }
 
@@ -305,6 +349,26 @@ async function softDeleteSession(id: string): Promise<void> {
 async function getAllSessions(): Promise<LocalSession[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<SessionRow>("SELECT * FROM sessions");
+  return rows.map(mapSession);
+}
+
+/**
+ * Live sessions, newest first — tombstones excluded.
+ *
+ * The counterpart to `getAllSessions`, which must keep tombstones for
+ * reconciliation. Anything that *derives* something for the listener (smart
+ * playlists, resume points, streak figures) wants this one instead: a history
+ * entry the listener deleted should stop influencing recommendations.
+ *
+ * Bounded by `limit` because smart playlists only ever reason about recent
+ * behaviour; a decade of sessions would be read in full otherwise.
+ */
+async function getLiveSessions(limit = 2000): Promise<LocalSession[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<SessionRow>(
+    "SELECT * FROM sessions WHERE deleted_at IS NULL ORDER BY started_at DESC LIMIT ?",
+    [limit],
+  );
   return rows.map(mapSession);
 }
 
@@ -853,10 +917,237 @@ async function deleteCheckpoint(sessionId: string): Promise<void> {
   await db.runAsync("DELETE FROM playback_checkpoints WHERE session_id = ?", [sessionId]);
 }
 
+// --- Folders --------------------------------------------------------------
+
+/**
+ * Every folder that has at least one track, with its progress. A folder row in
+ * `folders` is optional — folders discovered through the media index are
+ * synthesised here from `tracks.folder_key` alone, so nothing has to be
+ * back-filled when a scan finds a new directory.
+ *
+ * `finished` means the track has at least one completed session. That is the
+ * definition folder play uses to decide where to drop the needle.
+ */
+async function getFolderSummaries(): Promise<FolderSummary[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{
+    key: string;
+    name: string;
+    tree_uri: string | null;
+    added_at: number;
+    last_played_at: number | null;
+    track_count: number;
+    finished_count: number;
+    total_duration_sec: number;
+  }>(
+    `SELECT
+       t.folder_key AS key,
+       COALESCE(f.name, t.folder_name, t.folder_key) AS name,
+       f.tree_uri AS tree_uri,
+       COALESCE(f.added_at, MIN(t.created_at)) AS added_at,
+       f.last_played_at AS last_played_at,
+       COUNT(*) AS track_count,
+       SUM(CASE WHEN done.track_id IS NULL THEN 0 ELSE 1 END) AS finished_count,
+       COALESCE(SUM(t.duration_sec), 0) AS total_duration_sec
+     FROM tracks t
+     LEFT JOIN folders f ON f.key = t.folder_key
+     LEFT JOIN (
+       SELECT DISTINCT track_id FROM sessions
+       WHERE completed = 1 AND deleted_at IS NULL
+     ) done ON done.track_id = t.id
+     WHERE t.folder_key IS NOT NULL
+     GROUP BY t.folder_key
+     ORDER BY name COLLATE NOCASE ASC`,
+  );
+
+  return rows.map((row) => ({
+    key: row.key,
+    name: row.name,
+    treeUri: row.tree_uri,
+    addedAt: row.added_at,
+    lastPlayedAt: row.last_played_at,
+    trackCount: row.track_count,
+    finishedCount: row.finished_count,
+    totalDurationSec: row.total_duration_sec,
+  }));
+}
+
+async function getTracksByFolder(folderKey: string): Promise<LocalTrack[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<TrackRow>(
+    "SELECT * FROM tracks WHERE folder_key = ? ORDER BY file_name COLLATE NOCASE ASC",
+    [folderKey],
+  );
+  return rows.map(mapTrack);
+}
+
+/**
+ * Playback state for every track in a folder, in one round trip.
+ *
+ * The obvious implementation is `getSessionsByTrack` per track, but a lecture
+ * folder is easily 200 files and that becomes 200 bridge crossings on a screen
+ * the listener opens expecting it to be instant. Both subqueries are indexed on
+ * `sessions(track_id)`.
+ *
+ * `finished` is deliberately the same predicate `getFolderSummaries` counts
+ * with (`completed = 1`), so the card's "13 of 24" and the track folder play
+ * lands on can never disagree. The resume position is clamped in JS by the
+ * shared helper rather than re-expressed in SQL — an epsilon written twice is
+ * an epsilon that drifts.
+ */
+async function getFolderTrackProgress(
+  folderKey: string,
+): Promise<Record<string, FolderTrackProgress>> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{
+    track_id: string;
+    duration_sec: number;
+    completed_count: number;
+    last_end_position_sec: number | null;
+  }>(
+    `SELECT
+       t.id AS track_id,
+       t.duration_sec AS duration_sec,
+       (SELECT COUNT(*) FROM sessions s
+         WHERE s.track_id = t.id AND s.completed = 1 AND s.deleted_at IS NULL) AS completed_count,
+       (SELECT s.end_position_sec FROM sessions s
+         WHERE s.track_id = t.id AND s.ended_at IS NOT NULL AND s.deleted_at IS NULL
+         ORDER BY s.started_at DESC LIMIT 1) AS last_end_position_sec
+     FROM tracks t
+     WHERE t.folder_key = ?`,
+    [folderKey],
+  );
+
+  const progress: Record<string, FolderTrackProgress> = {};
+  for (const row of rows) {
+    progress[row.track_id] = {
+      finished: row.completed_count > 0,
+      resumeSec: clampResumePosition(row.last_end_position_sec ?? 0, row.duration_sec),
+    };
+  }
+  return progress;
+}
+
+async function getFolders(): Promise<LocalFolder[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<FolderRow>("SELECT * FROM folders ORDER BY name COLLATE NOCASE ASC");
+  return rows.map(mapFolder);
+}
+
+/**
+ * Records a folder the user explicitly granted. Re-granting an already-known
+ * folder must not reset `added_at` — that timestamp is what orders the folder
+ * list by how long the user has had it.
+ */
+async function upsertFolder(input: {
+  key: string;
+  name: string;
+  treeUri?: string | null;
+}): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `INSERT INTO folders (key, name, tree_uri, added_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET
+       name = excluded.name,
+       tree_uri = COALESCE(excluded.tree_uri, folders.tree_uri)`,
+    [input.key, input.name, input.treeUri ?? null, Date.now()],
+  );
+}
+
+/**
+ * Records that a folder was played. Upserts rather than updates, because a
+ * folder discovered through the media index has no `folders` row of its own and
+ * still deserves a `last_played_at`.
+ */
+async function touchFolderPlayed(key: string, name: string): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO folders (key, name, added_at, last_played_at)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET last_played_at = excluded.last_played_at`,
+    [key, name, now, now],
+  );
+}
+
+/** Flags a referenced track whose bytes are no longer reachable. */
+async function setTrackAvailability(
+  id: string,
+  availability: TrackAvailability,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("UPDATE tracks SET availability = ?, updated_at = ? WHERE id = ?", [
+    availability,
+    Date.now(),
+    id,
+  ]);
+}
+
+/**
+ * Re-points a track after its file moved. Only the location columns change —
+ * the content hash stays authoritative, so history and annotations survive.
+ */
+async function updateTrackLocation(
+  id: string,
+  input: {
+    sourceUri: string;
+    sourcePath: string | null;
+    sourceSize: number | null;
+    sourceMtime: number | null;
+    folderKey: string | null;
+    folderName: string | null;
+  },
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE tracks
+     SET source_uri = ?, source_path = ?, source_size = ?, source_mtime = ?,
+         folder_key = ?, folder_name = ?, availability = 'present', updated_at = ?
+     WHERE id = ?`,
+    [
+      input.sourceUri,
+      input.sourcePath,
+      input.sourceSize,
+      input.sourceMtime,
+      input.folderKey,
+      input.folderName,
+      Date.now(),
+      id,
+    ],
+  );
+}
+
+/** Size + mtime of the device-side original, used to skip unchanged files on rescan. */
+async function getSourceSignatures(): Promise<
+  Record<string, { sourcePath: string | null; sourceSize: number | null; sourceMtime: number | null }>
+> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{
+    content_hash: string;
+    source_path: string | null;
+    source_size: number | null;
+    source_mtime: number | null;
+  }>("SELECT content_hash, source_path, source_size, source_mtime FROM tracks");
+  const signatures: Record<
+    string,
+    { sourcePath: string | null; sourceSize: number | null; sourceMtime: number | null }
+  > = {};
+  for (const row of rows) {
+    signatures[row.content_hash] = {
+      sourcePath: row.source_path,
+      sourceSize: row.source_size,
+      sourceMtime: row.source_mtime,
+    };
+  }
+  return signatures;
+}
+
 export const LocalDBService = {
   insertTrack,
   getTrackById,
   getTrackByContentHash,
+  getTrackBySourceUri,
   getTrackDetailData,
   getAllTracks,
   getPendingTracks,
@@ -866,6 +1157,7 @@ export const LocalDBService = {
   getSessionsByTrack,
   getSessionsForHistory,
   getPendingSessions,
+  getLiveSessions,
   getAllSessions,
   insertRemoteSession,
   finalizeSession,
@@ -901,4 +1193,13 @@ export const LocalDBService = {
   getCheckpointBySession,
   getOrphanedCheckpoints,
   deleteCheckpoint,
+  getFolderSummaries,
+  getTracksByFolder,
+  getFolderTrackProgress,
+  getFolders,
+  upsertFolder,
+  touchFolderPlayed,
+  setTrackAvailability,
+  updateTrackLocation,
+  getSourceSignatures,
 };

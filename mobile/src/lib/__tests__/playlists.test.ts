@@ -82,6 +82,18 @@ describe("resolvePlaylistTracks", () => {
     syncStatus: "pending",
     createdAt: 0,
     updatedAt: 0,
+    source: null,
+    sourceUri: null,
+    sourcePath: null,
+    sourceSize: null,
+    sourceMtime: null,
+    folderKey: null,
+    folderName: null,
+    album: null,
+    trackNumber: null,
+    discNumber: null,
+    year: null,
+    availability: "present",
   });
 
   it("resolves items to tracks in playlist order and drops missing ones", () => {
