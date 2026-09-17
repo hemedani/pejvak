@@ -15,8 +15,14 @@
 
 import { aurora, type AuroraRamp } from "@/theme/tokens";
 
-/** FNV-1a, 32-bit. Cheap, stable, well distributed for short strings. */
-function hashString(value: string): number {
+/**
+ * FNV-1a, 32-bit. Cheap, stable, well distributed for short strings.
+ *
+ * Exported because colour is not the only thing that wants a stable hash of a
+ * string: smart playlists seed their tie-breaks with it, so two runs on the same
+ * day produce the same order without needing to store anything.
+ */
+export function hashString(value: string): number {
   let hash = 0x811c9dc5;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);

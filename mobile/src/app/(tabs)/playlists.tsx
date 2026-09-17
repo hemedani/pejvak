@@ -7,23 +7,27 @@ import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
+import { SmartPlaylistRow } from "@/components/smart-playlist-row";
 import { ThemedText } from "@/components/themed-text";
 import { GlassSurface } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
-import { useTheme } from "@/hooks/use-theme";
 import { usePlaylists } from "@/hooks/use-playlists";
+import { useSmartPlaylists } from "@/hooks/use-smart-playlists";
+import { useTheme } from "@/hooks/use-theme";
 import type { LocalPlaylist } from "@/lib/db/types";
 import { paletteFor } from "@/lib/palette";
 import { PlaylistService } from "@/services/PlaylistService";
 import { radius as radii, spacing } from "@/theme/tokens";
 
 /**
- * The header block occupies reveal index 1, so list rows start at 2. Only the
- * opening screenful staggers in — recycled rows past this limit render
- * immediately instead of replaying a delayed fade. See `Reveal`'s `limit`.
+ * The header block (create row, SMART section, SAVED heading) occupies reveal
+ * indices 1–9, so saved-playlist rows start at 10. Only the opening screenful
+ * staggers in — recycled rows past this limit render immediately instead of
+ * replaying a delayed fade. See `Reveal`'s `limit`.
  */
 const ROW_REVEAL_LIMIT = 12;
+const FIRST_SAVED_ROW_REVEAL_INDEX = 10;
 
 function trackCount(playlist: LocalPlaylist): string {
   const count = playlist.items.length;
@@ -34,13 +38,17 @@ export default function PlaylistsScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { playlists, loading, refresh } = usePlaylists();
+  const { playlists: smart, refresh: refreshSmart } = useSmartPlaylists();
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
+      // Smart lists are derived from listening history, so they go stale the
+      // moment a track is played — re-read them alongside the saved ones.
       void refresh();
-    }, [refresh]),
+      void refreshSmart();
+    }, [refresh, refreshSmart]),
   );
 
   const onCreate = async () => {
@@ -99,6 +107,35 @@ export default function PlaylistsScreen() {
                 style={styles.createButton}
               />
             </Reveal>
+
+            {smart.length > 0 ? (
+              <View style={styles.smartSection}>
+                <Reveal index={2}>
+                  <ThemedText type="overline" themeColor="textTertiary">
+                    SMART
+                  </ThemedText>
+                </Reveal>
+                {smart.map((playlist, index) => (
+                  <Reveal key={playlist.rule.id} index={index + 3} limit={ROW_REVEAL_LIMIT}>
+                    <SmartPlaylistRow
+                      playlist={playlist}
+                      onPress={() =>
+                        router.push({
+                          pathname: "/smart/[rule]",
+                          params: { rule: playlist.rule.id },
+                        })
+                      }
+                    />
+                  </Reveal>
+                ))}
+              </View>
+            ) : null}
+
+            <Reveal index={9}>
+              <ThemedText type="overline" themeColor="textTertiary">
+                SAVED
+              </ThemedText>
+            </Reveal>
           </View>
         }
         ListEmptyComponent={
@@ -109,7 +146,7 @@ export default function PlaylistsScreen() {
           )
         }
         renderItem={({ item, index }) => (
-          <Reveal index={index + 2} limit={ROW_REVEAL_LIMIT}>
+          <Reveal index={FIRST_SAVED_ROW_REVEAL_INDEX + index} limit={ROW_REVEAL_LIMIT}>
             <GlassSurface flat style={styles.row}>
               <ElasticPressable
                 accessibilityRole="button"
@@ -169,6 +206,9 @@ const styles = StyleSheet.create({
   createButton: {
     paddingHorizontal: spacing.xl,
   },
+  smartSection: {
+    gap: spacing.sm,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -192,3 +232,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.huge,
   },
 });
+
