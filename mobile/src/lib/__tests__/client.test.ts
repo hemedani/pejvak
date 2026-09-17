@@ -84,4 +84,33 @@ describe("callAct", () => {
       code: "timeout",
     });
   });
+
+  it("reports React Native's fetch rejection as offline", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Network request failed"));
+
+    await expect(callAct(getMeRequest())).rejects.toMatchObject({
+      code: "offline",
+      message: "Network request failed.",
+    });
+  });
+
+  it("reports expo/fetch's FetchError as offline", async () => {
+    // `expo` swaps the global `fetch` for its own native one, which rejects with a
+    // `FetchError` extending `Error` — NOT a `TypeError`. Before this was handled,
+    // every unreachable server surfaced as `unknown` ("Something unexpected went
+    // wrong."). Shape taken from `expo/src/winter/fetch/FetchErrors.ts`, where the
+    // constructor is `super(`fetch failed: ${message}`)` and `name` is left as "Error".
+    fetchMock.mockRejectedValue(new Error("fetch failed: Connection refused"));
+
+    await expect(callAct(getMeRequest())).rejects.toMatchObject({
+      code: "offline",
+      message: "Network request failed.",
+    });
+  });
+
+  it("keeps a genuinely unrecognised transport failure as unknown", async () => {
+    fetchMock.mockRejectedValue(new Error("something else entirely"));
+
+    await expect(callAct(getMeRequest())).rejects.toMatchObject({ code: "unknown" });
+  });
 });

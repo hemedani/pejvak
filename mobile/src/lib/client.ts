@@ -25,6 +25,30 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
+/**
+ * Did the request fail before any response arrived?
+ *
+ * `expo` replaces the global `fetch` with its own native-backed implementation
+ * (`expo/src/winter/runtime.native.ts` installs `expo/fetch` unless
+ * `EXPO_PUBLIC_USE_RN_FETCH` is set). That one rejects with a `FetchError` which
+ * *extends `Error`*, not React Native's `TypeError` — so an `instanceof TypeError`
+ * check alone misses every genuine network failure, and they all fall through to
+ * `unknown`, which the UI reports as "Something unexpected went wrong." That is the
+ * exact message an unreachable or misconfigured server used to produce.
+ *
+ * Matched by message because `FetchError` is not re-exported from the public
+ * `expo/fetch` entry point. Both shapes are pinned in `__tests__/client.test.ts`.
+ */
+function isNetworkFailure(error: unknown): boolean {
+  if (error instanceof TypeError) {
+    return true;
+  }
+  // Tested against `error.message`, not the `name: message` form that
+  // `errorMessage()` builds — `FetchError` does not set `name`, so it reads as a
+  // plain `Error` and an anchored pattern would never match.
+  return error instanceof Error && /fetch failed:/i.test(error.message);
+}
+
 function classifyTransportFailure(error: unknown, timedOut: boolean): LesanError {
   if (error instanceof LesanError) {
     return error;
@@ -39,8 +63,8 @@ function classifyTransportFailure(error: unknown, timedOut: boolean): LesanError
   if (error instanceof SyntaxError || /json parse|unexpected end of input/i.test(message)) {
     return new LesanError("Response was incomplete.", "invalid_response", undefined, message);
   }
-  if (error instanceof TypeError) {
-    return new LesanError("Network request failed.", "offline");
+  if (isNetworkFailure(error)) {
+    return new LesanError("Network request failed.", "offline", undefined, message);
   }
   return new LesanError("Unexpected request failure.", "unknown", undefined, error);
 }
@@ -64,7 +88,12 @@ function logDevelopmentFailure(error: unknown): void {
   }
   lastDevWarning = fingerprint;
   if (error instanceof LesanError) {
+    // `url` is the base URL the bundle was compiled with. It is inlined at build
+    // time and cannot change at runtime, so "which server is this build actually
+    // talking to?" is answerable only from here — otherwise the only record is the
+    // EAS build log.
     console.warn("[lesan]", {
+      url: env.lesanUrl,
       code: error.code,
       status: error.status,
       details: error.details,
