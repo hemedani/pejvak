@@ -12,6 +12,7 @@ import { ThemedText } from "@/components/themed-text";
 import { GlassChip, GlassProgress, GlassSurface } from "@/components/ui/glass";
 import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { useArtworkBackfill } from "@/hooks/use-artwork-backfill";
 import { useFolders } from "@/hooks/use-folders";
 import { useMissingTracks } from "@/hooks/use-missing-tracks";
 import { useTheme } from "@/hooks/use-theme";
@@ -34,6 +35,13 @@ import { radius as radii, spacing } from "@/theme/tokens";
 const ROW_REVEAL_LIMIT = 12;
 const FIRST_ROW_REVEAL_INDEX = 5;
 
+/**
+ * How many files one Library visit examines for cover art. Small on purpose:
+ * the read is real I/O on the JS thread, and the whole point of the bounded,
+ * self-stamping pass is that the next visit picks up where this one stopped.
+ */
+const ARTWORK_BACKFILL_BATCH = 8;
+
 type LibraryView = "tracks" | "folders";
 
 function formatLastPlayed(value: number | null): string {
@@ -51,6 +59,7 @@ export default function LibraryScreen() {
   const [annotationCounts, setAnnotationCounts] = useState<Record<string, number>>({});
   const { folders, refresh: refreshFolders } = useFolders();
   const { missing, refresh: refreshMissing } = useMissingTracks();
+  const { run: runArtworkBackfill } = useArtworkBackfill();
 
   const continueTrack = useMemo(
     () =>
@@ -61,6 +70,25 @@ export default function LibraryScreen() {
   );
 
   const wash = continueTrack ? paletteFor(continueTrack.contentHash)[1] : theme.accent;
+
+  /**
+   * Fills in cover art for tracks imported before it was extracted, then
+   * re-reads the rows only if something was found. Deliberately not awaited by
+   * `refresh`: the list has to paint from the rows already in hand, and a tile
+   * upgrading from a letter to a cover a moment later costs nothing.
+   *
+   * Bounded and self-stamping, so the first visits do real work and every visit
+   * after that is one cheap query returning nothing.
+   */
+  const backfillCovers = useCallback(async () => {
+    const found = await runArtworkBackfill(ARTWORK_BACKFILL_BATCH);
+    if (found === 0) {
+      return;
+    }
+    setTracks(await LocalDBService.getAllTracks());
+    // A folder card draws its cover from one of its members, so it moves too.
+    await refreshFolders();
+  }, [refreshFolders, runArtworkBackfill]);
 
   const refresh = useCallback(async () => {
     const [allTracks, counts] = await Promise.all([
@@ -75,7 +103,8 @@ export default function LibraryScreen() {
     // A relink writes to the tracks table too, so the alert has to re-read or
     // it would keep offering to fix something already fixed.
     await refreshMissing();
-  }, [refreshFolders, refreshMissing]);
+    void backfillCovers();
+  }, [backfillCovers, refreshFolders, refreshMissing]);
 
   useFocusEffect(
     useCallback(() => {
@@ -180,6 +209,7 @@ export default function LibraryScreen() {
               <PaletteTile
                 ramp={paletteFor(continueTrack.contentHash)}
                 label={continueTrack.title}
+                source={continueTrack.artworkUrl}
                 size={58}
                 radius={16}
               />
@@ -257,7 +287,13 @@ export default function LibraryScreen() {
             accessibilityLabel={`Open folder ${folder.name}`}
             onPress={() => openFolder(folder.key)}
             style={styles.rowMain}>
-            <PaletteTile ramp={ramp} label={folder.name} size={44} radius={13} />
+            <PaletteTile
+              ramp={ramp}
+              label={folder.name}
+              source={folder.artworkUrl}
+              size={44}
+              radius={13}
+            />
             <View style={styles.rowCopy}>
               <ThemedText type="bodyStrong" numberOfLines={1}>
                 {folder.name}
@@ -294,6 +330,7 @@ export default function LibraryScreen() {
           <AddToPlaylistButton
             title={folder.name}
             ramp={ramp}
+            artwork={folder.artworkUrl}
             isBatch
             size={40}
             iconSize={18}
@@ -339,6 +376,7 @@ export default function LibraryScreen() {
                     <PaletteTile
                       ramp={paletteFor(item.contentHash)}
                       label={item.title}
+                      source={item.artworkUrl}
                       size={44}
                       radius={13}
                     />
@@ -360,6 +398,7 @@ export default function LibraryScreen() {
                     trackIds={[item.id]}
                     title={item.title}
                     ramp={paletteFor(item.contentHash)}
+                    artwork={item.artworkUrl}
                     size={34}
                     iconSize={16}
                     tone="ghost"

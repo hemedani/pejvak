@@ -92,6 +92,7 @@ export function MiniPlayerRow({
           trackIds={[trackId]}
           title={title ?? "This track"}
           ramp={ramp}
+          artwork={artworkUrl}
           size={34}
           iconSize={17}
           tone="ghost"

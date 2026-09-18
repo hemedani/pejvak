@@ -117,6 +117,7 @@ export function SessionCard({ item, onPress, onDelete }: SessionCardProps) {
         trackIds={[item.track.id]}
         title={item.track.title}
         ramp={paletteFor(item.track.contentHash)}
+        artwork={item.track.artworkUrl}
         size={36}
         iconSize={17}
         tone="ghost"

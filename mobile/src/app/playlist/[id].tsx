@@ -131,6 +131,7 @@ export default function PlaylistDetailScreen() {
                         title={data.playlist.title}
                         subtitle={`${tracks.length} track${tracks.length === 1 ? "" : "s"} from this playlist`}
                         ramp={ramp}
+                        artwork={tracks[0]?.artworkUrl ?? null}
                         isBatch
                         size={42}
                         iconSize={20}
@@ -175,6 +176,7 @@ export default function PlaylistDetailScreen() {
                         <PaletteTile
                           ramp={paletteFor(track.contentHash)}
                           label={track.title}
+                          source={track.artworkUrl}
                           size={40}
                           radius={12}
                         />
@@ -200,6 +202,7 @@ export default function PlaylistDetailScreen() {
                         title={track.title}
                         subtitle={`from ${data.playlist.title}`}
                         ramp={paletteFor(track.contentHash)}
+                        artwork={track.artworkUrl}
                         size={34}
                         iconSize={16}
                         tone="ghost"
@@ -272,6 +275,7 @@ export default function PlaylistDetailScreen() {
                           <PaletteTile
                             ramp={paletteFor(track.contentHash)}
                             label={track.title}
+                            source={track.artworkUrl}
                             size={40}
                             radius={12}
                           />

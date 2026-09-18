@@ -264,7 +264,13 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
                 </View>
 
                 <View style={styles.header}>
-                  <PaletteTile ramp={ramp} label={request.title} size={48} radius={15} />
+                  <PaletteTile
+                    ramp={ramp}
+                    label={request.title}
+                    source={request.artwork}
+                    size={48}
+                    radius={15}
+                  />
                   <View style={styles.headerCopy}>
                     <ThemedText type="overline" themeColor="textTertiary">
                       ADD TO PLAYLIST

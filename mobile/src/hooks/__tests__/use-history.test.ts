@@ -38,6 +38,7 @@ function item(id: string): HistoryItem {
       author: null,
       contentHash: "hash-1",
       isAudiobook: true,
+      artworkUrl: null,
     },
   };
 }

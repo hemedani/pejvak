@@ -3,7 +3,15 @@ import { formatClock } from "@/lib/time";
 
 export type HistoryItem = {
   session: LocalSession;
-  track: Pick<LocalTrack, "id" | "title" | "author" | "contentHash" | "isAudiobook">;
+  /**
+   * A projection, not a whole `LocalTrack`: the history card is text-only and
+   * the join is on a 200-row list. `artworkUrl` is here because the playlist
+   * picker opened from a history card shows the track's cover in its header.
+   */
+  track: Pick<
+    LocalTrack,
+    "id" | "title" | "author" | "contentHash" | "isAudiobook" | "artworkUrl"
+  >;
 };
 
 export type HistoryDay = {

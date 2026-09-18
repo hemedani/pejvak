@@ -13,7 +13,7 @@
 
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -60,6 +60,13 @@ export function CrossfadeArtwork({
   // `""` rather than `null` so the cross-fade value is always a string and a
   // `null` previous layer unambiguously means "there is no outgoing layer".
   const { current, previous, progress } = useCrossfade(source ?? "");
+
+  // A stored artwork file can go missing — a wiped app directory, a half-written
+  // extract — and expo-image renders nothing for a URI it cannot read, which
+  // would leave a dark hole where the gradient tile belongs. One failed URI is
+  // enough: the next track brings a different one, so the flag clears itself.
+  const [failed, setFailed] = useState<string | null>(null);
+  const resolve = (value: string) => (value !== "" && value === failed ? "" : value);
 
   const rotate = useSharedValue(0);
   const kick = useSharedValue(1);
@@ -109,6 +116,7 @@ export function CrossfadeArtwork({
           // The cross-fade is ours; expo-image's own transition would fight it
           // and produce a visible double-fade.
           transition={0}
+          onError={() => setFailed(value)}
         />
       ) : (
         <LinearGradient
@@ -131,8 +139,8 @@ export function CrossfadeArtwork({
 
   return (
     <Animated.View style={[styles.container, { borderRadius: radius }, style, containerStyle]}>
-      {previous !== null ? renderLayer(previous, "previous") : null}
-      {renderLayer(current, "current")}
+      {previous !== null ? renderLayer(resolve(previous), "previous") : null}
+      {renderLayer(resolve(current), "current")}
       {/* Inner specular edge — sells the tile as a physical object. */}
       <View
         pointerEvents="none"

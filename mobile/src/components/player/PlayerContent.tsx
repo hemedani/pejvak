@@ -244,7 +244,12 @@ export function PlayerContent({
             {/* Only once a library row has resolved — before that there is no id
                 to hand to the picker. */}
             {trackId ? (
-              <AddToPlaylistChip trackIds={[trackId]} title={title} ramp={ramp} />
+              <AddToPlaylistChip
+                trackIds={[trackId]}
+                title={title}
+                ramp={ramp}
+                artwork={artworkUrl}
+              />
             ) : null}
           </View>
 

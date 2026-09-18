@@ -31,6 +31,7 @@ function item(overrides: Partial<LocalSession> = {}): HistoryItem {
       author: null,
       contentHash: "hash-1",
       isAudiobook: true,
+      artworkUrl: null,
     },
   };
 }

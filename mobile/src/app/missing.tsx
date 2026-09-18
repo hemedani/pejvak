@@ -123,6 +123,7 @@ export default function MissingFilesScreen() {
                           <PaletteTile
                             ramp={paletteFor(item.track.contentHash)}
                             label={item.track.title}
+                            source={item.track.artworkUrl}
                             size={40}
                             radius={12}
                           />

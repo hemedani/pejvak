@@ -31,6 +31,12 @@ export type AddToPlaylistRequest = {
   /** Colour identity of whatever was tapped, so the sheet matches its source. */
   ramp?: AuroraRamp;
   /**
+   * Cover art for the header tile, when the source has one. A folder's card
+   * passes its representative cover, so the sheet the listener just opened from
+   * that card looks like the card did.
+   */
+  artwork?: string | null;
+  /**
    * True when the selection is a container (a folder, an album) rather than a
    * single track. Changes the header glyph, nothing else.
    */

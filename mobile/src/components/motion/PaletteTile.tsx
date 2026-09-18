@@ -1,11 +1,18 @@
 /**
- * A square gradient tile standing in for artwork.
+ * A square artwork tile for list rows.
  *
- * Cheap enough for list rows (one `LinearGradient`, no shared values) where the
- * cross-fading `CrossfadeArtwork` would be overkill.
+ * Shows the track's cover when there is one and a deterministic gradient with
+ * the title's initial when there is not — which is the honest fallback, not a
+ * placeholder: plenty of lecture recordings and old rips carry no picture at
+ * all, and a library of identical grey boxes is worse than a library of colours.
+ *
+ * Cheap enough for a virtualised list: one `Image`, no shared values. The
+ * cross-fading `CrossfadeArtwork` would be overkill here.
  */
 
+import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
+import { useState } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
@@ -13,35 +20,66 @@ import { artworkScrim, type AuroraRamp } from "@/theme/tokens";
 
 export type PaletteTileProps = {
   ramp: AuroraRamp;
-  /** Text the tile takes its initial from. */
+  /** Text the fallback tile takes its initial from. */
   label?: string | null;
+  /** Cover art URI. Falls back to the gradient when absent or unreadable. */
+  source?: string | null;
   size: number;
   radius?: number;
   style?: StyleProp<ViewStyle>;
 };
 
-export function PaletteTile({ ramp, label, size, radius = 14, style }: PaletteTileProps) {
+export function PaletteTile({
+  ramp,
+  label,
+  source,
+  size,
+  radius = 14,
+  style,
+}: PaletteTileProps) {
+  // One failed URI, not a set: a new track brings a new URI, so the flag clears
+  // itself on the next row without an effect to reset it.
+  const [failed, setFailed] = useState<string | null>(null);
+  const uri = source ?? null;
+  const showArtwork = uri !== null && uri !== failed;
   const initial = label?.trim().charAt(0).toUpperCase() ?? "";
 
   return (
-    <LinearGradient
-      colors={ramp}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+    <View
       style={[
         styles.tile,
         { width: size, height: size, borderRadius: radius },
         style,
       ]}>
-      {/* Scrim sits under the glyph and over the gradient, so the initial
-          stays legible on the pale ramps. */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.scrim]} />
-      {initial ? (
-        <ThemedText style={[styles.initial, { fontSize: Math.round(size * 0.4) }]}>
-          {initial}
-        </ThemedText>
-      ) : null}
-    </LinearGradient>
+      <LinearGradient
+        colors={ramp}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {showArtwork ? (
+        <Image
+          source={{ uri }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={140}
+          // A file deleted behind the app's back must not leave a blank square.
+          onError={() => setFailed(uri)}
+        />
+      ) : (
+        <>
+          {/* Scrim sits under the glyph and over the gradient, so the initial
+              stays legible on the pale ramps. Over real artwork it would only
+              dim the picture, so it is drawn on the fallback path alone. */}
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.scrim]} />
+          {initial ? (
+            <ThemedText style={[styles.initial, { fontSize: Math.round(size * 0.4) }]}>
+              {initial}
+            </ThemedText>
+          ) : null}
+        </>
+      )}
+    </View>
   );
 }
 

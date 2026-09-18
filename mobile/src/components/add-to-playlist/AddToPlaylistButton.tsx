@@ -30,6 +30,8 @@ export type AddToPlaylistTarget = Selection & {
   title: string;
   subtitle?: string | null;
   ramp?: AuroraRamp;
+  /** Cover art for the sheet's header tile, when the source has one. */
+  artwork?: string | null;
   /** Defaults to "more than one track". */
   isBatch?: boolean;
 };
@@ -48,6 +50,7 @@ export function useAddToPlaylist() {
       title: target.title,
       subtitle: target.subtitle ?? null,
       ramp: target.ramp,
+      artwork: target.artwork ?? null,
       isBatch: target.isBatch ?? trackIds.length > 1,
     };
     open(request);

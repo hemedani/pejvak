@@ -111,6 +111,7 @@ export default function SmartPlaylistScreen() {
                 title={rule?.title ?? "Smart playlist"}
                 subtitle={`${picks.length} track${picks.length === 1 ? "" : "s"} from ${rule?.title ?? "this list"}`}
                 ramp={paletteFor(ruleId ?? "")}
+                artwork={picks[0]?.track.artworkUrl ?? null}
                 isBatch
                 size={42}
                 iconSize={20}
@@ -191,6 +192,7 @@ export default function SmartPlaylistScreen() {
                       <PaletteTile
                         ramp={paletteFor(pick.track.contentHash)}
                         label={pick.track.title}
+                        source={pick.track.artworkUrl}
                         size={40}
                         radius={12}
                       />
@@ -214,6 +216,7 @@ export default function SmartPlaylistScreen() {
                       trackIds={[pick.track.id]}
                       title={pick.track.title}
                       ramp={paletteFor(pick.track.contentHash)}
+                      artwork={pick.track.artworkUrl}
                       size={34}
                       iconSize={16}
                       tone="ghost"

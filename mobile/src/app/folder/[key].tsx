@@ -160,6 +160,9 @@ export default function FolderDetailScreen() {
                 title={data?.name ?? "Folder"}
                 subtitle={`${addableIds.length} track${addableIds.length === 1 ? "" : "s"} from this folder`}
                 ramp={ramp}
+                // The folder's own cover is its first track's, matching the
+                // library card this screen was opened from.
+                artwork={data?.tracks[0]?.artworkUrl ?? null}
                 isBatch
                 size={42}
                 iconSize={20}
@@ -245,6 +248,7 @@ export default function FolderDetailScreen() {
                         <PaletteTile
                           ramp={paletteFor(track.contentHash)}
                           label={track.title}
+                          source={track.artworkUrl}
                           size={40}
                           radius={12}
                         />
@@ -276,6 +280,7 @@ export default function FolderDetailScreen() {
                           title={track.title}
                           subtitle={`from ${data.name}`}
                           ramp={paletteFor(track.contentHash)}
+                          artwork={track.artworkUrl}
                           size={34}
                           iconSize={16}
                           tone="ghost"

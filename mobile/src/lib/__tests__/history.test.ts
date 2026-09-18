@@ -41,6 +41,10 @@ function track(overrides: Partial<HistoryItem["track"]> = {}): HistoryItem["trac
     contentHash: "hash-1",
     isAudiobook: true,
     ...overrides,
+    // After the spread, and coalesced: `Partial` makes the field optional, so
+    // leaving it to the spread would widen it to `undefined` and no longer
+    // satisfy the projection the type declares.
+    artworkUrl: overrides.artworkUrl ?? null,
   };
 }
 

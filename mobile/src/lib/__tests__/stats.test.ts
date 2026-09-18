@@ -48,6 +48,7 @@ function item(
       author: null,
       contentHash: s.contentHash,
       isAudiobook,
+      artworkUrl: null,
     },
   };
 }
