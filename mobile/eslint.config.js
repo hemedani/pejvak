@@ -27,6 +27,10 @@ module.exports = defineConfig([
       "src/components/motion/**/*.{ts,tsx}",
       "src/components/player/**/*.{ts,tsx}",
       "src/components/ui/glass/**/*.{ts,tsx}",
+      // The add-to-playlist sheet is the same kind of component: a glass sheet
+      // with a drag-to-dismiss gesture, so it writes to a shared value from a
+      // pan callback exactly as the player's sheet does.
+      "src/components/add-to-playlist/**/*.{ts,tsx}",
     ],
     rules: {
       "react-hooks/immutability": "off",

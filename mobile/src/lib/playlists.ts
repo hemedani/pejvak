@@ -9,10 +9,49 @@ export function addTrackToPlaylist(
   items: PlaylistItem[],
   trackId: string,
 ): PlaylistItem[] {
-  if (items.some((item) => item.trackId === trackId)) {
+  return addTracksToPlaylist(items, [trackId]);
+}
+
+/**
+ * Adds several tracks in one pass, preserving the given order and skipping any
+ * that are already present.
+ *
+ * The single-track case delegates here so the "already there" rule is expressed
+ * exactly once — and so adding a whole folder costs one playlist write rather
+ * than one per track.
+ *
+ * Duplicates *within* `trackIds` are collapsed too: a folder can legitimately
+ * hold the same content twice (the same lecture saved under two names), and
+ * adding both would put two identical rows in the playlist.
+ */
+export function addTracksToPlaylist(
+  items: PlaylistItem[],
+  trackIds: readonly string[],
+): PlaylistItem[] {
+  const present = new Set(items.map((item) => item.trackId));
+  const additions: PlaylistItem[] = [];
+
+  for (const trackId of trackIds) {
+    if (present.has(trackId)) {
+      continue;
+    }
+    present.add(trackId);
+    additions.push({ trackId, order: items.length + additions.length });
+  }
+
+  if (additions.length === 0) {
     return normalizeOrder(items);
   }
-  return normalizeOrder([...items, { trackId, order: items.length }]);
+  return normalizeOrder([...items, ...additions]);
+}
+
+/** Removes several tracks at once, keeping the remaining order intact. */
+export function removeTracksFromPlaylist(
+  items: PlaylistItem[],
+  trackIds: readonly string[],
+): PlaylistItem[] {
+  const doomed = new Set(trackIds);
+  return normalizeOrder(items.filter((item) => !doomed.has(item.trackId)));
 }
 
 export function removeTrackFromPlaylist(

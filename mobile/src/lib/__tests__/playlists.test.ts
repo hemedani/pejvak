@@ -1,8 +1,10 @@
 import {
   addTrackToPlaylist,
+  addTracksToPlaylist,
   movePlaylistItem,
   normalizeOrder,
   removeTrackFromPlaylist,
+  removeTracksFromPlaylist,
   resolvePlaylistTracks,
 } from "@/lib/playlists";
 import type { LocalTrack, PlaylistItem } from "@/lib/db/types";
@@ -32,6 +34,75 @@ describe("addTrackToPlaylist", () => {
 
   it("does not add a duplicate", () => {
     expect(addTrackToPlaylist(items("a", "b"), "a")).toEqual(items("a", "b"));
+  });
+});
+
+describe("addTracksToPlaylist", () => {
+  it("appends every new track in the order given", () => {
+    expect(addTracksToPlaylist(items("a"), ["b", "c", "d"])).toEqual(items("a", "b", "c", "d"));
+  });
+
+  it("skips the ones already present and appends only the rest", () => {
+    expect(addTracksToPlaylist(items("a", "b"), ["b", "c"])).toEqual(items("a", "b", "c"));
+  });
+
+  it("is a no-op when every track is already there", () => {
+    expect(addTracksToPlaylist(items("a", "b"), ["a", "b"])).toEqual(items("a", "b"));
+  });
+
+  it("collapses duplicates within the selection", () => {
+    // A folder can hold the same lecture twice under two names; adding both
+    // would put two identical rows in the playlist.
+    expect(addTracksToPlaylist(items(), ["a", "a", "b"])).toEqual(items("a", "b"));
+  });
+
+  it("handles an empty selection and an empty playlist", () => {
+    expect(addTracksToPlaylist(items("a"), [])).toEqual(items("a"));
+    expect(addTracksToPlaylist(items(), ["a"])).toEqual(items("a"));
+    expect(addTracksToPlaylist(items(), [])).toEqual([]);
+  });
+
+  it("rewrites a ragged order rather than appending after it", () => {
+    // `items.length` is not the same as "the highest order", so a playlist
+    // whose orders are sparse must not produce a duplicate order value.
+    const ragged: PlaylistItem[] = [
+      { trackId: "a", order: 4 },
+      { trackId: "b", order: 11 },
+    ];
+    expect(addTracksToPlaylist(ragged, ["c"])).toEqual(items("a", "b", "c"));
+  });
+
+  it("agrees with the single-track helper", () => {
+    const base = items("a", "b");
+    expect(addTracksToPlaylist(base, ["c"])).toEqual(addTrackToPlaylist(base, "c"));
+    expect(addTracksToPlaylist(base, ["a"])).toEqual(addTrackToPlaylist(base, "a"));
+  });
+
+  it("does not mutate its input", () => {
+    const base = items("a");
+    addTracksToPlaylist(base, ["b", "c"]);
+    expect(base).toEqual(items("a"));
+  });
+});
+
+describe("removeTracksFromPlaylist", () => {
+  it("removes several tracks and keeps the order contiguous", () => {
+    expect(removeTracksFromPlaylist(items("a", "b", "c", "d"), ["b", "d"])).toEqual(items("a", "c"));
+  });
+
+  it("is a no-op for unknown ids", () => {
+    expect(removeTracksFromPlaylist(items("a", "b"), ["z"])).toEqual(items("a", "b"));
+  });
+
+  it("handles removing everything and removing nothing", () => {
+    expect(removeTracksFromPlaylist(items("a", "b"), ["a", "b"])).toEqual([]);
+    expect(removeTracksFromPlaylist(items("a", "b"), [])).toEqual(items("a", "b"));
+  });
+
+  it("does not mutate its input", () => {
+    const base = items("a", "b");
+    removeTracksFromPlaylist(base, ["a"]);
+    expect(base).toEqual(items("a", "b"));
   });
 });
 
