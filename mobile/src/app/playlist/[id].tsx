@@ -2,6 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
 
+import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
@@ -120,17 +121,34 @@ export default function PlaylistDetailScreen() {
                 title={data.playlist.title}
                 subtitle={`${tracks.length} track${tracks.length === 1 ? "" : "s"}`}
                 action={
-                  <BouncyIconButton
-                    name="edit"
-                    accessibilityLabel="Rename playlist"
-                    size={42}
-                    iconSize={18}
-                    tone="glass"
-                    onPress={() => {
-                      setTitleDraft(data.playlist.title);
-                      setRenaming(true);
-                    }}
-                  />
+                  <View style={styles.headerActions}>
+                    {/* The whole playlist, in one tap: the useful direction
+                        here is copying or merging into another list, which is
+                        why this is a batch target rather than per-row only. */}
+                    {tracks.length > 0 ? (
+                      <AddToPlaylistButton
+                        trackIds={tracks.map((track) => track.id)}
+                        title={data.playlist.title}
+                        subtitle={`${tracks.length} track${tracks.length === 1 ? "" : "s"} from this playlist`}
+                        ramp={ramp}
+                        isBatch
+                        size={42}
+                        iconSize={20}
+                        tone="glass"
+                      />
+                    ) : null}
+                    <BouncyIconButton
+                      name="edit"
+                      accessibilityLabel="Rename playlist"
+                      size={42}
+                      iconSize={18}
+                      tone="glass"
+                      onPress={() => {
+                        setTitleDraft(data.playlist.title);
+                        setRenaming(true);
+                      }}
+                    />
+                  </View>
                 }
               />
             )}
@@ -161,11 +179,31 @@ export default function PlaylistDetailScreen() {
                           radius={12}
                         />
                         <View style={styles.rowCopy}>
-                          <ThemedText type="bodyStrong" numberOfLines={1}>
+                          {/* Two lines because this row carries four trailing
+                              controls, which leaves the title roughly 100 pt on
+                              a 360 dp phone — enough for one line and an
+                              ellipsis. A second line fits inside the 40 pt
+                              tile, so the row does not grow. */}
+                          <ThemedText type="bodyStrong" numberOfLines={2}>
                             {index + 1}. {track.title}
                           </ThemedText>
                         </View>
                       </ElasticPressable>
+
+                      {/* Outside `rowActions` on purpose. Those three are one
+                          group — reorder and remove, all about position in
+                          *this* list — while this button is about every other
+                          playlist, and the sheet it opens reports this list as
+                          already complete. */}
+                      <AddToPlaylistButton
+                        trackIds={[track.id]}
+                        title={track.title}
+                        subtitle={`from ${data.playlist.title}`}
+                        ramp={paletteFor(track.contentHash)}
+                        size={34}
+                        iconSize={16}
+                        tone="ghost"
+                      />
 
                       <View style={styles.rowActions}>
                         <BouncyIconButton
@@ -303,6 +341,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
   },
   section: {
+    gap: spacing.sm,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
   },
   row: {

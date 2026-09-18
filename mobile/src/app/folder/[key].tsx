@@ -2,6 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
+import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
@@ -60,7 +61,9 @@ export default function FolderDetailScreen() {
     }, [refresh]),
   );
 
-  const tracks = data?.tracks ?? [];
+  // Memoised because `?? []` makes a fresh array on every render, which would
+  // make anything derived from it recompute forever.
+  const tracks = useMemo(() => data?.tracks ?? [], [data]);
 
   /**
    * The queue and the entry point are computed once per render and shared by
@@ -73,6 +76,16 @@ export default function FolderDetailScreen() {
 
   const unfinishedCount = data ? data.tracks.length - data.finishedCount : 0;
   const playableCount = plan?.queueIds.length ?? 0;
+
+  /**
+   * A playlist is a promise to play something later, so the missing files are
+   * left out — offering to add a track whose bytes are gone would only produce a
+   * playlist that skips itself.
+   */
+  const addableIds = useMemo(
+    () => tracks.filter((track) => track.availability !== "missing").map((track) => track.id),
+    [tracks],
+  );
 
   // Same seed the folder card used, so opening a folder keeps its colour —
   // including the storage-root folder, whose key is the empty string.
@@ -139,6 +152,20 @@ export default function FolderDetailScreen() {
               : loading
                 ? "Loading…"
                 : undefined
+          }
+          action={
+            addableIds.length > 0 ? (
+              <AddToPlaylistButton
+                trackIds={addableIds}
+                title={data?.name ?? "Folder"}
+                subtitle={`${addableIds.length} track${addableIds.length === 1 ? "" : "s"} from this folder`}
+                ramp={ramp}
+                isBatch
+                size={42}
+                iconSize={20}
+                tone="glass"
+              />
+            ) : null
           }
         />
 
@@ -240,6 +267,20 @@ export default function FolderDetailScreen() {
                       <ThemedText type="caption" themeColor="textTertiary">
                         {track.durationSec > 0 ? formatClock(track.durationSec) : "—"}
                       </ThemedText>
+
+                      {/* A missing file is skipped by folder play, so it is not
+                          offered to a playlist either. */}
+                      {missing ? null : (
+                        <AddToPlaylistButton
+                          trackIds={[track.id]}
+                          title={track.title}
+                          subtitle={`from ${data.name}`}
+                          ramp={paletteFor(track.contentHash)}
+                          size={34}
+                          iconSize={16}
+                          tone="ghost"
+                        />
+                      )}
                     </GlassSurface>
                   </Reveal>
                 );

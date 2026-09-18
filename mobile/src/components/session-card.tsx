@@ -10,6 +10,7 @@
 
 import { StyleSheet, View } from "react-native";
 
+import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
@@ -24,6 +25,7 @@ import {
   resumeTargetSec,
   type HistoryItem,
 } from "@/lib/history";
+import { paletteFor } from "@/lib/palette";
 import { formatClock } from "@/lib/time";
 import { spacing } from "@/theme/tokens";
 
@@ -108,6 +110,17 @@ export function SessionCard({ item, onPress, onDelete }: SessionCardProps) {
       ) : (
         <View style={styles.body}>{body}</View>
       )}
+
+      {/* Same sibling rule as the remove button: nested inside the pressable it
+          would resume playback on the way to opening the picker. */}
+      <AddToPlaylistButton
+        trackIds={[item.track.id]}
+        title={item.track.title}
+        ramp={paletteFor(item.track.contentHash)}
+        size={36}
+        iconSize={17}
+        tone="ghost"
+      />
 
       {onDelete ? (
         <BouncyIconButton

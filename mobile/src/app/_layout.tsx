@@ -5,6 +5,7 @@ import { StyleSheet, useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
+import { AddToPlaylistSheet } from "@/components/add-to-playlist";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -55,6 +56,7 @@ export default function RootLayout() {
               <Stack.Screen name="folder/[key]" />
               <Stack.Screen name="playlist/[id]" />
               <Stack.Screen name="smart/[rule]" />
+              <Stack.Screen name="missing" />
               <Stack.Screen name="import" />
               <Stack.Screen name="settings" />
               <Stack.Screen
@@ -71,6 +73,10 @@ export default function RootLayout() {
             </Stack.Protected>
           </Stack>
         )}
+        {/* Mounted above the navigator on purpose. It renders a `Modal`, which
+            is its own window, so it can be opened from the player — itself a
+            transparent modal — without landing behind it. */}
+        <AddToPlaylistSheet />
       </ThemeProvider>
     </GestureHandlerRootView>
   );

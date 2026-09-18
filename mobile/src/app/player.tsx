@@ -255,6 +255,7 @@ export default function PlayerScreen() {
         <PlayerContent
           reveal={reveal}
           headerGesture={gesture}
+          trackId={activeTrackId}
           title={resolvedTitle}
           artist={artist ?? track?.author ?? null}
           artworkUrl={artworkUrl ?? track?.artworkUrl ?? null}

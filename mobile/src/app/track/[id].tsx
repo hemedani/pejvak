@@ -3,6 +3,7 @@ import { useCallback, useMemo } from "react";
 import { ScrollView, Share, StyleSheet, View } from "react-native";
 
 import { AnnotationList } from "@/components/annotation-list";
+import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { CrossfadeArtwork } from "@/components/motion/CrossfadeArtwork";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { Reveal } from "@/components/motion/Reveal";
@@ -82,6 +83,18 @@ export default function TrackDetailScreen() {
           overline="TRACK DETAIL"
           title={track?.title ?? "Track"}
           subtitle={track?.author ?? undefined}
+          action={
+            track ? (
+              <AddToPlaylistButton
+                trackIds={[track.id]}
+                title={track.title}
+                ramp={ramp}
+                size={42}
+                iconSize={20}
+                tone="glass"
+              />
+            ) : null
+          }
         />
 
         <Reveal index={1}>

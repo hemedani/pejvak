@@ -10,6 +10,7 @@
 import type { ReactNode } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
+import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { CrossfadeArtwork } from "@/components/motion/CrossfadeArtwork";
 import { ThemedText } from "@/components/themed-text";
@@ -22,6 +23,8 @@ import { layout, spacing } from "@/theme/tokens";
 const ART_SIZE = 46;
 
 export type MiniPlayerRowProps = {
+  /** The library row being played, for the playlist picker. */
+  trackId?: string | null;
   title: string | null;
   artist: string | null;
   artworkUrl: string | null;
@@ -38,6 +41,7 @@ export type MiniPlayerRowProps = {
 };
 
 export function MiniPlayerRow({
+  trackId,
   title,
   artist,
   artworkUrl,
@@ -82,6 +86,17 @@ export function MiniPlayerRow({
       ) : (
         <View style={styles.main}>{main}</View>
       )}
+
+      {trackId ? (
+        <AddToPlaylistButton
+          trackIds={[trackId]}
+          title={title ?? "This track"}
+          ramp={ramp}
+          size={34}
+          iconSize={17}
+          tone="ghost"
+        />
+      ) : null}
 
       <BouncyIconButton
         name={isPlaying ? "pause" : "play"}

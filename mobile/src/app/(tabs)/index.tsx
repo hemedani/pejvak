@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
+import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
@@ -9,8 +10,10 @@ import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
 import { GlassChip, GlassProgress, GlassSurface } from "@/components/ui/glass";
+import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useFolders } from "@/hooks/use-folders";
+import { useMissingTracks } from "@/hooks/use-missing-tracks";
 import { useTheme } from "@/hooks/use-theme";
 import type { FolderSummary, LocalTrack } from "@/lib/db/types";
 import { describeFolderProgress, folderProgressRatio } from "@/lib/folderPlay";
@@ -23,13 +26,13 @@ import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { radius as radii, spacing } from "@/theme/tokens";
 
 /**
- * The header block occupies reveal indices 1–3 (view toggle, continue card,
- * add-audio button), so list rows start at 4. Only the opening screenful
- * staggers in — recycled rows past this limit render immediately instead of
- * replaying a 320 ms-delayed fade. See `Reveal`'s `limit`.
+ * The header block occupies reveal indices 1–4 (view toggle, continue card,
+ * missing-files alert, add-audio button), so list rows start at 5. Only the
+ * opening screenful staggers in — recycled rows past this limit render
+ * immediately instead of replaying a 320 ms-delayed fade. See `Reveal`'s `limit`.
  */
 const ROW_REVEAL_LIMIT = 12;
-const FIRST_ROW_REVEAL_INDEX = 4;
+const FIRST_ROW_REVEAL_INDEX = 5;
 
 type LibraryView = "tracks" | "folders";
 
@@ -47,6 +50,7 @@ export default function LibraryScreen() {
   const [tracks, setTracks] = useState<LocalTrack[]>([]);
   const [annotationCounts, setAnnotationCounts] = useState<Record<string, number>>({});
   const { folders, refresh: refreshFolders } = useFolders();
+  const { missing, refresh: refreshMissing } = useMissingTracks();
 
   const continueTrack = useMemo(
     () =>
@@ -68,7 +72,10 @@ export default function LibraryScreen() {
     // Folders are derived from the tracks table, so a rescan or an import can
     // add one without any screen noticing; re-read on focus alongside them.
     await refreshFolders();
-  }, [refreshFolders]);
+    // A relink writes to the tracks table too, so the alert has to re-read or
+    // it would keep offering to fix something already fixed.
+    await refreshMissing();
+  }, [refreshFolders, refreshMissing]);
 
   useFocusEffect(
     useCallback(() => {
@@ -206,7 +213,32 @@ export default function LibraryScreen() {
         </Reveal>
       ) : null}
 
-      <Reveal index={3}>
+      {/* Only when something is actually broken. A standing "0 files missing"
+          banner would just train the listener to ignore it. */}
+      {missing.length > 0 ? (
+        <Reveal index={3}>
+          <GlassSurface tone="surfaceStrong" style={styles.missingCard}>
+            <ElasticPressable
+              accessibilityRole="button"
+              accessibilityLabel={`${missing.length} file${missing.length === 1 ? "" : "s"} missing. Find them again.`}
+              onPress={() => router.push("/missing")}
+              style={styles.missingMain}>
+              <Icon name="alert" size={20} color={theme.danger} />
+              <View style={styles.missingCopy}>
+                <ThemedText type="bodyStrong" numberOfLines={1}>
+                  {missing.length} file{missing.length === 1 ? "" : "s"} missing
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                  Your history is still here — find them again
+                </ThemedText>
+              </View>
+              <Icon name="chevronRight" size={16} color={theme.textTertiary} />
+            </ElasticPressable>
+          </GlassSurface>
+        </Reveal>
+      ) : null}
+
+      <Reveal index={4}>
         <PrimaryButton label="Add audio" onPress={onImport} />
       </Reveal>
     </View>
@@ -250,6 +282,27 @@ export default function LibraryScreen() {
             iconSize={18}
             tone="glass"
             onPress={() => void playFolder(folder.key)}
+          />
+
+          {/* The folder's contents are not loaded on this screen, so the ids are
+              resolved on tap rather than per card. Missing files are left out,
+              matching the folder screen: a playlist is a promise to play
+              something later, and a file whose bytes are gone cannot keep it.
+
+              No subtitle, so the sheet counts what was actually resolved
+              instead of repeating the card's total and disagreeing with it. */}
+          <AddToPlaylistButton
+            title={folder.name}
+            ramp={ramp}
+            isBatch
+            size={40}
+            iconSize={18}
+            tone="glass"
+            resolveTrackIds={async () =>
+              (await LocalDBService.getTracksByFolder(folder.key))
+                .filter((track) => track.availability !== "missing")
+                .map((track) => track.id)
+            }
           />
         </GlassSurface>
       </Reveal>
@@ -303,10 +356,19 @@ export default function LibraryScreen() {
                     </View>
                   </ElasticPressable>
 
+                  <AddToPlaylistButton
+                    trackIds={[item.id]}
+                    title={item.title}
+                    ramp={paletteFor(item.contentHash)}
+                    size={34}
+                    iconSize={16}
+                    tone="ghost"
+                  />
+
                   <BouncyIconButton
                     name="chevronRight"
                     accessibilityLabel={`Details for ${item.title}`}
-                    size={36}
+                    size={34}
                     iconSize={16}
                     tone="ghost"
                     onPress={() => router.push(`/track/${item.id}`)}
@@ -368,6 +430,21 @@ const styles = StyleSheet.create({
   continueCopy: {
     flex: 1,
     gap: spacing.xxs,
+  },
+  missingCard: {
+    borderRadius: 22,
+  },
+  missingMain: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    padding: spacing.md,
+    minWidth: 0,
+  },
+  missingCopy: {
+    flex: 1,
+    gap: spacing.xxs,
+    minWidth: 0,
   },
   row: {
     flexDirection: "row",

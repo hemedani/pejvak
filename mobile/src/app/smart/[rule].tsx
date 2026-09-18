@@ -2,6 +2,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
+import { AddToPlaylistButton, useAddToPlaylist } from "@/components/add-to-playlist";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
@@ -34,6 +35,7 @@ export default function SmartPlaylistScreen() {
 
   const ruleId: SmartRuleId | null = isSmartRuleId(params.rule) ? params.rule : null;
   const [budgetSec, setBudgetSec] = useState<number>(DEFAULT_COMMUTE_BUDGET_SEC);
+  const openPicker = useAddToPlaylist();
 
   const { data, loading, refresh } = useSmartPlaylist(ruleId, budgetSec);
 
@@ -102,6 +104,20 @@ export default function SmartPlaylistScreen() {
                 ? "Loading…"
                 : undefined
           }
+          action={
+            picks.length > 0 ? (
+              <AddToPlaylistButton
+                trackIds={picks.map((pick) => pick.track.id)}
+                title={rule?.title ?? "Smart playlist"}
+                subtitle={`${picks.length} track${picks.length === 1 ? "" : "s"} from ${rule?.title ?? "this list"}`}
+                ramp={paletteFor(ruleId ?? "")}
+                isBatch
+                size={42}
+                iconSize={20}
+                tone="glass"
+              />
+            ) : null
+          }
         />
 
         {!rule ? (
@@ -140,6 +156,19 @@ export default function SmartPlaylistScreen() {
 
             <Reveal index={3}>
               <View style={styles.chipRow}>
+                <GlassChip
+                  label="Add to playlist"
+                  icon="playlistAdd"
+                  onPress={() =>
+                    void openPicker({
+                      trackIds: picks.map((pick) => pick.track.id),
+                      title: rule?.title ?? "Smart playlist",
+                      subtitle: `${picks.length} track${picks.length === 1 ? "" : "s"} from this list`,
+                      ramp: paletteFor(ruleId ?? ""),
+                      isBatch: true,
+                    })
+                  }
+                />
                 <GlassChip label="Save as playlist" onPress={() => void onSave()} />
               </View>
             </Reveal>
@@ -180,6 +209,15 @@ export default function SmartPlaylistScreen() {
                     <ThemedText type="caption" themeColor="textTertiary">
                       {pick.track.durationSec > 0 ? formatClock(pick.track.durationSec) : "—"}
                     </ThemedText>
+
+                    <AddToPlaylistButton
+                      trackIds={[pick.track.id]}
+                      title={pick.track.title}
+                      ramp={paletteFor(pick.track.contentHash)}
+                      size={34}
+                      iconSize={16}
+                      tone="ghost"
+                    />
                   </GlassSurface>
                 </Reveal>
               ))}

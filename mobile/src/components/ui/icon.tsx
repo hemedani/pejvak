@@ -36,8 +36,14 @@ const glyphs = {
   trash: { family: "ionicons", name: "trash-outline" },
   close: { family: "ionicons", name: "close" },
   check: { family: "ionicons", name: "checkmark" },
+  minus: { family: "ionicons", name: "remove" },
+  /** A file that is no longer where the library last saw it. */
+  alert: { family: "ionicons", name: "alert-circle-outline" },
   search: { family: "ionicons", name: "search-outline" },
   more: { family: "ionicons", name: "ellipsis-horizontal" },
+  /** The two "add to playlist" glyphs only exist in MaterialIcons. */
+  playlistAdd: { family: "material", name: "playlist-add" },
+  playlistAddCheck: { family: "material", name: "playlist-add-check" },
 
   library: { family: "ionicons", name: "library-outline" },
   folder: { family: "ionicons", name: "folder-outline" },

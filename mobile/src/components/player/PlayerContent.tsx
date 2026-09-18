@@ -20,6 +20,7 @@ import { GestureDetector, type PanGesture } from "react-native-gesture-handler";
 
 import { AnnotationList } from "@/components/annotation-list";
 import { AnnotationMarker } from "@/components/annotation-marker";
+import { AddToPlaylistChip } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { CrossfadeArtwork } from "@/components/motion/CrossfadeArtwork";
 import { Scrubber } from "@/components/player/Scrubber";
@@ -39,6 +40,8 @@ const BODY_REVEAL_START = 0.42;
 export type PlayerContentProps = {
   /** 0 = collapsed over the mini-player, 1 = full screen. */
   reveal: SharedValue<number>;
+  /** The library row being played; null before a track resolves. */
+  trackId: string | null;
   title: string;
   artist: string | null;
   artworkUrl: string | null;
@@ -75,6 +78,7 @@ export type PlayerContentProps = {
 
 export function PlayerContent({
   reveal,
+  trackId,
   title,
   artist,
   artworkUrl,
@@ -237,6 +241,11 @@ export function PlayerContent({
               onPress={onOpenSleepTimer}
             />
             <GlassChip label="Note" icon="add" onPress={onAddNote} />
+            {/* Only once a library row has resolved — before that there is no id
+                to hand to the picker. */}
+            {trackId ? (
+              <AddToPlaylistChip trackIds={[trackId]} title={title} ramp={ramp} />
+            ) : null}
           </View>
 
           {error ? (

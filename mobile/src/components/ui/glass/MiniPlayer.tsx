@@ -118,6 +118,7 @@ export function MiniPlayer() {
       pointerEvents="box-none"
       style={[styles.host, { bottom: insets.bottom + TAB_BAR_CLEARANCE }, animatedStyle]}>
       <MiniPlayerRow
+        trackId={trackId}
         title={title}
         artist={artist}
         artworkUrl={artworkUrl}
