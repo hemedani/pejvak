@@ -2,7 +2,8 @@ import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
 import { readAsStringAsync } from "expo-file-system/legacy";
 
-import { readAudioTags, type AudioTags } from "@/lib/audioTags";
+import { readAudioTagBundle, type AudioTagBundle } from "@/lib/audioTags";
+import { decodeBase64 } from "@/lib/base64";
 import {
   CONTENT_HASH_CHUNK_BYTES,
   computeContentHashFromChunk,
@@ -15,39 +16,19 @@ const sha256: Sha256 = async (data) => {
   return new Uint8Array(digest);
 };
 
-/**
- * Base64 decoder that does not depend on `atob` (availability varies across
- * Hermes builds). Only used to turn the bounded base64 file read back into bytes.
- */
-function decodeBase64(input: string): Uint8Array {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-  const lookup = new Int16Array(128);
-  for (let index = 0; index < alphabet.length; index++) {
-    lookup[alphabet.charCodeAt(index)] = index;
-  }
-
-  const clean = input.replace(/=+$/, "");
-  const bytes: number[] = [];
-  let buffer = 0;
-  let bits = 0;
-
-  for (let index = 0; index < clean.length; index++) {
-    buffer = (buffer << 6) | lookup[clean.charCodeAt(index)];
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      bytes.push((buffer >> bits) & 0xff);
-    }
-  }
-
-  return new Uint8Array(bytes);
-}
-
 export type FileHashResult = {
   contentHash: string;
   fileSizeBytes: number;
   /** ID3v2 tags read from the very same buffer. Empty when the file has none. */
-  tags: AudioTags;
+  tags: AudioTagBundle["tags"];
+  /**
+   * The rest of what the same tag held — extended frames and the embedded cover
+   * picture. Free, because it comes out of the buffer the hash already read.
+   *
+   * A picture that overruns the 1 MB window is reported as absent rather than
+   * truncated; `ArtworkService` re-reads the tag in full for those.
+   */
+  bundle: AudioTagBundle;
 };
 
 /**
@@ -78,5 +59,6 @@ export async function computeFileContentHash(
   });
   const chunk = decodeBase64(base64);
   const contentHash = await computeContentHashFromChunk(chunk, fileSizeBytes, sha256);
-  return { contentHash, fileSizeBytes, tags: readAudioTags(chunk) };
+  const bundle = readAudioTagBundle(chunk);
+  return { contentHash, fileSizeBytes, tags: bundle.tags, bundle };
 }
