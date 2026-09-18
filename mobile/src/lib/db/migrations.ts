@@ -179,6 +179,18 @@ export const MIGRATIONS: Migration[] = [
       )`,
     ],
   },
+  {
+    // Cover art extraction. `artwork_url` has existed since v1 but was never
+    // written, because nothing read the picture out of the file.
+    //
+    // `artwork_checked_at` is what keeps the backfill finite. Without it, a file
+    // that simply has no embedded picture is indistinguishable from one that has
+    // not been looked at yet, so every pass would re-read the same rows forever.
+    // It is deliberately *not* part of `LocalTrack`: it schedules work, and no
+    // screen has any use for it.
+    version: 7,
+    up: [`ALTER TABLE tracks ADD COLUMN artwork_checked_at INTEGER`],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

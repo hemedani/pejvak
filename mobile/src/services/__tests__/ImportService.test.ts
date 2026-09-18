@@ -15,6 +15,8 @@ jest.mock("@/services/LocalDBService", () => ({
     insertTrack: jest.fn(),
     updateTrackLocation: jest.fn(),
     setTrackAvailability: jest.fn(),
+    setTrackArtwork: jest.fn(),
+    markTrackArtworkChecked: jest.fn(),
     upsertFolder: jest.fn(),
   },
 }));
@@ -36,6 +38,8 @@ const getTrackBySourceUri = jest.mocked(LocalDBService.getTrackBySourceUri);
 const insertTrack = jest.mocked(LocalDBService.insertTrack);
 const updateTrackLocation = jest.mocked(LocalDBService.updateTrackLocation);
 const setTrackAvailability = jest.mocked(LocalDBService.setTrackAvailability);
+const setTrackArtwork = jest.mocked(LocalDBService.setTrackArtwork);
+const markTrackArtworkChecked = jest.mocked(LocalDBService.markTrackArtworkChecked);
 const upsertFolder = jest.mocked(LocalDBService.upsertFolder);
 const isLocationReachable = jest.mocked(FileLocationService.isLocationReachable);
 
@@ -94,7 +98,7 @@ function discovered(overrides: Partial<DiscoveredFile> = {}): DiscoveredFile {
 }
 
 function identified(
-  overrides: { contentHash?: string; file?: DiscoveredFile } = {},
+  overrides: Partial<IdentifiedFile> = {},
 ): IdentifiedFile {
   const file = overrides.file ?? discovered();
   return {
@@ -102,6 +106,9 @@ function identified(
     contentHash: overrides.contentHash ?? "hash-chapter-one",
     fileSizeBytes: file.sizeBytes ?? 0,
     tags: EMPTY_AUDIO_TAGS,
+    picture: null,
+    tagTruncated: false,
+    ...overrides,
   };
 }
 
@@ -125,6 +132,11 @@ beforeEach(() => {
   upsertFolder.mockResolvedValue(undefined);
   updateTrackLocation.mockResolvedValue(undefined);
   setTrackAvailability.mockResolvedValue(undefined);
+  // Cover-art persistence is a no-op by default: the import path chains
+  // `.catch()` onto it, so a bare `jest.fn()` returning `undefined` would throw
+  // on a call that is meant to be incidental to the import.
+  setTrackArtwork.mockResolvedValue(undefined);
+  markTrackArtworkChecked.mockResolvedValue(undefined);
   getTrackBySourceUri.mockResolvedValue(null);
   insertTrack.mockImplementation(async (input) =>
     track({ id: "new-id", contentHash: input.contentHash, availability: "present" }),

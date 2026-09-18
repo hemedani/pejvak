@@ -292,7 +292,8 @@ async function getSessionsForHistory(limit = 200): Promise<HistoryItem[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<HistoryRow>(
     `SELECT s.*, t.title AS track_title, t.author AS track_author,
-            t.content_hash AS track_content_hash, t.is_audiobook AS track_is_audiobook
+            t.content_hash AS track_content_hash, t.is_audiobook AS track_is_audiobook,
+            t.artwork_url AS track_artwork_url
      FROM sessions s
      JOIN tracks t ON t.id = s.track_id
      WHERE s.deleted_at IS NULL
@@ -308,6 +309,7 @@ async function getSessionsForHistory(limit = 200): Promise<HistoryItem[]> {
       author: row.track_author,
       contentHash: row.track_content_hash,
       isAudiobook: row.track_is_audiobook === 1,
+      artworkUrl: row.track_artwork_url,
     },
   }));
 }
@@ -939,6 +941,7 @@ async function getFolderSummaries(): Promise<FolderSummary[]> {
     track_count: number;
     finished_count: number;
     total_duration_sec: number;
+    artwork_url: string | null;
   }>(
     `SELECT
        t.folder_key AS key,
@@ -948,7 +951,11 @@ async function getFolderSummaries(): Promise<FolderSummary[]> {
        f.last_played_at AS last_played_at,
        COUNT(*) AS track_count,
        SUM(CASE WHEN done.track_id IS NULL THEN 0 ELSE 1 END) AS finished_count,
-       COALESCE(SUM(t.duration_sec), 0) AS total_duration_sec
+       COALESCE(SUM(t.duration_sec), 0) AS total_duration_sec,
+       (SELECT a.artwork_url FROM tracks a
+         WHERE a.folder_key = t.folder_key AND a.artwork_url IS NOT NULL
+         ORDER BY a.track_number IS NULL, a.track_number, a.title COLLATE NOCASE
+         LIMIT 1) AS artwork_url
      FROM tracks t
      LEFT JOIN folders f ON f.key = t.folder_key
      LEFT JOIN (
@@ -969,6 +976,7 @@ async function getFolderSummaries(): Promise<FolderSummary[]> {
     trackCount: row.track_count,
     finishedCount: row.finished_count,
     totalDurationSec: row.total_duration_sec,
+    artworkUrl: row.artwork_url,
   }));
 }
 
@@ -1095,7 +1103,9 @@ async function setTrackAvailability(
  * at import and must stay equal.
  *
  * `availability` is set back to `present` in the same statement, so a relink can
- * never half-succeed.
+ * never half-succeed. `artwork_checked_at` is cleared for the same reason: the
+ * file at the new location has never been read, and its cover may differ from
+ * whatever the row was examined for before.
  */
 async function updateTrackLocation(
   id: string,
@@ -1112,7 +1122,8 @@ async function updateTrackLocation(
   await db.runAsync(
     `UPDATE tracks
      SET file_uri = ?, source_uri = ?, source_path = ?, source_size = ?, source_mtime = ?,
-         folder_key = ?, folder_name = ?, availability = 'present', updated_at = ?
+         folder_key = ?, folder_name = ?, availability = 'present',
+         artwork_checked_at = NULL, updated_at = ?
      WHERE id = ?`,
     [
       input.sourceUri,
@@ -1126,6 +1137,71 @@ async function updateTrackLocation(
       id,
     ],
   );
+}
+
+/**
+ * Records where a track's extracted cover art was written.
+ *
+ * Kept separate from `insertTrack` because extraction happens *after* the row
+ * exists: it reads the file, and an import must not fail or slow down because a
+ * picture could not be pulled out. A null `artwork_url` simply means the tile
+ * keeps its gradient.
+ *
+ * `artwork_checked_at` is stamped in the same statement so a successful
+ * extraction also takes the row out of the backfill's worklist.
+ */
+async function setTrackArtwork(id: string, artworkUrl: string): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    "UPDATE tracks SET artwork_url = ?, artwork_checked_at = ?, updated_at = ? WHERE id = ?",
+    [artworkUrl, now, now, id],
+  );
+}
+
+/**
+ * Records that a track's file was read and carries no picture.
+ *
+ * Without this the backfill could never tell "no artwork here" from "not looked
+ * at yet", and would re-read the same files on every pass.
+ */
+async function markTrackArtworkChecked(id: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("UPDATE tracks SET artwork_checked_at = ? WHERE id = ?", [Date.now(), id]);
+}
+
+/**
+ * Tracks that are playable but have not been examined for cover art yet — the
+ * backfill's worklist.
+ *
+ * Only rows never checked are returned, and rows flagged `missing` are excluded
+ * because reading them would fail; those are the relink screen's business.
+ */
+async function getTracksMissingArtwork(limit: number): Promise<LocalTrack[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<TrackRow>(
+    `SELECT * FROM tracks
+     WHERE artwork_url IS NULL
+       AND artwork_checked_at IS NULL
+       AND availability = 'present'
+       AND COALESCE(file_uri, source_uri) IS NOT NULL
+     ORDER BY created_at ASC
+     LIMIT ?`,
+    [limit],
+  );
+  return rows.map(mapTrack);
+}
+
+async function countTracksMissingArtwork(): Promise<number> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ total: number }>(
+    `SELECT COUNT(*) AS total FROM tracks
+     WHERE artwork_url IS NULL
+       AND artwork_checked_at IS NULL
+       AND availability = 'present'
+       AND COALESCE(file_uri, source_uri) IS NOT NULL`,
+  );
+  return row?.total ?? 0;
 }
 
 /**
@@ -1309,6 +1385,10 @@ export const LocalDBService = {
   upsertFolder,
   touchFolderPlayed,
   setTrackAvailability,
+  setTrackArtwork,
+  markTrackArtworkChecked,
+  getTracksMissingArtwork,
+  countTracksMissingArtwork,
   updateTrackLocation,
   getSourceSignatures,
 };

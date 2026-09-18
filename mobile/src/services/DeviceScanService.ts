@@ -3,7 +3,7 @@ import { getInfoAsync, readDirectoryAsync, StorageAccessFramework } from "expo-f
 import * as MediaLibrary from "expo-media-library/legacy";
 import { Platform } from "react-native";
 
-import type { AudioTags } from "@/lib/audioTags";
+import type { AudioTags, EmbeddedPicture } from "@/lib/audioTags";
 import { isAudioFileName } from "@/lib/audioFormats";
 import {
   deriveFolderKey,
@@ -57,6 +57,14 @@ export type IdentifiedFile = {
   contentHash: string;
   fileSizeBytes: number;
   tags: AudioTags;
+  /**
+   * Cover art found in the same buffer the hash was computed from, so it costs
+   * nothing here. Null when the file has none — or when its tag ran past the
+   * 1 MB that was read, which `tagTruncated` distinguishes.
+   */
+  picture: EmbeddedPicture | null;
+  /** True when the ID3 tag extended past the window, so `picture` proves nothing. */
+  tagTruncated: boolean;
 };
 
 export type IdentifyOutcome = {
@@ -396,6 +404,8 @@ export async function identifyFiles(
         contentHash: result.contentHash,
         fileSizeBytes: result.fileSizeBytes,
         tags: result.tags,
+        picture: result.bundle.picture,
+        tagTruncated: result.bundle.truncated,
       });
     } catch (error) {
       failed.push({

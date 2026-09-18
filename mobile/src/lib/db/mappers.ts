@@ -95,6 +95,7 @@ export type HistoryRow = SessionRow & {
   track_content_hash: string;
   /** SQLite has no boolean type; 0 or 1. */
   track_is_audiobook: number;
+  track_artwork_url: string | null;
 };
 
 export type PlaylistRow = {

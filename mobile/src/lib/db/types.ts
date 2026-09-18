@@ -74,6 +74,12 @@ export type FolderSummary = LocalFolder & {
   trackCount: number;
   finishedCount: number;
   totalDurationSec: number;
+  /**
+   * Cover art of the folder's first track, so a folder card shows the book it
+   * holds rather than a letter. Null when nothing inside has artwork — a folder
+   * has no picture of its own, and inventing one would be a lie.
+   */
+  artworkUrl: string | null;
 };
 
 export type LocalSession = {

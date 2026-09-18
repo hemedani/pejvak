@@ -26,6 +26,20 @@ import { SettingsService } from "@/services/SettingsService";
 type RegisterTrackDetails = BackendActRequest<"main", "track", "registerTrack">["details"];
 type SyncLocalDataDetails = BackendActRequest<"main", "track", "syncLocalData">["details"];
 
+/**
+ * Cover art extracted from a file lives in this device's private storage, so its
+ * URI (`file:///data/user/0/…`) means nothing to the server or to a second
+ * device. Sending it would fill `artworkUrl` on the backend with a path that
+ * only resolves on the phone that uploaded it.
+ *
+ * Only a real remote URL is worth syncing. Each device extracts its own art from
+ * the audio file it has, keyed on the content hash that already identifies the
+ * track — so the picture follows the file rather than the network.
+ */
+function isRemoteArtwork(url: string | null): url is string {
+  return url !== null && (url.startsWith("http://") || url.startsWith("https://"));
+}
+
 function registerTrack(track: LocalTrack): Promise<RegisterTrackResult> {
   const details: RegisterTrackDetails = {
     set: {
@@ -38,7 +52,7 @@ function registerTrack(track: LocalTrack): Promise<RegisterTrackResult> {
       ...(track.mimeType ? { mimeType: track.mimeType } : {}),
       ...(track.author ? { author: track.author } : {}),
       ...(track.narrator ? { narrator: track.narrator } : {}),
-      ...(track.artworkUrl ? { artworkUrl: track.artworkUrl } : {}),
+      ...(isRemoteArtwork(track.artworkUrl) ? { artworkUrl: track.artworkUrl } : {}),
     },
     get: { _id: 1, title: 1, contentHash: 1 },
   };

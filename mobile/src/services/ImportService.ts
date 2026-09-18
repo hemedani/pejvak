@@ -2,6 +2,7 @@ import { mimeTypeForFileName } from "@/lib/audioFormats";
 import type { LocalTrack } from "@/lib/db/types";
 import { resolveTrackMetadata } from "@/lib/importMetadata";
 import type { LibraryEntry } from "@/lib/scanPlan";
+import { saveImportedArtwork } from "@/services/ArtworkService";
 import type { FolderGrant, IdentifiedFile } from "@/services/DeviceScanService";
 import { isLocationReachable } from "@/services/FileLocationService";
 import { LocalDBService } from "@/services/LocalDBService";
@@ -122,6 +123,11 @@ export async function importIdentifiedFiles(
           folderKey: entry.file.folderKey,
           folderName: entry.file.folderName,
         });
+        // The row's location changed, so its cover has to be re-read from the
+        // file that is actually there now.
+        await saveImportedArtwork(existing.id, entry.picture, entry.tagTruncated).catch(
+          () => undefined,
+        );
         relinked += 1;
       } else if (existing) {
         // The scan plan could not know this without hashing; the hash is the
@@ -162,6 +168,14 @@ export async function importIdentifiedFiles(
           folderName: entry.file.folderName,
         });
         imported.push(track);
+
+        // The cover came out of the buffer the hash was computed from, so this
+        // costs no extra read. It must never be able to fail an import, hence
+        // the swallowed rejection: a track with no artwork is a tile with a
+        // gradient, and that is a fine outcome.
+        await saveImportedArtwork(track.id, entry.picture, entry.tagTruncated).catch(
+          () => undefined,
+        );
 
         if (previous && previous.contentHash !== entry.contentHash) {
           // The file was replaced since we last saw it. The old row's history is
