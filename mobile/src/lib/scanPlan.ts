@@ -11,7 +11,7 @@
  */
 
 import { naturalCompare } from "@/lib/mediaFolders";
-import type { TrackSource } from "@/lib/db/types";
+import type { TrackAvailability, TrackSource } from "@/lib/db/types";
 
 export type DiscoveredFile = {
   /** Stable identifier for the source location: a MediaStore asset id or a SAF document URI. */
@@ -37,12 +37,15 @@ export type DiscoveredFile = {
  * - `changed` — already imported from this location but the file differs; re-identify.
  * - `duplicate` — a different location holding content we already have (or that
  *   another candidate in this same scan already covers).
+ * - `relink` — looks like a library track whose file is *gone*. Not a duplicate:
+ *   the same content at a new location is the file that moved, and re-pointing
+ *   the existing row is what saves its history and annotations.
  */
-export type ScanStatus = "new" | "known" | "changed" | "duplicate";
+export type ScanStatus = "new" | "known" | "changed" | "duplicate" | "relink";
 
 export type ScanCandidate = DiscoveredFile & {
   status: ScanStatus;
-  /** For `duplicate`, what it duplicates: a library content hash or a sibling `sourceId`. */
+  /** For `duplicate` and `relink`, what it matches: a content hash or a sibling `sourceId`. */
   duplicateOf: string | null;
 };
 
@@ -52,6 +55,7 @@ export type ScanSummary = {
   known: number;
   changed: number;
   duplicate: number;
+  relink: number;
   /** How many files phase 2 will have to open. This is the cost the plan exists to reduce. */
   identifyCount: number;
 };
@@ -69,6 +73,13 @@ export type LibraryEntry = {
   sourceMtime: number | null;
   title: string;
   durationSec: number;
+  /**
+   * Whether the file is still where we last saw it, as last *written* — the
+   * planner also accepts a caller-verified `goneLocations` entry as evidence,
+   * because this flag is only set by something that already looked. See
+   * `isLocationGone`.
+   */
+  availability: TrackAvailability;
 };
 
 /**
@@ -120,6 +131,81 @@ export function isSameFileName(left: string, right: string): boolean {
 }
 
 /**
+ * Whether a candidate has to have its bytes read before anything can be decided.
+ *
+ * One predicate, used both to size the phase-2 cost and to select the files that
+ * pass actually opens — so the preview's "identifying N files" can never
+ * disagree with how many are opened.
+ *
+ * A `relink` is included deliberately: the plan matched it on title and
+ * duration, which is far too weak a signal to re-point a row on. Only the hash
+ * settles it.
+ */
+export function needsIdentification(status: ScanStatus): boolean {
+  return status === "new" || status === "changed" || status === "relink";
+}
+
+/** No recorded locations are known to be gone. */
+const NO_GONE_LOCATIONS: ReadonlySet<string> = new Set();
+
+/**
+ * Whether a library row's own file is known to be gone.
+ *
+ * Two sources of the same fact: `availability` when something already wrote it
+ * (a play failure, or a replace at the same URI), and `goneLocations` when the
+ * caller went and looked. Either is enough, and neither is a guess.
+ */
+function isLocationGone(entry: LibraryEntry, goneLocations: ReadonlySet<string>): boolean {
+  return (
+    entry.availability === "missing" ||
+    (entry.sourceUri !== null && goneLocations.has(entry.sourceUri))
+  );
+}
+
+/**
+ * The library rows whose recorded location is worth checking, given what the
+ * scan found.
+ *
+ * Narrowed deliberately: asking the filesystem about every row would be
+ * thousands of stats to resolve a handful of duplicates, and only a row whose
+ * title a discovered file could match is ever a candidate for relinking.
+ *
+ * Rows already flagged `missing` are left out — the answer is known, and a stat
+ * would only confirm it. So are rows with no recorded URI, which have nothing to
+ * check and are already treated as gone by `isLocationGone`.
+ *
+ * Pure, so the caller can size the work before doing it and the rule stays
+ * testable without a device.
+ */
+export function libraryEntriesToVerify(
+  files: DiscoveredFile[],
+  library: LibraryEntry[],
+): LibraryEntry[] {
+  const discoveredTitles = new Set<string>();
+  for (const file of files) {
+    const key = normaliseTitle(file.fileName);
+    if (key.length > 0) {
+      discoveredTitles.add(key);
+    }
+  }
+
+  const seenUris = new Set<string>();
+  const result: LibraryEntry[] = [];
+  for (const entry of library) {
+    if (!entry.sourceUri || entry.availability === "missing" || seenUris.has(entry.sourceUri)) {
+      continue;
+    }
+    const key = normaliseTitle(entry.title);
+    if (key.length === 0 || !discoveredTitles.has(key)) {
+      continue;
+    }
+    seenUris.add(entry.sourceUri);
+    result.push(entry);
+  }
+  return result;
+}
+
+/**
  * Normalises a source timestamp to milliseconds.
  *
  * The two scan sources disagree: `expo-file-system` reports modification time in
@@ -148,8 +234,18 @@ function compareCandidates(left: ScanCandidate, right: ScanCandidate): number {
  * Builds the plan. `files` may arrive in any order and may contain repeats from
  * overlapping scan sources (a granted folder that the media index also covers),
  * which the sibling pass below collapses.
+ *
+ * `goneLocations` holds the URIs the caller found to be unreachable — see
+ * `libraryEntriesToVerify` for which rows to ask about. It is an argument rather
+ * than a lookup so this stays pure and testable without a device; a scan that
+ * passes nothing simply cannot tell a moved file from a duplicate, and says so
+ * by classifying both as `duplicate`.
  */
-export function buildScanPlan(files: DiscoveredFile[], library: LibraryEntry[]): ScanPlan {
+export function buildScanPlan(
+  files: DiscoveredFile[],
+  library: LibraryEntry[],
+  goneLocations: ReadonlySet<string> = NO_GONE_LOCATIONS,
+): ScanPlan {
   const bySourceUri = new Map<string, LibraryEntry>();
   const libraryByTitle = new Map<string, LibraryEntry[]>();
 
@@ -210,15 +306,20 @@ export function buildScanPlan(files: DiscoveredFile[], library: LibraryEntry[]):
           ? sibling
           : undefined;
 
-      const libraryMatch = (titleKey.length > 0 ? (libraryByTitle.get(titleKey) ?? []) : []).find(
-        (entry) => isNearDuplicate({ title: entry.title, durationSec: entry.durationSec }, subject),
-      );
+      // A near-duplicate whose file is *gone* is preferred over one that is
+      // still present: relinking it is the only outcome that restores history,
+      // whereas the present copy would earn a no-op.
+      const nearDuplicates = (
+        titleKey.length > 0 ? (libraryByTitle.get(titleKey) ?? []) : []
+      ).filter((entry) => isNearDuplicate({ title: entry.title, durationSec: entry.durationSec }, subject));
+      const libraryMatch =
+        nearDuplicates.find((entry) => isLocationGone(entry, goneLocations)) ?? nearDuplicates[0];
 
       if (siblingMatch) {
         status = "duplicate";
         duplicateOf = siblingMatch.sourceId;
       } else if (libraryMatch) {
-        status = "duplicate";
+        status = isLocationGone(libraryMatch, goneLocations) ? "relink" : "duplicate";
         duplicateOf = libraryMatch.contentHash;
       } else {
         status = "new";
@@ -241,11 +342,12 @@ export function buildScanPlan(files: DiscoveredFile[], library: LibraryEntry[]):
     known: 0,
     changed: 0,
     duplicate: 0,
+    relink: 0,
     identifyCount: 0,
   };
   for (const candidate of candidates) {
     summary[candidate.status] += 1;
-    if (candidate.status === "new" || candidate.status === "changed") {
+    if (needsIdentification(candidate.status)) {
       summary.identifyCount += 1;
     }
   }

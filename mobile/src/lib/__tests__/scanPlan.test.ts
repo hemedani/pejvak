@@ -2,6 +2,8 @@ import {
   buildScanPlan,
   isNearDuplicate,
   isSameFileName,
+  libraryEntriesToVerify,
+  needsIdentification,
   normaliseTitle,
   type DiscoveredFile,
   type LibraryEntry,
@@ -29,6 +31,9 @@ function entry(overrides: Partial<LibraryEntry> & { contentHash: string; title: 
     sourceSize: null,
     sourceMtime: null,
     durationSec: 600,
+    // Defaults to present, because the interesting cases below are the ones that
+    // opt *out* of it: a missing entry is what turns a duplicate into a relink.
+    availability: "present",
     ...overrides,
   };
 }
@@ -69,6 +74,171 @@ describe("isSameFileName", () => {
   it("ignores case and surrounding whitespace", () => {
     expect(isSameFileName("Intro.MP3", " intro.mp3 ")).toBe(true);
     expect(isSameFileName("a.mp3", "b.mp3")).toBe(false);
+  });
+});
+
+describe("needsIdentification", () => {
+  it("covers exactly the statuses whose bytes have to be read", () => {
+    // One predicate for both the preview's "identifying N files" and the pass
+    // that opens them, so the two can never disagree.
+    expect(needsIdentification("new")).toBe(true);
+    expect(needsIdentification("changed")).toBe(true);
+    expect(needsIdentification("relink")).toBe(true);
+    expect(needsIdentification("known")).toBe(false);
+    expect(needsIdentification("duplicate")).toBe(false);
+  });
+});
+
+describe("libraryEntriesToVerify", () => {
+  it("asks only about rows a discovered file could match", () => {
+    // The whole point of the narrowing: a stat is cheap but not free, and only
+    // a row whose title could match can ever be a relink candidate.
+    const entries = libraryEntriesToVerify(
+      [file({ sourceId: "1", fileName: "Intro.mp3" })],
+      [
+        entry({ contentHash: "h1", title: "Intro", sourceUri: "content://intro" }),
+        entry({ contentHash: "h2", title: "Unrelated", sourceUri: "content://other" }),
+      ],
+    );
+
+    expect(entries.map((item) => item.contentHash)).toEqual(["h1"]);
+  });
+
+  it("skips rows already known to be missing", () => {
+    const entries = libraryEntriesToVerify(
+      [file({ sourceId: "1", fileName: "Intro.mp3" })],
+      [
+        entry({
+          contentHash: "h1",
+          title: "Intro",
+          sourceUri: "content://intro",
+          availability: "missing",
+        }),
+      ],
+    );
+
+    expect(entries).toEqual([]);
+  });
+
+  it("skips rows with no recorded location", () => {
+    // Nothing to stat, and `isLocationGone` already treats a null URI as gone.
+    const entries = libraryEntriesToVerify(
+      [file({ sourceId: "1", fileName: "Intro.mp3" })],
+      [entry({ contentHash: "h1", title: "Intro", sourceUri: null })],
+    );
+
+    expect(entries).toEqual([]);
+  });
+
+  it("asks about a shared location once", () => {
+    const entries = libraryEntriesToVerify(
+      [file({ sourceId: "1", fileName: "Intro.mp3" })],
+      [
+        entry({ contentHash: "h1", title: "Intro", sourceUri: "content://same" }),
+        entry({ contentHash: "h2", title: "Intro", sourceUri: "content://same" }),
+      ],
+    );
+
+    expect(entries).toHaveLength(1);
+  });
+
+  it("matches on the folded title, not the raw one", () => {
+    const entries = libraryEntriesToVerify(
+      [file({ sourceId: "1", fileName: "03 - Thermodynamics.mp3" })],
+      [entry({ contentHash: "h1", title: "Thermodynamics", sourceUri: "content://t" })],
+    );
+
+    expect(entries).toHaveLength(1);
+  });
+
+  it("asks about nothing when the scan found nothing", () => {
+    expect(
+      libraryEntriesToVerify([], [entry({ contentHash: "h1", title: "Intro", sourceUri: "content://i" })]),
+    ).toEqual([]);
+  });
+});
+
+describe("buildScanPlan — verified-gone locations", () => {
+  it("relinks a file whose recorded location the caller found gone", () => {
+    // What a moved folder actually looks like: the row still says `present`,
+    // because nothing has looked since it moved. The caller's answer is the
+    // evidence, and without it this same input reads as a duplicate.
+    const plan = buildScanPlan(
+      [file({ sourceId: "9", fileName: "03 - Thermodynamics.mp3", durationSec: 605 })],
+      [
+        entry({
+          contentHash: "hash-t",
+          title: "Thermodynamics",
+          durationSec: 600,
+          sourceUri: "content://old",
+        }),
+      ],
+      new Set(["content://old"]),
+    );
+
+    expect(plan.candidates[0].status).toBe("relink");
+    expect(plan.candidates[0].duplicateOf).toBe("hash-t");
+    expect(plan.summary.identifyCount).toBe(1);
+  });
+
+  it("still calls it a duplicate when the recorded location is fine", () => {
+    const plan = buildScanPlan(
+      [file({ sourceId: "9", fileName: "03 - Thermodynamics.mp3", durationSec: 605 })],
+      [
+        entry({
+          contentHash: "hash-t",
+          title: "Thermodynamics",
+          durationSec: 600,
+          sourceUri: "content://live",
+        }),
+      ],
+      new Set(["content://elsewhere"]),
+    );
+
+    expect(plan.candidates[0].status).toBe("duplicate");
+  });
+
+  it("prefers a verified-gone match over a present one", () => {
+    const plan = buildScanPlan(
+      [file({ sourceId: "9", fileName: "Intro.mp3", durationSec: 600 })],
+      [
+        entry({
+          contentHash: "hash-live",
+          title: "Intro",
+          durationSec: 600,
+          sourceUri: "content://live",
+        }),
+        entry({
+          contentHash: "hash-gone",
+          title: "Intro",
+          durationSec: 600,
+          sourceUri: "content://old",
+        }),
+      ],
+      new Set(["content://old"]),
+    );
+
+    expect(plan.candidates[0].duplicateOf).toBe("hash-gone");
+    expect(plan.candidates[0].status).toBe("relink");
+  });
+
+  it("classifies nothing as a relink without the caller's evidence", () => {
+    // No `goneLocations` means the planner cannot tell a moved file from a
+    // second copy. It says duplicate rather than guessing at a relink, because
+    // guessing wrong moves a row that was never lost.
+    const plan = buildScanPlan(
+      [file({ sourceId: "9", fileName: "Intro.mp3", durationSec: 600 })],
+      [
+        entry({
+          contentHash: "hash-a",
+          title: "Intro",
+          durationSec: 600,
+          sourceUri: "content://old",
+        }),
+      ],
+    );
+
+    expect(plan.candidates[0].status).toBe("duplicate");
   });
 });
 
@@ -163,6 +333,103 @@ describe("buildScanPlan", () => {
     expect(plan.candidates[0].status).toBe("new");
   });
 
+  it("calls a moved file a relink rather than a duplicate", () => {
+    const plan = buildScanPlan(
+      [file({ sourceId: "9", fileName: "03 - Thermodynamics.mp3", durationSec: 605 })],
+      [
+        entry({
+          contentHash: "hash-t",
+          title: "Thermodynamics",
+          durationSec: 600,
+          availability: "missing",
+        }),
+      ],
+    );
+
+    expect(plan.candidates[0].status).toBe("relink");
+    expect(plan.candidates[0].duplicateOf).toBe("hash-t");
+  });
+
+  it("still identifies a relink, because title and duration cannot prove it", () => {
+    // The one status that is both a match and an action. Skipping the hash here
+    // would re-point a row on a filename, which is exactly the guess that loses
+    // someone's audio.
+    const plan = buildScanPlan(
+      [file({ sourceId: "9", fileName: "Intro.mp3", durationSec: 600 })],
+      [entry({ contentHash: "hash-t", title: "Intro", durationSec: 600, availability: "missing" })],
+    );
+
+    expect(plan.summary.identifyCount).toBe(1);
+  });
+
+  it("prefers the missing copy when the library holds both", () => {
+    // Same title and length twice: one file still on disk, one gone. The gone
+    // one is the only one worth re-pointing — the present copy earns a no-op
+    // while the missing copy is the one holding listening history.
+    const plan = buildScanPlan(
+      [file({ sourceId: "9", fileName: "Intro.mp3", durationSec: 600 })],
+      [
+        entry({
+          contentHash: "hash-present",
+          title: "Intro",
+          durationSec: 600,
+          availability: "present",
+        }),
+        entry({
+          contentHash: "hash-missing",
+          title: "Intro",
+          durationSec: 600,
+          availability: "missing",
+        }),
+      ],
+    );
+
+    expect(plan.candidates[0].status).toBe("relink");
+    expect(plan.candidates[0].duplicateOf).toBe("hash-missing");
+  });
+
+  it("does not relink twice when a moved file is reachable through two sources", () => {
+    // The media index and a folder grant can both surface the same file. The
+    // first discovery relinks; the second is a double-discovery of it.
+    const plan = buildScanPlan(
+      [
+        file({ sourceId: "1", fileName: "gone.mp3", durationSec: 300 }),
+        file({ sourceId: "2", fileName: "gone.mp3", durationSec: 300 }),
+      ],
+      [entry({ contentHash: "hash-gone", title: "gone", durationSec: 300, availability: "missing" })],
+    );
+
+    expect(plan.candidates.map((candidate) => candidate.status)).toEqual(["relink", "duplicate"]);
+    expect(plan.summary.relink).toBe(1);
+  });
+
+  it("counts relinks alongside every other status", () => {
+    const plan = buildScanPlan(
+      [
+        file({ sourceId: "1", fileName: "a.mp3" }),
+        file({ sourceId: "2", fileName: "gone.mp3", durationSec: 300 }),
+      ],
+      [
+        entry({
+          contentHash: "hash-gone",
+          title: "gone",
+          durationSec: 300,
+          availability: "missing",
+        }),
+      ],
+    );
+
+    expect(plan.summary).toEqual({
+      total: 2,
+      new: 1,
+      known: 0,
+      changed: 0,
+      duplicate: 0,
+      relink: 1,
+      identifyCount: 2,
+    });
+  });
+
   it("collapses the same file discovered through two sources", () => {
     const plan = buildScanPlan(
       [
@@ -205,6 +472,7 @@ describe("buildScanPlan", () => {
       known: 1,
       changed: 1,
       duplicate: 1,
+      relink: 0,
       identifyCount: 2,
     });
   });

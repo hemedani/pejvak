@@ -14,6 +14,7 @@ import {
   type SessionTrackerState,
 } from "@/lib/sessionTracking";
 import { LocalDBService } from "@/services/LocalDBService";
+import { isLocationReachable } from "@/services/FileLocationService";
 import { syncPending } from "@/services/SyncService";
 import { usePlayerStore, type PlayerPatch } from "@/store/playerStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -41,6 +42,14 @@ let configured = false;
 let lockScreenFailed = IS_EXPO_GO;
 let pendingSeekSec: number | null = null;
 let nextSessionStartSec = 0;
+
+/**
+ * Tracks already reported as unreachable, so a player that keeps failing does
+ * not re-run the check on every status tick. An id is dropped again if the file
+ * turns out to be reachable after all, so a genuinely later deletion is still
+ * caught.
+ */
+const reportedUnreachable = new Set<string>();
 
 function patch(partial: PlayerPatch) {
   usePlayerStore.getState().patch(partial);
@@ -145,6 +154,37 @@ async function finishSession(options: {
   void syncPending().catch(() => undefined);
 }
 
+/**
+ * A load failure is the other place a file goes missing: the listener taps a
+ * track whose file was deleted, and nothing has scanned since to notice. The
+ * store already shows the error — this is what lets the Missing files screen
+ * learn about it, so the row can be offered a relink instead of failing again
+ * on every tap.
+ *
+ * The decision is made by looking at the file, not by reading `status.error`:
+ * the message is not a stable contract, and a transient failure must not flag a
+ * track that is still there.
+ */
+function reportUnreachableTrack(): void {
+  const track = currentTrack;
+  if (!track || reportedUnreachable.has(track.id)) {
+    return;
+  }
+  reportedUnreachable.add(track.id);
+  void (async () => {
+    // `fileUri` is the URI that was actually handed to the player, and it cannot
+    // be null here: `loadAndPlay` refuses a track without one and is the only
+    // place `currentTrack` is set.
+    const reachable = await isLocationReachable(track.fileUri);
+    if (reachable) {
+      reportedUnreachable.delete(track.id);
+      return;
+    }
+    await LocalDBService.setTrackAvailability(track.id, "missing");
+    void syncPending().catch(() => undefined);
+  })().catch(() => undefined);
+}
+
 function handleStatus(status: AudioStatus): void {
   const currentTime = Number.isFinite(status.currentTime) ? status.currentTime : 0;
   const current = usePlayerStore.getState();
@@ -155,6 +195,7 @@ function handleStatus(status: AudioStatus): void {
 
   if (status.error) {
     patch({ status: "error", error: status.error });
+    reportUnreachableTrack();
     return;
   }
 

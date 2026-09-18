@@ -1087,6 +1087,15 @@ async function setTrackAvailability(
 /**
  * Re-points a track after its file moved. Only the location columns change —
  * the content hash stays authoritative, so history and annotations survive.
+ *
+ * `file_uri` is updated alongside `source_uri` because playback reads
+ * `file_uri` (`TrackPlayerService.loadAndPlay`). Leaving it behind would mark
+ * the track present while it still tried to play the path that is gone, which
+ * is the one failure this method exists to prevent. The two columns start equal
+ * at import and must stay equal.
+ *
+ * `availability` is set back to `present` in the same statement, so a relink can
+ * never half-succeed.
  */
 async function updateTrackLocation(
   id: string,
@@ -1102,10 +1111,11 @@ async function updateTrackLocation(
   const db = await getDatabase();
   await db.runAsync(
     `UPDATE tracks
-     SET source_uri = ?, source_path = ?, source_size = ?, source_mtime = ?,
+     SET file_uri = ?, source_uri = ?, source_path = ?, source_size = ?, source_mtime = ?,
          folder_key = ?, folder_name = ?, availability = 'present', updated_at = ?
      WHERE id = ?`,
     [
+      input.sourceUri,
       input.sourceUri,
       input.sourcePath,
       input.sourceSize,
@@ -1116,6 +1126,103 @@ async function updateTrackLocation(
       id,
     ],
   );
+}
+
+/**
+ * Tracks whose audio file is known to be gone, newest first.
+ *
+ * Only `availability = 'missing'`, which is written in two places: a re-import
+ * that finds a file replaced at the same URI, and a play attempt whose file no
+ * longer resolves (`TrackPlayerService.reportUnreachableTrack`). A *scan*
+ * cannot write it for a moved file — a scan only ever sees files that exist, so
+ * it learns about a missing one by matching content and checking the old
+ * location, which is `ImportService`'s relink path rather than this flag.
+ *
+ * So this is the list the user can actually act on, not a guess from a stale
+ * path. Its length is a floor, not a total: files deleted while nothing has
+ * played or scanned them are not in it yet.
+ */
+async function getTracksByAvailability(
+  availability: TrackAvailability,
+): Promise<LocalTrack[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<TrackRow>(
+    "SELECT * FROM tracks WHERE availability = ? ORDER BY updated_at DESC",
+    [availability],
+  );
+  return rows.map(mapTrack);
+}
+
+export type TrackActivityCounts = {
+  sessionCount: number;
+  /** Seconds actually listened, across live sessions. */
+  listenedSec: number;
+  annotationCount: number;
+};
+
+/**
+ * What is recorded against each of the given tracks, in two queries rather than
+ * two per track.
+ *
+ * This is what makes a relink worth offering: "14 sessions and 3 notes" is the
+ * thing at stake, and the list it is shown on is at its longest precisely when
+ * the user moved a whole library at once. Tombstoned rows are excluded, matching
+ * `getLiveSessions` — a history entry the listener deleted should not inflate
+ * the figure.
+ */
+async function getTrackActivityCounts(
+  trackIds: readonly string[],
+): Promise<Map<string, TrackActivityCounts>> {
+  const counts = new Map<string, TrackActivityCounts>();
+  if (trackIds.length === 0) {
+    return counts;
+  }
+  const db = await getDatabase();
+  const placeholders = trackIds.map(() => "?").join(", ");
+  const ids = [...trackIds];
+
+  const sessionRows = await db.getAllAsync<{
+    track_id: string;
+    session_count: number;
+    listened_sec: number;
+  }>(
+    `SELECT track_id, COUNT(*) AS session_count,
+            COALESCE(SUM(duration_listened_sec), 0) AS listened_sec
+       FROM sessions
+      WHERE deleted_at IS NULL AND track_id IN (${placeholders})
+      GROUP BY track_id`,
+    ids,
+  );
+
+  const annotationRows = await db.getAllAsync<{
+    track_id: string;
+    annotation_count: number;
+  }>(
+    `SELECT track_id, COUNT(*) AS annotation_count
+       FROM annotations
+      WHERE deleted_at IS NULL AND track_id IN (${placeholders})
+      GROUP BY track_id`,
+    ids,
+  );
+
+  for (const id of ids) {
+    counts.set(id, { sessionCount: 0, listenedSec: 0, annotationCount: 0 });
+  }
+  for (const row of sessionRows) {
+    const entry = counts.get(row.track_id);
+    if (entry) {
+      entry.sessionCount = row.session_count;
+      entry.listenedSec = row.listened_sec;
+    }
+  }
+  for (const row of annotationRows) {
+    const entry = counts.get(row.track_id);
+    if (entry) {
+      entry.annotationCount = row.annotation_count;
+    }
+  }
+
+  return counts;
 }
 
 /** Size + mtime of the device-side original, used to skip unchanged files on rescan. */
@@ -1150,6 +1257,8 @@ export const LocalDBService = {
   getTrackBySourceUri,
   getTrackDetailData,
   getAllTracks,
+  getTracksByAvailability,
+  getTrackActivityCounts,
   getPendingTracks,
   setTrackSyncStatus,
   insertSession,

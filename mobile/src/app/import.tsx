@@ -21,8 +21,20 @@ import {
   type FolderGrant,
   type IdentifiedFile,
 } from "@/services/DeviceScanService";
-import { importIdentifiedFiles, loadLibraryIndex, type ImportOutcome } from "@/services/ImportService";
-import { buildScanPlan, type ScanCandidate, type ScanPlan, type ScanStatus } from "@/lib/scanPlan";
+import {
+  findGoneLocations,
+  importIdentifiedFiles,
+  loadLibraryIndex,
+  type ImportOutcome,
+} from "@/services/ImportService";
+import {
+  buildScanPlan,
+  libraryEntriesToVerify,
+  needsIdentification,
+  type ScanCandidate,
+  type ScanPlan,
+  type ScanStatus,
+} from "@/lib/scanPlan";
 
 /**
  * Device import, in the order the user actually needs it: choose a source, watch
@@ -48,13 +60,19 @@ const STATUS_LABEL: Record<ScanStatus, string> = {
   changed: "Changed",
   known: "In library",
   duplicate: "Duplicate",
+  // "Moved" rather than "Relink": the listener moved a folder, they did not ask
+  // for a database operation.
+  relink: "Moved",
 };
 
 function summaryLine(plan: ScanPlan): string {
-  const { total, new: fresh, changed, known, duplicate } = plan.summary;
+  const { total, new: fresh, changed, known, duplicate, relink } = plan.summary;
   const parts = [`${total} found`];
   if (fresh > 0) {
     parts.push(`${fresh} new`);
+  }
+  if (relink > 0) {
+    parts.push(`${relink} moved`);
   }
   if (changed > 0) {
     parts.push(`${changed} changed`);
@@ -83,10 +101,7 @@ export default function ImportScreen() {
   const [newOnly, setNewOnly] = useState(true);
 
   const actionable = useMemo(
-    () =>
-      (plan?.candidates ?? []).filter(
-        (candidate) => candidate.status === "new" || candidate.status === "changed",
-      ),
+    () => (plan?.candidates ?? []).filter((candidate) => needsIdentification(candidate.status)),
     [plan],
   );
 
@@ -95,11 +110,19 @@ export default function ImportScreen() {
     [actionable, newOnly, plan],
   );
 
+  /**
+   * The button has to name both outcomes when both are on the table: "Import 3
+   * files" would be a lie about the two that are already in the library and
+   * only need re-pointing.
+   */
+  const hasRelinks = useMemo(
+    () => actionable.some((candidate) => candidate.status === "relink"),
+    [actionable],
+  );
+
   /** Runs the identify pass and keeps the preview readable while it works. */
   const identify = useCallback(async (candidates: ScanCandidate[]) => {
-    const needsWork = candidates.filter(
-      (candidate) => candidate.status === "new" || candidate.status === "changed",
-    );
+    const needsWork = candidates.filter((candidate) => needsIdentification(candidate.status));
     if (needsWork.length === 0) {
       setIdentified([]);
       return;
@@ -152,7 +175,12 @@ export default function ImportScreen() {
 
         setBusyLabel("Comparing against your library…");
         const library = await loadLibraryIndex();
-        const built = buildScanPlan(found, library);
+        // A moved file carries the same content hash as the row it left behind,
+        // so the plan cannot tell it from a second copy on hashes alone. Ask the
+        // filesystem which recorded locations have gone — but only about the
+        // rows a found file could match, not the whole library.
+        const gone = await findGoneLocations(libraryEntriesToVerify(found, library));
+        const built = buildScanPlan(found, library, gone);
 
         setGrants(granted);
         setPlan(built);
@@ -268,21 +296,31 @@ export default function ImportScreen() {
     }
 
     if (phase === "done" && outcome) {
+      const { imported, relinked, duplicates, failed } = outcome;
+      const headlineParts: string[] = [];
+      if (imported.length > 0) {
+        headlineParts.push(`${imported.length} added`);
+      }
+      if (relinked > 0) {
+        headlineParts.push(`${relinked} relinked`);
+      }
+      const detail =
+        [
+          relinked > 0 ? "relinked tracks keep their history and notes" : null,
+          duplicates > 0 ? `${duplicates} already in your library` : null,
+          failed > 0 ? `${failed} could not be read` : null,
+        ]
+          .filter(Boolean)
+          .join(" · ") || "Everything found was already in your library.";
+
       return (
         <Reveal index={1}>
           <GlassSurface tone="surfaceStrong" style={styles.progressCard}>
             <ThemedText type="bodyStrong">
-              {outcome.imported.length > 0
-                ? `${outcome.imported.length} track${outcome.imported.length === 1 ? "" : "s"} added`
-                : "Nothing new to add"}
+              {headlineParts.length > 0 ? headlineParts.join(" · ") : "Nothing new to add"}
             </ThemedText>
             <ThemedText type="caption" themeColor="textSecondary">
-              {[
-                outcome.duplicates > 0 ? `${outcome.duplicates} already in your library` : null,
-                outcome.failed > 0 ? `${outcome.failed} could not be read` : null,
-              ]
-                .filter(Boolean)
-                .join(" · ") || "Everything found was already in your library."}
+              {detail}
             </ThemedText>
             <PrimaryButton label="Back to library" onPress={() => router.back()} />
           </GlassSurface>
@@ -308,7 +346,7 @@ export default function ImportScreen() {
               <View style={styles.previewHeader}>
                 <View style={styles.chipRow}>
                   <GlassChip
-                    label={`New (${actionable.length})`}
+                    label={`New or moved (${actionable.length})`}
                     selected={newOnly}
                     onPress={() => setNewOnly(true)}
                   />
@@ -322,7 +360,9 @@ export default function ImportScreen() {
                   label={
                     identifying
                       ? "Identifying…"
-                      : `Import ${actionable.length} file${actionable.length === 1 ? "" : "s"}`
+                      : hasRelinks
+                        ? `Add or relink ${actionable.length} file${actionable.length === 1 ? "" : "s"}`
+                        : `Import ${actionable.length} file${actionable.length === 1 ? "" : "s"}`
                   }
                   loading={identifying}
                   disabled={actionable.length === 0}
@@ -336,7 +376,7 @@ export default function ImportScreen() {
           phase === "preview" && !identifying && visible.length === 0 ? (
             <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
               {newOnly
-                ? "Everything found is already in your library."
+                ? "Nothing here needs adding or relinking."
                 : "No audio files were found."}
             </ThemedText>
           ) : null
@@ -354,7 +394,7 @@ export default function ImportScreen() {
               </View>
               <ThemedText
                 type="caption"
-                themeColor={item.status === "new" || item.status === "changed" ? "text" : "textTertiary"}>
+                themeColor={needsIdentification(item.status) ? "text" : "textTertiary"}>
                 {STATUS_LABEL[item.status]}
               </ThemedText>
             </GlassSurface>
