@@ -28,6 +28,13 @@ describe("usePlaylistDetail", () => {
       },
       tracks: [],
       library: [],
+      stats: {
+        playCount: 0,
+        completedPlayCount: 0,
+        listenedSec: 0,
+        lastPlayedAt: null,
+        bestFinishedCount: 0,
+      },
     });
 
     const { result } = await renderHook(() => usePlaylistDetail("p1"));

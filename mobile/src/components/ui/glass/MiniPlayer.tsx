@@ -20,7 +20,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { scheduleOnRN } from "react-native-worklets";
 
 import { MiniPlayerRow } from "@/components/player/MiniPlayerRow";
+import { usePlaybackContext } from "@/hooks/use-playback-context";
 import { paletteFor } from "@/lib/palette";
+import { contextRouteTarget } from "@/lib/playbackContext";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useNowPlayingStore } from "@/store/nowPlayingStore";
 import { usePlayerStore } from "@/store/playerStore";
@@ -51,8 +53,16 @@ export function MiniPlayer() {
   const setAnchor = useNowPlayingStore((state) => state.setAnchor);
   const drag = useSharedValue(0);
 
+  const { context } = usePlaybackContext();
+
   const ramp = paletteFor(contentHash ?? title ?? trackId);
   const isPlaying = status === "playing";
+
+  const openContext = useCallback(() => {
+    if (context) {
+      router.push(contextRouteTarget(context));
+    }
+  }, [context, router]);
 
   const measure = useCallback(() => {
     const node = hostRef.current;
@@ -126,6 +136,8 @@ export function MiniPlayer() {
         positionSec={positionSec}
         durationSec={durationSec}
         isPlaying={isPlaying}
+        context={context}
+        onOpenContext={openContext}
         skipNonce={skip?.nonce}
         skipDirection={skip?.direction}
         onToggle={() => TrackPlayerService.togglePlayPause()}

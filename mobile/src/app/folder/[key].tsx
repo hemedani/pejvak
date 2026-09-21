@@ -16,6 +16,7 @@ import type { LocalTrack } from "@/lib/db/types";
 import { describeFolderProgress, describeMissing } from "@/lib/folderPlay";
 import { formatDuration } from "@/lib/history";
 import { folderKeyFromRouteSegment } from "@/lib/mediaFolders";
+import { describeContextStats } from "@/lib/playbackContext";
 import { paletteFor } from "@/lib/palette";
 import { formatClock } from "@/lib/time";
 import { FolderService } from "@/services/FolderService";
@@ -73,6 +74,24 @@ export default function FolderDetailScreen() {
   const plan = useMemo(() => (data ? FolderService.plan(data, "resume") : null), [data]);
 
   const missingNote = useMemo(() => describeMissing(plan?.missingCount ?? 0), [plan]);
+
+  /**
+   * What the folder is, how long it runs, and how often it has been heard
+   * through. Joining here rather than in the header keeps the `·` in one place,
+   * so a folder that has never been played simply drops that clause.
+   */
+  const subtitle = useMemo(() => {
+    if (!data) {
+      return undefined;
+    }
+    return [
+      describeFolderProgress(data.finishedCount, data.tracks.length),
+      data.totalDurationSec > 0 ? formatDuration(data.totalDurationSec) : null,
+      describeContextStats(data.stats),
+    ]
+      .filter((part): part is string => part !== null)
+      .join(" · ");
+  }, [data]);
 
   const unfinishedCount = data ? data.tracks.length - data.finishedCount : 0;
   const playableCount = plan?.queueIds.length ?? 0;
@@ -144,15 +163,7 @@ export default function FolderDetailScreen() {
           onBack={() => router.back()}
           overline="FOLDER"
           title={data?.name ?? "Folder"}
-          subtitle={
-            data
-              ? `${describeFolderProgress(data.finishedCount, data.tracks.length)}${
-                  data.totalDurationSec > 0 ? ` · ${formatDuration(data.totalDurationSec)}` : ""
-                }`
-              : loading
-                ? "Loading…"
-                : undefined
-          }
+          subtitle={subtitle ?? (loading ? "Loading…" : undefined)}
           action={
             addableIds.length > 0 ? (
               <AddToPlaylistButton

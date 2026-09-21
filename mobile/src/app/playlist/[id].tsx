@@ -16,8 +16,8 @@ import { useTheme } from "@/hooks/use-theme";
 import { usePlaylistDetail } from "@/hooks/use-playlist-detail";
 import type { LocalTrack } from "@/lib/db/types";
 import { paletteFor } from "@/lib/palette";
+import { describeContextStats } from "@/lib/playbackContext";
 import { PlaylistService } from "@/services/PlaylistService";
-import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { spacing } from "@/theme/tokens";
 
 export default function PlaylistDetailScreen() {
@@ -44,15 +44,17 @@ export default function PlaylistDetailScreen() {
 
   const tracks = data?.tracks ?? [];
 
+  /**
+   * Starts the playlist *as a collection*, not as a bare list of tracks: the
+   * queue carries a playlist context, which is what records a run against the
+   * playlist and lets the player offer to open it again.
+   */
   const play = (index: number) => {
     const track = tracks[index];
-    if (!track) {
+    if (!playlistId || !track) {
       return;
     }
-    void TrackPlayerService.playQueueAt(
-      tracks.map((item) => item.id),
-      index,
-    );
+    void PlaylistService.play(playlistId, index);
     router.push({ pathname: "/player", params: { trackId: track.id } });
   };
 
@@ -119,7 +121,12 @@ export default function PlaylistDetailScreen() {
                 onBack={() => router.back()}
                 overline="PLAYLIST"
                 title={data.playlist.title}
-                subtitle={`${tracks.length} track${tracks.length === 1 ? "" : "s"}`}
+                subtitle={[
+                  `${tracks.length} track${tracks.length === 1 ? "" : "s"}`,
+                  describeContextStats(data.stats),
+                ]
+                  .filter((part): part is string => part !== null)
+                  .join(" · ")}
                 action={
                   <View style={styles.headerActions}>
                     {/* The whole playlist, in one tap: the useful direction

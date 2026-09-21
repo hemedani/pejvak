@@ -29,8 +29,17 @@ import { ThemedText } from "@/components/themed-text";
 import { GlassChip } from "@/components/ui/glass/GlassChip";
 import { useScheme } from "@/hooks/use-theme";
 import type { LocalAnnotation } from "@/lib/db/types";
+import { describeContextType, type PlaybackContext } from "@/lib/playbackContext";
 import { formatClock } from "@/lib/time";
 import { colors, spacing, type AuroraRamp } from "@/theme/tokens";
+
+/**
+ * A chip label that cannot grow without bound: a folder key is a path and a
+ * playlist title is free text, and either can be longer than the row it sits in.
+ */
+function shortTitle(title: string, max = 22): string {
+  return title.length <= max ? title : `${title.slice(0, max - 1)}…`;
+}
 
 /** The morph progress at which the artwork starts growing in. */
 const ART_REVEAL_START = 0.22;
@@ -47,6 +56,12 @@ export type PlayerContentProps = {
   artworkUrl: string | null;
   isAudiobook: boolean;
   ramp: AuroraRamp;
+  /** The folder or playlist the queue came from, if it came from one. */
+  context: PlaybackContext | null;
+  /** "4 of 12" — where playback is inside that collection, or null. */
+  contextPosition: string | null;
+  /** Opens the collection's own screen. */
+  onOpenContext: () => void;
   isPlaying: boolean;
   positionSec: number;
   durationSec: number;
@@ -84,6 +99,9 @@ export function PlayerContent({
   artworkUrl,
   isAudiobook,
   ramp,
+  context,
+  contextPosition,
+  onOpenContext,
   isPlaying,
   positionSec,
   durationSec,
@@ -113,6 +131,17 @@ export function PlayerContent({
   const scheme = useScheme();
   const progress = durationSec > 0 ? Math.min(1, positionSec / durationSec) : 0;
   const remainingSec = Math.max(0, durationSec - positionSec);
+
+  // A collection replaces the audiobook/now-playing overline rather than sitting
+  // beside it: "FOLDER · 4 OF 12" already says what the thing is, and a second
+  // line of context above the title would push the artwork down.
+  const overline = context
+    ? [describeContextType(context.type).toUpperCase(), contextPosition?.toUpperCase()]
+        .filter(Boolean)
+        .join(" · ")
+    : isAudiobook
+      ? "AUDIOBOOK"
+      : "NOW PLAYING";
 
   const artStyle = useAnimatedStyle(() => {
     const grow = Math.min(1, Math.max(0, (reveal.value - ART_REVEAL_START) / (1 - ART_REVEAL_START)));
@@ -179,7 +208,7 @@ export function PlayerContent({
         <Animated.View style={[styles.body, bodyStyle]}>
           <View style={styles.meta}>
             <ThemedText type="overline" themeColor="textSecondary">
-              {isAudiobook ? "AUDIOBOOK" : "NOW PLAYING"}
+              {overline}
             </ThemedText>
             <ThemedText type="title" numberOfLines={2}>
               {title}
@@ -228,6 +257,16 @@ export function PlayerContent({
           />
 
           <View style={styles.chips}>
+            {/* First, because it answers "what am I in the middle of", which
+                comes before "how fast". */}
+            {context ? (
+              <GlassChip
+                label={shortTitle(context.title)}
+                icon={context.type === "folder" ? "folder" : "playlists"}
+                accessibilityLabel={`Open ${describeContextType(context.type).toLowerCase()} ${context.title}`}
+                onPress={onOpenContext}
+              />
+            ) : null}
             <GlassChip
               label={`${playbackSpeed}×`}
               icon="speed"

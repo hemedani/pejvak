@@ -1,4 +1,4 @@
-import type { LocalTrack, PlaylistItem } from "@/lib/db/types";
+import type { ContextStats, LocalTrack, PlaylistItem } from "@/lib/db/types";
 import {
   buildFolderPlan,
   type FolderPlayMode,
@@ -6,6 +6,7 @@ import {
   type FolderTrackProgress,
 } from "@/lib/folderPlay";
 import { folderNameFromKey, orderFolderTracks } from "@/lib/mediaFolders";
+import type { PlaybackContext } from "@/lib/playbackContext";
 import { LocalDBService } from "@/services/LocalDBService";
 import { PlaylistService } from "@/services/PlaylistService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
@@ -19,6 +20,11 @@ export type FolderDetailData = {
   progress: Record<string, FolderTrackProgress>;
   finishedCount: number;
   totalDurationSec: number;
+  /**
+   * How often the folder has been played *as a collection*, and how often
+   * through. Loaded with the rest so the header does not flicker a second time.
+   */
+  stats: ContextStats;
 };
 
 /**
@@ -30,10 +36,11 @@ export type FolderDetailData = {
  * played them the other way round.
  */
 async function loadFolder(folderKey: string): Promise<FolderDetailData> {
-  const [rawTracks, progress, folders] = await Promise.all([
+  const [rawTracks, progress, folders, stats] = await Promise.all([
     LocalDBService.getTracksByFolder(folderKey),
     LocalDBService.getFolderTrackProgress(folderKey),
     LocalDBService.getFolders(),
+    LocalDBService.getContextStats("folder", folderKey),
   ]);
   const tracks = orderFolderTracks(rawTracks);
   return {
@@ -43,6 +50,7 @@ async function loadFolder(folderKey: string): Promise<FolderDetailData> {
     progress,
     finishedCount: tracks.filter((track) => progress[track.id]?.finished ?? false).length,
     totalDurationSec: tracks.reduce((total, track) => total + track.durationSec, 0),
+    stats,
   };
 }
 
@@ -79,19 +87,39 @@ function planFromTrack(
 }
 
 /**
- * Starts an already-built plan and records the folder as played.
+ * The collection a folder's queue belongs to.
  *
- * The two steps belong together: a folder that plays without touching
- * `last_played_at` would never rise to the top of the folder list, and a folder
- * touched without playing would lie about it. Returns the entry track id, or
- * null when there is nothing playable.
+ * `key` is the folder key rather than the name, because the key is what
+ * survives a rename and what the run's resume path resolves back to a queue;
+ * the name is only carried so the player can show it without a query. The
+ * storage-root folder has the empty key, which is a legitimate key — it is the
+ * route segment that needs a stand-in for it, not the key itself.
+ */
+function contextFor(data: FolderDetailData): PlaybackContext {
+  return { type: "folder", key: data.folderKey, title: data.name };
+}
+
+/**
+ * Starts an already-built plan, records the folder as played, and opens a run
+ * so the folder has a listening history of its own.
+ *
+ * The steps belong together: a folder that plays without touching
+ * `last_played_at` would never rise to the top of the folder list, a folder
+ * touched without playing would lie about it, and a queue that plays without a
+ * run would leave the listener's place in a 24-lecture series unrecorded.
+ * Returns the entry track id, or null when there is nothing playable.
  */
 async function startPlan(data: FolderDetailData, plan: FolderPlayPlan): Promise<string | null> {
   const entryId = plan.queueIds[plan.startIndex];
   if (!entryId) {
     return null;
   }
-  await TrackPlayerService.playQueueAt(plan.queueIds, plan.startIndex, plan.startPositionSec);
+  await TrackPlayerService.playQueueAt(
+    plan.queueIds,
+    plan.startIndex,
+    plan.startPositionSec,
+    contextFor(data),
+  );
   await LocalDBService.touchFolderPlayed(data.folderKey, data.name);
   return entryId;
 }
@@ -113,6 +141,7 @@ export const FolderService = {
   plan: planFolder,
   planFromTrack,
   startPlan,
+  contextFor,
 
   /**
    * Loads a folder and starts it. Returns the track id playback entered on, so

@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
 
@@ -9,9 +9,11 @@ import { GlassSheet } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
 import { useTrackAnnotations } from "@/hooks/use-annotations";
+import { usePlaybackContext } from "@/hooks/use-playback-context";
 import { useSleepTimer } from "@/hooks/use-sleep-timer";
 import type { LocalAnnotation, LocalTrack } from "@/lib/db/types";
 import { paletteFor } from "@/lib/palette";
+import { contextRouteTarget } from "@/lib/playbackContext";
 import { formatRemaining, SLEEP_TIMER_CHOICES } from "@/lib/sleepTimer";
 import { formatClock } from "@/lib/time";
 import { LocalDBService } from "@/services/LocalDBService";
@@ -39,8 +41,11 @@ function parsePositionParam(raw: string | undefined): number | undefined {
 
 export default function PlayerScreen() {
   const params = useLocalSearchParams<{ trackId?: string; positionSec?: string }>();
+  const router = useRouter();
   const paramTrackId = params.trackId ?? null;
   const paramPositionSec = parsePositionParam(params.positionSec);
+
+  const { context, position: contextPosition } = usePlaybackContext();
 
   const storeTrackId = usePlayerStore((state) => state.trackId);
   const title = usePlayerStore((state) => state.title);
@@ -89,7 +94,7 @@ export default function PlayerScreen() {
       // Only take over playback when this is a different track from the one
       // already loaded — opening the sheet from the mini-player must not restart.
       if (usePlayerStore.getState().trackId !== loaded.id) {
-        const { queue } = usePlayerStore.getState();
+        const { queue, context } = usePlayerStore.getState();
         const existingIndex = queue.indexOf(loaded.id);
         await TrackPlayerService.playQueueAt(
           existingIndex >= 0 ? queue : [loaded.id],
@@ -97,6 +102,10 @@ export default function PlayerScreen() {
           // Explicit, so a history entry lands on *its* session's position
           // rather than the most recent one.
           paramPositionSec,
+          // Jumping to a track that is already queued stays inside the
+          // collection that queue came from. Replacing the queue with a single
+          // track is a deliberate move out of it, so that clears the context.
+          existingIndex >= 0 ? context : null,
         );
         return;
       }
@@ -261,6 +270,16 @@ export default function PlayerScreen() {
           artworkUrl={artworkUrl ?? track?.artworkUrl ?? null}
           isAudiobook={isAudiobook || (track?.isAudiobook ?? false)}
           ramp={ramp}
+          context={context}
+          contextPosition={contextPosition}
+          onOpenContext={() => {
+            // Pushed rather than replacing: the sheet is a transparent modal, so
+            // the collection screen sits over it and the back gesture returns to
+            // the player the listener left — no need to re-open it.
+            if (context) {
+              router.push(contextRouteTarget(context));
+            }
+          }}
           isPlaying={isPlaying}
           positionSec={positionSec}
           durationSec={durationSec}

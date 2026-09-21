@@ -16,6 +16,7 @@ import { CrossfadeArtwork } from "@/components/motion/CrossfadeArtwork";
 import { ThemedText } from "@/components/themed-text";
 import { GlassProgress } from "@/components/ui/glass/GlassProgress";
 import { GlassSurface } from "@/components/ui/glass/GlassSurface";
+import { describeContextType, type PlaybackContext } from "@/lib/playbackContext";
 import { formatClock } from "@/lib/time";
 import type { AuroraRamp } from "@/theme/tokens";
 import { layout, spacing } from "@/theme/tokens";
@@ -32,6 +33,10 @@ export type MiniPlayerRowProps = {
   positionSec: number;
   durationSec: number;
   isPlaying: boolean;
+  /** The folder or playlist the queue came from, if it came from one. */
+  context?: PlaybackContext | null;
+  /** Opens that collection's own screen. */
+  onOpenContext?: () => void;
   onToggle: () => void;
   skipNonce?: number;
   skipDirection?: 1 | -1;
@@ -49,6 +54,8 @@ export function MiniPlayerRow({
   positionSec,
   durationSec,
   isPlaying,
+  context,
+  onOpenContext,
   onToggle,
   skipNonce,
   skipDirection,
@@ -86,6 +93,20 @@ export function MiniPlayerRow({
       ) : (
         <View style={styles.main}>{main}</View>
       )}
+
+      {/* The way back into the collection, without opening the full player
+          first. Icon-only because the bar already carries a title and two other
+          controls — the label is on the accessibility node, not on the glass. */}
+      {context && onOpenContext ? (
+        <BouncyIconButton
+          name={context.type === "folder" ? "folder" : "playlists"}
+          accessibilityLabel={`Open ${describeContextType(context.type).toLowerCase()} ${context.title}`}
+          size={34}
+          iconSize={17}
+          tone="ghost"
+          onPress={onOpenContext}
+        />
+      ) : null}
 
       {trackId ? (
         <AddToPlaylistButton

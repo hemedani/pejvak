@@ -21,6 +21,7 @@ import { describeFolderProgress, folderProgressRatio } from "@/lib/folderPlay";
 import { formatDuration } from "@/lib/history";
 import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
 import { paletteFor } from "@/lib/palette";
+import { formatPlayCount } from "@/lib/playbackContext";
 import { FolderService } from "@/services/FolderService";
 import { LocalDBService } from "@/services/LocalDBService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
@@ -299,8 +300,15 @@ export default function LibraryScreen() {
                 {folder.name}
               </ThemedText>
               <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                {describeFolderProgress(folder.finishedCount, folder.trackCount)}
-                {folder.totalDurationSec > 0 ? ` · ${formatDuration(folder.totalDurationSec)}` : ""}
+                {/* Progress first, so a card that runs out of width ellipsises
+                    the play count rather than the thing being tracked. */}
+                {[
+                  describeFolderProgress(folder.finishedCount, folder.trackCount),
+                  folder.totalDurationSec > 0 ? formatDuration(folder.totalDurationSec) : null,
+                  formatPlayCount(folder.playCount),
+                ]
+                  .filter((part): part is string => part !== null)
+                  .join(" · ")}
               </ThemedText>
               <GlassProgress
                 progress={folderProgressRatio(folder.finishedCount, folder.trackCount)}

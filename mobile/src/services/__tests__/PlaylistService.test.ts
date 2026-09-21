@@ -1,6 +1,7 @@
 import type { LocalPlaylist, LocalTrack } from "@/lib/db/types";
 import { PlaylistService } from "@/services/PlaylistService";
 import { LocalDBService } from "@/services/LocalDBService";
+import * as TrackPlayerService from "@/services/TrackPlayerService";
 
 jest.mock("@/services/LocalDBService", () => ({
   LocalDBService: {
@@ -10,7 +11,18 @@ jest.mock("@/services/LocalDBService", () => ({
     insertPlaylist: jest.fn(),
     updatePlaylist: jest.fn(),
     softDeletePlaylist: jest.fn(),
+    getContextStats: jest.fn(),
   },
+}));
+
+/**
+ * Stubbed rather than loaded for real: importing the module pulls in
+ * `expo-audio` at the top level, which needs a native runtime this suite has no
+ * business standing up to test playlist bookkeeping. What matters here is the
+ * contract `play` hands over — the queue and the collection it belongs to.
+ */
+jest.mock("@/services/TrackPlayerService", () => ({
+  playQueueAt: jest.fn(() => Promise.resolve()),
 }));
 
 const getPlaylistById = jest.mocked(LocalDBService.getPlaylistById);
@@ -18,6 +30,17 @@ const getAllTracks = jest.mocked(LocalDBService.getAllTracks);
 const insertPlaylist = jest.mocked(LocalDBService.insertPlaylist);
 const updatePlaylist = jest.mocked(LocalDBService.updatePlaylist);
 const softDeletePlaylist = jest.mocked(LocalDBService.softDeletePlaylist);
+const getContextStats = jest.mocked(LocalDBService.getContextStats);
+const playQueueAt = jest.mocked(TrackPlayerService.playQueueAt);
+
+/** A playlist nobody has played yet. */
+const NO_STATS = {
+  playCount: 0,
+  completedPlayCount: 0,
+  listenedSec: 0,
+  lastPlayedAt: null,
+  bestFinishedCount: 0,
+};
 
 function playlist(ids: string[]): LocalPlaylist {
   return {
@@ -72,6 +95,7 @@ function track(id: string): LocalTrack {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  getContextStats.mockResolvedValue(NO_STATS);
 });
 
 describe("PlaylistService.create", () => {
@@ -296,5 +320,59 @@ describe("PlaylistService.loadDetail", () => {
     getAllTracks.mockResolvedValue([]);
 
     expect(await PlaylistService.loadDetail("p1")).toBeNull();
+  });
+
+  it("carries the collection's play figures", async () => {
+    getPlaylistById.mockResolvedValue(playlist([]));
+    getAllTracks.mockResolvedValue([]);
+    getContextStats.mockResolvedValue({ ...NO_STATS, playCount: 3, completedPlayCount: 1 });
+
+    const detail = await PlaylistService.loadDetail("p1");
+
+    expect(getContextStats).toHaveBeenCalledWith("playlist", "p1");
+    expect(detail?.stats).toMatchObject({ playCount: 3, completedPlayCount: 1 });
+  });
+});
+
+describe("PlaylistService.play", () => {
+  it("queues the whole playlist and names it as the collection", async () => {
+    getPlaylistById.mockResolvedValue(playlist(["b", "a"]));
+    getAllTracks.mockResolvedValue([track("a"), track("b")]);
+
+    const entryId = await PlaylistService.play("p1");
+
+    // The whole playlist is the queue, so the track after the entry one is the
+    // next item rather than the end of playback — and the context is what gives
+    // the playlist a listening history and lets the player open it.
+    expect(playQueueAt).toHaveBeenCalledWith(["b", "a"], 0, undefined, {
+      type: "playlist",
+      key: "p1",
+      title: "Focus",
+    });
+    expect(entryId).toBe("b");
+  });
+
+  it("starts at the tapped index and returns that track", async () => {
+    getPlaylistById.mockResolvedValue(playlist(["b", "a"]));
+    getAllTracks.mockResolvedValue([track("a"), track("b")]);
+
+    expect(await PlaylistService.play("p1", 1)).toBe("a");
+    expect(playQueueAt).toHaveBeenCalledWith(["b", "a"], 1, undefined, expect.anything());
+  });
+
+  it("returns null without starting playback when the playlist is empty", async () => {
+    getPlaylistById.mockResolvedValue(playlist([]));
+    getAllTracks.mockResolvedValue([]);
+
+    expect(await PlaylistService.play("p1")).toBeNull();
+    expect(playQueueAt).not.toHaveBeenCalled();
+  });
+
+  it("returns null when the playlist is gone", async () => {
+    getPlaylistById.mockResolvedValue(null);
+    getAllTracks.mockResolvedValue([]);
+
+    expect(await PlaylistService.play("p1")).toBeNull();
+    expect(playQueueAt).not.toHaveBeenCalled();
   });
 });

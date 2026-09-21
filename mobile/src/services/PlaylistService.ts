@@ -4,8 +4,10 @@ import {
   removeTracksFromPlaylist,
   resolvePlaylistTracks,
 } from "@/lib/playlists";
-import type { LocalPlaylist, LocalTrack } from "@/lib/db/types";
+import type { ContextStats, LocalPlaylist, LocalTrack } from "@/lib/db/types";
+import type { PlaybackContext } from "@/lib/playbackContext";
 import { LocalDBService } from "@/services/LocalDBService";
+import * as TrackPlayerService from "@/services/TrackPlayerService";
 
 export type PlaylistDetailData = {
   playlist: LocalPlaylist;
@@ -13,6 +15,8 @@ export type PlaylistDetailData = {
   tracks: LocalTrack[];
   /** All library tracks, for the add-track picker. */
   library: LocalTrack[];
+  /** How often the playlist has been played *as a collection*, and how often through. */
+  stats: ContextStats;
 };
 
 function requireTitle(title: string): string {
@@ -43,7 +47,20 @@ async function loadDetail(id: string): Promise<PlaylistDetailData | null> {
     playlist,
     library,
     tracks: resolvePlaylistTracks(playlist.items, library),
+    stats: await LocalDBService.getContextStats("playlist", playlist.id),
   };
+}
+
+/**
+ * The collection a playlist's queue belongs to.
+ *
+ * `key` is the local playlist id, which is what a run's resume path resolves
+ * back to a queue; the title rides along so the player can name the collection
+ * without a query — and is captured into the run at play time, so renaming the
+ * playlist later cannot rewrite what the listener heard.
+ */
+function contextFor(playlist: Pick<LocalPlaylist, "id" | "title">): PlaybackContext {
+  return { type: "playlist", key: playlist.id, title: playlist.title };
 }
 
 /**
@@ -128,6 +145,34 @@ async function moveTrack(id: string, from: number, to: number): Promise<void> {
 }
 
 /**
+ * Starts a playlist at `index`, as a collection.
+ *
+ * The whole playlist becomes the queue — so the next track after the one tapped
+ * is the next item rather than the end of playback — and the queue carries a
+ * playlist context, which is what gives the playlist a listening history and
+ * lets the player offer to open it. Returns the entry track id, or null when
+ * the playlist is empty or gone.
+ */
+async function play(id: string, index = 0): Promise<string | null> {
+  const detail = await loadDetail(id);
+  if (!detail) {
+    return null;
+  }
+  const queueIds = detail.tracks.map((track) => track.id);
+  const entryId = queueIds[index];
+  if (!entryId) {
+    return null;
+  }
+  await TrackPlayerService.playQueueAt(
+    queueIds,
+    index,
+    undefined,
+    contextFor(detail.playlist),
+  );
+  return entryId;
+}
+
+/**
  * Local-first playlist management. Playlists live in SQLite and sync through
  * `SyncService` (items are sent by `contentHash` and resolved to server ids
  * server-side); deletes are tombstoned locally and pushed by `clientId`.
@@ -139,6 +184,7 @@ export const PlaylistService = {
   list,
   get,
   loadDetail,
+  contextFor,
   create,
   rename,
   remove,
@@ -148,4 +194,5 @@ export const PlaylistService = {
   removeTracks,
   createWithTracks,
   moveTrack,
+  play,
 };
