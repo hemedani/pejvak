@@ -7,6 +7,7 @@ import {
 import Constants, { ExecutionEnvironment } from "expo-constants";
 
 import type { LocalTrack } from "@/lib/db/types";
+import { sameContext, type PlaybackContext } from "@/lib/playbackContext";
 import { resumePositionSec } from "@/lib/resume";
 import {
   applyProgress,
@@ -27,6 +28,17 @@ type ActiveSession = {
 };
 
 /**
+ * The run currently open in `context_plays`, when the queue belongs to a
+ * collection. This is a cache of the database row, not the record itself — see
+ * `openRun` for why it is re-read rather than trusted after a cold start.
+ */
+type ActiveRun = {
+  id: string;
+  context: PlaybackContext;
+  trackCount: number;
+};
+
+/**
  * Expo Go has no audio foreground service (the config-plugin-generated
  * `AudioControlsService` only exists in a development/production build), so
  * lock-screen/background features are unavailable there.
@@ -36,7 +48,29 @@ const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.Store
 let player: AudioPlayer | null = null;
 let currentTrack: LocalTrack | null = null;
 let active: ActiveSession | null = null;
+let activeRun: ActiveRun | null = null;
+/**
+ * The listening stretch the current session belongs to.
+ *
+ * A session is one continuous listen, not one track: the id is carried across an
+ * automatic advance so the History list can show "started here, stopped there"
+ * as a single entry. Anything the listener does deliberately — skipping,
+ * pausing, opening another queue — ends it, and the next listen starts a new one.
+ */
+let activeStretchId: string | null = null;
+/**
+ * The stretch the *next* session continues, handed over only by auto-advance.
+ *
+ * Held as its own handover rather than inferred from the previous session's
+ * `completed` flag: a queue that merely ran out would leave that flag set, and
+ * whatever the listener played next would silently join a stretch it was never
+ * part of.
+ */
+let pendingStretchId: string | null = null;
+/** Set once per session, so dragging the scrubber costs one write, not fifty. */
+let seekReported = false;
 let sessionStarting = false;
+let advancing = false;
 let wasPlaying = false;
 let configured = false;
 let lockScreenFailed = IS_EXPO_GO;
@@ -81,6 +115,101 @@ export async function configureAudio(): Promise<void> {
   }
 }
 
+/**
+ * Makes `context` the collection being played, and returns the id of the run
+ * that records it.
+ *
+ * A run is one *attempt* at listening through a collection, and it deliberately
+ * outlives a single app session: a book heard over five commutes is one attempt,
+ * and closing the run at every launch would report it as five plays, none of
+ * them finished. So an open run is looked up in the database before a new one is
+ * made — the module-level copy above is only a cache, and it is empty after a
+ * cold start.
+ *
+ * Every *other* open run is closed first. That keeps the invariant that at most
+ * one run is open, which is what stops an abandoned collection from being
+ * credited with the tracks played in a different one.
+ */
+async function openRun(context: PlaybackContext, trackCount: number): Promise<string> {
+  if (activeRun && sameContext(activeRun.context, context)) {
+    return activeRun.id;
+  }
+
+  const open = await LocalDBService.getOpenContextPlays();
+  const resumable = open.find((run) =>
+    sameContext({ type: run.contextType, key: run.contextKey }, context),
+  );
+
+  for (const run of open) {
+    if (run.id !== resumable?.id) {
+      await LocalDBService.finalizeContextPlay(run.id, {
+        endedAt: Date.now(),
+        completed: false,
+        interrupted: true,
+      });
+    }
+  }
+
+  if (resumable) {
+    // The track count is the collection's size when the attempt began, not its
+    // size now: a run whose denominator grew mid-listen would report progress
+    // that never happened.
+    activeRun = { id: resumable.id, context, trackCount: resumable.trackCount };
+    return resumable.id;
+  }
+
+  const created = await LocalDBService.insertContextPlay({
+    contextType: context.type,
+    contextKey: context.key,
+    contextTitle: context.title,
+    trackCount,
+    startedAt: Date.now(),
+  });
+  activeRun = { id: created.id, context, trackCount };
+  return created.id;
+}
+
+/**
+ * Ends the open run. `completed` means the queue genuinely ran out, which is
+ * what "this collection has been listened to" means.
+ *
+ * The store's `context` is deliberately left alone: the collection is still the
+ * one loaded, and the mini-player should keep offering to open it after the last
+ * track ends.
+ */
+async function closeRun(options: { completed: boolean; interrupted: boolean }): Promise<void> {
+  const run = activeRun;
+  if (!run) {
+    return;
+  }
+  activeRun = null;
+  await LocalDBService.finalizeContextPlay(run.id, {
+    endedAt: Date.now(),
+    completed: options.completed,
+    interrupted: options.interrupted,
+  });
+}
+
+/**
+ * Records where the run has got to. Called on every track change and on every
+ * checkpoint, which is what lets "continue this folder" land on the right
+ * lecture *and* the right second inside it.
+ *
+ * The write deliberately does not dirty `sync_status` — a run is only worth
+ * sending once it has ended.
+ */
+function touchRun(trackId: string, positionSec: number): void {
+  const run = activeRun;
+  if (!run) {
+    return;
+  }
+  void LocalDBService.touchContextPlay(run.id, {
+    lastIndex: usePlayerStore.getState().queueIndex,
+    lastTrackId: trackId,
+    lastPositionSec: positionSec,
+  }).catch(() => undefined);
+}
+
 async function beginSession(
   track: LocalTrack,
   startPositionSec: number,
@@ -92,12 +221,27 @@ async function beginSession(
   sessionStarting = true;
   try {
     const startedAt = Date.now();
+    // Read once, at the top: `activeRun` can be replaced by the time the insert
+    // resolves, and the session belongs to the run that was playing when it
+    // started, not to whichever one is current afterwards.
+    const run = activeRun;
+    // Automatic progression hands the current stretch forward; every other way
+    // into a track starts a new one. Consumed here so it cannot outlive the
+    // handover it was set for.
+    const stretchId = pendingStretchId ?? LocalDBService.newStretchId();
+    pendingStretchId = null;
+    activeStretchId = stretchId;
+    seekReported = false;
     const session = await LocalDBService.insertSession({
       trackId: track.id,
       contentHash: track.contentHash,
       startedAt,
       startPositionSec,
       playbackSpeed,
+      contextPlayId: run?.id ?? null,
+      contextType: run?.context.type ?? null,
+      contextKey: run?.context.key ?? null,
+      stretchId,
     });
     active = {
       track,
@@ -130,7 +274,28 @@ async function writeCheckpoint(): Promise<void> {
     startedAt: active.tracker.startedAtMs,
     timestamp: Date.now(),
     deviceInfo: active.deviceInfo,
+    contextPlayId: activeRun?.id ?? null,
+    stretchId: activeStretchId,
   });
+  touchRun(active.track.id, active.tracker.lastPositionSec);
+}
+
+/**
+ * Records that the listener scrubbed.
+ *
+ * A scrub is not a session boundary — what is being listened to has not changed
+ * — but it does mean the stretch was not heard straight through, and that is
+ * what separates a complete listen from a merely finished one. Written the
+ * moment it happens rather than at finalize, so a listen cut short by a kill
+ * still knows; guarded by a flag, so a drag across the scrubber is one write.
+ */
+function reportSeek(): void {
+  const session = active;
+  if (!session || seekReported) {
+    return;
+  }
+  seekReported = true;
+  void LocalDBService.markSessionSeeked(session.sessionId).catch(() => undefined);
 }
 
 async function finishSession(options: {
@@ -142,6 +307,9 @@ async function finishSession(options: {
     return;
   }
   active = null;
+  // The listen is over, so the stretch ends with it. An automatic advance has
+  // already taken a copy to hand on before getting here.
+  activeStretchId = null;
   await LocalDBService.finalizeSession(session.sessionId, {
     endedAt: Date.now(),
     endPositionSec: Math.round(session.tracker.lastPositionSec),
@@ -185,6 +353,32 @@ function reportUnreachableTrack(): void {
   })().catch(() => undefined);
 }
 
+/**
+ * Move to the next queued track after one finishes, and close the run when the
+ * queue runs out.
+ *
+ * Deliberately not `next()`: that signals a *skip*, and the artwork's kick
+ * belongs to a gesture the listener made, not to a track that ended by itself.
+ * A manual skip at the end of the queue also restarts the current track, which
+ * is right for "there is nothing after this one" but wrong here — a track that
+ * finished has nothing left to restart.
+ */
+async function advanceAfterFinish(stretchId: string | null): Promise<void> {
+  const { queue, queueIndex } = usePlayerStore.getState();
+  const targetIndex = queueIndex + 1;
+  const targetId = queue[targetIndex];
+  if (!targetId) {
+    await closeRun({ completed: true, interrupted: false });
+    patch({ status: "ended" });
+    return;
+  }
+  usePlayerStore.getState().setQueue(queue, targetIndex);
+  // The listener did not choose this track, so it is the same listen. Every
+  // other route into a track leaves this null and so starts a new stretch.
+  pendingStretchId = stretchId;
+  await playTrackById(targetId, 0);
+}
+
 function handleStatus(status: AudioStatus): void {
   const currentTime = Number.isFinite(status.currentTime) ? status.currentTime : 0;
   const current = usePlayerStore.getState();
@@ -206,8 +400,28 @@ function handleStatus(status: AudioStatus): void {
   }
 
   if (status.didJustFinish) {
+    // `didJustFinish` can be reported on more than one status tick, and two
+    // advances from one ending would silently skip a track. The guard is a plain
+    // module flag rather than state, for the same reason `sessionStarting` is:
+    // state is a render behind, so two ticks in one frame would both read it as
+    // free.
+    if (advancing) {
+      return;
+    }
+    advancing = true;
     wasPlaying = false;
-    void finishSession({ completed: true, interrupted: false });
+    void (async () => {
+      try {
+        // Taken before the session is closed, because closing it ends the
+        // stretch — and a track ending by itself is not the listener stopping,
+        // so the next track is still the same listen.
+        const stretch = activeStretchId;
+        await finishSession({ completed: true, interrupted: false });
+        await advanceAfterFinish(stretch);
+      } finally {
+        advancing = false;
+      }
+    })();
     return;
   }
 
@@ -227,6 +441,9 @@ function handleStatus(status: AudioStatus): void {
       active.tracker = result.state;
       if (result.checkpointDue) {
         void writeCheckpoint();
+      }
+      if (result.isSeek) {
+        reportSeek();
       }
     }
   } else if (wasPlaying) {
@@ -317,6 +534,9 @@ export async function seekTo(positionSec: number): Promise<void> {
       positionSec,
       atMs: Date.now(),
     }).state;
+    // Reported here rather than left to the next status tick: the tracker has
+    // already moved, so that tick sees a small delta and would miss the scrub.
+    reportSeek();
   }
   patch({ positionSec: Math.floor(positionSec) });
 }
@@ -339,11 +559,18 @@ export async function setPlaybackRate(rate: number): Promise<void> {
 /**
  * Start a queue at `index`. The queue is just an ordered list of track ids; the
  * player resolves them lazily so a long library does not need to be hydrated.
+ *
+ * `context` names the folder or playlist the queue came from. Passing one opens
+ * — or re-opens — a run, so the collection's history is recorded and the player
+ * can offer to open it. Omitting one means the queue is just a list (the whole
+ * library, a smart playlist), which ends whatever run was open: the listener has
+ * moved on to something that is not that collection.
  */
 export async function playQueueAt(
   trackIds: string[],
   index: number,
   startPositionSec?: number,
+  context?: PlaybackContext | null,
 ): Promise<void> {
   const trackId = trackIds[index];
   if (!trackId) {
@@ -354,6 +581,15 @@ export async function playQueueAt(
   // immediately after this call (and would otherwise decide to load the track
   // itself) sees the right one.
   patch({ trackId });
+
+  if (context) {
+    await openRun(context, trackIds.length);
+    patch({ context });
+  } else {
+    await closeRun({ completed: false, interrupted: true });
+    patch({ context: null });
+  }
+
   await playTrackById(trackId, startPositionSec);
 }
 
@@ -369,6 +605,9 @@ export async function playQueueAt(
 async function playTrackById(trackId: string, startPositionSec?: number): Promise<void> {
   const track = await LocalDBService.getTrackById(trackId);
   if (!track) {
+    // No session will begin, so a stretch handed forward by an auto-advance
+    // must not be left waiting for one.
+    pendingStretchId = null;
     patch({ status: "error", error: "That track is no longer in your library." });
     return;
   }
@@ -377,6 +616,10 @@ async function playTrackById(trackId: string, startPositionSec?: number): Promis
     startPositionSec !== undefined
       ? startPositionSec
       : resumePositionSec(sessions, track.durationSec);
+  // One place covers every way the queue moves — a queue load, a manual skip,
+  // and an automatic advance — so the run can never be left pointing at a track
+  // the listener has already moved past.
+  touchRun(track.id, start);
   await loadAndPlay(track, start);
 }
 
@@ -442,6 +685,13 @@ export async function recoverOrphanedSessions(): Promise<number> {
   for (const checkpoint of checkpoints) {
     let existing = await LocalDBService.getSessionById(checkpoint.sessionId);
     if (!existing) {
+      // The run is looked up rather than taken from the checkpoint alone: a
+      // session carries the collection's type and key as well as the run id, and
+      // a killed playback has to come back describing itself exactly as a normal
+      // one would.
+      const run = checkpoint.contextPlayId
+        ? await LocalDBService.getContextPlayById(checkpoint.contextPlayId)
+        : null;
       await LocalDBService.insertSession({
         id: checkpoint.sessionId,
         trackId: checkpoint.trackId,
@@ -449,6 +699,12 @@ export async function recoverOrphanedSessions(): Promise<number> {
         startedAt: checkpoint.startedAt,
         startPositionSec: checkpoint.positionSec,
         playbackSpeed: checkpoint.playbackSpeed,
+        contextPlayId: checkpoint.contextPlayId,
+        contextType: run?.contextType ?? null,
+        contextKey: run?.contextKey ?? null,
+        // A checkpoint from before v10 has no group; standing alone is the
+        // truthful reading, and matches what the migration backfilled.
+        stretchId: checkpoint.stretchId ?? checkpoint.sessionId,
       });
       existing = await LocalDBService.getSessionById(checkpoint.sessionId);
     }
@@ -464,4 +720,31 @@ export async function recoverOrphanedSessions(): Promise<number> {
     await LocalDBService.deleteCheckpoint(checkpoint.sessionId);
   }
   return checkpoints.length;
+}
+
+/**
+ * Test-only: forgets the player, the session and the open run.
+ *
+ * These live in module scope on purpose — a run has to outlive a screen, and the
+ * status listener is registered exactly once — which also means they outlive a
+ * *test*. A suite drives playback through that listener, so without this a case
+ * inherits the previous case's live session and ends up asserting against a
+ * session it never started. The app never calls this.
+ */
+export function __resetForTests(): void {
+  player = null;
+  currentTrack = null;
+  active = null;
+  activeRun = null;
+  sessionStarting = false;
+  advancing = false;
+  wasPlaying = false;
+  configured = false;
+  lockScreenFailed = IS_EXPO_GO;
+  pendingSeekSec = null;
+  nextSessionStartSec = 0;
+  activeStretchId = null;
+  pendingStretchId = null;
+  seekReported = false;
+  reportedUnreachable.clear();
 }

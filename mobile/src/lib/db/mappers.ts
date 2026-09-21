@@ -1,5 +1,7 @@
 import type {
+  ContextType,
   LocalAnnotation,
+  LocalContextPlay,
   LocalFolder,
   LocalPlaylist,
   LocalSession,
@@ -70,6 +72,34 @@ export type SessionRow = {
   sync_status: string;
   created_at: number;
   updated_at: number;
+  context_play_id: string | null;
+  context_type: string | null;
+  context_key: string | null;
+  /** Nullable only for a row written before the v10 backfill ran. */
+  stretch_id: string | null;
+  seeked: number;
+};
+
+export type ContextPlayRow = {
+  id: string;
+  server_id: string | null;
+  context_type: string;
+  context_key: string;
+  context_title: string;
+  track_count: number;
+  started_at: number;
+  ended_at: number | null;
+  last_index: number;
+  last_track_id: string | null;
+  last_position_sec: number;
+  listened_sec: number;
+  finished_count: number;
+  completed: number;
+  interrupted: number;
+  deleted_at: number | null;
+  sync_status: string;
+  created_at: number;
+  updated_at: number;
 };
 
 export type AnnotationRow = {
@@ -96,6 +126,12 @@ export type HistoryRow = SessionRow & {
   /** SQLite has no boolean type; 0 or 1. */
   track_is_audiobook: number;
   track_artwork_url: string | null;
+  /**
+   * Denormalised from the session's run. Null when the session was a track
+   * played on its own — the History card has nothing to say about a collection
+   * that was never involved.
+   */
+  context_title: string | null;
 };
 
 export type PlaylistRow = {
@@ -123,15 +159,33 @@ export type CheckpointRow = {
   started_at: number;
   timestamp: number;
   device_info: string | null;
+  context_play_id: string | null;
+  /** Nullable only for a checkpoint written before the v10 backfill. */
+  stretch_id: string | null;
 };
 
 const SYNC_STATUSES: readonly SyncStatus[] = ["pending", "syncing", "synced", "failed"];
 const TRACK_SOURCES: readonly TrackSource[] = ["mediastore", "saf", "picker"];
+const CONTEXT_TYPES: readonly ContextType[] = ["playlist", "folder"];
 
 export function toSyncStatus(value: string): SyncStatus {
   return (SYNC_STATUSES as readonly string[]).includes(value)
     ? (value as SyncStatus)
     : "pending";
+}
+
+/**
+ * An unrecognised context type reads as `null`, not as a default. A session
+ * whose run cannot be classified belongs to no collection — guessing
+ * "playlist" would put it in a list it was never part of.
+ */
+export function toContextType(value: string | null): ContextType | null {
+  if (value === null) {
+    return null;
+  }
+  return (CONTEXT_TYPES as readonly string[]).includes(value)
+    ? (value as ContextType)
+    : null;
 }
 
 /** Rows imported before device scanning existed have a null source, not a bogus one. */
@@ -244,6 +298,40 @@ export function mapSession(row: SessionRow): LocalSession {
     syncStatus: toSyncStatus(row.sync_status),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    contextPlayId: row.context_play_id,
+    contextType: toContextType(row.context_type),
+    contextKey: row.context_key,
+    // A row written before v10 has no group; being its own stretch is the
+    // truthful reading of it, and matches what the migration backfilled.
+    stretchId: row.stretch_id ?? row.id,
+    seeked: toBoolean(row.seeked),
+  };
+}
+
+export function mapContextPlay(row: ContextPlayRow): LocalContextPlay {
+  return {
+    id: row.id,
+    serverId: row.server_id,
+    // A run with an unreadable type is not a run anyone can act on; `folder` is
+    // the fallback that at least resolves to a real screen rather than to a
+    // playlist id that will never match.
+    contextType: toContextType(row.context_type) ?? "folder",
+    contextKey: row.context_key,
+    contextTitle: row.context_title,
+    trackCount: row.track_count,
+    startedAt: row.started_at,
+    endedAt: row.ended_at,
+    lastIndex: row.last_index,
+    lastTrackId: row.last_track_id,
+    lastPositionSec: row.last_position_sec,
+    listenedSec: row.listened_sec,
+    finishedCount: row.finished_count,
+    completed: toBoolean(row.completed),
+    interrupted: toBoolean(row.interrupted),
+    deletedAt: row.deleted_at,
+    syncStatus: toSyncStatus(row.sync_status),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -293,5 +381,7 @@ export function mapCheckpoint(row: CheckpointRow): PlaybackCheckpoint {
     startedAt: row.started_at,
     timestamp: row.timestamp,
     deviceInfo: row.device_info,
+    contextPlayId: row.context_play_id,
+    stretchId: row.stretch_id,
   };
 }

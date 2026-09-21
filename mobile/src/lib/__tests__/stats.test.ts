@@ -27,6 +27,11 @@ function session(overrides: Partial<LocalSession> = {}): LocalSession {
     completed: true,
     interrupted: false,
     deviceInfo: null,
+    contextPlayId: null,
+    contextType: null,
+    contextKey: null,
+    stretchId: overrides.stretchId ?? overrides.id ?? "s1",
+    seeked: false,
     syncStatus: "synced",
     createdAt: 0,
     updatedAt: 0,
@@ -50,6 +55,7 @@ function item(
       isAudiobook,
       artworkUrl: null,
     },
+    contextTitle: null,
   };
 }
 

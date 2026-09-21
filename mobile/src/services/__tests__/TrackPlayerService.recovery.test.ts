@@ -55,6 +55,10 @@ const checkpoint: PlaybackCheckpoint = {
   startedAt: 1000,
   timestamp: 5000,
   deviceInfo: null,
+  contextPlayId: null,
+  // No group: this is a checkpoint written before v10, so recovery has to make
+  // the rebuilt session stand alone.
+  stretchId: null,
 };
 
 function openSession(): LocalSession {
@@ -72,6 +76,11 @@ function openSession(): LocalSession {
     completed: false,
     interrupted: false,
     deviceInfo: null,
+    contextPlayId: null,
+    contextType: null,
+    contextKey: null,
+    stretchId: "sess-1",
+    seeked: false,
     syncStatus: "pending",
     createdAt: 0,
     updatedAt: 0,

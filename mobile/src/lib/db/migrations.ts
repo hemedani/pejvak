@@ -191,6 +191,118 @@ export const MIGRATIONS: Migration[] = [
     version: 7,
     up: [`ALTER TABLE tracks ADD COLUMN artwork_checked_at INTEGER`],
   },
+  {
+    // Listening history for whole collections.
+    //
+    // Until now a session only ever knew *which track* it was. That cannot say
+    // "this playlist has been heard through three times", because a run through
+    // a playlist is many sessions and nothing tied them together — and it
+    // cannot answer "which folder was I in?" when a session is resumed, so
+    // resuming a lecture dropped the listener into a queue of one.
+    //
+    // `context_plays` is the missing level: one row per *run* of a collection,
+    // the same shape as a session one level up. A run starts when a queue that
+    // belongs to a collection begins playing and ends when the queue runs out,
+    // when playback moves to a different collection, or when recovery closes it
+    // after a kill. `sessions.context_play_id` is the link down, and the two
+    // denormalised columns beside it exist for the same reason
+    // `sessions.content_hash` does — the History list reads 200 rows and should
+    // not join to draw each one.
+    //
+    // `context_key` is a local playlist id or a folder key, and `context_title`
+    // is captured at play time: a playlist can be renamed or deleted, and a
+    // history entry that silently changed its name would be a worse record than
+    // one that remembers what it was called.
+    //
+    // `track_count` is the size of the queue *when the run started*, so a run
+    // can be read as "9 of 24" later. Completion is deliberately not judged
+    // from it — `completed` means the queue genuinely ran out, which stays true
+    // even if tracks were appended mid-run.
+    //
+    // There is deliberately no play counter on `playlists`. A stored count is a
+    // second source of truth that has to be kept in step with these rows on
+    // every device, and the first device to disagree would be wrong in a way
+    // nobody could see. Counting runs is one indexed `GROUP BY`, and the
+    // figures for a folder and for a playlist then come from the same code.
+    version: 8,
+    up: [
+      `ALTER TABLE sessions ADD COLUMN context_play_id TEXT`,
+      `ALTER TABLE sessions ADD COLUMN context_type TEXT`,
+      `ALTER TABLE sessions ADD COLUMN context_key TEXT`,
+      `CREATE INDEX IF NOT EXISTS idx_sessions_context_play_id ON sessions(context_play_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_sessions_context_key ON sessions(context_type, context_key)`,
+      `CREATE TABLE IF NOT EXISTS context_plays (
+        id TEXT PRIMARY KEY NOT NULL,
+        server_id TEXT,
+        context_type TEXT NOT NULL,
+        context_key TEXT NOT NULL,
+        context_title TEXT NOT NULL,
+        track_count INTEGER NOT NULL DEFAULT 0,
+        started_at INTEGER NOT NULL,
+        ended_at INTEGER,
+        last_index INTEGER NOT NULL DEFAULT 0,
+        last_track_id TEXT,
+        last_position_sec INTEGER NOT NULL DEFAULT 0,
+        listened_sec INTEGER NOT NULL DEFAULT 0,
+        finished_count INTEGER NOT NULL DEFAULT 0,
+        completed INTEGER NOT NULL DEFAULT 0,
+        interrupted INTEGER NOT NULL DEFAULT 0,
+        deleted_at INTEGER,
+        sync_status TEXT NOT NULL DEFAULT 'pending',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_context_plays_key ON context_plays(context_type, context_key)`,
+      `CREATE INDEX IF NOT EXISTS idx_context_plays_started_at ON context_plays(started_at)`,
+      `CREATE INDEX IF NOT EXISTS idx_context_plays_sync_status ON context_plays(sync_status)`,
+      `CREATE INDEX IF NOT EXISTS idx_context_plays_deleted_at ON context_plays(deleted_at)`,
+    ],
+  },
+  {
+    // The run link has to survive a kill, exactly as the session does.
+    //
+    // `playback_checkpoints` is what lets a killed app still record what was
+    // listened to; without the run id here, the session that recovery rebuilds
+    // would come back as an orphan and the collection it belonged to would be
+    // lost — the History entry would no longer say which book it was, and the
+    // run's own listen time would quietly drop that stretch.
+    //
+    // A new version rather than another line in v8: v8 may already have been
+    // applied on a device, and `ALTER TABLE ... ADD COLUMN` is not repeatable.
+    version: 9,
+    up: [`ALTER TABLE playback_checkpoints ADD COLUMN context_play_id TEXT`],
+  },
+  {
+    // A session is one continuous *listen*, not one track.
+    //
+    // Scrubbing inside a track is not a change of what is being listened to, so
+    // it must not cut the session; deliberately moving to another track is, so
+    // it must. Automatic progression is neither — the listener is still on the
+    // same stretch — which is what makes "heard from the first second of the
+    // first track through to the end of the last" something the history can
+    // point at rather than infer.
+    //
+    // The per-track row is untouched, because every derived figure in the app is
+    // per track: the folder's "13 of 24 finished", where a track resumes, a
+    // track's own play count. `stretch_id` only groups those rows — the
+    // stretch's start track, end track and completeness are read off its members
+    // rather than stored, so there is no second copy to keep in step.
+    //
+    // Backfilled to each row's own id, so every session already recorded becomes
+    // a stretch of one, which is exactly what it was.
+    version: 10,
+    up: [
+      // The stretch has to survive a kill for the same reason the run does:
+      // recovery rebuilds only the track that was playing, and without the group
+      // id that rebuilt row would read as a separate listen rather than as the
+      // tail of one.
+      `ALTER TABLE playback_checkpoints ADD COLUMN stretch_id TEXT`,
+      `ALTER TABLE sessions ADD COLUMN stretch_id TEXT`,
+      `ALTER TABLE sessions ADD COLUMN seeked INTEGER NOT NULL DEFAULT 0`,
+      `UPDATE sessions SET stretch_id = id WHERE stretch_id IS NULL`,
+      `CREATE INDEX IF NOT EXISTS idx_sessions_stretch ON sessions(stretch_id, started_at)`,
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

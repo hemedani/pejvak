@@ -51,8 +51,9 @@ function annotation(id: string, positionSec: number): LocalAnnotation {
 }
 
 function session(endedAt: number | null): LocalSession {
+  const id = `s-${Math.random()}`;
   return {
-    id: `s-${Math.random()}`,
+    id,
     serverId: null,
     trackId: "track-1",
     contentHash: "hash-1",
@@ -65,6 +66,11 @@ function session(endedAt: number | null): LocalSession {
     completed: false,
     interrupted: false,
     deviceInfo: null,
+    contextPlayId: null,
+    contextType: null,
+    contextKey: null,
+    stretchId: id,
+    seeked: false,
     syncStatus: "pending",
     createdAt: 0,
     updatedAt: 0,

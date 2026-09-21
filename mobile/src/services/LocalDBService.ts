@@ -4,12 +4,14 @@ import { getDatabase } from "@/lib/db/database";
 import {
   mapAnnotation,
   mapCheckpoint,
+  mapContextPlay,
   mapFolder,
   mapPlaylist,
   mapSession,
   mapTrack,
   type AnnotationRow,
   type CheckpointRow,
+  type ContextPlayRow,
   type FolderRow,
   type HistoryRow,
   type PlaylistRow,
@@ -17,14 +19,20 @@ import {
   type TrackRow,
 } from "@/lib/db/mappers";
 import type {
+  ContextRunProgress,
+  ContextStats,
+  ContextType,
   CreateAnnotationInput,
+  CreateContextPlayInput,
   CreatePlaylistInput,
   CreateSessionInput,
   CreateTrackInput,
+  FinalizeContextPlayInput,
   FinalizeSessionInput,
   FolderSummary,
   InsertRemotePlaylistInput,
   LocalAnnotation,
+  LocalContextPlay,
   LocalFolder,
   LocalPlaylist,
   LocalSession,
@@ -34,6 +42,7 @@ import type {
   PendingCounts,
   SaveCheckpointInput,
   SyncStatus,
+  TouchContextPlayInput,
   TrackAvailability,
   TrackDetailData,
 } from "@/lib/db/types";
@@ -44,11 +53,23 @@ import type {
   AnnotationUpdate,
   PlaylistUpdate,
   RemoteAnnotation,
+  RemoteContextPlay,
   RemoteSession,
 } from "@/lib/reconcile";
 
 function newId(): string {
   return Crypto.randomUUID();
+}
+
+/**
+ * A fresh listening-stretch id.
+ *
+ * Minted here rather than in the player so every local id comes from the same
+ * generator — and so the player never imports a native crypto module, which
+ * would drag one into every test that touches playback.
+ */
+function newStretchId(): string {
+  return newId();
 }
 
 // --- Tracks ---------------------------------------------------------------
@@ -219,8 +240,9 @@ async function setTrackSyncStatus(
 async function insertSession(input: CreateSessionInput): Promise<LocalSession> {
   const db = await getDatabase();
   const now = Date.now();
+  const id = input.id ?? newId();
   const session: LocalSession = {
-    id: input.id ?? newId(),
+    id,
     serverId: null,
     trackId: input.trackId,
     contentHash: input.contentHash,
@@ -236,14 +258,22 @@ async function insertSession(input: CreateSessionInput): Promise<LocalSession> {
     syncStatus: "pending",
     createdAt: now,
     updatedAt: now,
+    contextPlayId: input.contextPlayId ?? null,
+    contextType: input.contextType ?? null,
+    contextKey: input.contextKey ?? null,
+    // Defaulting the group to the row's own id is what makes a single-track
+    // listen a stretch of one, so nothing downstream has to special-case it.
+    stretchId: input.stretchId ?? id,
+    seeked: input.seeked ?? false,
   };
 
   await db.runAsync(
     `INSERT INTO sessions (
       id, server_id, track_id, content_hash, started_at, ended_at,
       start_position_sec, end_position_sec, duration_listened_sec, playback_speed,
-      completed, interrupted, device_info, sync_status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      completed, interrupted, device_info, sync_status, created_at, updated_at,
+      context_play_id, context_type, context_key, stretch_id, seeked
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       session.id,
       session.serverId,
@@ -261,6 +291,11 @@ async function insertSession(input: CreateSessionInput): Promise<LocalSession> {
       session.syncStatus,
       session.createdAt,
       session.updatedAt,
+      session.contextPlayId,
+      session.contextType,
+      session.contextKey,
+      session.stretchId,
+      session.seeked ? 1 : 0,
     ],
   );
 
@@ -287,18 +322,38 @@ async function getSessionsByTrack(trackId: string): Promise<LocalSession[]> {
   return rows.map(mapSession);
 }
 
-/** Newest-first session history joined with each track, for the History screen. */
+/**
+ * Newest-first session history joined with each track, for the History screen.
+ *
+ * The collection title comes along in the same join rather than being looked up
+ * per row: the list is up to 200 entries, and "which folder was this?" is a
+ * caption on each of them.
+ *
+ * `limit` counts *stretches*, not rows. A stretch is read off its member rows,
+ * so cutting the page at a row count would hand the caller part of a listen: a
+ * card missing the track it ended on, and a completeness verdict computed from
+ * a prefix of the evidence. Picking the newest N groups first and then taking
+ * every member of each costs one bounded subquery and keeps each stretch whole.
+ */
 async function getSessionsForHistory(limit = 200): Promise<HistoryItem[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<HistoryRow>(
     `SELECT s.*, t.title AS track_title, t.author AS track_author,
             t.content_hash AS track_content_hash, t.is_audiobook AS track_is_audiobook,
-            t.artwork_url AS track_artwork_url
+            t.artwork_url AS track_artwork_url,
+            cp.context_title AS context_title
      FROM sessions s
      JOIN tracks t ON t.id = s.track_id
+     LEFT JOIN context_plays cp ON cp.id = s.context_play_id
      WHERE s.deleted_at IS NULL
-     ORDER BY s.started_at DESC
-     LIMIT ?`,
+       AND s.stretch_id IN (
+         SELECT stretch_id FROM sessions
+         WHERE deleted_at IS NULL
+         GROUP BY stretch_id
+         ORDER BY MAX(started_at) DESC
+         LIMIT ?
+       )
+     ORDER BY s.started_at DESC`,
     [limit],
   );
   return rows.map((row) => ({
@@ -311,6 +366,7 @@ async function getSessionsForHistory(limit = 200): Promise<HistoryItem[]> {
       isAudiobook: row.track_is_audiobook === 1,
       artworkUrl: row.track_artwork_url,
     },
+    contextTitle: row.context_title,
   }));
 }
 
@@ -336,10 +392,27 @@ async function getPendingSessions(limit = 50): Promise<LocalSession[]> {
  * device that already pulled it.
  */
 async function softDeleteSession(id: string): Promise<void> {
+  await softDeleteSessions([id]);
+}
+
+/**
+ * Tombstones several history entries at once.
+ *
+ * The History list shows a stretch as a single row, so removing that row has to
+ * remove every track it covered. Tombstoning one member would leave the card on
+ * screen with a different end track and a fresh completeness verdict — the row
+ * the listener deleted would appear not to have gone anywhere.
+ */
+async function softDeleteSessions(ids: readonly string[]): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
   const db = await getDatabase();
+  const now = Date.now();
+  const placeholders = ids.map(() => "?").join(", ");
   await db.runAsync(
-    "UPDATE sessions SET deleted_at = ?, updated_at = ? WHERE id = ?",
-    [Date.now(), Date.now(), id],
+    `UPDATE sessions SET deleted_at = ?, updated_at = ? WHERE id IN (${placeholders})`,
+    [now, now, ...ids],
   );
 }
 
@@ -387,8 +460,9 @@ async function insertRemoteSession(input: RemoteSession): Promise<void> {
     `INSERT OR IGNORE INTO sessions (
       id, server_id, track_id, content_hash, started_at, ended_at,
       start_position_sec, end_position_sec, duration_listened_sec, playback_speed,
-      completed, interrupted, device_info, sync_status, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?)`,
+      completed, interrupted, device_info, sync_status, created_at, updated_at,
+      context_play_id, context_type, context_key, stretch_id, seeked
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'synced', ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.serverId,
@@ -405,6 +479,15 @@ async function insertRemoteSession(input: RemoteSession): Promise<void> {
       null,
       now,
       now,
+      input.contextPlayId,
+      input.contextType,
+      input.contextKey,
+      // A session pulled from another device joins the stretch that device
+      // minted, so a listen split across two phones is still one entry. A row
+      // the server has no group for becomes a stretch of one, which is what the
+      // v10 backfill made of every local row written before stretches existed.
+      input.stretchId ?? id,
+      input.seeked ? 1 : 0,
     ],
   );
 }
@@ -432,6 +515,21 @@ async function finalizeSession(id: string, input: FinalizeSessionInput): Promise
   );
 }
 
+/**
+ * Flags the session as having been scrubbed.
+ *
+ * Written the moment it happens rather than at finalize, so a listen cut short
+ * by a kill still knows it was not heard straight through — and guarded by the
+ * caller, so a listener dragging the scrubber costs one write, not fifty.
+ */
+async function markSessionSeeked(id: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    "UPDATE sessions SET seeked = 1, updated_at = ? WHERE id = ? AND sync_status != 'synced'",
+    [Date.now(), id],
+  );
+}
+
 async function setSessionSyncStatus(
   id: string,
   status: SyncStatus,
@@ -444,6 +542,328 @@ async function setSessionSyncStatus(
      WHERE id = ?`,
     [status, serverId ?? null, Date.now(), id],
   );
+}
+
+// --- Collection runs (context plays) --------------------------------------
+
+async function insertContextPlay(input: CreateContextPlayInput): Promise<LocalContextPlay> {
+  const db = await getDatabase();
+  const now = Date.now();
+  const run: LocalContextPlay = {
+    id: input.id ?? newId(),
+    serverId: null,
+    contextType: input.contextType,
+    contextKey: input.contextKey,
+    contextTitle: input.contextTitle,
+    trackCount: Math.max(0, Math.round(input.trackCount)),
+    startedAt: input.startedAt,
+    endedAt: null,
+    lastIndex: Math.max(0, Math.round(input.lastIndex ?? 0)),
+    lastTrackId: input.lastTrackId ?? null,
+    lastPositionSec: Math.max(0, Math.round(input.lastPositionSec ?? 0)),
+    listenedSec: 0,
+    finishedCount: 0,
+    completed: false,
+    interrupted: false,
+    deletedAt: null,
+    syncStatus: "pending",
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await db.runAsync(
+    `INSERT INTO context_plays (
+      id, server_id, context_type, context_key, context_title, track_count,
+      started_at, ended_at, last_index, last_track_id, last_position_sec,
+      listened_sec, finished_count, completed, interrupted, deleted_at,
+      sync_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, 0, 0, 0, 0, NULL, 'pending', ?, ?)`,
+    [
+      run.id,
+      run.serverId,
+      run.contextType,
+      run.contextKey,
+      run.contextTitle,
+      run.trackCount,
+      run.startedAt,
+      run.lastIndex,
+      run.lastTrackId,
+      run.lastPositionSec,
+      run.createdAt,
+      run.updatedAt,
+    ],
+  );
+
+  return run;
+}
+
+async function getContextPlayById(id: string): Promise<LocalContextPlay | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<ContextPlayRow>(
+    "SELECT * FROM context_plays WHERE id = ?",
+    [id],
+  );
+  return row ? mapContextPlay(row) : null;
+}
+
+/**
+ * Records where a run has got to, as it moves from track to track.
+ *
+ * Deliberately does not touch `sync_status`: a run is only worth sending once
+ * it has ended, and marking it dirty on every track change would queue an
+ * unfinished run for the push loop.
+ */
+async function touchContextPlay(id: string, input: TouchContextPlayInput): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE context_plays
+     SET last_index = ?, last_track_id = ?, last_position_sec = ?, updated_at = ?
+     WHERE id = ? AND ended_at IS NULL`,
+    [
+      Math.max(0, Math.round(input.lastIndex)),
+      input.lastTrackId,
+      Math.max(0, Math.round(input.lastPositionSec)),
+      Date.now(),
+      id,
+    ],
+  );
+}
+
+/**
+ * Closes a run, and derives its figures from its own sessions.
+ *
+ * `listened_sec` and `finished_count` are computed here rather than
+ * accumulated in memory, so a run that survived a kill still reports what
+ * actually happened — the session rows are the record, and the run summarises
+ * them. `finished_count` counts *distinct* tracks, because replaying one track
+ * three times is not three finished lectures.
+ *
+ * The `ended_at IS NULL` guard makes a run end exactly once. Every path that
+ * ends a run (the queue running out, playback moving elsewhere, startup
+ * recovery) can therefore call this without coordinating.
+ */
+async function finalizeContextPlay(
+  id: string,
+  input: FinalizeContextPlayInput,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE context_plays
+     SET ended_at = ?,
+         completed = ?,
+         interrupted = ?,
+         listened_sec = COALESCE((
+           SELECT SUM(s.duration_listened_sec) FROM sessions s
+           WHERE s.context_play_id = context_plays.id AND s.deleted_at IS NULL
+         ), 0),
+         finished_count = COALESCE((
+           SELECT COUNT(DISTINCT s.track_id) FROM sessions s
+           WHERE s.context_play_id = context_plays.id
+             AND s.completed = 1 AND s.deleted_at IS NULL
+         ), 0),
+         sync_status = 'pending',
+         updated_at = ?
+     WHERE id = ? AND ended_at IS NULL`,
+    [
+      input.endedAt,
+      input.completed ? 1 : 0,
+      input.interrupted ? 1 : 0,
+      Date.now(),
+      id,
+    ],
+  );
+}
+
+/** Runs that never closed — a kill, or a crash mid-collection. */
+async function getOpenContextPlays(): Promise<LocalContextPlay[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<ContextPlayRow>(
+    "SELECT * FROM context_plays WHERE ended_at IS NULL AND deleted_at IS NULL ORDER BY started_at ASC",
+  );
+  return rows.map(mapContextPlay);
+}
+
+/** A run's live figures, derived from its sessions rather than stored. */
+async function getContextRunProgress(id: string): Promise<ContextRunProgress> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{
+    listened_sec: number;
+    session_count: number;
+    finished_count: number;
+  }>(
+    `SELECT
+       COALESCE(SUM(duration_listened_sec), 0) AS listened_sec,
+       COUNT(*) AS session_count,
+       COUNT(DISTINCT CASE WHEN completed = 1 THEN track_id END) AS finished_count
+     FROM sessions
+     WHERE context_play_id = ? AND deleted_at IS NULL`,
+    [id],
+  );
+  return {
+    listenedSec: row?.listened_sec ?? 0,
+    sessionCount: row?.session_count ?? 0,
+    finishedCount: row?.finished_count ?? 0,
+  };
+}
+
+/** Closed runs, newest first — the collection half of the History screen. */
+async function getContextPlaysForHistory(limit = 200): Promise<LocalContextPlay[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<ContextPlayRow>(
+    `SELECT * FROM context_plays
+     WHERE deleted_at IS NULL AND ended_at IS NOT NULL
+     ORDER BY started_at DESC
+     LIMIT ?`,
+    [limit],
+  );
+  return rows.map(mapContextPlay);
+}
+
+/** Every run of one collection, newest first. Includes the open one. */
+async function getContextPlaysByKey(
+  contextType: ContextType,
+  contextKey: string,
+  limit = 20,
+): Promise<LocalContextPlay[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<ContextPlayRow>(
+    `SELECT * FROM context_plays
+     WHERE context_type = ? AND context_key = ? AND deleted_at IS NULL
+     ORDER BY started_at DESC
+     LIMIT ?`,
+    [contextType, contextKey, limit],
+  );
+  return rows.map(mapContextPlay);
+}
+
+/**
+ * Totals for one collection.
+ *
+ * `bestFinishedCount` is the furthest any single run got, which is what makes a
+ * partially completed series visible: the tracks finished *now* are a fact
+ * about the library, but the best run is a fact about the listener's attempt.
+ */
+async function getContextStats(
+  contextType: ContextType,
+  contextKey: string,
+): Promise<ContextStats> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{
+    play_count: number;
+    completed_play_count: number;
+    listened_sec: number;
+    last_played_at: number | null;
+    best_finished_count: number;
+  }>(
+    `SELECT
+       COUNT(*) AS play_count,
+       COALESCE(SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END), 0) AS completed_play_count,
+       COALESCE(SUM(listened_sec), 0) AS listened_sec,
+       MAX(COALESCE(ended_at, started_at)) AS last_played_at,
+       COALESCE(MAX(finished_count), 0) AS best_finished_count
+     FROM context_plays
+     WHERE context_type = ? AND context_key = ? AND deleted_at IS NULL`,
+    [contextType, contextKey],
+  );
+  return {
+    playCount: row?.play_count ?? 0,
+    completedPlayCount: row?.completed_play_count ?? 0,
+    listenedSec: row?.listened_sec ?? 0,
+    lastPlayedAt: row?.last_played_at ?? null,
+    bestFinishedCount: row?.best_finished_count ?? 0,
+  };
+}
+
+/**
+ * All local runs, **including tombstones** — used by remote reconciliation, the
+ * same way `getAllSessions` is: a tombstoned row has to be visible so a pull
+ * does not treat it as missing.
+ */
+async function getAllContextPlays(): Promise<LocalContextPlay[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<ContextPlayRow>("SELECT * FROM context_plays");
+  return rows.map(mapContextPlay);
+}
+
+/** Ended runs still waiting to reach the server. */
+async function getPendingContextPlays(limit = 50): Promise<LocalContextPlay[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<ContextPlayRow>(
+    `SELECT * FROM context_plays
+     WHERE sync_status IN ('pending', 'failed')
+       AND deleted_at IS NULL
+       AND ended_at IS NOT NULL
+     ORDER BY created_at ASC
+     LIMIT ?`,
+    [limit],
+  );
+  return rows.map(mapContextPlay);
+}
+
+async function insertRemoteContextPlay(input: RemoteContextPlay): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  const id = input.clientId ?? input.serverId;
+  await db.runAsync(
+    `INSERT OR IGNORE INTO context_plays (
+      id, server_id, context_type, context_key, context_title, track_count,
+      started_at, ended_at, last_index, last_track_id, last_position_sec,
+      listened_sec, finished_count, completed, interrupted, deleted_at,
+      sync_status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?, ?)`,
+    [
+      id,
+      input.serverId,
+      input.contextType,
+      input.contextKey,
+      input.contextTitle,
+      Math.round(input.trackCount),
+      input.startedAt,
+      input.endedAt,
+      Math.round(input.lastIndex),
+      input.lastTrackId,
+      Math.round(input.lastPositionSec),
+      Math.round(input.listenedSec),
+      Math.round(input.finishedCount),
+      input.completed ? 1 : 0,
+      input.interrupted ? 1 : 0,
+      now,
+      input.updatedAt,
+    ],
+  );
+}
+
+async function setContextPlaySyncStatus(
+  id: string,
+  status: SyncStatus,
+  serverId?: string,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE context_plays
+     SET sync_status = ?, server_id = COALESCE(?, server_id), updated_at = ?
+     WHERE id = ?`,
+    [status, serverId ?? null, Date.now(), id],
+  );
+}
+
+/**
+ * Tombstones a run so its removal survives the next pull. There is no
+ * server-side delete act for runs, exactly as for sessions — this hides the
+ * entry on this device and nowhere else.
+ */
+async function softDeleteContextPlay(id: string): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    "UPDATE context_plays SET deleted_at = ?, updated_at = ? WHERE id = ?",
+    [now, now, id],
+  );
+}
+
+async function deleteContextPlay(id: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("DELETE FROM context_plays WHERE id = ?", [id]);
 }
 
 // --- Annotations ----------------------------------------------------------
@@ -846,6 +1266,7 @@ async function getPendingCounts(): Promise<PendingCounts> {
     sessions: await count("sessions"),
     annotations: await count("annotations"),
     playlists: await count("playlists"),
+    contextPlays: await count("context_plays"),
   };
 }
 
@@ -871,8 +1292,9 @@ async function saveCheckpoint(input: SaveCheckpointInput): Promise<void> {
   await db.runAsync(
     `INSERT OR REPLACE INTO playback_checkpoints (
       id, session_id, track_id, content_hash, position_sec, last_position_sec,
-      duration_listened_sec, playback_speed, started_at, timestamp, device_info
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      duration_listened_sec, playback_speed, started_at, timestamp, device_info,
+      context_play_id, stretch_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.sessionId,
       input.sessionId,
@@ -885,6 +1307,8 @@ async function saveCheckpoint(input: SaveCheckpointInput): Promise<void> {
       input.startedAt,
       input.timestamp,
       input.deviceInfo ?? null,
+      input.contextPlayId ?? null,
+      input.stretchId ?? null,
     ],
   );
 }
@@ -940,6 +1364,8 @@ async function getFolderSummaries(): Promise<FolderSummary[]> {
     last_played_at: number | null;
     track_count: number;
     finished_count: number;
+    play_count: number;
+    completed_play_count: number;
     total_duration_sec: number;
     artwork_url: string | null;
   }>(
@@ -951,6 +1377,12 @@ async function getFolderSummaries(): Promise<FolderSummary[]> {
        f.last_played_at AS last_played_at,
        COUNT(*) AS track_count,
        SUM(CASE WHEN done.track_id IS NULL THEN 0 ELSE 1 END) AS finished_count,
+       (SELECT COUNT(*) FROM context_plays cp
+         WHERE cp.context_type = 'folder' AND cp.context_key = t.folder_key
+           AND cp.deleted_at IS NULL) AS play_count,
+       (SELECT COUNT(*) FROM context_plays cp
+         WHERE cp.context_type = 'folder' AND cp.context_key = t.folder_key
+           AND cp.completed = 1 AND cp.deleted_at IS NULL) AS completed_play_count,
        COALESCE(SUM(t.duration_sec), 0) AS total_duration_sec,
        (SELECT a.artwork_url FROM tracks a
          WHERE a.folder_key = t.folder_key AND a.artwork_url IS NOT NULL
@@ -975,6 +1407,8 @@ async function getFolderSummaries(): Promise<FolderSummary[]> {
     lastPlayedAt: row.last_played_at,
     trackCount: row.track_count,
     finishedCount: row.finished_count,
+    playCount: row.play_count,
+    completedPlayCount: row.completed_play_count,
     totalDurationSec: row.total_duration_sec,
     artworkUrl: row.artwork_url,
   }));
@@ -1346,8 +1780,26 @@ export const LocalDBService = {
   getAllSessions,
   insertRemoteSession,
   finalizeSession,
+  markSessionSeeked,
+  newStretchId,
   setSessionSyncStatus,
   softDeleteSession,
+  softDeleteSessions,
+  insertContextPlay,
+  getContextPlayById,
+  touchContextPlay,
+  finalizeContextPlay,
+  getOpenContextPlays,
+  getContextRunProgress,
+  getContextPlaysForHistory,
+  getContextPlaysByKey,
+  getContextStats,
+  getAllContextPlays,
+  getPendingContextPlays,
+  insertRemoteContextPlay,
+  setContextPlaySyncStatus,
+  softDeleteContextPlay,
+  deleteContextPlay,
   insertAnnotation,
   getAnnotationsByTrack,
   getAnnotationCounts,

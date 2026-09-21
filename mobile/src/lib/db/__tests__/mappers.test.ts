@@ -73,6 +73,11 @@ describe("row mappers", () => {
       completed: 0,
       interrupted: 0,
       device_info: null,
+      context_play_id: null,
+      context_type: null,
+      context_key: null,
+      stretch_id: null,
+      seeked: 0,
       sync_status: "pending",
       ...base,
     };
@@ -138,10 +143,13 @@ describe("row mappers", () => {
       started_at: 1,
       timestamp: 2,
       device_info: null,
+      context_play_id: null,
+      stretch_id: "stretch-1",
     };
 
     expect(mapCheckpoint(row).sessionId).toBe("s1");
     expect(mapCheckpoint(row).positionSec).toBe(42);
+    expect(mapCheckpoint(row).stretchId).toBe("stretch-1");
   });
 });
 
