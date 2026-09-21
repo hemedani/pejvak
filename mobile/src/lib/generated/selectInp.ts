@@ -8,6 +8,7 @@
 sessions?: number | playbackSessionInp
 annotations?: number | annotationInp
 playlists?: number | playlistInp
+playbackContexts?: number | playbackContextInp
     }
 
 
@@ -50,6 +51,11 @@ playbackSpeed: number;
 completed: boolean;
 interrupted: boolean;
 deviceInfo?: string;
+contextPlayId?: string;
+contextType?: string;
+contextKey?: string;
+stretchId?: string;
+seeked?: boolean;
 createdAt?: Date;
 updatedAt?: Date;
 }[];
@@ -74,6 +80,25 @@ items: {
 trackId: string;
 order: number;
 }[];
+createdAt?: Date;
+updatedAt?: Date;
+}[];
+playbackContexts: {
+_id?: string;
+clientId?: string;
+contextType: string;
+contextKey: string;
+contextTitle: string;
+trackCount: number;
+startedAt: number;
+endedAt?: number;
+lastIndex: number;
+lastTrackId?: string;
+lastPositionSec: number;
+listenedSec: number;
+finishedCount: number;
+completed: boolean;
+interrupted: boolean;
 createdAt?: Date;
 updatedAt?: Date;
 }[];
@@ -125,6 +150,11 @@ playbackSpeed: number;
 completed: boolean;
 interrupted: boolean;
 deviceInfo?: string;
+contextPlayId?: string;
+contextType?: string;
+contextKey?: string;
+stretchId?: string;
+seeked?: boolean;
 createdAt?: Date;
 updatedAt?: Date;
 }[];
@@ -163,6 +193,11 @@ playbackSpeed: number;
 completed: boolean;
 interrupted: boolean;
 deviceInfo?: string;
+contextPlayId?: string;
+contextType?: string;
+contextKey?: string;
+stretchId?: string;
+seeked?: boolean;
 createdAt?: Date;
 updatedAt?: Date;
 track: {
@@ -279,12 +314,85 @@ avatarUrl?: string;
 ;
 
 
+    export type playbackContextInp = {
+      user?: number | userInp
+      
+    }
+
+
+    export type playbackContextSchema = {
+_id?: string;
+clientId?: string;
+contextType: string;
+contextKey: string;
+contextTitle: string;
+trackCount: number;
+startedAt: number;
+endedAt?: number;
+lastIndex: number;
+lastTrackId?: string;
+lastPositionSec: number;
+listenedSec: number;
+finishedCount: number;
+completed: boolean;
+interrupted: boolean;
+createdAt?: Date;
+updatedAt?: Date;
+user: {
+_id?: string;
+username: string;
+email: string;
+displayName?: string;
+avatarUrl?: string;
+};
+};
+;
+
+
     export type ReqType = {
 
   
         main: {
 
-      
+        playbackContext: {
+            getMyPlaybackContexts: {
+set: {
+page?: number;
+limit?: number;
+skip?: number;
+contextType?: string;
+contextKey?: string;
+};
+get: {
+_id?: (0 | 1 );
+clientId?: (0 | 1 );
+contextType?: (0 | 1 );
+contextKey?: (0 | 1 );
+contextTitle?: (0 | 1 );
+trackCount?: (0 | 1 );
+startedAt?: (0 | 1 );
+endedAt?: (0 | 1 );
+lastIndex?: (0 | 1 );
+lastTrackId?: (0 | 1 );
+lastPositionSec?: (0 | 1 );
+listenedSec?: (0 | 1 );
+finishedCount?: (0 | 1 );
+completed?: (0 | 1 );
+interrupted?: (0 | 1 );
+createdAt?: (0 | 1 );
+updatedAt?: (0 | 1 );
+user?: {
+_id?: (0 | 1 );
+username?: (0 | 1 );
+email?: (0 | 1 );
+displayName?: (0 | 1 );
+avatarUrl?: (0 | 1 );
+};
+};
+};
+
+          }
+
         user: {
 
       
@@ -1050,6 +1158,11 @@ playbackSpeed: number;
 completed: boolean;
 interrupted: boolean;
 deviceInfo?: string;
+contextPlayId?: string;
+contextType?: string;
+contextKey?: string;
+stretchId?: string;
+seeked?: boolean;
 }[];
 annotations?: {
 clientId: string;
@@ -1073,16 +1186,38 @@ order: number;
 updatedAt?: number;
 deleted?: boolean;
 }[];
+contextPlays?: {
+clientId: string;
+contextType: string;
+contextKey: string;
+contextTitle: string;
+trackCount: number;
+startedAt: number;
+endedAt: number;
+lastIndex: number;
+lastTrackId?: string;
+lastPositionSec: number;
+listenedSec: number;
+finishedCount: number;
+completed: boolean;
+interrupted: boolean;
+updatedAt?: number;
+}[];
 };
 get: {
 syncedSessions?: number;
 syncedAnnotations?: number;
 syncedPlaylists?: number;
+syncedContextPlays?: number;
 annotations?: {
 clientId: string;
 serverId?: string;
 }[];
 playlists?: {
+clientId: string;
+serverId?: string;
+}[];
+contextPlays?: {
 clientId: string;
 serverId?: string;
 }[];
@@ -1359,6 +1494,11 @@ playbackSpeed?: (0 | 1 );
 completed?: (0 | 1 );
 interrupted?: (0 | 1 );
 deviceInfo?: (0 | 1 );
+contextPlayId?: (0 | 1 );
+contextType?: (0 | 1 );
+contextKey?: (0 | 1 );
+stretchId?: (0 | 1 );
+seeked?: (0 | 1 );
 createdAt?: (0 | 1 );
 updatedAt?: (0 | 1 );
 track?: {

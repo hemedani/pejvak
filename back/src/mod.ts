@@ -1,5 +1,6 @@
 import { annotationsSetup } from "./annotations/mod.ts";
 import { authSetup } from "./auth/mod.ts";
+import { contextsSetup } from "./contexts/mod.ts";
 import { playlistsSetup } from "./playlists/mod.ts";
 import { sessionsSetup } from "./sessions/mod.ts";
 import { statsSetup } from "./stats/mod.ts";
@@ -14,4 +15,5 @@ export const functionsSetup = () => {
   sessionsSetup();
   statsSetup();
   playlistsSetup();
+  contextsSetup();
 };

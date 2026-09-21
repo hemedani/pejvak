@@ -2,6 +2,7 @@ import { type ActFn, ObjectId } from "lesan";
 import {
   annotation,
   coreApp,
+  playbackContext,
   playbackSession,
   playlist,
   track,
@@ -11,15 +12,71 @@ import { type MyContext } from "@lib";
 export const syncLocalDataFn: ActFn = async (body) => {
   const { user }: MyContext = coreApp.contextFns.getContextModel() as MyContext;
   const {
-    set: { sessions = [], annotations = [], playlists = [] },
+    set: { sessions = [], annotations = [], playlists = [], contextPlays = [] },
   } = body.details;
 
   const userId = new ObjectId(user._id);
   let syncedSessions = 0;
   let syncedAnnotations = 0;
   let syncedPlaylists = 0;
+  let syncedContextPlays = 0;
   const annotationMappings: { clientId: string; serverId?: string }[] = [];
   const playlistMappings: { clientId: string; serverId?: string }[] = [];
+  const contextPlayMappings: { clientId: string; serverId?: string }[] = [];
+
+  // Runs first, so a session that names one can be linked to a row that already
+  // exists. A session whose run is missing is still stored — the session is the
+  // primary record and losing it to a batch ordering would be worse than a
+  // history entry with no collection attached.
+  for (const run of contextPlays) {
+    const alreadySynced = await playbackContext.findOne({
+      filters: { clientId: run.clientId, "user._id": userId },
+      projection: { _id: 1 },
+    });
+
+    if (alreadySynced) {
+      contextPlayMappings.push({
+        clientId: run.clientId,
+        serverId: String(alreadySynced._id),
+      });
+      continue;
+    }
+
+    const inserted = await playbackContext.insertOne({
+      doc: {
+        clientId: run.clientId,
+        contextType: run.contextType,
+        contextKey: run.contextKey,
+        contextTitle: run.contextTitle,
+        trackCount: run.trackCount,
+        startedAt: run.startedAt,
+        endedAt: run.endedAt,
+        lastIndex: run.lastIndex,
+        lastTrackId: run.lastTrackId,
+        lastPositionSec: run.lastPositionSec,
+        listenedSec: run.listenedSec,
+        finishedCount: run.finishedCount,
+        completed: run.completed,
+        interrupted: run.interrupted,
+        updatedAt: new Date(run.updatedAt ?? Date.now()),
+      },
+      relations: {
+        user: {
+          _ids: userId,
+          relatedRelations: { playbackContexts: true },
+        },
+      } as never,
+      projection: { _id: 1 },
+    });
+
+    if (inserted) {
+      contextPlayMappings.push({
+        clientId: run.clientId,
+        serverId: String(inserted._id),
+      });
+      syncedContextPlays += 1;
+    }
+  }
 
   for (const session of sessions) {
     const parentTrack = await track.findOne({
@@ -47,6 +104,11 @@ export const syncLocalDataFn: ActFn = async (body) => {
         completed: session.completed,
         interrupted: session.interrupted,
         deviceInfo: session.deviceInfo,
+        contextPlayId: session.contextPlayId,
+        contextType: session.contextType,
+        contextKey: session.contextKey,
+        stretchId: session.stretchId,
+        seeked: session.seeked,
       },
       relations: {
         track: {
@@ -255,7 +317,9 @@ export const syncLocalDataFn: ActFn = async (body) => {
     syncedSessions,
     syncedAnnotations,
     syncedPlaylists,
+    syncedContextPlays,
     annotations: annotationMappings,
     playlists: playlistMappings,
+    contextPlays: contextPlayMappings,
   };
 };
