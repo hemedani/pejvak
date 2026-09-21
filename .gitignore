@@ -9,3 +9,4 @@ ignore-scripts
 # ignored here is shipped to the build servers on every build.
 .workbuddy-ai/memory/
 back/dump.rdb
+ignoreAssets
