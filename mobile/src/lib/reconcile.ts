@@ -1,5 +1,7 @@
 import type {
+  ContextType,
   LocalAnnotation,
+  LocalContextPlay,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
@@ -30,6 +32,45 @@ export type RemoteSession = {
   playbackSpeed: number;
   completed: boolean;
   interrupted: boolean;
+  /** The run this session belonged to, when it was part of a collection. */
+  contextPlayId: string | null;
+  contextType: ContextType | null;
+  contextKey: string | null;
+  /** The stretch the origin device grouped this session under, if it said. */
+  stretchId: string | null;
+  /** Whether the listener scrubbed during it, as the origin device recorded. */
+  seeked: boolean;
+};
+
+/**
+ * A run through a collection, as the server holds it.
+ *
+ * `contextKey` is a *local* playlist id or a folder key. A playlist id is
+ * stable across a device's own lifetime and travels with the run, so a second
+ * device can match the run to the playlist it pulls — the same way
+ * `contentHash` lets a session find its track. A folder key is a path, which
+ * only means anything on a device that has that folder; a run whose folder is
+ * absent is still a true record of listening, so it is kept and simply has no
+ * screen to open.
+ */
+export type RemoteContextPlay = {
+  serverId: string;
+  /** Original local id; the dedupe key against local rows. */
+  clientId: string | null;
+  contextType: ContextType;
+  contextKey: string;
+  contextTitle: string;
+  trackCount: number;
+  startedAt: number;
+  endedAt: number | null;
+  lastIndex: number;
+  lastTrackId: string | null;
+  lastPositionSec: number;
+  listenedSec: number;
+  finishedCount: number;
+  completed: boolean;
+  interrupted: boolean;
+  updatedAt: number;
 };
 
 export type RemoteAnnotation = {
@@ -108,6 +149,32 @@ export function reconcileSessions(
 ): { inserts: RemoteSession[]; backfill: Backfill[] } {
   const byId = new Map(local.map((session) => [session.id, session]));
   const inserts: RemoteSession[] = [];
+  const backfill: Backfill[] = [];
+
+  for (const item of remote) {
+    const id = remoteLocalId(item);
+    const existing = byId.get(id);
+    if (!existing) {
+      inserts.push(item);
+    } else if (!existing.serverId) {
+      backfill.push({ id, serverId: item.serverId });
+    }
+  }
+
+  return { inserts, backfill };
+}
+
+/**
+ * Runs dedupe by `clientId`, like sessions — a run is written once, when it
+ * ends, and never edited afterwards. There is therefore no update path and no
+ * last-write-wins: the only question is whether the row is already here.
+ */
+export function reconcileContextPlays(
+  local: LocalContextPlay[],
+  remote: RemoteContextPlay[],
+): { inserts: RemoteContextPlay[]; backfill: Backfill[] } {
+  const byId = new Map(local.map((run) => [run.id, run]));
+  const inserts: RemoteContextPlay[] = [];
   const backfill: Backfill[] = [];
 
   for (const item of remote) {

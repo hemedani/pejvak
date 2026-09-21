@@ -10,6 +10,7 @@ const EMPTY_COUNTS: PendingCounts = {
   sessions: 0,
   annotations: 0,
   playlists: 0,
+  contextPlays: 0,
 };
 
 export type UseSyncStatusResult = {
@@ -65,7 +66,11 @@ export function useSyncStatus(): UseSyncStatusResult {
   }, [refresh]);
 
   const pendingTotal =
-    pending.tracks + pending.sessions + pending.annotations + pending.playlists;
+    pending.tracks +
+    pending.sessions +
+    pending.annotations +
+    pending.playlists +
+    pending.contextPlays;
 
   return { pending, pendingTotal, lastSyncAt, syncing, refresh, syncNow };
 }

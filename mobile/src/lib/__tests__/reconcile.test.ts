@@ -67,6 +67,11 @@ function localSession(overrides: Partial<LocalSession> = {}): LocalSession {
     completed: false,
     interrupted: false,
     deviceInfo: null,
+    contextPlayId: null,
+    contextType: null,
+    contextKey: null,
+    stretchId: overrides.stretchId ?? overrides.id ?? "ls1",
+    seeked: false,
     syncStatus: "synced",
     createdAt: 0,
     updatedAt: 0,
@@ -116,6 +121,11 @@ const remoteSession: RemoteSession = {
   playbackSpeed: 1,
   completed: false,
   interrupted: false,
+  contextPlayId: null,
+  contextType: null,
+  contextKey: null,
+  stretchId: null,
+  seeked: false,
 };
 
 function localPlaylist(overrides: Partial<LocalPlaylist> = {}): LocalPlaylist {

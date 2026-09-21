@@ -1,5 +1,6 @@
 import type {
   LocalAnnotation,
+  LocalContextPlay,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
@@ -22,10 +23,15 @@ jest.mock("@/services/LocalDBService", () => ({
     getAllAnnotations: jest.fn(),
     getPendingPlaylists: jest.fn(),
     getAllPlaylists: jest.fn(),
+    getPendingContextPlays: jest.fn(),
+    getAllContextPlays: jest.fn(),
+    insertRemoteContextPlay: jest.fn(),
+    insertRemoteSession: jest.fn(),
     setTrackSyncStatus: jest.fn(),
     setSessionSyncStatus: jest.fn(),
     setAnnotationSyncStatus: jest.fn(),
     setPlaylistSyncStatus: jest.fn(),
+    setContextPlaySyncStatus: jest.fn(),
     hardDeleteAnnotation: jest.fn(),
     deletePlaylist: jest.fn(),
     insertRemotePlaylist: jest.fn(),
@@ -56,8 +62,12 @@ const getPendingAnnotations = jest.mocked(LocalDBService.getPendingAnnotations);
 const getAllAnnotations = jest.mocked(LocalDBService.getAllAnnotations);
 const getPendingPlaylists = jest.mocked(LocalDBService.getPendingPlaylists);
 const getAllPlaylists = jest.mocked(LocalDBService.getAllPlaylists);
+const getPendingContextPlays = jest.mocked(LocalDBService.getPendingContextPlays);
+const getAllContextPlays = jest.mocked(LocalDBService.getAllContextPlays);
 const setPlaylistSyncStatus = jest.mocked(LocalDBService.setPlaylistSyncStatus);
+const setContextPlaySyncStatus = jest.mocked(LocalDBService.setContextPlaySyncStatus);
 const deletePlaylist = jest.mocked(LocalDBService.deletePlaylist);
+const insertRemoteSession = jest.mocked(LocalDBService.insertRemoteSession);
 const setTrackSyncStatus = jest.mocked(LocalDBService.setTrackSyncStatus);
 const setSessionSyncStatus = jest.mocked(LocalDBService.setSessionSyncStatus);
 const setAnnotationSyncStatus = jest.mocked(LocalDBService.setAnnotationSyncStatus);
@@ -71,6 +81,7 @@ const db = {
   sessions: new Map<string, LocalSession>(),
   annotations: new Map<string, LocalAnnotation>(),
   playlists: new Map<string, LocalPlaylist>(),
+  contextPlays: new Map<string, LocalContextPlay>(),
 };
 
 function pending<T extends Row>(rows: Map<string, T>, limit: number): T[] {
@@ -96,10 +107,13 @@ function installClient(): void {
         (request.details?.set?.annotations as { clientId: string }[] | undefined) ?? [];
       const playlists =
         (request.details?.set?.playlists as { clientId: string }[] | undefined) ?? [];
+      const contextPlays =
+        (request.details?.set?.contextPlays as { clientId: string }[] | undefined) ?? [];
       return {
         syncedSessions: sessions.length,
         syncedAnnotations: annotations.length,
         syncedPlaylists: playlists.length,
+        syncedContextPlays: contextPlays.length,
         annotations: annotations.map((annotation) => ({
           clientId: annotation.clientId,
           serverId: `srv-${annotation.clientId}`,
@@ -108,6 +122,10 @@ function installClient(): void {
           clientId: playlist.clientId,
           serverId: `srv-${playlist.clientId}`,
         })),
+        contextPlays: contextPlays.map((run) => ({
+          clientId: run.clientId,
+          serverId: `srv-${run.clientId}`,
+        })),
       };
     }
     return [];
@@ -115,18 +133,25 @@ function installClient(): void {
 }
 
 function syncLocalDataPayloads(): {
-  sessions: { clientId: string; endedAt?: number }[];
+  sessions: { clientId: string; endedAt?: number; stretchId?: string; seeked?: boolean }[];
   annotations: { clientId: string; deleted: boolean }[];
   playlists: {
     clientId: string;
     deleted: boolean;
     items: { contentHash: string; order: number }[];
   }[];
+  contextPlays: { clientId: string }[];
 }[] {
   return callTypedActMock.mock.calls
     .filter(([request]) => request.act === "syncLocalData")
     .map(([request]) => ({
-      sessions: (request.details?.set?.sessions as { clientId: string; endedAt?: number }[]) ?? [],
+      sessions:
+        (request.details?.set?.sessions as {
+          clientId: string;
+          endedAt?: number;
+          stretchId?: string;
+          seeked?: boolean;
+        }[]) ?? [],
       annotations:
         (request.details?.set?.annotations as { clientId: string; deleted: boolean }[]) ?? [],
       playlists:
@@ -135,6 +160,7 @@ function syncLocalDataPayloads(): {
           deleted: boolean;
           items: { contentHash: string; order: number }[];
         }[]) ?? [],
+      contextPlays: (request.details?.set?.contextPlays as { clientId: string }[]) ?? [],
     }));
 }
 
@@ -196,6 +222,11 @@ function session(overrides: Partial<LocalSession> = {}): LocalSession {
     completed: false,
     interrupted: false,
     deviceInfo: null,
+    contextPlayId: null,
+    contextType: null,
+    contextKey: null,
+    stretchId: overrides.stretchId ?? overrides.id ?? "s1",
+    seeked: false,
     syncStatus: "pending",
     createdAt: 1,
     updatedAt: 1,
@@ -238,6 +269,31 @@ function playlist(overrides: Partial<LocalPlaylist> = {}): LocalPlaylist {
   };
 }
 
+function contextPlay(overrides: Partial<LocalContextPlay> = {}): LocalContextPlay {
+  return {
+    id: "r1",
+    serverId: null,
+    contextType: "folder",
+    contextKey: "Lectures",
+    contextTitle: "Lectures",
+    trackCount: 24,
+    startedAt: 100,
+    endedAt: 200,
+    lastIndex: 23,
+    lastTrackId: "t1",
+    lastPositionSec: 600,
+    listenedSec: 5400,
+    finishedCount: 24,
+    completed: true,
+    interrupted: false,
+    deletedAt: null,
+    syncStatus: "pending",
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides,
+  };
+}
+
 function setSyncStatus<T extends Row>(
   rows: Map<string, T>,
   id: string,
@@ -256,6 +312,7 @@ beforeEach(() => {
   db.sessions.clear();
   db.annotations.clear();
   db.playlists.clear();
+  db.contextPlays.clear();
   installClient();
 
   getPendingTracks.mockImplementation(async (limit = 50) => pending(db.tracks, limit));
@@ -266,6 +323,10 @@ beforeEach(() => {
   getAllAnnotations.mockImplementation(async () => [...db.annotations.values()]);
   getPendingPlaylists.mockImplementation(async (limit = 50) => pending(db.playlists, limit));
   getAllPlaylists.mockImplementation(async () => [...db.playlists.values()]);
+  getPendingContextPlays.mockImplementation(async (limit = 50) =>
+    pending(db.contextPlays, limit),
+  );
+  getAllContextPlays.mockImplementation(async () => [...db.contextPlays.values()]);
 
   setTrackSyncStatus.mockImplementation(async (id, status, serverId) => {
     setSyncStatus(db.tracks, id, status, serverId);
@@ -278,6 +339,9 @@ beforeEach(() => {
   });
   setPlaylistSyncStatus.mockImplementation(async (id, status, serverId) => {
     setSyncStatus(db.playlists, id, status, serverId);
+  });
+  setContextPlaySyncStatus.mockImplementation(async (id, status, serverId) => {
+    setSyncStatus(db.contextPlays, id, status, serverId);
   });
   hardDeleteAnnotation.mockImplementation(async (id) => {
     db.annotations.delete(id);
@@ -300,6 +364,7 @@ describe("syncPending", () => {
       sessionsSynced: 1,
       annotationsSynced: 1,
       playlistsSynced: 0,
+      contextPlaysSynced: 0,
       failed: 0,
     });
     expect(registeredHashes()).toEqual(["hash-1"]);
@@ -317,6 +382,62 @@ describe("syncPending", () => {
     expect(payload.annotations).toEqual([
       expect.objectContaining({ clientId: "a1", deleted: false }),
     ]);
+  });
+
+  it("carries the listening stretch and the scrub flag with each session", async () => {
+    db.tracks.set("t1", track());
+    db.sessions.set("s1", session({ id: "s1", stretchId: "stretch-9", seeked: true }));
+
+    await syncPending();
+
+    const [payload] = syncLocalDataPayloads();
+    expect(payload.sessions).toEqual([
+      expect.objectContaining({ clientId: "s1", stretchId: "stretch-9", seeked: true }),
+    ]);
+  });
+
+  it("sends a session's own id as its stretch when it has no group", async () => {
+    // A row that was never part of a longer listen is a stretch of one, and the
+    // other device has to be told that rather than left to guess.
+    db.tracks.set("t1", track());
+    db.sessions.set("s1", session({ id: "s1" }));
+
+    await syncPending();
+
+    const [payload] = syncLocalDataPayloads();
+    expect(payload.sessions).toEqual([
+      expect.objectContaining({ clientId: "s1", stretchId: "s1", seeked: false }),
+    ]);
+  });
+
+  it("pushes a finished run and stores the server id it comes back with", async () => {
+    db.contextPlays.set("r1", contextPlay());
+
+    const summary = await syncPending();
+
+    expect(summary.contextPlaysSynced).toBe(1);
+    const [payload] = syncLocalDataPayloads();
+    expect(payload.contextPlays).toEqual([
+      expect.objectContaining({ clientId: "r1", contextKey: "Lectures" }),
+    ]);
+    expect(db.contextPlays.get("r1")).toMatchObject({
+      syncStatus: "synced",
+      serverId: "srv-r1",
+    });
+  });
+
+  it("leaves a run that has not ended queued", async () => {
+    // An in-progress run has no final figures: its listened time and its
+    // finished count are still moving, so sending it would put a guess on the
+    // server and then have to correct it.
+    db.contextPlays.set("r1", contextPlay({ endedAt: null, completed: false }));
+
+    const summary = await syncPending();
+
+    expect(summary.contextPlaysSynced).toBe(0);
+    // Nothing was worth sending, so the transport was never called at all.
+    expect(syncLocalDataPayloads()).toEqual([]);
+    expect(db.contextPlays.get("r1")?.syncStatus).toBe("pending");
   });
 
   it("only sends finalized sessions for a track that is already synced", async () => {
@@ -458,7 +579,82 @@ describe("pullFromServer", () => {
     const first = await pullFromServer();
     const second = await pullFromServer();
 
-    expect(first).toEqual({ tracks: 0, sessions: 0, annotations: 0, playlists: 0 });
-    expect(second).toEqual({ tracks: 0, sessions: 0, annotations: 0, playlists: 0 });
+    expect(first).toEqual({
+      tracks: 0,
+      sessions: 0,
+      annotations: 0,
+      playlists: 0,
+      contextPlays: 0,
+    });
+    expect(second).toEqual({
+      tracks: 0,
+      sessions: 0,
+      annotations: 0,
+      playlists: 0,
+      contextPlays: 0,
+    });
+  });
+
+  it("keeps a pulled session in the stretch the origin device gave it", async () => {
+    // A listen split across two phones has to read as one entry on both, so the
+    // grouping key travels with the session instead of being re-derived here.
+    db.tracks.set("t1", track({ syncStatus: "synced", serverId: "srv-t1" }));
+    callTypedActMock.mockImplementation(async (request) => {
+      if (request.act === "getMyListeningHistory") {
+        return [
+          {
+            _id: "srv-s1",
+            clientId: "ls1",
+            contentHash: "hash-1",
+            startedAt: 10,
+            endedAt: 70,
+            startPositionSec: 0,
+            endPositionSec: 60,
+            durationListenedSec: 60,
+            playbackSpeed: 1,
+            completed: true,
+            interrupted: false,
+            stretchId: "stretch-9",
+            seeked: true,
+          },
+        ];
+      }
+      return [];
+    });
+
+    const summary = await pullFromServer();
+
+    expect(summary.sessions).toBe(1);
+    expect(insertRemoteSession).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: "ls1", stretchId: "stretch-9", seeked: true }),
+    );
+  });
+
+  it("reads a pulled session the server had no group for as ungrouped", async () => {
+    // Null, not a synthesised id: the local insert turns "no group" into a
+    // stretch of one, and it cannot do that if the value is indistinguishable
+    // from a real grouping key.
+    db.tracks.set("t1", track({ syncStatus: "synced", serverId: "srv-t1" }));
+    callTypedActMock.mockImplementation(async (request) => {
+      if (request.act === "getMyListeningHistory") {
+        return [
+          {
+            _id: "srv-s1",
+            clientId: "ls1",
+            contentHash: "hash-1",
+            startedAt: 10,
+            durationListenedSec: 0,
+            playbackSpeed: 1,
+          },
+        ];
+      }
+      return [];
+    });
+
+    await pullFromServer();
+
+    expect(insertRemoteSession).toHaveBeenCalledWith(
+      expect.objectContaining({ clientId: "ls1", stretchId: null, seeked: false }),
+    );
   });
 });

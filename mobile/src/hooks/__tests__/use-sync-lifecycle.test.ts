@@ -26,6 +26,7 @@ beforeEach(() => {
     sessionsSynced: 0,
     annotationsSynced: 0,
     playlistsSynced: 0,
+    contextPlaysSynced: 0,
     failed: 0,
   });
   addNetworkStateListener.mockImplementation((callback) => {

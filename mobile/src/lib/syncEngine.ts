@@ -1,5 +1,7 @@
 import type {
+  ContextType,
   LocalAnnotation,
+  LocalContextPlay,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
@@ -12,8 +14,10 @@ export type SyncLocalDataResult = {
   syncedSessions?: number;
   syncedAnnotations?: number;
   syncedPlaylists?: number;
+  syncedContextPlays?: number;
   annotations?: { clientId: string; serverId?: string }[];
   playlists?: { clientId: string; serverId?: string }[];
+  contextPlays?: { clientId: string; serverId?: string }[];
 };
 
 /** A playlist ready for the wire: item track ids replaced by content hashes. */
@@ -27,12 +31,39 @@ export type PlaylistSyncPayload = {
   deleted: boolean;
 };
 
+/**
+ * A finished run through a collection, ready for the wire.
+ *
+ * Only ended runs are sent — an in-progress run has no final figures, and the
+ * server's job is to keep the record, not to follow along. Nothing is resolved
+ * server-side: `contextKey` is already the identifier the client will look for
+ * when it pulls the run back.
+ */
+export type ContextPlaySyncPayload = {
+  clientId: string;
+  contextType: ContextType;
+  contextKey: string;
+  contextTitle: string;
+  trackCount: number;
+  startedAt: number;
+  endedAt: number;
+  lastIndex: number;
+  lastTrackId: string | null;
+  lastPositionSec: number;
+  listenedSec: number;
+  finishedCount: number;
+  completed: boolean;
+  interrupted: boolean;
+  updatedAt: number;
+};
+
 export type SyncTransport = {
   registerTrack: (track: LocalTrack) => Promise<RegisterTrackResult>;
   syncLocalData: (
     sessions: LocalSession[],
     annotations: LocalAnnotation[],
     playlists: PlaylistSyncPayload[],
+    contextPlays: ContextPlaySyncPayload[],
   ) => Promise<SyncLocalDataResult>;
 };
 
@@ -42,10 +73,16 @@ export type SyncStore = {
   getPendingSessions: (limit: number) => Promise<LocalSession[]>;
   getPendingAnnotations: (limit: number) => Promise<LocalAnnotation[]>;
   getPendingPlaylists: (limit: number) => Promise<LocalPlaylist[]>;
+  getPendingContextPlays: (limit: number) => Promise<LocalContextPlay[]>;
   setTrackSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
   setSessionSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
   setAnnotationSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
   setPlaylistSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
+  setContextPlaySyncStatus: (
+    id: string,
+    status: SyncStatus,
+    serverId?: string,
+  ) => Promise<void>;
   /** Hard-delete a row (used for acknowledged delete tombstones). */
   removeAnnotation: (id: string) => Promise<void>;
   removePlaylist: (id: string) => Promise<void>;
@@ -56,6 +93,7 @@ export type SyncSummary = {
   sessionsSynced: number;
   annotationsSynced: number;
   playlistsSynced: number;
+  contextPlaysSynced: number;
   failed: number;
 };
 
@@ -88,6 +126,7 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     sessionsSynced: 0,
     annotationsSynced: 0,
     playlistsSynced: 0,
+    contextPlaysSynced: 0,
     failed: 0,
   };
 
@@ -163,7 +202,41 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     });
   }
 
-  if (sessions.length === 0 && annotations.length === 0 && playlistPayloads.length === 0) {
+  // Collection runs need nothing resolved first: a run identifies its
+  // collection by key, not by content hash, so there is no parent row that has
+  // to exist server-side before it can be sent. Only ended runs are pending —
+  // an in-progress run has no final figures — and the guard below restates that
+  // so the contract does not live only inside a SQL predicate.
+  const contextPlayPayloads: ContextPlaySyncPayload[] = [];
+  for (const run of await store.getPendingContextPlays(limit)) {
+    if (run.endedAt === null) {
+      continue;
+    }
+    contextPlayPayloads.push({
+      clientId: run.id,
+      contextType: run.contextType,
+      contextKey: run.contextKey,
+      contextTitle: run.contextTitle,
+      trackCount: run.trackCount,
+      startedAt: run.startedAt,
+      endedAt: run.endedAt,
+      lastIndex: run.lastIndex,
+      lastTrackId: run.lastTrackId,
+      lastPositionSec: run.lastPositionSec,
+      listenedSec: run.listenedSec,
+      finishedCount: run.finishedCount,
+      completed: run.completed,
+      interrupted: run.interrupted,
+      updatedAt: run.updatedAt,
+    });
+  }
+
+  if (
+    sessions.length === 0 &&
+    annotations.length === 0 &&
+    playlistPayloads.length === 0 &&
+    contextPlayPayloads.length === 0
+  ) {
     return summary;
   }
 
@@ -175,15 +248,26 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     ...playlistPayloads.map((playlist) =>
       store.setPlaylistSyncStatus(playlist.clientId, "syncing"),
     ),
+    ...contextPlayPayloads.map((run) =>
+      store.setContextPlaySyncStatus(run.clientId, "syncing"),
+    ),
   ]);
 
   try {
-    const result = await transport.syncLocalData(sessions, annotations, playlistPayloads);
+    const result = await transport.syncLocalData(
+      sessions,
+      annotations,
+      playlistPayloads,
+      contextPlayPayloads,
+    );
     const annotationServerIds = new Map(
       (result.annotations ?? []).map((mapping) => [mapping.clientId, mapping.serverId]),
     );
     const playlistServerIds = new Map(
       (result.playlists ?? []).map((mapping) => [mapping.clientId, mapping.serverId]),
+    );
+    const contextPlayServerIds = new Map(
+      (result.contextPlays ?? []).map((mapping) => [mapping.clientId, mapping.serverId]),
     );
     await Promise.all([
       ...sessions.map((session) => store.setSessionSyncStatus(session.id, "synced")),
@@ -205,10 +289,18 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
               playlistServerIds.get(playlist.clientId),
             ),
       ),
+      ...contextPlayPayloads.map((run) =>
+        store.setContextPlaySyncStatus(
+          run.clientId,
+          "synced",
+          contextPlayServerIds.get(run.clientId),
+        ),
+      ),
     ]);
     summary.sessionsSynced = result.syncedSessions ?? 0;
     summary.annotationsSynced = result.syncedAnnotations ?? 0;
     summary.playlistsSynced = result.syncedPlaylists ?? 0;
+    summary.contextPlaysSynced = result.syncedContextPlays ?? 0;
   } catch {
     await Promise.all([
       ...sessions.map((session) => store.setSessionSyncStatus(session.id, "failed")),
@@ -218,8 +310,15 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
       ...playlistPayloads.map((playlist) =>
         store.setPlaylistSyncStatus(playlist.clientId, "failed"),
       ),
+      ...contextPlayPayloads.map((run) =>
+        store.setContextPlaySyncStatus(run.clientId, "failed"),
+      ),
     ]);
-    summary.failed += sessions.length + annotations.length + playlistPayloads.length;
+    summary.failed +=
+      sessions.length +
+      annotations.length +
+      playlistPayloads.length +
+      contextPlayPayloads.length;
   }
 
   return summary;

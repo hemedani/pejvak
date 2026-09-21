@@ -24,6 +24,7 @@ const counts = (n: number) => ({
   sessions: n,
   annotations: n,
   playlists: n,
+  contextPlays: n,
 });
 
 beforeEach(() => jest.clearAllMocks());
@@ -35,7 +36,7 @@ describe("useSyncStatus", () => {
 
     const { result } = await renderHook(() => useSyncStatus());
 
-    await waitFor(() => expect(result.current.pendingTotal).toBe(8));
+    await waitFor(() => expect(result.current.pendingTotal).toBe(10));
     expect(result.current.lastSyncAt).toBe(1234);
   });
 
@@ -44,7 +45,7 @@ describe("useSyncStatus", () => {
     getLastSyncAt.mockResolvedValue(null);
 
     const { result } = await renderHook(() => useSyncStatus());
-    await waitFor(() => expect(result.current.pendingTotal).toBe(4));
+    await waitFor(() => expect(result.current.pendingTotal).toBe(5));
 
     await act(async () => {
       await result.current.syncNow();

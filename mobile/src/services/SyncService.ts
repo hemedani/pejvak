@@ -1,18 +1,22 @@
 import type { BackendActRequest } from "@/lib/backend-types";
 import { callTypedAct } from "@/lib/client";
+import { toContextType } from "@/lib/db/mappers";
 import type { LocalAnnotation, LocalSession, LocalTrack, SyncStatus } from "@/lib/db/types";
 import {
   reconcileAnnotations,
+  reconcileContextPlays,
   reconcilePlaylists,
   reconcileSessions,
   reconcileTracks,
   type RemoteAnnotation,
+  type RemoteContextPlay,
   type RemotePlaylist,
   type RemoteSession,
   type RemoteTrack,
 } from "@/lib/reconcile";
 import {
   runSync,
+  type ContextPlaySyncPayload,
   type PlaylistSyncPayload,
   type RegisterTrackResult,
   type SyncLocalDataResult,
@@ -68,9 +72,27 @@ function syncLocalData(
   sessions: LocalSession[],
   annotations: LocalAnnotation[],
   playlists: PlaylistSyncPayload[],
+  contextPlays: ContextPlaySyncPayload[],
 ): Promise<SyncLocalDataResult> {
   const details: SyncLocalDataDetails = {
     set: {
+      contextPlays: contextPlays.map((run) => ({
+        clientId: run.clientId,
+        contextType: run.contextType,
+        contextKey: run.contextKey,
+        contextTitle: run.contextTitle,
+        trackCount: run.trackCount,
+        startedAt: run.startedAt,
+        endedAt: run.endedAt,
+        lastIndex: run.lastIndex,
+        lastPositionSec: run.lastPositionSec,
+        listenedSec: run.listenedSec,
+        finishedCount: run.finishedCount,
+        completed: run.completed,
+        interrupted: run.interrupted,
+        updatedAt: run.updatedAt,
+        ...(run.lastTrackId !== null ? { lastTrackId: run.lastTrackId } : {}),
+      })),
       playlists: playlists.map((playlist) => ({
         clientId: playlist.clientId,
         title: playlist.title,
@@ -92,6 +114,19 @@ function syncLocalData(
         interrupted: session.interrupted,
         ...(session.endedAt !== null ? { endedAt: session.endedAt } : {}),
         ...(session.deviceInfo ? { deviceInfo: session.deviceInfo } : {}),
+        // A folder key may legitimately be the empty string (the storage root),
+        // so these are tested against null rather than for truthiness: an
+        // omitted key would send a session that no longer belongs to a
+        // collection, and the run it was part of would lose its tracks.
+        ...(session.contextPlayId !== null ? { contextPlayId: session.contextPlayId } : {}),
+        ...(session.contextType !== null ? { contextType: session.contextType } : {}),
+        ...(session.contextKey !== null ? { contextKey: session.contextKey } : {}),
+        // Sent unconditionally: every session has a stretch, and a stretch of
+        // one is the truthful reading of a row that has no siblings. Omitting
+        // the id would make the other device treat the listen as ungrouped and
+        // lose the fact that it was heard through.
+        stretchId: session.stretchId,
+        seeked: session.seeked,
       })),
       annotations: annotations.map((annotation) => ({
         clientId: annotation.id,
@@ -108,8 +143,10 @@ function syncLocalData(
       syncedSessions: 1,
       syncedAnnotations: 1,
       syncedPlaylists: 1,
+      syncedContextPlays: 1,
       annotations: [],
       playlists: [],
+      contextPlays: [],
     },
   };
   return callTypedAct<"main", "track", "syncLocalData", SyncLocalDataResult>({
@@ -128,6 +165,7 @@ export const localStore: SyncStore = {
   getPendingSessions: (limit) => LocalDBService.getPendingSessions(limit),
   getPendingAnnotations: (limit) => LocalDBService.getPendingAnnotations(limit),
   getPendingPlaylists: (limit) => LocalDBService.getPendingPlaylists(limit),
+  getPendingContextPlays: (limit) => LocalDBService.getPendingContextPlays(limit),
   setTrackSyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
     LocalDBService.setTrackSyncStatus(id, status, serverId),
   setSessionSyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
@@ -136,6 +174,8 @@ export const localStore: SyncStore = {
     LocalDBService.setAnnotationSyncStatus(id, status, serverId),
   setPlaylistSyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
     LocalDBService.setPlaylistSyncStatus(id, status, serverId),
+  setContextPlaySyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
+    LocalDBService.setContextPlaySyncStatus(id, status, serverId),
   removeAnnotation: (id: string) => LocalDBService.hardDeleteAnnotation(id),
   removePlaylist: (id: string) => LocalDBService.deletePlaylist(id),
 };
@@ -172,7 +212,31 @@ type RemoteSessionRow = {
   playbackSpeed?: number;
   completed?: boolean;
   interrupted?: boolean;
+  contextPlayId?: string;
+  contextType?: string;
+  contextKey?: string;
+  stretchId?: string;
+  seeked?: boolean;
   track?: { contentHash?: string };
+};
+
+type RemoteContextPlayRow = {
+  _id?: string;
+  clientId?: string;
+  contextType?: string;
+  contextKey?: string;
+  contextTitle?: string;
+  trackCount?: number;
+  startedAt?: number;
+  endedAt?: number;
+  lastIndex?: number;
+  lastTrackId?: string;
+  lastPositionSec?: number;
+  listenedSec?: number;
+  finishedCount?: number;
+  completed?: boolean;
+  interrupted?: boolean;
+  updatedAt?: string | number;
 };
 
 type RemoteAnnotationRow = {
@@ -257,6 +321,11 @@ async function fetchRemoteSessions(): Promise<RemoteSession[]> {
         playbackSpeed: 1,
         completed: 1,
         interrupted: 1,
+        contextPlayId: 1,
+        contextType: 1,
+        contextKey: 1,
+        stretchId: 1,
+        seeked: 1,
         track: { contentHash: 1 },
       },
     };
@@ -289,6 +358,90 @@ async function fetchRemoteSessions(): Promise<RemoteSession[]> {
         playbackSpeed: row.playbackSpeed ?? 1,
         completed: row.completed ?? false,
         interrupted: row.interrupted ?? false,
+        contextPlayId: row.contextPlayId ?? null,
+        contextType: toContextType(row.contextType ?? null),
+        contextKey: row.contextKey ?? null,
+        // Null rather than a synthesised id: the caller decides that a session
+        // with no group of its own is a stretch of one, and it needs to be able
+        // to tell "no group" from "a group named after its own id".
+        stretchId: row.stretchId ?? null,
+        seeked: row.seeked ?? false,
+      },
+    ];
+  });
+}
+
+async function fetchRemoteContextPlays(): Promise<RemoteContextPlay[]> {
+  const details: BackendActRequest<
+    "main",
+    "playbackContext",
+    "getMyPlaybackContexts"
+  >["details"] = {
+    set: { page: 1, limit: PULL_PAGE_SIZE },
+    get: {
+      _id: 1,
+      clientId: 1,
+      contextType: 1,
+      contextKey: 1,
+      contextTitle: 1,
+      trackCount: 1,
+      startedAt: 1,
+      endedAt: 1,
+      lastIndex: 1,
+      lastTrackId: 1,
+      lastPositionSec: 1,
+      listenedSec: 1,
+      finishedCount: 1,
+      completed: 1,
+      interrupted: 1,
+      updatedAt: 1,
+    },
+  };
+  const rows = await callTypedAct<
+    "main",
+    "playbackContext",
+    "getMyPlaybackContexts",
+    RemoteContextPlayRow[]
+  >({
+    service: "main",
+    model: "playbackContext",
+    act: "getMyPlaybackContexts",
+    details,
+  });
+  return rows.flatMap((row) => {
+    // A run with no key, no start or no end cannot be placed on a timeline —
+    // an open run has no final figures, so it is not a history entry yet.
+    if (
+      !row._id ||
+      !row.contextType ||
+      row.contextKey === undefined ||
+      row.startedAt === undefined ||
+      row.endedAt === undefined
+    ) {
+      return [];
+    }
+    const contextType = toContextType(row.contextType);
+    if (!contextType) {
+      return [];
+    }
+    return [
+      {
+        serverId: row._id,
+        clientId: row.clientId ?? null,
+        contextType,
+        contextKey: row.contextKey,
+        contextTitle: row.contextTitle ?? row.contextKey,
+        trackCount: row.trackCount ?? 0,
+        startedAt: row.startedAt,
+        endedAt: row.endedAt,
+        lastIndex: row.lastIndex ?? 0,
+        lastTrackId: row.lastTrackId ?? null,
+        lastPositionSec: row.lastPositionSec ?? 0,
+        listenedSec: row.listenedSec ?? 0,
+        finishedCount: row.finishedCount ?? 0,
+        completed: row.completed ?? false,
+        interrupted: row.interrupted ?? false,
+        updatedAt: toMillis(row.updatedAt),
       },
     ];
   });
@@ -370,6 +523,7 @@ export type PullSummary = {
   sessions: number;
   annotations: number;
   playlists: number;
+  contextPlays: number;
 };
 
 /**
@@ -378,12 +532,13 @@ export type PullSummary = {
  * annotations by `clientId`. Best-effort: throws only if a fetch fails.
  */
 export async function pullFromServer(): Promise<PullSummary> {
-  const [remoteTracks, remoteSessions, remoteAnnotations, remotePlaylists] =
+  const [remoteTracks, remoteSessions, remoteAnnotations, remotePlaylists, remoteContextPlays] =
     await Promise.all([
       fetchRemoteTracks(),
       fetchRemoteSessions(),
       fetchRemoteAnnotations(),
       fetchRemotePlaylists(),
+      fetchRemoteContextPlays(),
     ]);
 
   const trackPlan = reconcileTracks(await LocalDBService.getAllTracks(), remoteTracks);
@@ -409,6 +564,21 @@ export async function pullFromServer(): Promise<PullSummary> {
   }
   for (const item of sessionPlan.backfill) {
     await LocalDBService.setSessionSyncStatus(item.id, "synced", item.serverId);
+  }
+
+  // Runs come after sessions so a session's `contextPlayId` names a row that is
+  // already here. Nothing is resolved on the way in: a run carries its
+  // collection's key verbatim, and a key that matches nothing on this device is
+  // still a true record of listening done elsewhere.
+  const contextPlan = reconcileContextPlays(
+    await LocalDBService.getAllContextPlays(),
+    remoteContextPlays,
+  );
+  for (const item of contextPlan.inserts) {
+    await LocalDBService.insertRemoteContextPlay(item);
+  }
+  for (const item of contextPlan.backfill) {
+    await LocalDBService.setContextPlaySyncStatus(item.id, "synced", item.serverId);
   }
 
   const annotationPlan = reconcileAnnotations(
@@ -482,6 +652,7 @@ export async function pullFromServer(): Promise<PullSummary> {
     annotations:
       annotationPlan.inserts.length + annotationPlan.updates.length,
     playlists: playlistPlan.inserts.length + playlistPlan.updates.length,
+    contextPlays: contextPlan.inserts.length,
   };
 }
 

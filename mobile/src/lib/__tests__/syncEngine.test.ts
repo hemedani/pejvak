@@ -1,5 +1,6 @@
 import type {
   LocalAnnotation,
+  LocalContextPlay,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
@@ -64,6 +65,11 @@ function session(overrides: Partial<LocalSession> = {}): LocalSession {
     completed: false,
     interrupted: false,
     deviceInfo: null,
+    contextPlayId: null,
+    contextType: null,
+    contextKey: null,
+    stretchId: overrides.stretchId ?? overrides.id ?? "s1",
+    seeked: false,
     syncStatus: "pending",
     createdAt: 1,
     updatedAt: 1,
@@ -111,11 +117,13 @@ function createStore(seed: {
   sessions?: LocalSession[];
   annotations?: LocalAnnotation[];
   playlists?: LocalPlaylist[];
+  contextPlays?: LocalContextPlay[];
 }) {
   const tracks = new Map((seed.tracks ?? []).map((item) => [item.id, item]));
   const sessions = new Map((seed.sessions ?? []).map((item) => [item.id, item]));
   const annotations = new Map((seed.annotations ?? []).map((item) => [item.id, item]));
   const playlists = new Map((seed.playlists ?? []).map((item) => [item.id, item]));
+  const contextPlays = new Map((seed.contextPlays ?? []).map((item) => [item.id, item]));
 
   const pending = <T extends { syncStatus: SyncStatus }>(map: Map<string, T>, limit: number) =>
     [...map.values()]
@@ -128,6 +136,7 @@ function createStore(seed: {
     getPendingSessions: async (limit) => pending(sessions, limit),
     getPendingAnnotations: async (limit) => pending(annotations, limit),
     getPendingPlaylists: async (limit) => pending(playlists, limit),
+    getPendingContextPlays: async (limit) => pending(contextPlays, limit),
     setTrackSyncStatus: async (id, status, serverId) => {
       const current = tracks.get(id);
       if (current) {
@@ -164,6 +173,16 @@ function createStore(seed: {
         });
       }
     },
+    setContextPlaySyncStatus: async (id, status, serverId) => {
+      const current = contextPlays.get(id);
+      if (current) {
+        contextPlays.set(id, {
+          ...current,
+          syncStatus: status,
+          serverId: serverId ?? current.serverId,
+        });
+      }
+    },
     removeAnnotation: async (id) => {
       annotations.delete(id);
     },
@@ -172,7 +191,7 @@ function createStore(seed: {
     },
   };
 
-  return { store, tracks, sessions, annotations, playlists };
+  return { store, tracks, sessions, annotations, playlists, contextPlays };
 }
 
 function createTransport(overrides: Partial<SyncTransport> = {}) {
