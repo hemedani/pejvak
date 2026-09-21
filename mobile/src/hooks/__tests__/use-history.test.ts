@@ -28,6 +28,11 @@ function item(id: string): HistoryItem {
       completed: true,
       interrupted: false,
       deviceInfo: null,
+      contextPlayId: null,
+      contextType: null,
+      contextKey: null,
+      stretchId: id,
+      seeked: false,
       syncStatus: "synced",
       createdAt: 0,
       updatedAt: 0,
@@ -40,6 +45,7 @@ function item(id: string): HistoryItem {
       isAudiobook: true,
       artworkUrl: null,
     },
+    contextTitle: null,
   };
 }
 

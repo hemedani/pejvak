@@ -272,6 +272,11 @@ export default function TrackDetailScreen() {
                   isAudiobook: track?.isAudiobook ?? false,
                   artworkUrl: track?.artworkUrl ?? null,
                 },
+                // This list is the track's own sessions. The join that resolves
+                // a run's title lives on the History screen, which reads run
+                // rows; here there is nothing to name a collection with, and
+                // inventing a name would be worse than saying nothing.
+                contextTitle: null,
               };
               return (
                 <SessionCard

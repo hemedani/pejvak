@@ -1,4 +1,5 @@
 import type { LocalSession, LocalTrack } from "@/lib/db/types";
+import { groupSessionsIntoStretches, type ListeningStretch } from "@/lib/listeningStretch";
 import { formatClock } from "@/lib/time";
 
 export type HistoryItem = {
@@ -12,14 +13,38 @@ export type HistoryItem = {
     LocalTrack,
     "id" | "title" | "author" | "contentHash" | "isAudiobook" | "artworkUrl"
   >;
+  /**
+   * The collection this session was part of, if it was part of one. Resolved in
+   * the same query as the track, because "which folder was this?" is a caption
+   * on every row of a 200-entry list.
+   */
+  contextTitle: string | null;
 };
 
-export type HistoryDay = {
+/**
+ * One listening stretch, paired with the rows it was read from.
+ *
+ * The stretch alone is not enough to render: it carries ids and seconds, while
+ * the card has to *name* the track the listen began on and the one it ended on,
+ * and the track projection only exists on the joined rows. So the two travel
+ * together and the pairing is done once, here, instead of in each card.
+ */
+export type HistoryStretch = {
+  stretch: ListeningStretch;
+  /** Members in listening order, paired with their track and collection. */
+  items: HistoryItem[];
+  /** The row the listen began on — the card's headline. */
+  start: HistoryItem;
+  /** The row it ended on; the same row as `start` for a single-track listen. */
+  end: HistoryItem;
+};
+
+export type HistoryDay<T> = {
   /** Local calendar date key, `YYYY-MM-DD`. */
   key: string;
   /** Human label: "Today", "Yesterday", or "Tue, Sep 8". */
   label: string;
-  items: HistoryItem[];
+  items: T[];
 };
 
 /** Chronological order of the day buckets. */
@@ -37,11 +62,14 @@ export const HISTORY_SORT_OPTIONS: { value: HistorySort; label: string }[] = [
 /**
  * A rendered block of the History list. `title` is `null` for sorts that are not
  * chronological, where a day heading would be meaningless.
+ *
+ * Generic over the row so the two halves of the screen — stretches and
+ * collection runs — share one shape and one renderer.
  */
-export type HistorySection = {
+export type HistorySection<T = HistoryStretch> = {
   key: string;
   title: string | null;
-  data: HistoryItem[];
+  data: T[];
 };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -71,18 +99,23 @@ export function dayKey(timestampMs: number): string {
 }
 
 /**
- * Groups sessions into day buckets, newest day and newest session first by
- * default. Pass `order: "oldest"` to flip both the days and the sessions inside
- * them; the grouping itself is unaffected.
+ * Groups arbitrary timestamped rows into day buckets, newest day and newest row
+ * first by default. Pass `order: "oldest"` to flip both the days and the rows
+ * inside them; the grouping itself is unaffected.
+ *
+ * Generic over the row so the sessions list and the collections list share one
+ * implementation — two copies of "which day is this, and what is that day
+ * called?" would eventually label the same date two different ways.
  */
-export function groupSessionsByDay(
-  items: HistoryItem[],
+export function groupByDay<T>(
+  items: readonly T[],
+  timestampOf: (item: T) => number,
   now: number = Date.now(),
   order: HistoryOrder = "newest",
-): HistoryDay[] {
-  const buckets = new Map<string, HistoryItem[]>();
+): HistoryDay<T>[] {
+  const buckets = new Map<string, T[]>();
   for (const item of items) {
-    const key = dayKey(item.session.startedAt);
+    const key = dayKey(timestampOf(item));
     const bucket = buckets.get(key);
     if (bucket) {
       bucket.push(item);
@@ -112,40 +145,70 @@ export function groupSessionsByDay(
       return {
         key,
         label,
-        items: [...bucket].sort(
-          (a, b) => (b.session.startedAt - a.session.startedAt) * direction,
-        ),
+        items: [...bucket].sort((a, b) => (timestampOf(b) - timestampOf(a)) * direction),
       };
     });
 }
 
 /**
+ * Pairs each stretch with the rows it was built from.
+ *
+ * The grouping itself is the pure model's job; this only re-attaches the track
+ * and collection columns the query joined on. A stretch whose rows are missing
+ * is dropped rather than rendered as a nameless card — the caller's query
+ * returns every member of every stretch it selected, so a gap here means the
+ * list was assembled from somewhere else and the card would be lying.
+ */
+export function groupHistoryIntoStretches(
+  items: readonly HistoryItem[],
+): HistoryStretch[] {
+  const bySessionId = new Map(items.map((item) => [item.session.id, item]));
+
+  return groupSessionsIntoStretches(items.map((item) => item.session))
+    .map((stretch) => {
+      // `members` is already in listening order, so the first and last rows are
+      // the stretch's own start and end — no second ordering to disagree with
+      // the one that decided `startTrackId`.
+      const ordered = stretch.members
+        .map((session) => bySessionId.get(session.id))
+        .filter((item): item is HistoryItem => item !== undefined);
+      const start = ordered[0];
+      const end = ordered[ordered.length - 1];
+      return start && end ? { stretch, items: ordered, start, end } : null;
+    })
+    .filter((entry): entry is HistoryStretch => entry !== null);
+}
+
+/**
  * The History screen's list model.
  *
- * Chronological sorts keep their day headings. "Longest" is deliberately flat —
- * how long a session ran has nothing to do with the day it happened, so a
- * section header there would be noise.
+ * Chronological sorts keep their day headings, bucketed by the day the *listen
+ * began* — a stretch that ran past midnight belongs to the evening it started,
+ * which is where the listener would look for it.
+ *
+ * "Longest" is deliberately flat: how long a listen ran has nothing to do with
+ * the day it happened, so a section header there would be noise.
  */
-export function buildHistorySections(
-  items: HistoryItem[],
+export function buildStretchSections(
+  stretches: readonly HistoryStretch[],
   sort: HistorySort = "newest",
   now: number = Date.now(),
-): HistorySection[] {
+): HistorySection<HistoryStretch>[] {
   if (sort === "longest") {
     return [
       {
         key: "longest",
         title: null,
-        data: [...items].sort(
+        data: [...stretches].sort(
           (a, b) =>
-            b.session.durationListenedSec - a.session.durationListenedSec ||
-            b.session.startedAt - a.session.startedAt,
+            b.stretch.listenedSec - a.stretch.listenedSec ||
+            b.stretch.startedAt - a.stretch.startedAt,
         ),
       },
     ];
   }
 
-  return groupSessionsByDay(items, now, sort).map((day) => ({
+  return groupByDay(stretches, (entry) => entry.stretch.startedAt, now, sort).map((day) => ({
     key: day.key,
     title: day.label,
     data: day.items,
@@ -159,6 +222,9 @@ export function buildHistorySections(
  * complete the track the instant it started — so a completed entry replays from
  * the point that session began. Anything else continues from where it stopped,
  * falling back to the start position while a session is still in progress.
+ *
+ * Kept for the per-session cards (`track/[id].tsx` and the stats screen), which
+ * list single tracks rather than stretches.
  */
 export function resumeTargetSec(item: HistoryItem): number {
   const { completed, endPositionSec, startPositionSec } = item.session;
@@ -166,6 +232,44 @@ export function resumeTargetSec(item: HistoryItem): number {
     return Math.max(0, startPositionSec);
   }
   return Math.max(0, endPositionSec ?? startPositionSec);
+}
+
+/**
+ * The row tapping a stretch should reopen, and where inside it.
+ *
+ * The position and the track have to come from the same end of the stretch: a
+ * completed listen replays its first track from its opening second, while an
+ * unfinished one continues the *last* track it reached. Pairing the start track
+ * with the end track's offset would drop the listener minutes into a file they
+ * never played.
+ */
+export function stretchResumeTarget(entry: HistoryStretch): {
+  item: HistoryItem;
+  positionSec: number;
+} {
+  const { stretch } = entry;
+  if (stretch.completed) {
+    return { item: entry.start, positionSec: Math.max(0, stretch.startPositionSec) };
+  }
+  return {
+    item: entry.end,
+    positionSec: Math.max(0, stretch.endPositionSec ?? stretch.startPositionSec),
+  };
+}
+
+/**
+ * The headline for a stretch: the track it began on, and — when it covered more
+ * than one — the track it ended on.
+ *
+ * Both ends are shown because that is the whole point of a stretch: "chapter 4"
+ * alone does not say whether the listener got through chapter 7. A single-track
+ * listen says its title once rather than repeating it either side of an arrow.
+ */
+export function describeStretchTitle(entry: HistoryStretch): string {
+  if (entry.stretch.trackCount <= 1) {
+    return entry.start.track.title;
+  }
+  return `${entry.start.track.title} → ${entry.end.track.title}`;
 }
 
 /** Compact listened-time label: "45s", "1m 30s", "2h 2m". */

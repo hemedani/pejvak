@@ -68,6 +68,10 @@ export function SessionCard({ item, onPress, onDelete }: SessionCardProps) {
         </ThemedText>
         <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
           {formatPositionRange(item.session.startPositionSec, item.session.endPositionSec)}
+          {/* Which collection the session was part of, on the same line — the
+              row already carries three lines, and a fourth would grow every card
+              in a 200-entry list. */}
+          {item.contextTitle ? ` · ${item.contextTitle}` : ""}
         </ThemedText>
       </View>
 
