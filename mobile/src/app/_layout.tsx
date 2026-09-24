@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import { AddToPlaylistSheet } from "@/components/add-to-playlist";
+import { ContextHistorySheet } from "@/components/context-history";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -77,6 +78,9 @@ export default function RootLayout() {
             is its own window, so it can be opened from the player — itself a
             transparent modal — without landing behind it. */}
         <AddToPlaylistSheet />
+        {/* Same reasoning: a collection's history is reachable from a library
+            card, a collection screen, and the player alike. */}
+        <ContextHistorySheet />
       </ThemeProvider>
     </GestureHandlerRootView>
   );

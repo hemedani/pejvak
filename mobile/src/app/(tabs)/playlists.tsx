@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, FlatList, StyleSheet, View } from "react-native";
 
+import { ContextHistoryButton } from "@/components/context-history";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
@@ -168,6 +169,14 @@ export default function PlaylistsScreen() {
                   </ThemedText>
                 </View>
               </ElasticPressable>
+
+              <ContextHistoryButton
+                type="playlist"
+                contextKey={item.id}
+                title={item.title}
+                size={36}
+                iconSize={17}
+              />
 
               <BouncyIconButton
                 name="trash"

@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
 import { AddToPlaylistButton } from "@/components/add-to-playlist";
+import { ContextHistoryButton } from "@/components/context-history";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
@@ -165,21 +166,37 @@ export default function FolderDetailScreen() {
           title={data?.name ?? "Folder"}
           subtitle={subtitle ?? (loading ? "Loading…" : undefined)}
           action={
-            addableIds.length > 0 ? (
-              <AddToPlaylistButton
-                trackIds={addableIds}
-                title={data?.name ?? "Folder"}
-                subtitle={`${addableIds.length} track${addableIds.length === 1 ? "" : "s"} from this folder`}
-                ramp={ramp}
-                // The folder's own cover is its first track's, matching the
-                // library card this screen was opened from.
-                artwork={data?.tracks[0]?.artworkUrl ?? null}
-                isBatch
-                size={42}
-                iconSize={20}
-                tone="glass"
-              />
-            ) : null
+            <View style={styles.headerActions}>
+              {/* The folder's history, not this track's. The rows below carry
+                  the same control for the same reason: a track inside a folder
+                  has no history that is not already part of the folder's. */}
+              {data ? (
+                <ContextHistoryButton
+                  type="folder"
+                  contextKey={folderKey ?? ""}
+                  title={data.name}
+                  artwork={data.tracks[0]?.artworkUrl ?? null}
+                  size={42}
+                  iconSize={20}
+                  tone="glass"
+                />
+              ) : null}
+              {addableIds.length > 0 ? (
+                <AddToPlaylistButton
+                  trackIds={addableIds}
+                  title={data?.name ?? "Folder"}
+                  subtitle={`${addableIds.length} track${addableIds.length === 1 ? "" : "s"} from this folder`}
+                  ramp={ramp}
+                  // The folder's own cover is its first track's, matching the
+                  // library card this screen was opened from.
+                  artwork={data?.tracks[0]?.artworkUrl ?? null}
+                  isBatch
+                  size={42}
+                  iconSize={20}
+                  tone="glass"
+                />
+              ) : null}
+            </View>
           }
         />
 
@@ -283,6 +300,15 @@ export default function FolderDetailScreen() {
                         {track.durationSec > 0 ? formatClock(track.durationSec) : "—"}
                       </ThemedText>
 
+                      <ContextHistoryButton
+                        type="folder"
+                        contextKey={folderKey ?? ""}
+                        title={data.name}
+                        artwork={data.tracks[0]?.artworkUrl ?? null}
+                        size={34}
+                        iconSize={16}
+                      />
+
                       {/* A missing file is skipped by folder play, so it is not
                           offered to a playlist either. */}
                       {missing ? null : (
@@ -322,6 +348,11 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: spacing.sm,
   },
   section: {

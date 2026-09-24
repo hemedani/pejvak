@@ -31,6 +31,9 @@ module.exports = defineConfig([
       // with a drag-to-dismiss gesture, so it writes to a shared value from a
       // pan callback exactly as the player's sheet does.
       "src/components/add-to-playlist/**/*.{ts,tsx}",
+      // The collection-history sheet is the third of those: same glass surface,
+      // same drag-to-dismiss pan writing to a shared value.
+      "src/components/context-history/**/*.{ts,tsx}",
     ],
     rules: {
       "react-hooks/immutability": "off",

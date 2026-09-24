@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { Alert, ScrollView, StyleSheet, View } from "react-native";
 
 import { AddToPlaylistButton } from "@/components/add-to-playlist";
+import { ContextHistoryButton } from "@/components/context-history";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
@@ -129,6 +130,15 @@ export default function PlaylistDetailScreen() {
                   .join(" · ")}
                 action={
                   <View style={styles.headerActions}>
+                    <ContextHistoryButton
+                      type="playlist"
+                      contextKey={playlistId ?? ""}
+                      title={data.playlist.title}
+                      artwork={tracks[0]?.artworkUrl ?? null}
+                      size={42}
+                      iconSize={20}
+                      tone="glass"
+                    />
                     {/* The whole playlist, in one tap: the useful direction
                         here is copying or merging into another list, which is
                         why this is a batch target rather than per-row only. */}
@@ -199,22 +209,27 @@ export default function PlaylistDetailScreen() {
                         </View>
                       </ElasticPressable>
 
-                      {/* Outside `rowActions` on purpose. Those three are one
-                          group — reorder and remove, all about position in
-                          *this* list — while this button is about every other
-                          playlist, and the sheet it opens reports this list as
-                          already complete. */}
-                      <AddToPlaylistButton
-                        trackIds={[track.id]}
-                        title={track.title}
-                        subtitle={`from ${data.playlist.title}`}
-                        ramp={paletteFor(track.contentHash)}
-                        artwork={track.artworkUrl}
+                      {/* Every row opens the playlist's own history. It is the
+                          same sheet from each of them — a track in a playlist
+                          has no history that is not already part of it — but
+                          the control is on the row the listener is looking at
+                          rather than only in the header. */}
+                      <ContextHistoryButton
+                        type="playlist"
+                        contextKey={playlistId ?? ""}
+                        title={data.playlist.title}
+                        artwork={tracks[0]?.artworkUrl ?? null}
                         size={34}
                         iconSize={16}
-                        tone="ghost"
                       />
 
+                      {/* No per-row "add to playlist" here, deliberately. The
+                          header above adds the whole list in one tap, and this
+                          row already carries four other controls — reorder up,
+                          reorder down, remove, and the history below. A fifth
+                          leaves the title about three characters wide, because
+                          every touch target pads out to 44 pt and the gap
+                          between them cannot be tightened to compensate. */}
                       <View style={styles.rowActions}>
                         <BouncyIconButton
                           name="arrowUp"
