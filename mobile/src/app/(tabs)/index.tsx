@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
 import { AddToPlaylistButton } from "@/components/add-to-playlist";
+import { ContextHistoryButton } from "@/components/context-history";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
@@ -15,6 +16,7 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import { useArtworkBackfill } from "@/hooks/use-artwork-backfill";
 import { useFolders } from "@/hooks/use-folders";
 import { useMissingTracks } from "@/hooks/use-missing-tracks";
+import { useRecentPlays } from "@/hooks/use-recent-plays";
 import { useTheme } from "@/hooks/use-theme";
 import type { FolderSummary, LocalTrack } from "@/lib/db/types";
 import { describeFolderProgress, folderProgressRatio } from "@/lib/folderPlay";
@@ -22,8 +24,10 @@ import { formatDuration } from "@/lib/history";
 import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
 import { paletteFor } from "@/lib/palette";
 import { formatPlayCount } from "@/lib/playbackContext";
+import { describeRecentWhen, recentPlayKey, type RecentPlay } from "@/lib/recentPlays";
 import { FolderService } from "@/services/FolderService";
 import { LocalDBService } from "@/services/LocalDBService";
+import { PlaylistService } from "@/services/PlaylistService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { radius as radii, spacing } from "@/theme/tokens";
 
@@ -43,13 +47,23 @@ const FIRST_ROW_REVEAL_INDEX = 5;
  */
 const ARTWORK_BACKFILL_BATCH = 8;
 
-type LibraryView = "tracks" | "folders";
+/**
+ * How many distinct recent plays the Recent tab shows. Short on purpose — it is
+ * a way back to what you were doing, not a second history screen.
+ */
+const RECENT_LIMIT = 12;
+
+type LibraryView = "tracks" | "folders" | "recent";
 
 function formatLastPlayed(value: number | null): string {
   if (!value) {
     return "Never played";
   }
   return `Last played ${new Date(value).toLocaleDateString()}`;
+}
+
+function describeTrackCount(count: number): string {
+  return `${count} track${count === 1 ? "" : "s"}`;
 }
 
 export default function LibraryScreen() {
@@ -60,6 +74,7 @@ export default function LibraryScreen() {
   const [annotationCounts, setAnnotationCounts] = useState<Record<string, number>>({});
   const { folders, refresh: refreshFolders } = useFolders();
   const { missing, refresh: refreshMissing } = useMissingTracks();
+  const { recent, refresh: refreshRecent } = useRecentPlays(RECENT_LIMIT);
   const { run: runArtworkBackfill } = useArtworkBackfill();
 
   const continueTrack = useMemo(
@@ -104,8 +119,11 @@ export default function LibraryScreen() {
     // A relink writes to the tracks table too, so the alert has to re-read or
     // it would keep offering to fix something already fixed.
     await refreshMissing();
+    // Recent plays are read from the sessions table, which playback writes to
+    // without this screen knowing — so it goes stale for the same reason.
+    await refreshRecent();
     void backfillCovers();
-  }, [backfillCovers, refreshFolders, refreshMissing]);
+  }, [backfillCovers, refreshFolders, refreshMissing, refreshRecent]);
 
   useFocusEffect(
     useCallback(() => {
@@ -125,6 +143,21 @@ export default function LibraryScreen() {
       router.push({ pathname: "/player", params: { trackId } });
     },
     [router, tracks],
+  );
+
+  /**
+   * Plays one track on its own, as the queue.
+   *
+   * Deliberately not `playAt`: the Recent tab's track rows are shortcuts to a
+   * single file, and making the whole library the queue behind it would turn
+   * "play this again" into "start the library from here".
+   */
+  const playTrack = useCallback(
+    (trackId: string) => {
+      void TrackPlayerService.playQueueAt([trackId], 0);
+      router.push({ pathname: "/player", params: { trackId } });
+    },
+    [router],
   );
 
   const openFolder = useCallback(
@@ -148,6 +181,24 @@ export default function LibraryScreen() {
   const playFolder = useCallback(
     async (folderKey: string) => {
       const entryId = await FolderService.play(folderKey, "resume");
+      if (entryId) {
+        router.push({ pathname: "/player", params: { trackId: entryId } });
+      }
+    },
+    [router],
+  );
+
+  const openPlaylist = useCallback(
+    (playlistId: string) => {
+      router.push({ pathname: "/playlist/[id]", params: { id: playlistId } });
+    },
+    [router],
+  );
+
+  /** Plays a playlist as a collection, so the play-through is recorded. */
+  const playPlaylist = useCallback(
+    async (playlistId: string) => {
+      const entryId = await PlaylistService.play(playlistId, 0);
       if (entryId) {
         router.push({ pathname: "/player", params: { trackId: entryId } });
       }
@@ -180,18 +231,31 @@ export default function LibraryScreen() {
       />
 
       <Reveal index={1}>
+        {/* Three chips share the row equally rather than sizing to their
+            labels. "Tracks / Folders / Recent" at the chip's own padding is
+            wider than a small phone's content column, and a clipped third
+            option is worse than a tighter one. */}
         <View style={styles.viewToggle}>
           <GlassChip
             label="Tracks"
             icon="music"
             selected={view === "tracks"}
             onPress={() => setView("tracks")}
+            style={styles.viewChip}
           />
           <GlassChip
             label="Folders"
             icon="folder"
             selected={view === "folders"}
             onPress={() => setView("folders")}
+            style={styles.viewChip}
+          />
+          <GlassChip
+            label="Recent"
+            icon="history"
+            selected={view === "recent"}
+            onPress={() => setView("recent")}
+            style={styles.viewChip}
           />
         </View>
       </Reveal>
@@ -275,7 +339,15 @@ export default function LibraryScreen() {
     </View>
   );
 
-  const renderFolder = (folder: FolderSummary, index: number) => {
+  /**
+   * A folder card, shared by the Folders tab and the Recent tab.
+   *
+   * One implementation rather than two, so the same folder cannot show a
+   * different progress figure or a different set of buttons depending on which
+   * tab it was reached from. `when` is the only thing Recent adds, and it goes
+   * last in the fact line so it is the first clause to ellipsise.
+   */
+  const renderFolder = (folder: FolderSummary, index: number, when?: string) => {
     const ramp = paletteFor(folder.key);
     return (
       <Reveal
@@ -306,6 +378,7 @@ export default function LibraryScreen() {
                   describeFolderProgress(folder.finishedCount, folder.trackCount),
                   folder.totalDurationSec > 0 ? formatDuration(folder.totalDurationSec) : null,
                   formatPlayCount(folder.playCount),
+                  when ?? null,
                 ]
                   .filter((part): part is string => part !== null)
                   .join(" · ")}
@@ -349,9 +422,151 @@ export default function LibraryScreen() {
                 .map((track) => track.id)
             }
           />
+
+          <ContextHistoryButton
+            type="folder"
+            contextKey={folder.key}
+            title={folder.name}
+            artwork={folder.artworkUrl}
+            size={40}
+            iconSize={18}
+            tone="glass"
+          />
         </GlassSurface>
       </Reveal>
     );
+  };
+
+  const renderPlaylist = (play: Extract<RecentPlay, { kind: "playlist" }>, index: number) => {
+    const { playlist } = play;
+    const ramp = paletteFor(playlist.title);
+    return (
+      <Reveal index={FIRST_ROW_REVEAL_INDEX + index} from="below" limit={ROW_REVEAL_LIMIT}>
+        <GlassSurface flat style={styles.row}>
+          <ElasticPressable
+            accessibilityRole="button"
+            accessibilityLabel={`Open playlist ${playlist.title}`}
+            onPress={() => openPlaylist(playlist.id)}
+            style={styles.rowMain}>
+            <PaletteTile ramp={ramp} label={playlist.title} size={44} radius={13} />
+            <View style={styles.rowCopy}>
+              <ThemedText type="bodyStrong" numberOfLines={1}>
+                {playlist.title}
+              </ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                {[describeTrackCount(playlist.items.length), describeRecentWhen(play.lastPlayedAt)]
+                  .filter((part) => part.length > 0)
+                  .join(" · ")}
+              </ThemedText>
+            </View>
+          </ElasticPressable>
+
+          <BouncyIconButton
+            name="play"
+            accessibilityLabel={`Play playlist ${playlist.title}`}
+            size={40}
+            iconSize={18}
+            tone="glass"
+            onPress={() => void playPlaylist(playlist.id)}
+          />
+
+          {/* Resolved through the service rather than from the playlist's stored
+              items, so this hands over exactly the queue playback would use —
+              and drops missing files for the same reason the folder card does. */}
+          <AddToPlaylistButton
+            title={playlist.title}
+            ramp={ramp}
+            isBatch
+            size={40}
+            iconSize={18}
+            tone="glass"
+            resolveTrackIds={async () => {
+              const detail = await PlaylistService.loadDetail(playlist.id);
+              return (detail?.tracks ?? [])
+                .filter((track) => track.availability !== "missing")
+                .map((track) => track.id);
+            }}
+          />
+
+          <ContextHistoryButton
+            type="playlist"
+            contextKey={playlist.id}
+            title={playlist.title}
+            size={40}
+            iconSize={18}
+            tone="glass"
+          />
+        </GlassSurface>
+      </Reveal>
+    );
+  };
+
+  const renderRecentTrack = (play: Extract<RecentPlay, { kind: "track" }>, index: number) => {
+    const { track } = play;
+    return (
+      <Reveal index={FIRST_ROW_REVEAL_INDEX + index} from="below" limit={ROW_REVEAL_LIMIT}>
+        <GlassSurface flat style={styles.row}>
+          <ElasticPressable
+            accessibilityRole="button"
+            accessibilityLabel={`Play ${track.title}`}
+            onPress={() => playTrack(track.id)}
+            style={styles.rowMain}>
+            <PaletteTile
+              ramp={paletteFor(track.contentHash)}
+              label={track.title}
+              source={track.artworkUrl}
+              size={44}
+              radius={13}
+            />
+            <View style={styles.rowCopy}>
+              <ThemedText type="bodyStrong" numberOfLines={1}>
+                {track.title}
+              </ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                {[
+                  `${track.totalPlayCount} play${track.totalPlayCount === 1 ? "" : "s"}`,
+                  describeRecentWhen(play.lastPlayedAt),
+                ].join(" · ")}
+              </ThemedText>
+            </View>
+          </ElasticPressable>
+
+          {/* A bare track has no collection to show history for, so it gets the
+              same pair the Tracks tab gives it: add to a playlist, and open the
+              track — where its own sessions are listed. */}
+          <AddToPlaylistButton
+            trackIds={[track.id]}
+            title={track.title}
+            ramp={paletteFor(track.contentHash)}
+            artwork={track.artworkUrl}
+            size={34}
+            iconSize={16}
+            tone="ghost"
+          />
+
+          <BouncyIconButton
+            name="chevronRight"
+            accessibilityLabel={`Details for ${track.title}`}
+            size={34}
+            iconSize={16}
+            tone="ghost"
+            onPress={() => router.push(`/track/${track.id}`)}
+          />
+        </GlassSurface>
+      </Reveal>
+    );
+  };
+
+  const renderRecent = (play: RecentPlay, index: number) => {
+    const when = describeRecentWhen(play.lastPlayedAt);
+    switch (play.kind) {
+      case "folder":
+        return renderFolder(play.folder, index, when);
+      case "playlist":
+        return renderPlaylist(play, index);
+      case "track":
+        return renderRecentTrack(play, index);
+    }
   };
 
   return (
@@ -425,7 +640,7 @@ export default function LibraryScreen() {
             );
           }}
         />
-      ) : (
+      ) : view === "folders" ? (
         <FlatList
           data={folders}
           keyExtractor={(item) => item.key || "root"}
@@ -439,6 +654,21 @@ export default function LibraryScreen() {
             </ThemedText>
           }
           renderItem={({ item, index }) => renderFolder(item, index)}
+        />
+      ) : (
+        <FlatList
+          data={recent}
+          keyExtractor={recentPlayKey}
+          ListHeaderComponent={header}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
+              Nothing played yet. Whatever you listen to next — a track, a playlist, or a whole
+              folder — shows up here.
+            </ThemedText>
+          }
+          renderItem={({ item, index }) => renderRecent(item, index)}
         />
       )}
     </Screen>
@@ -457,7 +687,11 @@ const styles = StyleSheet.create({
   },
   viewToggle: {
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: spacing.xs,
+  },
+  viewChip: {
+    flex: 1,
+    paddingHorizontal: spacing.xs,
   },
   continueCard: {
     flexDirection: "row",
