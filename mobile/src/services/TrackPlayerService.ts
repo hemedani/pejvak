@@ -380,6 +380,14 @@ async function advanceAfterFinish(stretchId: string | null): Promise<void> {
 }
 
 function handleStatus(status: AudioStatus): void {
+  // A released player can still emit one last update. `stop()` clears the store
+  // as it releases, so acting on that tick would leave a "playing" status with
+  // no track behind it — the state the bar reads to decide whether to show
+  // itself. `getPlayer` assigns before registering, so nothing else can arrive
+  // here with no player.
+  if (!player) {
+    return;
+  }
   const currentTime = Number.isFinite(status.currentTime) ? status.currentTime : 0;
   const current = usePlayerStore.getState();
   patch({
@@ -524,6 +532,43 @@ export function togglePlayPause(): void {
   } else {
     void configureAudio().then(() => instance.play());
   }
+}
+
+/**
+ * Stop playback entirely and put the bar away.
+ *
+ * Closing the now-playing bar is a deliberate ending, so the session is closed
+ * as *interrupted*, never as completed: the listener walked out on this listen,
+ * and counting it as having reached the end would inflate both the folder's
+ * "13 of 24" and the run's finished count. The open run is closed the same way
+ * for the same reason — an abandoned collection is not a play.
+ *
+ * The player is released rather than paused. A paused player still holds the
+ * track and keeps the audio session alive, and the mini-player is driven by the
+ * store, which `reset()` returns to `idle` — that is what makes the bar
+ * disappear.
+ */
+export async function stop(): Promise<void> {
+  await finishSession({ completed: false, interrupted: true });
+  await closeRun({ completed: false, interrupted: true });
+
+  // Dropped before `release()`: a released player can still emit one last
+  // status update, and `getPlayer()` would otherwise hand that listener a new
+  // instance to write into.
+  const instance = player;
+  player = null;
+  instance?.release();
+
+  currentTrack = null;
+  activeStretchId = null;
+  pendingStretchId = null;
+  seekReported = false;
+  pendingSeekSec = null;
+  nextSessionStartSec = 0;
+  wasPlaying = false;
+  reportedUnreachable.clear();
+
+  usePlayerStore.getState().reset();
 }
 
 export async function seekTo(positionSec: number): Promise<void> {

@@ -1,10 +1,9 @@
 /**
  * The now-playing row: artwork, title, and a play/pause button on frosted glass.
  *
- * Shared by the collapsed mini-player and by the first frame of the expanding
- * sheet, so the morph starts from a pixel-identical surface instead of a
- * lookalike. `renderMain` lets the mini-player wrap the tap target in a gesture
- * detector while the sheet renders it plainly.
+ * Rendered by the collapsed mini-player, which wraps the artwork and copy in a
+ * gesture detector through `renderMain` so the whole surface answers a tap and
+ * an upward drag without the trailing buttons stealing either.
  */
 
 import type { ReactNode } from "react";
@@ -38,6 +37,12 @@ export type MiniPlayerRowProps = {
   /** Opens that collection's own screen. */
   onOpenContext?: () => void;
   onToggle: () => void;
+  /**
+   * Ends playback and puts the bar away. Omit to hide the control — the full
+   * player has its own dismiss, and a second one there would be a lie about
+   * what it does.
+   */
+  onClose?: () => void;
   skipNonce?: number;
   skipDirection?: 1 | -1;
   /** Wraps the artwork + copy. Used by the mini-player to attach gestures. */
@@ -57,6 +62,7 @@ export function MiniPlayerRow({
   context,
   onOpenContext,
   onToggle,
+  onClose,
   skipNonce,
   skipDirection,
   renderMain,
@@ -128,6 +134,21 @@ export function MiniPlayerRow({
         tone="accent"
         onPress={onToggle}
       />
+
+      {/* Last, so the play control keeps the position the thumb already knows
+          and the dismiss sits out at the edge of the bar. Sized a step down
+          from play because it is the destructive one of the pair, and the
+          trailing group is already three controls deep. */}
+      {onClose ? (
+        <BouncyIconButton
+          name="close"
+          accessibilityLabel="Stop playback and close the player"
+          size={32}
+          iconSize={16}
+          tone="ghost"
+          onPress={onClose}
+        />
+      ) : null}
 
       <GlassProgress progress={progress} tint={ramp[1]} thickness={2} style={styles.progress} />
     </GlassSurface>

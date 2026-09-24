@@ -1,7 +1,7 @@
 /**
  * The collapsed now-playing bar.
  *
- * It does three things beyond showing the track:
+ * It does four things beyond showing the track:
  *
  *   1. Measures itself into `nowPlayingStore` so the full-screen sheet can grow
  *      out of exactly this rectangle.
@@ -9,6 +9,8 @@
  *   3. Answers a drag upward with a small lift-and-scale preview, then commits to
  *      the full player once the drag passes a threshold or carries enough
  *      upward velocity — the same gesture grammar as the sheet's dismiss.
+ *   4. Answers the close button by stopping playback outright, which is the only
+ *      way out of a paused bar without opening the player first.
  */
 
 import { useRouter } from "expo-router";
@@ -141,6 +143,7 @@ export function MiniPlayer() {
         skipNonce={skip?.nonce}
         skipDirection={skip?.direction}
         onToggle={() => TrackPlayerService.togglePlayPause()}
+        onClose={() => void TrackPlayerService.stop()}
         renderMain={(content) => (
           <GestureDetector gesture={gesture}>
             <Animated.View
