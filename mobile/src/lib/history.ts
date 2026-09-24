@@ -1,5 +1,5 @@
 import type { LocalSession, LocalTrack } from "@/lib/db/types";
-import { groupSessionsIntoStretches, type ListeningStretch } from "@/lib/listeningStretch";
+import { groupSessionsIntoStretches, stretchResumeTarget as modelResumeTarget, type ListeningStretch } from "@/lib/listeningStretch";
 import { formatClock } from "@/lib/time";
 
 export type HistoryItem = {
@@ -242,19 +242,20 @@ export function resumeTargetSec(item: HistoryItem): number {
  * unfinished one continues the *last* track it reached. Pairing the start track
  * with the end track's offset would drop the listener minutes into a file they
  * never played.
+ *
+ * Which end that is, is decided by `stretchResumeTarget` in the model module —
+ * this only attaches the row the card renders. Looking the track up by id
+ * rather than taking `entry.start`/`entry.end` positionally is what keeps the
+ * two in step if a middle row of the group is ever missing from the list.
  */
 export function stretchResumeTarget(entry: HistoryStretch): {
   item: HistoryItem;
   positionSec: number;
 } {
-  const { stretch } = entry;
-  if (stretch.completed) {
-    return { item: entry.start, positionSec: Math.max(0, stretch.startPositionSec) };
-  }
-  return {
-    item: entry.end,
-    positionSec: Math.max(0, stretch.endPositionSec ?? stretch.startPositionSec),
-  };
+  const target = modelResumeTarget(entry.stretch);
+  const item =
+    entry.items.find((candidate) => candidate.session.trackId === target.trackId) ?? entry.end;
+  return { item, positionSec: target.positionSec };
 }
 
 /**

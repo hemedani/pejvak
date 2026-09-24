@@ -165,6 +165,9 @@ export function describeStretchOutcome(stretch: ListeningStretch): StretchOutcom
  * seeking to its end would finish that track the instant it started — so it
  * replays from the point it began. That reading matches `resumeTargetSec` for a
  * stretch of one, which is what the per-session card still uses.
+ *
+ * This is the model-level half. `lib/history.ts` wraps it to attach the row the
+ * card actually renders, so the rule below is stated exactly once.
  */
 export function stretchResumeTarget(stretch: ListeningStretch): {
   trackId: string;
@@ -177,9 +180,4 @@ export function stretchResumeTarget(stretch: ListeningStretch): {
     trackId: stretch.endTrackId,
     positionSec: Math.max(0, stretch.endPositionSec ?? stretch.startPositionSec),
   };
-}
-
-/** The resume position alone, for a caller that already knows which track. */
-export function stretchResumeTargetSec(stretch: ListeningStretch): number {
-  return stretchResumeTarget(stretch).positionSec;
 }

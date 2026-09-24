@@ -6,7 +6,6 @@ import {
   groupSessionsIntoStretches,
   spansTracks,
   stretchResumeTarget,
-  stretchResumeTargetSec,
 } from "@/lib/listeningStretch";
 
 function session(overrides: Partial<LocalSession> = {}): LocalSession {
@@ -198,7 +197,6 @@ describe("stretchResumeTarget", () => {
 
     expect(target.trackId).toBe("t1");
     expect(target.positionSec).toBe(0);
-    expect(stretchResumeTargetSec(stretch!)).toBe(target.positionSec);
   });
 
   it("continues an unfinished listen on the track it stopped on", () => {
