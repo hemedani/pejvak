@@ -4,6 +4,8 @@ Agent rules and conventions for the **Pejvak** project. Read this before writing
 
 Pejvak is an offline-first **Android audio player** for audiobooks, long-form content, and music. Its differentiators are an **exhaustive, queryable playback history** (every play/pause/seek/complete session is recorded) and **timestamped annotations** that sync across devices. Full product specs live in `docs/` — see [Reference Specs](#reference-specs).
 
+This is the root agent file. The `back/` (backend) and `mobile/` workspaces each have their own `AGENTS.md` with sector-specific rules — read the nearest one before editing anything in those directories: see [Nested `AGENTS.md` Files](#nested-agentsmd-files).
+
 ---
 
 ## Architecture
@@ -17,21 +19,39 @@ Pejvak/
 │   ├── models/              # Lesan models (one file per model)
 │   ├── src/                 # Lesan API acts (one folder per domain)
 │   ├── utils/               # JWT, validation, shared helpers
-│   └── declarations/        # Auto-generated TS declarations (typeGeneration: true)
+│   ├── declarations/        # Auto-generated TS declarations (typeGeneration: true)
+│   └── AGENTS.md            # Backend-specific agent rules
 ├── mobile/                  # React Native (Expo)
 │   ├── app/                 # Expo Router screens
 │   ├── components/          # Reusable UI components
 │   ├── services/            # TrackPlayerService, LocalDBService, SyncService
 │   ├── store/               # Zustand stores
-│   └── lib/                 # Lesan client wrapper, utils
+│   ├── lib/                 # Lesan client wrapper, utils
+│   └── AGENTS.md            # Mobile-specific agent rules
 ├── web/                     # (Future) Next.js / React frontend
 ├── docker-compose.yml       # Production MongoDB + backend
 ├── docker-compose.dev.yml   # Development MongoDB + backend
-└── AGENTS.md
+└── AGENTS.md                # Root agent rules (this file) — authoritative
 ```
 
 - **Data flow is local-first.** All writes go to SQLite, then a background `SyncService` pushes them to the Lesan backend.
 - **Never block the UI on a network call.**
+
+---
+
+## Nested `AGENTS.md` Files
+
+This file is the **root** and is authoritative. Each major workspace also has its own `AGENTS.md` holding the specialized rules for that sector. **Always read the nearest `AGENTS.md` before editing files in that directory** — it wins over this file for sector-specific detail, and this file wins over it on domain rules and product invariants.
+
+| File | Applies to | Brief |
+|---|---|---|
+| [`AGENTS.md`](./AGENTS.md) (root) | Whole repo | Domain model, tech stack, Lesan conventions, coding standards, offline-first sync contract, roadmap, commands, reference specs. Authoritative — read first. |
+| [`back/AGENTS.md`](./back/AGENTS.md) | `back/` — Deno + Lesan + MongoDB backend | Per-model field/index/relation details, the acts reference (`register`, `login`, `getMe`, `registerTrack`, `getMyTracks`, `syncLocalData`), Lesan framework patterns (one-directional relations, embedded single relations, `hardCascade`), idempotent `syncLocalData` behavior, env vars, and backend test/lint commands. |
+| [`mobile/AGENTS.md`](./mobile/AGENTS.md) | `mobile/` — React Native (Expo) app | Expo SDK 57 platform rule, audio engine rules (`expo-audio`, lock-screen/Expo Go limits, no `setInterval` tracking), `LocalDBService` schema, `SyncService` queue states, Lesan request wire format, screen and annotation UX expectations, and mobile dev commands. |
+
+- The backend folder is named **`back/`** (not `backend/`).
+- `web/` is future work and has no `AGENTS.md` yet; create one alongside it.
+- **Precedence:** nearest `AGENTS.md` → root `AGENTS.md` → `docs/`. If a nested file contradicts this file, this file wins.
 
 ---
 
@@ -65,12 +85,16 @@ One Lesan model per file in `back/models/` (e.g. `track.ts`, `playbackSession.ts
 - **PlaybackSession** — one continuous period of listening. The heart of the product: `startedAt`, `endedAt`, `startPositionSec`, `endPositionSec`, `durationListenedSec`, `playbackSpeed`, `completed`, `interrupted`, `deviceInfo`.
 - **Annotation** — a note at a specific audio position: `positionSec`, `text`, `tags`, `color`, `createdAt`, `updatedAt`, `timesPlayedBefore`, `sessionId`.
 - **Playlist** — ordered collection of tracks (`items[].order`).
+- **PlaybackContext** — one *run* through a collection: `contextType`, `contextKey`, `contextTitle`, `trackCount`, `startedAt`, `endedAt`, `lastIndex`, `lastPositionSec`, `listenedSec`, `finishedCount`, `completed`, `interrupted`. A run outlives the playlist it names, which is why it stores the key verbatim rather than a relation.
+- **OnlineCollection** — an online collection the listener saved, favourited or downloaded: `sourceId`, `externalId`, `title`, `pageUrl`, `languageCode`, `trackCount`, `isFavorite`, `lastOpenedAt`. **Addresses and user state only — never media.** The audio stays on the source's own CDN and is fetched by the device.
 
 **Rules:**
 - **All positions and durations are integer seconds.** Never store audio offsets as floats — audiobooks can exceed 20 hours and floating-point drift is unacceptable.
 - **`contentHash` (SHA-256, first 1 MB + file size) is the true identity of a track.** Never dedupe by filename or path. Cross-device history and annotations follow the hash.
 - `durationListenedSec` is **actual wall-clock time played**, not `endPositionSec - startPositionSec`. Compute it from progress deltas: add a delta only when `0 < delta < 5` (normal play); on a seek (`delta > 5` or `delta < 0`) update position without adding.
 - Persist a lightweight checkpoint every 10 s so a killed app doesn't lose a session; recover orphaned checkpoints on next launch.
+- **An online track's identity is the source's own id, never its URL.** `contentHash = sha256("online:<sourceId>:<externalId>")`. Online sources hand out signed, expiring URLs, so a hash taken from a URL would split one episode into two rows and its history in half. A URL is a cache to be re-resolved before use; the address that lasts is the collection's `pageUrl`.
+- **`ContextType` is `"playlist" | "folder" | "online"`.** A streamed collection is a *run* like any other, so history, stats, stretches and annotations need no second code path.
 - Relations: embedded (`relatedRelations`, bounded — e.g. last N sessions/annotations on a Track) for fast reads; referenced for unbounded collections.
 
 ---
