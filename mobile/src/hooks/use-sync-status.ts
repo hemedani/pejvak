@@ -11,6 +11,7 @@ const EMPTY_COUNTS: PendingCounts = {
   annotations: 0,
   playlists: 0,
   contextPlays: 0,
+  onlineCollections: 0,
 };
 
 export type UseSyncStatusResult = {

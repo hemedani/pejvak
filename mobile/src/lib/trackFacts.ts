@@ -12,6 +12,7 @@
  */
 
 import type { AudioInfo } from "@/lib/audioInfo";
+import { isStreamUri } from "@/lib/audioLocation";
 import type { AudioTagBundle, AudioTagDetails } from "@/lib/audioTags";
 import type { LocalTrack, TrackAvailability, TrackSource } from "@/lib/db/types";
 import { formatDuration } from "@/lib/history";
@@ -239,24 +240,39 @@ export function buildTagFacts(
   }
 
   // The tag's own structure, which is the only part of this section that exists
-  // for the file rather than for the music.
+  // for the file rather than for the music. Both rows are omitted for a file
+  // with no tag at all: "Tag frames: 0" beside no "Tag" row describes nothing,
+  // and this section's rule is that a fact with no value is left out.
   push(facts, "Tag", bundle.tagVersion);
-  pushNumber(facts, "Tag frames", bundle.frameCount);
+  if (bundle.frameCount > 0) {
+    pushNumber(facts, "Tag frames", bundle.frameCount);
+  }
 
   return facts;
 }
 
-/** Where the audio actually lives and how the library got it. */
+/**
+ * Where the audio actually lives and how the library got it.
+ *
+ * The one section that cannot describe a streamed track the way it describes a
+ * file. Such a row keeps its source's signed, expiring URL in `file_uri`, so
+ * printing that under "Location" would present a cache of how to reach the
+ * audio as a durable address — and `source` is null for it, which would have it
+ * described as an "Imported file" it never was.
+ */
 export function buildFileFacts(track: LocalTrack): Fact[] {
   const facts: Fact[] = [];
+
+  const location = track.fileUri ?? track.sourceUri;
+  const streamed = location !== null && isStreamUri(location);
 
   push(facts, "File name", track.fileName);
   push(facts, "Folder", track.folderName ?? track.folderKey);
   push(facts, "Size", track.fileSizeBytes > 0 ? formatBytes(track.fileSizeBytes) : null);
   push(facts, "Type", track.mimeType);
-  push(facts, "Source", describeTrackSource(track.source));
+  push(facts, "Source", streamed ? "Streamed from its source" : describeTrackSource(track.source));
   push(facts, "Availability", describeAvailability(track.availability));
-  push(facts, "Location", track.fileUri ?? track.sourceUri, true);
+  push(facts, streamed ? "Stream" : "Location", location, true);
   push(facts, "Modified", formatDateTime(track.sourceMtime));
   push(facts, "Added to library", formatDateTime(track.createdAt));
   push(facts, "Last updated", formatDateTime(track.updatedAt));

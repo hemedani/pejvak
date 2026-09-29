@@ -9,6 +9,7 @@ import {
   computeContentHashFromChunk,
   type Sha256,
 } from "@/lib/contentHash";
+import { onlineIdentity } from "@/lib/online";
 
 const sha256: Sha256 = async (data) => {
   const bytes = new Uint8Array(data);
@@ -61,4 +62,26 @@ export async function computeFileContentHash(
   const contentHash = await computeContentHashFromChunk(chunk, fileSizeBytes, sha256);
   const bundle = readAudioTagBundle(chunk);
   return { contentHash, fileSizeBytes, tags: bundle.tags, bundle };
+}
+
+/**
+ * The identity of an online item, as a real SHA-256.
+ *
+ * Hashing rather than storing the raw `online:<source>:<id>` string keeps
+ * `content_hash` meaning exactly one thing across the whole app — a SHA-256 of
+ * whatever identifies the audio — so nothing downstream has to know that some
+ * rows identify bytes and others identify an address.
+ *
+ * The input is the source's own id for the item, never the stream URL: those are
+ * signed and rotate, and hashing one would give the same episode a new identity
+ * every time the signature expired.
+ */
+export async function hashOnlineIdentity(
+  sourceId: string,
+  externalId: string,
+): Promise<string> {
+  return Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    onlineIdentity(sourceId, externalId),
+  );
 }

@@ -2,6 +2,7 @@ import type {
   ContextType,
   LocalAnnotation,
   LocalContextPlay,
+  LocalOnlineCollection,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
@@ -274,6 +275,99 @@ export function reconcilePlaylists(
     }
     if (!existing.serverId) {
       backfill.push({ id, serverId: item.serverId });
+    }
+  }
+
+  return { inserts, updates, backfill };
+}
+
+/**
+ * An online collection the listener saved, as the server holds it.
+ *
+ * The dedupe key is the collection's own key — `sourceId:externalId` — not a
+ * per-device id, because the same public course is the same course on every
+ * device. Nothing is resolved on the way in: a collection whose source this
+ * device cannot currently reach is still a true record of what the listener
+ * kept, and the address is what makes it findable again.
+ */
+export type RemoteOnlineCollection = {
+  serverId: string;
+  clientId: string | null;
+  sourceId: string;
+  externalId: string;
+  title: string;
+  subtitle: string | null;
+  artworkUrl: string | null;
+  languageCode: string;
+  trackCount: number;
+  pageUrl: string | null;
+  isFavorite: boolean;
+  lastOpenedAt: number | null;
+  updatedAt: number;
+};
+
+export type OnlineCollectionUpdate = {
+  id: string;
+  serverId: string;
+  title: string;
+  subtitle: string | null;
+  artworkUrl: string | null;
+  trackCount: number;
+  pageUrl: string | null;
+  isFavorite: boolean;
+  lastOpenedAt: number | null;
+  updatedAt: number;
+};
+
+/**
+ * Online collections dedupe by key. Edits use last-write-wins on `updatedAt`;
+ * a local tombstone is never resurrected by a pull, because a removal the
+ * listener made on one device is a decision rather than a gap.
+ *
+ * The key is taken from `clientId` and, failing that, derived from the source's
+ * own ids — so a row that arrived without its clientId is still matchable rather
+ * than silently duplicated.
+ */
+export function reconcileOnlineCollections(
+  local: LocalOnlineCollection[],
+  remote: RemoteOnlineCollection[],
+): {
+  inserts: RemoteOnlineCollection[];
+  updates: OnlineCollectionUpdate[];
+  backfill: Backfill[];
+} {
+  const byKey = new Map(local.map((row) => [row.key, row]));
+  const inserts: RemoteOnlineCollection[] = [];
+  const updates: OnlineCollectionUpdate[] = [];
+  const backfill: Backfill[] = [];
+
+  for (const item of remote) {
+    const key = item.clientId ?? `${item.sourceId}:${item.externalId}`;
+    const existing = byKey.get(key);
+    if (!existing) {
+      inserts.push(item);
+      continue;
+    }
+    if (existing.deletedAt !== null) {
+      continue;
+    }
+    if (item.updatedAt > existing.updatedAt) {
+      updates.push({
+        id: key,
+        serverId: item.serverId,
+        title: item.title,
+        subtitle: item.subtitle,
+        artworkUrl: item.artworkUrl,
+        trackCount: item.trackCount,
+        pageUrl: item.pageUrl,
+        isFavorite: item.isFavorite,
+        lastOpenedAt: item.lastOpenedAt,
+        updatedAt: item.updatedAt,
+      });
+      continue;
+    }
+    if (!existing.serverId) {
+      backfill.push({ id: key, serverId: item.serverId });
     }
   }
 

@@ -56,6 +56,13 @@ export default function RootLayout() {
               <Stack.Screen name="track/[id]" />
               <Stack.Screen name="folder/[key]" />
               <Stack.Screen name="playlist/[id]" />
+              {/* Online content. Three levels, pushed in the order the listener
+                  walks them: language → source → collection. They use the
+                  default slide so arriving at a course feels the same as
+                  arriving at a folder. */}
+              <Stack.Screen name="online/language/[code]" />
+              <Stack.Screen name="online/source/[id]" />
+              <Stack.Screen name="online/[key]" />
               <Stack.Screen name="smart/[rule]" />
               <Stack.Screen name="missing" />
               <Stack.Screen name="import" />

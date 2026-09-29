@@ -116,6 +116,14 @@ function track(id: string, overrides: Partial<LocalTrack> = {}): LocalTrack {
     discNumber: null,
     year: null,
     availability: "present",
+    origin: "local",
+    streamUrl: null,
+    sourceId: null,
+    externalId: null,
+    collectionKey: null,
+    collectionTitle: null,
+    downloadedAt: null,
+    downloadPath: null,
     contentHash: `hash-${id}`,
     ...overrides,
   };
@@ -305,12 +313,31 @@ describe("backfillArtwork", () => {
     expect(outcome.scanned).toBe(1);
   });
 
+  it("skips a streamed track without reading it, and without stamping it", async () => {
+    // An online track keeps its source's URL in `file_uri` until it is
+    // downloaded, and the reader behind this accepts only a file, a SAF URI, an
+    // asset or a resource path — so the read could only throw. The row is left
+    // unstamped deliberately: it becomes a real file the day it is downloaded,
+    // and a stamp now would record a verdict about a file that does not exist
+    // yet and stop the backfill from ever looking once it does.
+    getTracksMissingArtwork.mockResolvedValue([
+      track("a", { fileUri: "https://cdn.manahej.ir/audio/1.mp3?md5=abc&expires=1700000000" }),
+    ]);
+
+    const outcome = await backfillArtwork();
+
+    expect(outcome).toMatchObject({ scanned: 1, found: 0, empty: 0, failed: 0, skipped: 1 });
+    expect(inspectAudioFileMock).not.toHaveBeenCalled();
+    expect(markTrackArtworkChecked).not.toHaveBeenCalled();
+    expect(setTrackArtwork).not.toHaveBeenCalled();
+  });
+
   it("does nothing at all when the library has no artwork left to find", async () => {
     getTracksMissingArtwork.mockResolvedValue([]);
 
     const outcome = await backfillArtwork();
 
-    expect(outcome).toEqual({ scanned: 0, found: 0, empty: 0, failed: 0 });
+    expect(outcome).toEqual({ scanned: 0, found: 0, empty: 0, failed: 0, skipped: 0 });
     expect(inspectAudioFileMock).not.toHaveBeenCalled();
   });
 });

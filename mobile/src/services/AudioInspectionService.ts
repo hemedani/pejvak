@@ -5,6 +5,7 @@ import {
   parseAudioInfo,
   type AudioInfo,
 } from "@/lib/audioInfo";
+import { isStreamUri } from "@/lib/audioLocation";
 import {
   EMPTY_AUDIO_TAG_BUNDLE,
   readAudioTagBundle,
@@ -94,6 +95,19 @@ export async function inspectAudioFile(
     includeArtwork?: boolean;
   },
 ): Promise<AudioInspection> {
+  // Refused here rather than left to the native module, so the message says what
+  // is actually wrong. A caller that arrives with a stream URL has misread the
+  // row, and the native error — "Unsupported scheme for location 'https://…?md5=…'"
+  // — blames the URL instead of the assumption, on a screen that then shows it
+  // to the listener verbatim.
+  //
+  // Thrown before the first read, not after a failed one: there is nothing a
+  // caller could do differently on a second attempt, so a caller that retries
+  // must be told "never", not "not now".
+  if (isStreamUri(uri)) {
+    throw new Error("This track streams from its source; there is no file on this device to read.");
+  }
+
   const fileSizeBytes = options.fileSizeBytes > 0 ? options.fileSizeBytes : 0;
 
   let head = await readWindow(

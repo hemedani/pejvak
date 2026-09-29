@@ -165,6 +165,14 @@ describe("resolvePlaylistTracks", () => {
     discNumber: null,
     year: null,
     availability: "present",
+    origin: "local",
+    streamUrl: null,
+    sourceId: null,
+    externalId: null,
+    collectionKey: null,
+    collectionTitle: null,
+    downloadedAt: null,
+    downloadPath: null,
   });
 
   it("resolves items to tracks in playlist order and drops missing ones", () => {

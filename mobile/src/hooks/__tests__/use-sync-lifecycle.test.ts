@@ -27,6 +27,7 @@ beforeEach(() => {
     annotationsSynced: 0,
     playlistsSynced: 0,
     contextPlaysSynced: 0,
+    onlineCollectionsSynced: 0,
     failed: 0,
   });
   addNetworkStateListener.mockImplementation((callback) => {

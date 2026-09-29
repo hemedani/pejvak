@@ -1,6 +1,7 @@
 import type {
   LocalAnnotation,
   LocalContextPlay,
+  LocalOnlineCollection,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
@@ -8,7 +9,6 @@ import type {
 } from "@/lib/db/types";
 import {
   runSync,
-  type PlaylistSyncPayload,
   type SyncStore,
   type SyncTransport,
 } from "@/lib/syncEngine";
@@ -46,6 +46,14 @@ function track(overrides: Partial<LocalTrack> = {}): LocalTrack {
     discNumber: null,
     year: null,
     availability: "present",
+    origin: "local",
+    streamUrl: null,
+    sourceId: null,
+    externalId: null,
+    collectionKey: null,
+    collectionTitle: null,
+    downloadedAt: null,
+    downloadPath: null,
     ...overrides,
   };
 }
@@ -112,18 +120,47 @@ function playlist(overrides: Partial<LocalPlaylist> = {}): LocalPlaylist {
   };
 }
 
+function onlineCollection(
+  overrides: Partial<LocalOnlineCollection> = {},
+): LocalOnlineCollection {
+  return {
+    key: "manahej:190",
+    serverId: null,
+    sourceId: "manahej",
+    externalId: "190",
+    title: "History of Shia",
+    subtitle: null,
+    artworkUrl: null,
+    languageCode: "fa",
+    trackCount: 12,
+    pageUrl: "https://manahej.ir/?p=190",
+    isFavorite: false,
+    lastOpenedAt: null,
+    downloadState: "none",
+    deletedAt: null,
+    syncStatus: "pending",
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides,
+  };
+}
+
 function createStore(seed: {
   tracks?: LocalTrack[];
   sessions?: LocalSession[];
   annotations?: LocalAnnotation[];
   playlists?: LocalPlaylist[];
   contextPlays?: LocalContextPlay[];
+  onlineCollections?: LocalOnlineCollection[];
 }) {
   const tracks = new Map((seed.tracks ?? []).map((item) => [item.id, item]));
   const sessions = new Map((seed.sessions ?? []).map((item) => [item.id, item]));
   const annotations = new Map((seed.annotations ?? []).map((item) => [item.id, item]));
   const playlists = new Map((seed.playlists ?? []).map((item) => [item.id, item]));
   const contextPlays = new Map((seed.contextPlays ?? []).map((item) => [item.id, item]));
+  const onlineCollections = new Map(
+    (seed.onlineCollections ?? []).map((item) => [item.key, item]),
+  );
 
   const pending = <T extends { syncStatus: SyncStatus }>(map: Map<string, T>, limit: number) =>
     [...map.values()]
@@ -137,6 +174,7 @@ function createStore(seed: {
     getPendingAnnotations: async (limit) => pending(annotations, limit),
     getPendingPlaylists: async (limit) => pending(playlists, limit),
     getPendingContextPlays: async (limit) => pending(contextPlays, limit),
+    getPendingOnlineCollections: async (limit) => pending(onlineCollections, limit),
     setTrackSyncStatus: async (id, status, serverId) => {
       const current = tracks.get(id);
       if (current) {
@@ -183,21 +221,42 @@ function createStore(seed: {
         });
       }
     },
+    setOnlineCollectionSyncStatus: async (key, status, serverId) => {
+      const current = onlineCollections.get(key);
+      if (current) {
+        onlineCollections.set(key, {
+          ...current,
+          syncStatus: status,
+          serverId: serverId ?? current.serverId,
+        });
+      }
+    },
     removeAnnotation: async (id) => {
       annotations.delete(id);
     },
     removePlaylist: async (id) => {
       playlists.delete(id);
     },
+    removeOnlineCollection: async (key) => {
+      onlineCollections.delete(key);
+    },
   };
 
-  return { store, tracks, sessions, annotations, playlists, contextPlays };
+  return {
+    store,
+    tracks,
+    sessions,
+    annotations,
+    playlists,
+    contextPlays,
+    onlineCollections,
+  };
 }
 
 function createTransport(overrides: Partial<SyncTransport> = {}) {
   const calls: {
     registerTrack: LocalTrack[];
-    syncLocalData: [LocalSession[], LocalAnnotation[], PlaylistSyncPayload[]][];
+    syncLocalData: Parameters<SyncTransport["syncLocalData"]>[];
   } = { registerTrack: [], syncLocalData: [] };
 
   const transport: SyncTransport = {
@@ -209,12 +268,29 @@ function createTransport(overrides: Partial<SyncTransport> = {}) {
       }),
     syncLocalData:
       overrides.syncLocalData ??
-      (async (sessions, annotations, playlists) => {
-        calls.syncLocalData.push([sessions, annotations, playlists]);
+      (async (
+        sessions,
+        annotations,
+        playlists,
+        contextPlays,
+        onlineCollections,
+      ) => {
+        calls.syncLocalData.push([
+          sessions,
+          annotations,
+          playlists,
+          contextPlays,
+          onlineCollections,
+        ]);
         return {
           syncedSessions: sessions.length,
           syncedAnnotations: annotations.length,
           syncedPlaylists: playlists.length,
+          syncedOnlineCollections: onlineCollections.length,
+          onlineCollections: onlineCollections.map((item) => ({
+            clientId: item.clientId,
+            serverId: `server-${item.clientId}`,
+          })),
           annotations: annotations.map((item) => ({
             clientId: item.id,
             serverId: `server-${item.id}`,
@@ -379,6 +455,44 @@ describe("runSync", () => {
       clientId: "p1",
       deleted: true,
     });
+  });
+
+  it("syncs a saved online collection and stores its server id", async () => {
+    const { store, onlineCollections } = createStore({
+      onlineCollections: [
+        onlineCollection({ isFavorite: true, lastOpenedAt: 900 }),
+      ],
+    });
+    const { transport, calls } = createTransport();
+
+    const summary = await runSync({ store, transport });
+
+    expect(calls.syncLocalData[0][4][0]).toMatchObject({
+      clientId: "manahej:190",
+      sourceId: "manahej",
+      externalId: "190",
+      isFavorite: true,
+      lastOpenedAt: 900,
+      deleted: false,
+    });
+    expect(summary.onlineCollectionsSynced).toBe(1);
+    expect(onlineCollections.get("manahej:190")?.syncStatus).toBe("synced");
+    expect(onlineCollections.get("manahej:190")?.serverId).toBe("server-manahej:190");
+  });
+
+  it("sends a collection tombstone as a delete and drops the row", async () => {
+    const { store, onlineCollections } = createStore({
+      onlineCollections: [onlineCollection({ deletedAt: 5000, syncStatus: "pending" })],
+    });
+    const { transport, calls } = createTransport();
+
+    await runSync({ store, transport });
+
+    expect(calls.syncLocalData[0][4][0]).toMatchObject({
+      clientId: "manahej:190",
+      deleted: true,
+    });
+    expect(onlineCollections.has("manahej:190")).toBe(false);
   });
 
   it("keeps a track queued when registration fails", async () => {

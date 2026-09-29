@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { isStreamUri } from "@/lib/audioLocation";
 import type { LocalTrack } from "@/lib/db/types";
 import {
   EMPTY_AUDIO_INSPECTION,
@@ -19,6 +20,8 @@ export type UseAudioInspectionResult = {
 type Loaded = { id: string; inspection: AudioInspection; error: string | null };
 
 const MISSING_MESSAGE = "The file is not where the library last saw it.";
+const STREAM_MESSAGE =
+  "This track streams from its source, so there is nothing on this device to read.";
 
 /**
  * Reads a track's stream header, tag and cover-art size on demand.
@@ -28,6 +31,15 @@ const MISSING_MESSAGE = "The file is not where the library last saw it.";
  * field, a migration to add them, and a stale value the moment the file is
  * replaced. This is a screen someone opened deliberately, so one bounded read of
  * its header is a fair price for always being right.
+ *
+ * Two reasons a row has nothing to read — a file that is gone, and a track that
+ * only streams — and both are properties of the row rather than results of a
+ * read, so both are derived here and answered without touching the filesystem.
+ * A stream is refused rather than attempted because the attempt cannot succeed:
+ * the reader behind `inspectAudioFile` accepts only a file, a SAF URI, an asset
+ * or a resource path, so an `http(s)` URL would surface a native
+ * "Unsupported scheme" message to the listener where the truth is simply that
+ * this track lives somewhere else.
  *
  * Every piece of state is keyed by track id and read back through that key, so
  * a previous track's codec never flashes while the next one is read — and so no
@@ -45,9 +57,10 @@ export function useAudioInspection(track: LocalTrack | null): UseAudioInspection
   const fileName = track?.fileName ?? track?.title ?? "";
   const fileSizeBytes = track?.fileSizeBytes ?? 0;
   const missing = track?.availability === "missing";
+  const streamed = uri !== null && isStreamUri(uri);
 
   useEffect(() => {
-    if (!trackId || !uri || missing) {
+    if (!trackId || !uri || missing || streamed) {
       return;
     }
 
@@ -71,7 +84,7 @@ export function useAudioInspection(track: LocalTrack | null): UseAudioInspection
     return () => {
       cancelled = true;
     };
-  }, [fileName, fileSizeBytes, missing, nonce, trackId, uri]);
+  }, [fileName, fileSizeBytes, missing, nonce, streamed, trackId, uri]);
 
   const refresh = useCallback(() => setNonce((value) => value + 1), []);
 
@@ -79,8 +92,11 @@ export function useAudioInspection(track: LocalTrack | null): UseAudioInspection
 
   return {
     inspection: current?.inspection ?? EMPTY_AUDIO_INSPECTION,
-    loading: !missing && uri !== null && current === null,
-    error: missing ? MISSING_MESSAGE : (current?.error ?? null),
+    // A streamed row never starts a read, so it must never report one as
+    // pending — otherwise the spinner would turn forever over a track that is
+    // working exactly as intended.
+    loading: !missing && !streamed && uri !== null && current === null,
+    error: missing ? MISSING_MESSAGE : streamed ? STREAM_MESSAGE : (current?.error ?? null),
     refresh,
   };
 }

@@ -38,7 +38,12 @@ jest.mock("expo-constants", () => ({
 }));
 
 jest.mock("@/services/LocalDBService", () => ({
-  LocalDBService: { setTrackAvailability: jest.fn() },
+  LocalDBService: {
+    setTrackAvailability: jest.fn(),
+    // Async on purpose: the player attaches `.catch` to the returned value, so a
+    // bare `jest.fn()` returning `undefined` throws before the catch exists.
+    setTrackDuration: jest.fn(async () => undefined),
+  },
 }));
 
 jest.mock("@/services/SyncService", () => ({
@@ -85,6 +90,14 @@ function track(overrides: Partial<LocalTrack> & { id: string }): LocalTrack {
     discNumber: null,
     year: null,
     availability: "present",
+    origin: "local",
+    streamUrl: null,
+    sourceId: null,
+    externalId: null,
+    collectionKey: null,
+    collectionTitle: null,
+    downloadedAt: null,
+    downloadPath: null,
     ...overrides,
   };
 }

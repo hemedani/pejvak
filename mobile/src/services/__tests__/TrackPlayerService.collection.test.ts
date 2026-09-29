@@ -61,6 +61,7 @@ jest.mock("@/services/LocalDBService", () => ({
     finalizeSession: jest.fn(),
     deleteCheckpoint: jest.fn(),
     setTrackAvailability: jest.fn(),
+    setTrackDuration: jest.fn(async () => undefined),
     newStretchId: jest.fn(() => "stretch-new"),
     markSessionSeeked: jest.fn(),
   },
@@ -145,6 +146,14 @@ function track(id: string): LocalTrack {
     discNumber: null,
     year: null,
     availability: "present",
+    origin: "local",
+    streamUrl: null,
+    sourceId: null,
+    externalId: null,
+    collectionKey: null,
+    collectionTitle: null,
+    downloadedAt: null,
+    downloadPath: null,
   };
 }
 

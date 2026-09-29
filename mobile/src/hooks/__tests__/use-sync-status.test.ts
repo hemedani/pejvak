@@ -25,6 +25,9 @@ const counts = (n: number) => ({
   annotations: n,
   playlists: n,
   contextPlays: n,
+  // Deliberately not `n`: the assertions below count five buckets, and the
+  // online bucket is exercised by its own suite.
+  onlineCollections: 0,
 });
 
 beforeEach(() => jest.clearAllMocks());

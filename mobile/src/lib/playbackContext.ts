@@ -12,9 +12,9 @@ import type { ContextStats, ContextType, LocalContextPlay } from "@/lib/db/types
 import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
 
 /**
- * The collection currently being played. `key` is a local playlist id or a
- * folder key; `title` is captured when playback starts so the player can name
- * the collection without a query.
+ * The collection currently being played. `key` is a local playlist id, a folder
+ * key, or an online collection key (`sourceId:externalId`); `title` is captured
+ * when playback starts so the player can name the collection without a query.
  */
 export type PlaybackContext = {
   type: ContextType;
@@ -45,9 +45,12 @@ export function sameContext(
   return a.type === b.type && a.key === b.key;
 }
 
-/** "Folder" / "Playlist", for an overline or a chip subtitle. */
+/** "Folder" / "Playlist" / "Online", for an overline or a chip subtitle. */
 export function describeContextType(type: ContextType): string {
-  return type === "folder" ? "Folder" : "Playlist";
+  if (type === "folder") {
+    return "Folder";
+  }
+  return type === "online" ? "Online" : "Playlist";
 }
 
 /**
@@ -59,7 +62,8 @@ export function describeContextType(type: ContextType): string {
  */
 export type ContextRouteTarget =
   | { pathname: "/folder/[key]"; params: { key: string } }
-  | { pathname: "/playlist/[id]"; params: { id: string } };
+  | { pathname: "/playlist/[id]"; params: { id: string } }
+  | { pathname: "/online/[key]"; params: { key: string } };
 
 /**
  * Returned as data rather than pushed here, so the three places that offer the
@@ -68,15 +72,20 @@ export type ContextRouteTarget =
  *
  * The folder key goes through `folderKeyToRouteSegment` for the same reason the
  * library screen uses it: the storage-root folder's key is the empty string, and
- * an empty path segment is not a route.
+ * an empty path segment is not a route. An online key is already a route-safe
+ * `sourceId:externalId` and goes through untouched.
  */
 export function contextRouteTarget(context: {
   type: ContextType;
   key: string;
 }): ContextRouteTarget {
-  return context.type === "folder"
-    ? { pathname: "/folder/[key]", params: { key: folderKeyToRouteSegment(context.key) } }
-    : { pathname: "/playlist/[id]", params: { id: context.key } };
+  if (context.type === "folder") {
+    return { pathname: "/folder/[key]", params: { key: folderKeyToRouteSegment(context.key) } };
+  }
+  if (context.type === "online") {
+    return { pathname: "/online/[key]", params: { key: context.key } };
+  }
+  return { pathname: "/playlist/[id]", params: { id: context.key } };
 }
 
 /** Finished share of a run, clamped to 0–1. A zero-length run reports 0. */

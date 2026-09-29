@@ -9,7 +9,11 @@ import type {
   PlaybackCheckpoint,
   PlaylistItem,
   SyncStatus,
+  DownloadState,
+  LocalDownloadJob,
+  LocalOnlineCollection,
   TrackAvailability,
+  TrackOrigin,
   TrackSource,
 } from "@/lib/db/types";
 
@@ -45,6 +49,14 @@ export type TrackRow = {
   disc_number: number | null;
   year: number | null;
   availability: string;
+  origin: string;
+  stream_url: string | null;
+  source_id: string | null;
+  external_id: string | null;
+  collection_key: string | null;
+  collection_title: string | null;
+  downloaded_at: number | null;
+  download_path: string | null;
 };
 
 export type FolderRow = {
@@ -166,7 +178,22 @@ export type CheckpointRow = {
 
 const SYNC_STATUSES: readonly SyncStatus[] = ["pending", "syncing", "synced", "failed"];
 const TRACK_SOURCES: readonly TrackSource[] = ["mediastore", "saf", "picker"];
-const CONTEXT_TYPES: readonly ContextType[] = ["playlist", "folder"];
+const CONTEXT_TYPES: readonly ContextType[] = ["playlist", "folder", "online"];
+const TRACK_ORIGINS: readonly TrackOrigin[] = ["local", "online"];
+const DOWNLOAD_STATES: readonly DownloadState[] = [
+  "none",
+  "downloading",
+  "complete",
+  "failed",
+  "cancelled",
+];
+const DOWNLOAD_JOB_STATES: readonly LocalDownloadJob["state"][] = [
+  "queued",
+  "running",
+  "done",
+  "failed",
+  "cancelled",
+];
 
 export function toSyncStatus(value: string): SyncStatus {
   return (SYNC_STATUSES as readonly string[]).includes(value)
@@ -194,6 +221,33 @@ export function toTrackSource(value: string | null): TrackSource | null {
     return null;
   }
   return (TRACK_SOURCES as readonly string[]).includes(value) ? (value as TrackSource) : null;
+}
+
+/**
+ * A row written before v11 has no origin, and `local` is the truthful reading
+ * of it: it was imported from a file, not streamed from a source.
+ */
+export function toTrackOrigin(value: string | null): TrackOrigin {
+  return (TRACK_ORIGINS as readonly string[]).includes(value ?? "")
+    ? (value as TrackOrigin)
+    : "local";
+}
+
+export function toDownloadState(value: string): DownloadState {
+  return (DOWNLOAD_STATES as readonly string[]).includes(value)
+    ? (value as DownloadState)
+    : "none";
+}
+
+/**
+ * An unreadable job state reads as `queued`, not as `failed`: a row that cannot
+ * be classified is one the next run should simply try again, and marking it
+ * failed would leave a track permanently un-downloadable for a schema reason.
+ */
+export function toDownloadJobState(value: string): LocalDownloadJob["state"] {
+  return (DOWNLOAD_JOB_STATES as readonly string[]).includes(value)
+    ? (value as LocalDownloadJob["state"])
+    : "queued";
 }
 
 export function toTrackAvailability(value: string): TrackAvailability {
@@ -267,6 +321,94 @@ export function mapTrack(row: TrackRow): LocalTrack {
     discNumber: row.disc_number,
     year: row.year,
     availability: toTrackAvailability(row.availability),
+    origin: toTrackOrigin(row.origin),
+    streamUrl: row.stream_url,
+    sourceId: row.source_id,
+    externalId: row.external_id,
+    collectionKey: row.collection_key,
+    collectionTitle: row.collection_title,
+    downloadedAt: row.downloaded_at,
+    downloadPath: row.download_path,
+  };
+}
+
+export type OnlineCollectionRow = {
+  key: string;
+  server_id: string | null;
+  source_id: string;
+  external_id: string;
+  title: string;
+  subtitle: string | null;
+  artwork_url: string | null;
+  language_code: string;
+  track_count: number;
+  page_url: string | null;
+  is_favorite: number;
+  last_opened_at: number | null;
+  download_state: string;
+  deleted_at: number | null;
+  sync_status: string;
+  created_at: number;
+  updated_at: number;
+};
+
+export type DownloadJobRow = {
+  id: string;
+  collection_key: string;
+  track_id: string;
+  external_id: string;
+  title: string;
+  order_index: number;
+  url: string;
+  dest_path: string;
+  state: string;
+  bytes_total: number;
+  bytes_done: number;
+  attempts: number;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+export function mapOnlineCollection(row: OnlineCollectionRow): LocalOnlineCollection {
+  return {
+    key: row.key,
+    serverId: row.server_id,
+    sourceId: row.source_id,
+    externalId: row.external_id,
+    title: row.title,
+    subtitle: row.subtitle,
+    artworkUrl: row.artwork_url,
+    languageCode: row.language_code,
+    trackCount: row.track_count,
+    pageUrl: row.page_url,
+    isFavorite: toBoolean(row.is_favorite),
+    lastOpenedAt: row.last_opened_at,
+    downloadState: toDownloadState(row.download_state),
+    deletedAt: row.deleted_at,
+    syncStatus: toSyncStatus(row.sync_status),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapDownloadJob(row: DownloadJobRow): LocalDownloadJob {
+  return {
+    id: row.id,
+    collectionKey: row.collection_key,
+    trackId: row.track_id,
+    externalId: row.external_id,
+    title: row.title,
+    orderIndex: row.order_index,
+    url: row.url,
+    destPath: row.dest_path,
+    state: toDownloadJobState(row.state),
+    bytesTotal: row.bytes_total,
+    bytesDone: row.bytes_done,
+    attempts: row.attempts,
+    error: row.error,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 

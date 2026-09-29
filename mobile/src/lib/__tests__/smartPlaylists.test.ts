@@ -55,6 +55,14 @@ function track(id: string, overrides: Partial<LocalTrack> = {}): LocalTrack {
     discNumber: null,
     year: null,
     availability: "present",
+    origin: "local",
+    streamUrl: null,
+    sourceId: null,
+    externalId: null,
+    collectionKey: null,
+    collectionTitle: null,
+    downloadedAt: null,
+    downloadPath: null,
     ...overrides,
   };
 }

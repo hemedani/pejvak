@@ -48,6 +48,14 @@ describe("row mappers", () => {
       disc_number: null,
       year: null,
       availability: "present",
+      origin: "local",
+      stream_url: null,
+      source_id: null,
+      external_id: null,
+      collection_key: null,
+      collection_title: null,
+      downloaded_at: null,
+      download_path: null,
       ...base,
     };
 

@@ -31,8 +31,12 @@ import { usePlayerStore } from "@/store/playerStore";
 import { spring } from "@/theme/motion";
 import { layout, spacing } from "@/theme/tokens";
 
-/** Clearance above the native tab bar. */
-const TAB_BAR_CLEARANCE = 76;
+/**
+ * Clearance above the tab bar. Read from the layout tokens rather than a local
+ * number, so the bar's geometry is described in exactly one place and the two
+ * cannot overlap after either is adjusted.
+ */
+const TAB_BAR_CLEARANCE = layout.tabBarClearance;
 /** Pixels of upward drag that map to a full "peek". */
 const DRAG_RANGE = 140;
 

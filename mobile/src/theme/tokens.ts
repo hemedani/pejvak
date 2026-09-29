@@ -10,7 +10,7 @@
  * (or from `motion.ts`), never from an inline literal.
  */
 
-import { Platform, StyleSheet, type ColorValue } from "react-native";
+import { StyleSheet, type ColorValue } from "react-native";
 
 export type ColorScheme = "light" | "dark";
 
@@ -157,6 +157,20 @@ export const aurora: readonly (readonly [string, string, string])[] = [
 export type AuroraRamp = (typeof aurora)[number];
 
 /**
+ * The accent's own two-stop gradient — the raised centre tab, and anywhere else
+ * the accent needs depth rather than a flat fill.
+ *
+ * Both stops are the *same* hue family as `accent`, so this can never introduce
+ * a second accent colour: it is the app's existing teal, deepened. The darker
+ * stop is what keeps `onAccent` legible on top — the mid-tone teal alone lands
+ * around 2.3:1 against white, which is a glyph nobody can read.
+ */
+export const accentGradient: Record<ColorScheme, readonly [string, string]> = {
+  light: ["#0D7B72", "#0B4F52"],
+  dark: ["#5FD9C6", "#1FB6A6"],
+};
+
+/**
  * Darkening laid over gradient artwork before a glyph is drawn on it.
  *
  * The aurora ramps are mid-tone by design, so white text on the lighter ones
@@ -198,8 +212,29 @@ export const blur = {
 } as const;
 
 export const layout = {
-  /** Bottom padding reserved for the tab bar so content can scroll clear of it. */
-  tabBarInset: Platform.select({ ios: 52, android: 84 }) ?? 64,
+  /**
+   * Bottom padding reserved for the floating tab bar, so a screen's content can
+   * scroll clear of it.
+   *
+   * One number for every platform, unlike the native bar this replaces: the bar
+   * is drawn by the app now, so its geometry is identical everywhere and a
+   * per-platform value would only be a way to be wrong on one of them. It covers
+   * the bar, its gap from the safe-area edge, and the centre button's overhang.
+   */
+  tabBarInset: 98,
+  /** Height of the bar's pill. */
+  tabBarHeight: 62,
+  /** Gap between the bar and the safe-area edge. */
+  tabBarMargin: 10,
+  /** How far the centre button rises above the bar's top edge. */
+  tabBarRaise: 22,
+  /** Diameter of the raised centre button. */
+  tabBarActionSize: 62,
+  /**
+   * Where a floating panel (the mini-player) must sit to clear the bar. Mirrors
+   * the bar's own geometry so the two can never overlap.
+   */
+  tabBarClearance: 80,
   /** Height of the collapsed mini-player. */
   miniPlayerHeight: 66,
   /** Floating margin around the mini-player / collapsed sheet. */

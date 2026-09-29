@@ -47,11 +47,33 @@ const glyphs = {
 
   library: { family: "ionicons", name: "library-outline" },
   folder: { family: "ionicons", name: "folder-outline" },
+  folderOpen: { family: "ionicons", name: "folder-open-outline" },
   history: { family: "ionicons", name: "time-outline" },
   stats: { family: "ionicons", name: "stats-chart-outline" },
   playlists: { family: "ionicons", name: "list-outline" },
   settings: { family: "ionicons", name: "settings-outline" },
   notes: { family: "ionicons", name: "document-text-outline" },
+
+  /** Discover — the raised centre tab. Filled, because it is the destination. */
+  compass: { family: "ionicons", name: "compass" },
+  compassOutline: { family: "ionicons", name: "compass-outline" },
+  /** A language, in the Browse list. */
+  globe: { family: "ionicons", name: "globe-outline" },
+  /** A source: a station broadcasting. */
+  radio: { family: "ionicons", name: "radio-outline" },
+  /** Saved, in the Favorites tab. */
+  bookmark: { family: "ionicons", name: "bookmark-outline" },
+  bookmarkFilled: { family: "ionicons", name: "bookmark" },
+  heartFilled: { family: "ionicons", name: "heart" },
+  /** Streaming vs. on the device. */
+  stream: { family: "ionicons", name: "cloud-outline" },
+  cloudDownload: { family: "ionicons", name: "cloud-download-outline" },
+  playCircle: { family: "ionicons", name: "play-circle" },
+  stopCircle: { family: "ionicons", name: "stop-circle-outline" },
+  checkCircle: { family: "ionicons", name: "checkmark-circle" },
+  /** A link out to the source's own page. */
+  external: { family: "ionicons", name: "open-outline" },
+  layers: { family: "ionicons", name: "albums-outline" },
 
   speed: { family: "ionicons", name: "speedometer-outline" },
   moon: { family: "ionicons", name: "moon-outline" },

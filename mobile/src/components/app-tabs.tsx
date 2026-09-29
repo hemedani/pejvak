@@ -1,36 +1,33 @@
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
-import { useColorScheme } from 'react-native';
+/**
+ * The tab navigator.
+ *
+ * Registers the destinations from `TABS` and hands the drawing to `AppTabBar`,
+ * so the route list and the bar's layout are the same array and cannot drift.
+ *
+ * The screens keep the full height of the window and the bar floats over them:
+ * each screen reserves its own bottom space from `layout.tabBarInset`. That is
+ * what lets a list scroll *under* the bar rather than stopping short of it,
+ * which is the whole point of a floating bar — and why `tabBarStyle` reports a
+ * zero height, so nothing below tries to reserve space for a bar that is not in
+ * the layout flow.
+ */
 
-import { Colors } from '@/constants/theme';
+import { Tabs } from "expo-router/tabs";
+
+import { AppTabBar, TABS } from "@/components/app-tab-bar";
 
 export default function AppTabs() {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
-
   return (
-    <NativeTabs
-      backgroundColor={colors.background}
-      indicatorColor={colors.backgroundElement}
-      labelStyle={{ selected: { color: colors.text } }}>
-      <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Label>Library</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="house" md="home" />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="history">
-        <NativeTabs.Trigger.Label>History</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="clock.arrow.circlepath" md="history" />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="stats">
-        <NativeTabs.Trigger.Label>Stats</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="chart.bar" md="bar_chart" />
-      </NativeTabs.Trigger>
-
-      <NativeTabs.Trigger name="playlists">
-        <NativeTabs.Trigger.Label>Playlists</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="music.note.list" md="playlist_play" />
-      </NativeTabs.Trigger>
-    </NativeTabs>
+    <Tabs
+      tabBar={(props) => <AppTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: { height: 0 },
+        sceneStyle: { backgroundColor: "transparent" },
+      }}>
+      {TABS.map((tab) => (
+        <Tabs.Screen key={tab.name} name={tab.name} options={{ title: tab.label }} />
+      ))}
+    </Tabs>
   );
 }

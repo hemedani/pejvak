@@ -5,15 +5,19 @@ import {
   mapAnnotation,
   mapCheckpoint,
   mapContextPlay,
+  mapDownloadJob,
   mapFolder,
+  mapOnlineCollection,
   mapPlaylist,
   mapSession,
   mapTrack,
   type AnnotationRow,
   type CheckpointRow,
   type ContextPlayRow,
+  type DownloadJobRow,
   type FolderRow,
   type HistoryRow,
+  type OnlineCollectionRow,
   type PlaylistRow,
   type SessionRow,
   type TrackRow,
@@ -30,6 +34,7 @@ import type {
   FinalizeContextPlayInput,
   FinalizeSessionInput,
   FolderSummary,
+  InsertRemoteOnlineCollectionInput,
   InsertRemotePlaylistInput,
   LocalAnnotation,
   LocalContextPlay,
@@ -43,14 +48,20 @@ import type {
   SaveCheckpointInput,
   SyncStatus,
   TouchContextPlayInput,
+  CreateDownloadJobInput,
+  DownloadState,
+  LocalDownloadJob,
+  LocalOnlineCollection,
   TrackAvailability,
   TrackDetailData,
+  UpsertOnlineCollectionInput,
 } from "@/lib/db/types";
 import type { FolderTrackProgress } from "@/lib/folderPlay";
 import type { HistoryItem } from "@/lib/history";
 import { clampResumePosition } from "@/lib/resume";
 import type {
   AnnotationUpdate,
+  OnlineCollectionUpdate,
   PlaylistUpdate,
   RemoteAnnotation,
   RemoteContextPlay,
@@ -114,6 +125,14 @@ async function insertTrack(input: CreateTrackInput): Promise<LocalTrack> {
     discNumber: input.discNumber ?? null,
     year: input.year ?? null,
     availability: "present",
+    origin: input.origin ?? "local",
+    streamUrl: input.streamUrl ?? null,
+    sourceId: input.sourceId ?? null,
+    externalId: input.externalId ?? null,
+    collectionKey: input.collectionKey ?? null,
+    collectionTitle: input.collectionTitle ?? null,
+    downloadedAt: input.downloadedAt ?? null,
+    downloadPath: input.downloadPath ?? null,
   };
 
   await db.runAsync(
@@ -123,9 +142,11 @@ async function insertTrack(input: CreateTrackInput): Promise<LocalTrack> {
       total_play_count, total_listen_time_sec, last_played_at, sync_status,
       created_at, updated_at,
       source, source_uri, source_path, source_size, source_mtime,
-      folder_key, folder_name, album, track_number, disc_number, year, availability
+      folder_key, folder_name, album, track_number, disc_number, year, availability,
+      origin, stream_url, source_id, external_id, collection_key, collection_title,
+      downloaded_at, download_path
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       track.id,
       track.serverId,
@@ -158,6 +179,14 @@ async function insertTrack(input: CreateTrackInput): Promise<LocalTrack> {
       track.discNumber,
       track.year,
       track.availability,
+      track.origin,
+      track.streamUrl,
+      track.sourceId,
+      track.externalId,
+      track.collectionKey,
+      track.collectionTitle,
+      track.downloadedAt,
+      track.downloadPath,
     ],
   );
 
@@ -1267,6 +1296,7 @@ async function getPendingCounts(): Promise<PendingCounts> {
     annotations: await count("annotations"),
     playlists: await count("playlists"),
     contextPlays: await count("context_plays"),
+    onlineCollections: await count("online_collections"),
   };
 }
 
@@ -1610,6 +1640,18 @@ async function markTrackArtworkChecked(id: string): Promise<void> {
  *
  * Only rows never checked are returned, and rows flagged `missing` are excluded
  * because reading them would fail; those are the relink screen's business.
+ *
+ * Streams are excluded as well, and the exclusion is a filter rather than a
+ * stamp on purpose. An online track that has not been downloaded keeps its
+ * source's URL in `file_uri`, and the reader behind this accepts only a file, a
+ * SAF URI, an asset or a resource path — so every streamed row would be a native
+ * call that can only throw, spending the pass's limit on rows that can never
+ * succeed and holding this count above zero forever. Filtering rather than
+ * stamping is what makes that safe: downloading writes a real path into
+ * `file_uri`, and the row is a candidate again on that day. Stamping would have
+ * denied it the artwork that arrives with the download.
+ *
+ * The same rule lives in TypeScript as `isStreamUri`; the two have to agree.
  */
 async function getTracksMissingArtwork(limit: number): Promise<LocalTrack[]> {
   const db = await getDatabase();
@@ -1619,6 +1661,8 @@ async function getTracksMissingArtwork(limit: number): Promise<LocalTrack[]> {
        AND artwork_checked_at IS NULL
        AND availability = 'present'
        AND COALESCE(file_uri, source_uri) IS NOT NULL
+       AND COALESCE(file_uri, source_uri) NOT LIKE 'http://%'
+       AND COALESCE(file_uri, source_uri) NOT LIKE 'https://%'
      ORDER BY created_at ASC
      LIMIT ?`,
     [limit],
@@ -1633,7 +1677,9 @@ async function countTracksMissingArtwork(): Promise<number> {
      WHERE artwork_url IS NULL
        AND artwork_checked_at IS NULL
        AND availability = 'present'
-       AND COALESCE(file_uri, source_uri) IS NOT NULL`,
+       AND COALESCE(file_uri, source_uri) IS NOT NULL
+       AND COALESCE(file_uri, source_uri) NOT LIKE 'http://%'
+       AND COALESCE(file_uri, source_uri) NOT LIKE 'https://%'`,
   );
   return row?.total ?? 0;
 }
@@ -1760,6 +1806,765 @@ async function getSourceSignatures(): Promise<
   return signatures;
 }
 
+
+// --- Online tracks --------------------------------------------------------
+
+/**
+ * The row for an online item, created on first sight and refreshed after.
+ *
+ * Keyed on `content_hash`, which for online audio is derived from the source and
+ * the item's own id — never from the stream URL, which is signed and rotates.
+ * Re-resolving a collection therefore lands on the rows that already exist
+ * instead of minting a second copy of the same episode every time a signature
+ * expires.
+ *
+ * `file_uri` is the one column the player reads, so an online row sets it to the
+ * stream URL and a local row sets it to a path: streaming needs no second code
+ * path through the audio engine. The one case that must not be overwritten is a
+ * *downloaded* track, whose `file_uri` is now the copy in app storage — writing
+ * the expiring URL over it would silently turn offline playback back into
+ * streaming, so the update leaves it alone once `downloaded_at` is set.
+ *
+ * The duration is only ever filled in, never replaced: the source does not
+ * report one, so the first real reading comes from the audio itself.
+ */
+async function upsertOnlineTrack(input: {
+  contentHash: string;
+  title: string;
+  streamUrl: string;
+  sourceId: string;
+  externalId: string;
+  collectionKey: string;
+  collectionTitle: string;
+  artworkUrl?: string | null;
+  album?: string | null;
+  author?: string | null;
+  durationSec?: number;
+  trackNumber?: number;
+}): Promise<LocalTrack> {
+  const existing = await getTrackByContentHash(input.contentHash);
+  const db = await getDatabase();
+  const now = Date.now();
+  const durationSec = Math.round(input.durationSec ?? 0);
+
+  if (existing) {
+    await db.runAsync(
+      `UPDATE tracks
+       SET title = ?,
+           stream_url = ?,
+           file_uri = CASE WHEN downloaded_at IS NULL THEN ? ELSE file_uri END,
+           collection_key = ?,
+           collection_title = ?,
+           artwork_url = COALESCE(?, artwork_url),
+           album = COALESCE(?, album),
+           author = COALESCE(?, author),
+           track_number = COALESCE(?, track_number),
+           duration_sec = CASE WHEN duration_sec = 0 THEN ? ELSE duration_sec END,
+           updated_at = ?
+       WHERE id = ?`,
+      [
+        input.title,
+        input.streamUrl,
+        input.streamUrl,
+        input.collectionKey,
+        input.collectionTitle,
+        input.artworkUrl ?? null,
+        input.album ?? null,
+        input.author ?? null,
+        input.trackNumber ?? null,
+        durationSec,
+        now,
+        existing.id,
+      ],
+    );
+    return (await getTrackById(existing.id)) ?? existing;
+  }
+
+  return insertTrack({
+    contentHash: input.contentHash,
+    title: input.title,
+    fileUri: input.streamUrl,
+    durationSec,
+    fileSizeBytes: 0,
+    // Long-form by nature: a podcast series or a course wants the resume and
+    // speed behaviour an audiobook gets, not a song's.
+    isAudiobook: true,
+    author: input.author ?? null,
+    artworkUrl: input.artworkUrl ?? null,
+    album: input.album ?? null,
+    trackNumber: input.trackNumber ?? null,
+    origin: "online",
+    streamUrl: input.streamUrl,
+    sourceId: input.sourceId,
+    externalId: input.externalId,
+    collectionKey: input.collectionKey,
+    collectionTitle: input.collectionTitle,
+  });
+}
+
+/**
+ * Every row belonging to one online collection, in the source's own order.
+ *
+ * Ordered by `track_number` because that is the position the source gave the
+ * item, and a course played in the wrong order is not the course.
+ */
+async function getTracksByCollection(collectionKey: string): Promise<LocalTrack[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<TrackRow>(
+    `SELECT * FROM tracks
+     WHERE collection_key = ?
+     ORDER BY COALESCE(track_number, 0) ASC, created_at ASC`,
+    [collectionKey],
+  );
+  return rows.map(mapTrack);
+}
+
+/**
+ * Per-track progress for one online collection.
+ *
+ * The same two facts `getFolderTrackProgress` answers, keyed on the collection
+ * instead of the folder — because an online collection is not a folder until it
+ * has been downloaded. Reading it from `folder_key` would leave a streamed
+ * course with no "Finished" and no "Resume at", which is exactly the state the
+ * listener spends most of their time in: the point of streaming is that nothing
+ * is on the device yet.
+ *
+ * `completed = 1` is the same predicate the folder card uses, so a downloaded
+ * course reports the same numbers before and after the download.
+ */
+async function getCollectionTrackProgress(
+  collectionKey: string,
+): Promise<Record<string, FolderTrackProgress>> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{
+    track_id: string;
+    duration_sec: number;
+    completed_count: number;
+    last_end_position_sec: number | null;
+  }>(
+    `SELECT
+       t.id AS track_id,
+       t.duration_sec AS duration_sec,
+       (SELECT COUNT(*) FROM sessions s
+         WHERE s.track_id = t.id AND s.completed = 1 AND s.deleted_at IS NULL) AS completed_count,
+       (SELECT s.end_position_sec FROM sessions s
+         WHERE s.track_id = t.id AND s.ended_at IS NOT NULL AND s.deleted_at IS NULL
+         ORDER BY s.started_at DESC LIMIT 1) AS last_end_position_sec
+     FROM tracks t
+     WHERE t.collection_key = ?`,
+    [collectionKey],
+  );
+
+  const progress: Record<string, FolderTrackProgress> = {};
+  for (const row of rows) {
+    progress[row.track_id] = {
+      finished: row.completed_count > 0,
+      resumeSec: clampResumePosition(row.last_end_position_sec ?? 0, row.duration_sec),
+    };
+  }
+  return progress;
+}
+
+/**
+ * The duration the source never reported, written back once the player knows it.
+ *
+ * Fills a zero and nothing else. The first real duration came from the audio
+ * itself; a later reading that disagrees is a buffering artefact, and letting it
+ * through would move every resume position in the collection.
+ */
+async function setTrackDuration(id: string, durationSec: number): Promise<void> {
+  if (!Number.isFinite(durationSec) || durationSec <= 0) {
+    return;
+  }
+  const db = await getDatabase();
+  await db.runAsync(
+    "UPDATE tracks SET duration_sec = ?, updated_at = ? WHERE id = ? AND duration_sec = 0",
+    [Math.round(durationSec), Date.now(), id],
+  );
+}
+
+/**
+ * Records that a track's bytes are now on the device.
+ *
+ * `file_uri` moves to the downloaded copy while `stream_url` stays put, so the
+ * row keeps both halves of its story: where the audio is, and where it came
+ * from. `availability` is set present in the same statement — a download that
+ * succeeded must not leave the row flagged missing.
+ *
+ * `artwork_checked_at` is deliberately left alone: a row with no remote cover
+ * should still be examined by the backfill, now that a local file exists to
+ * read one out of.
+ */
+async function markTrackDownloaded(input: {
+  id: string;
+  fileUri: string;
+  downloadPath: string;
+  fileSizeBytes: number;
+  durationSec: number;
+  folderKey: string;
+  folderName: string;
+  trackNumber: number;
+}): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    `UPDATE tracks
+     SET file_uri = ?, download_path = ?, downloaded_at = ?, file_size_bytes = ?,
+         duration_sec = CASE WHEN duration_sec = 0 THEN ? ELSE duration_sec END,
+         folder_key = ?, folder_name = ?, track_number = ?,
+         availability = 'present', updated_at = ?
+     WHERE id = ?`,
+    [
+      input.fileUri,
+      input.downloadPath,
+      now,
+      Math.round(input.fileSizeBytes),
+      Math.round(input.durationSec),
+      input.folderKey,
+      input.folderName,
+      input.trackNumber,
+      now,
+      input.id,
+    ],
+  );
+}
+
+/**
+ * Where a collection's downloaded bytes actually are.
+ *
+ * Read from `download_path` rather than recomputed from the collection's title,
+ * because the title is not stable: a show renamed on the source between the
+ * download and the delete would have the app looking in a directory that no
+ * longer exists, leaving the real one on disk forever with nothing pointing at
+ * it. The rows are the record of where each file was put, so this reads that
+ * record instead of deriving it a second time.
+ */
+async function getDownloadedTrackPaths(collectionKey: string): Promise<string[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ download_path: string | null }>(
+    `SELECT download_path FROM tracks
+     WHERE collection_key = ? AND downloaded_at IS NOT NULL AND download_path IS NOT NULL`,
+    [collectionKey],
+  );
+  return rows
+    .map((row) => row.download_path)
+    .filter((value): value is string => value !== null);
+}
+
+/**
+ * Hand a collection's tracks back to streaming, keeping every row.
+ *
+ * The exact inverse of `markTrackDownloaded`, and the reason deleting a
+ * download is not the same as deleting the content. The row is what history,
+ * statistics, annotations and resume positions hang off, and its identity is
+ * `content_hash` — which downloading never changed. So the bytes go and the row
+ * stays, pointing back at the stream it came from: a course finished last year
+ * keeps its finished count after the listener reclaims the space.
+ *
+ * `folder_key` is cleared along with the bytes so the folder leaves the Library
+ * in the same breath — a folder whose tracks are not on the device would open
+ * onto nothing, and the Folder view is derived from this column.
+ *
+ * `availability` returns to `present` deliberately. `missing` is the flag that
+ * offers a relink, and there is no file left to relink to; the stream is where
+ * this row now lives.
+ */
+async function forgetDownloadedTracks(collectionKey: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE tracks
+     SET file_uri = COALESCE(stream_url, file_uri),
+         download_path = NULL,
+         downloaded_at = NULL,
+         file_size_bytes = 0,
+         folder_key = NULL,
+         folder_name = NULL,
+         availability = CASE WHEN stream_url IS NULL THEN 'missing' ELSE 'present' END,
+         updated_at = ?
+     WHERE collection_key = ? AND downloaded_at IS NOT NULL`,
+    [Date.now(), collectionKey],
+  );
+}
+
+// --- Online collections ---------------------------------------------------
+
+/**
+ * Writes what a catalogue read learned about a collection.
+ *
+ * Only catalogue facts. The listener's own state — favourited, how far they got,
+ * how much is downloaded — is written by the setters below, so a background
+ * refresh can never quietly un-favourite something.
+ *
+ * `deleted_at` is cleared on conflict: a collection the listener removed and
+ * then re-opened from Browse is one they want back, and a tombstone left in
+ * place would make the row invisible to every read.
+ */
+async function upsertOnlineCollection(
+  input: UpsertOnlineCollectionInput,
+): Promise<LocalOnlineCollection> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO online_collections (
+       key, server_id, source_id, external_id, title, subtitle, artwork_url,
+       language_code, track_count, page_url, is_favorite, last_opened_at,
+       download_state, deleted_at, sync_status, created_at, updated_at
+     ) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, 'none', NULL, 'pending', ?, ?)
+     ON CONFLICT(key) DO UPDATE SET
+       title = excluded.title,
+       subtitle = COALESCE(excluded.subtitle, online_collections.subtitle),
+       artwork_url = COALESCE(excluded.artwork_url, online_collections.artwork_url),
+       track_count = CASE WHEN excluded.track_count > 0
+                          THEN excluded.track_count
+                          ELSE online_collections.track_count END,
+       page_url = COALESCE(excluded.page_url, online_collections.page_url),
+       deleted_at = NULL,
+       updated_at = excluded.updated_at`,
+    [
+      input.key,
+      input.sourceId,
+      input.externalId,
+      input.title,
+      input.subtitle ?? null,
+      input.artworkUrl ?? null,
+      input.languageCode,
+      input.trackCount ?? 0,
+      input.pageUrl ?? null,
+      now,
+      now,
+    ],
+  );
+  const saved = await getOnlineCollection(input.key);
+  if (!saved) {
+    throw new Error("Online collection was not saved.");
+  }
+  return saved;
+}
+
+async function getOnlineCollection(key: string): Promise<LocalOnlineCollection | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<OnlineCollectionRow>(
+    "SELECT * FROM online_collections WHERE key = ? AND deleted_at IS NULL",
+    [key],
+  );
+  return row ? mapOnlineCollection(row) : null;
+}
+
+/** Saved collections, most recently touched first. */
+async function getOnlineCollections(): Promise<LocalOnlineCollection[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<OnlineCollectionRow>(
+    `SELECT * FROM online_collections
+     WHERE deleted_at IS NULL
+     ORDER BY COALESCE(last_opened_at, updated_at) DESC`,
+  );
+  return rows.map(mapOnlineCollection);
+}
+
+/** The Favorites tab: only what the listener explicitly kept. */
+async function getFavoriteOnlineCollections(): Promise<LocalOnlineCollection[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<OnlineCollectionRow>(
+    `SELECT * FROM online_collections
+     WHERE deleted_at IS NULL AND is_favorite = 1
+     ORDER BY updated_at DESC`,
+  );
+  return rows.map(mapOnlineCollection);
+}
+
+/**
+ * Collections with something in flight, so a download interrupted by a kill can
+ * be picked up again without the listener finding the screen they started it on.
+ */
+async function getDownloadingOnlineCollections(): Promise<LocalOnlineCollection[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<OnlineCollectionRow>(
+    `SELECT * FROM online_collections
+     WHERE deleted_at IS NULL AND download_state = 'downloading'
+     ORDER BY updated_at ASC`,
+  );
+  return rows.map(mapOnlineCollection);
+}
+
+/**
+ * Favourite / unfavourite, which is what the Favorites tab is made of.
+ *
+ * Dirties `sync_status`: the shelf the listener curated is worth carrying to
+ * their other devices, and a favourite that never left the phone would make the
+ * server's copy of the collection quietly wrong.
+ */
+async function setOnlineCollectionFavorite(key: string, isFavorite: boolean): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE online_collections
+     SET is_favorite = ?, sync_status = 'pending', updated_at = ?
+     WHERE key = ?`,
+    [isFavorite ? 1 : 0, Date.now(), key],
+  );
+}
+
+/**
+ * Records how much of a collection is on this device.
+ *
+ * Dirties `sync_status` so "I downloaded this course" survives the phone it
+ * happened on — it is the fact that lets the collection be offered for
+ * re-download elsewhere, and the reason the address is kept at all.
+ */
+async function setOnlineCollectionDownloadState(
+  key: string,
+  state: DownloadState,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE online_collections
+     SET download_state = ?, sync_status = 'pending', updated_at = ?
+     WHERE key = ?`,
+    [state, Date.now(), key],
+  );
+}
+
+/**
+ * Marks a collection as opened, which is what orders the Continue tab.
+ *
+ * This does dirty `sync_status`. `last_opened_at` is the one field that makes
+ * Continue mean anything on a second device — a course started on the phone
+ * should be waiting on the tablet — and the cost is one small row update inside
+ * a batch that is already going out alongside the streaming it accompanies.
+ */
+async function touchOnlineCollectionOpened(key: string): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    `UPDATE online_collections
+     SET last_opened_at = ?, sync_status = 'pending', updated_at = ?
+     WHERE key = ?`,
+    [now, now, key],
+  );
+}
+
+/**
+ * Removes a collection from the listener's list.
+ *
+ * A tombstone rather than a DELETE, for the same reason sessions are tombstoned:
+ * the row is synced, and a hard delete would simply be re-inserted by the next
+ * pull. The downloaded files are deliberately left on the device — deleting
+ * someone's audio because they tidied a list is not a trade they agreed to.
+ */
+async function softDeleteOnlineCollection(key: string): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    `UPDATE online_collections
+     SET deleted_at = ?, is_favorite = 0, download_state = 'none', sync_status = 'pending',
+         updated_at = ?
+     WHERE key = ?`,
+    [now, now, key],
+  );
+}
+
+/**
+ * Collections with a local change the server has not seen.
+ *
+ * Tombstoned rows are included. A removal is a change like any other, and the
+ * row may only be dropped once the server has been told — which is why this
+ * reads `sync_status` rather than filtering `deleted_at IS NULL`.
+ */
+async function getPendingOnlineCollections(
+  limit = 50,
+): Promise<LocalOnlineCollection[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<OnlineCollectionRow>(
+    `SELECT * FROM online_collections
+     WHERE sync_status IN ('pending', 'failed')
+     ORDER BY updated_at ASC
+     LIMIT ?`,
+    [limit],
+  );
+  return rows.map(mapOnlineCollection);
+}
+
+async function setOnlineCollectionSyncStatus(
+  key: string,
+  status: SyncStatus,
+  serverId?: string,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE online_collections
+     SET sync_status = ?, server_id = COALESCE(?, server_id), updated_at = ?
+     WHERE key = ?`,
+    [status, serverId ?? null, Date.now(), key],
+  );
+}
+
+/** Drops a row whose tombstone the server has acknowledged. */
+async function hardDeleteOnlineCollection(key: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("DELETE FROM online_collections WHERE key = ?", [key]);
+}
+
+/**
+ * Writes a collection that arrived from the server.
+ *
+ * `ON CONFLICT DO NOTHING` rather than `INSERT OR REPLACE`: the caller only
+ * reaches here for a key that is absent locally, and a replace on a key that
+ * turned out to exist would take `download_state` with it — the one column that
+ * describes *this* device and that the server has no opinion about.
+ */
+async function insertRemoteOnlineCollection(
+  input: InsertRemoteOnlineCollectionInput,
+): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO online_collections (
+       key, server_id, source_id, external_id, title, subtitle, artwork_url,
+       language_code, track_count, page_url, is_favorite, last_opened_at,
+       download_state, deleted_at, sync_status, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'none', NULL, 'synced', ?, ?)
+     ON CONFLICT(key) DO NOTHING`,
+    [
+      input.key,
+      input.serverId,
+      input.sourceId,
+      input.externalId,
+      input.title,
+      input.subtitle,
+      input.artworkUrl,
+      input.languageCode,
+      input.trackCount,
+      input.pageUrl,
+      input.isFavorite ? 1 : 0,
+      input.lastOpenedAt,
+      now,
+      input.updatedAt,
+    ],
+  );
+}
+
+/**
+ * Applies a newer remote edit.
+ *
+ * `download_state` is deliberately absent: whether the audio is on this device
+ * is not something another device can tell us.
+ */
+async function applyRemoteOnlineCollectionUpdate(
+  update: OnlineCollectionUpdate,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE online_collections
+     SET title = ?, subtitle = ?, artwork_url = ?, track_count = ?, page_url = ?,
+         is_favorite = ?, last_opened_at = ?, server_id = ?,
+         sync_status = 'synced', updated_at = ?
+     WHERE key = ? AND deleted_at IS NULL`,
+    [
+      update.title,
+      update.subtitle,
+      update.artworkUrl,
+      update.trackCount,
+      update.pageUrl,
+      update.isFavorite ? 1 : 0,
+      update.lastOpenedAt,
+      update.serverId,
+      update.updatedAt,
+      update.id,
+    ],
+  );
+}
+
+// --- Downloads ------------------------------------------------------------
+
+/**
+ * Replaces a collection's queue with one job per track.
+ *
+ * The whole queue is rewritten rather than appended to, because the source can
+ * add, reorder or drop episodes and a stale job would otherwise download a file
+ * that no longer exists at a position that no longer applies. Jobs already
+ * finished are dropped with it — the files stay, and `markTrackDownloaded` is
+ * what remembers them.
+ */
+async function replaceDownloadJobs(
+  inputs: CreateDownloadJobInput[],
+): Promise<LocalDownloadJob[]> {
+  const db = await getDatabase();
+  const now = Date.now();
+  const collectionKey = inputs[0]?.collectionKey;
+  if (!collectionKey) {
+    return [];
+  }
+  await db.runAsync("DELETE FROM download_jobs WHERE collection_key = ?", [collectionKey]);
+  for (const input of inputs) {
+    await db.runAsync(
+      `INSERT INTO download_jobs (
+         id, collection_key, track_id, external_id, title, order_index, url,
+         dest_path, state, bytes_total, bytes_done, attempts, error, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, 0, 0, NULL, ?, ?)`,
+      [
+        input.id ?? newId(),
+        input.collectionKey,
+        input.trackId,
+        input.externalId,
+        input.title,
+        input.orderIndex,
+        input.url,
+        input.destPath,
+        now,
+        now,
+      ],
+    );
+  }
+  return getDownloadJobs(collectionKey);
+}
+
+async function getDownloadJobs(collectionKey: string): Promise<LocalDownloadJob[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<DownloadJobRow>(
+    "SELECT * FROM download_jobs WHERE collection_key = ? ORDER BY order_index ASC",
+    [collectionKey],
+  );
+  return rows.map(mapDownloadJob);
+}
+
+/**
+ * The next job to run: the oldest one that has not finished.
+ *
+ * `running` is included because a kill leaves a row in that state with no
+ * process behind it — treating it as work in progress would stall the queue
+ * forever.
+ */
+async function getNextDownloadJob(collectionKey: string): Promise<LocalDownloadJob | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<DownloadJobRow>(
+    `SELECT * FROM download_jobs
+     WHERE collection_key = ? AND state IN ('queued', 'running')
+     ORDER BY order_index ASC
+     LIMIT 1`,
+    [collectionKey],
+  );
+  return row ? mapDownloadJob(row) : null;
+}
+
+async function setDownloadJobState(
+  id: string,
+  state: LocalDownloadJob["state"],
+  error?: string | null,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    "UPDATE download_jobs SET state = ?, error = ?, updated_at = ? WHERE id = ?",
+    [state, error ?? null, Date.now(), id],
+  );
+}
+
+async function updateDownloadJobProgress(
+  id: string,
+  bytesDone: number,
+  bytesTotal: number,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    "UPDATE download_jobs SET bytes_done = ?, bytes_total = ?, updated_at = ? WHERE id = ?",
+    [Math.max(0, Math.round(bytesDone)), Math.max(0, Math.round(bytesTotal)), Date.now(), id],
+  );
+}
+
+async function incrementDownloadJobAttempts(id: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    "UPDATE download_jobs SET attempts = attempts + 1, updated_at = ? WHERE id = ?",
+    [Date.now(), id],
+  );
+}
+
+/** Where a collection's download has got to, counted from the job rows. */
+export type DownloadProgress = {
+  total: number;
+  done: number;
+  failed: number;
+  bytesDone: number;
+  bytesTotal: number;
+};
+
+async function getDownloadProgress(collectionKey: string): Promise<DownloadProgress> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{
+    total: number;
+    done: number;
+    failed: number;
+    bytes_done: number;
+    bytes_total: number;
+  }>(
+    `SELECT COUNT(*) AS total,
+            SUM(CASE WHEN state = 'done' THEN 1 ELSE 0 END) AS done,
+            SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) AS failed,
+            SUM(bytes_done) AS bytes_done,
+            SUM(bytes_total) AS bytes_total
+     FROM download_jobs WHERE collection_key = ?`,
+    [collectionKey],
+  );
+  return {
+    total: row?.total ?? 0,
+    done: row?.done ?? 0,
+    failed: row?.failed ?? 0,
+    bytesDone: row?.bytes_done ?? 0,
+    bytesTotal: row?.bytes_total ?? 0,
+  };
+}
+
+/** The queue rows for one track, so a row can show its own progress. */
+async function getDownloadJobsForTrack(trackId: string): Promise<LocalDownloadJob[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<DownloadJobRow>(
+    "SELECT * FROM download_jobs WHERE track_id = ? ORDER BY order_index ASC",
+    [trackId],
+  );
+  return rows.map(mapDownloadJob);
+}
+
+/** Marks every unfinished job in a collection as cancelled. */
+async function cancelDownloadJobs(collectionKey: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE download_jobs SET state = 'cancelled', updated_at = ?
+     WHERE collection_key = ? AND state IN ('queued', 'running')`,
+    [Date.now(), collectionKey],
+  );
+}
+
+/**
+ * Drop a collection's queue outright, finished rows included.
+ *
+ * Unlike `cancelDownloadJobs`, which keeps the rows so a resume can pick up
+ * where it left off, this is what "the download is gone" means: the files it
+ * described have been deleted, so a row pointing at one is a row that would
+ * offer to resume a download of something that is already gone.
+ */
+async function deleteDownloadJobs(collectionKey: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("DELETE FROM download_jobs WHERE collection_key = ?", [collectionKey]);
+}
+
+/**
+ * Runs through an online collection, newest first — the Continue tab's query.
+ *
+ * Deliberately not `getContextPlaysForHistory`: that one returns *closed* runs
+ * and is shared with a screen whose limit is about pagination. Continue needs the
+ * open run too — it is the whole point — and it needs it not to be crowded out
+ * of a 200-row window by a listener who has spent a year in folders.
+ */
+async function getOnlineContextPlays(limit = 50): Promise<LocalContextPlay[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<ContextPlayRow>(
+    `SELECT * FROM context_plays
+     WHERE context_type = 'online' AND deleted_at IS NULL
+     ORDER BY started_at DESC
+     LIMIT ?`,
+    [limit],
+  );
+  return rows.map(mapContextPlay);
+}
+
 export const LocalDBService = {
   insertTrack,
   getTrackById,
@@ -1793,6 +2598,7 @@ export const LocalDBService = {
   getContextRunProgress,
   getContextPlaysForHistory,
   getContextPlaysByKey,
+  getOnlineContextPlays,
   getContextStats,
   getAllContextPlays,
   getPendingContextPlays,
@@ -1843,4 +2649,35 @@ export const LocalDBService = {
   countTracksMissingArtwork,
   updateTrackLocation,
   getSourceSignatures,
+  upsertOnlineTrack,
+  getTracksByCollection,
+  getCollectionTrackProgress,
+  setTrackDuration,
+  markTrackDownloaded,
+  upsertOnlineCollection,
+  getOnlineCollection,
+  getOnlineCollections,
+  getFavoriteOnlineCollections,
+  getDownloadingOnlineCollections,
+  setOnlineCollectionFavorite,
+  setOnlineCollectionDownloadState,
+  touchOnlineCollectionOpened,
+  softDeleteOnlineCollection,
+  getPendingOnlineCollections,
+  setOnlineCollectionSyncStatus,
+  hardDeleteOnlineCollection,
+  insertRemoteOnlineCollection,
+  applyRemoteOnlineCollectionUpdate,
+  replaceDownloadJobs,
+  getDownloadJobs,
+  getNextDownloadJob,
+  setDownloadJobState,
+  updateDownloadJobProgress,
+  incrementDownloadJobAttempts,
+  getDownloadProgress,
+  getDownloadJobsForTrack,
+  cancelDownloadJobs,
+  getDownloadedTrackPaths,
+  forgetDownloadedTracks,
+  deleteDownloadJobs,
 };

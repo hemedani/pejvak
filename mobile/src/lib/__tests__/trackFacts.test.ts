@@ -48,6 +48,14 @@ function track(overrides: Partial<LocalTrack> = {}): LocalTrack {
     discNumber: null,
     year: null,
     availability: "present",
+    origin: "local",
+    streamUrl: null,
+    sourceId: null,
+    externalId: null,
+    collectionKey: null,
+    collectionTitle: null,
+    downloadedAt: null,
+    downloadPath: null,
     contentHash: "a".repeat(64),
     ...overrides,
   };
@@ -274,6 +282,27 @@ describe("buildFileFacts", () => {
   it("falls back to the folder key when the folder has no display name", () => {
     const facts = asMap(buildFileFacts(track({ folderName: null, folderKey: "Lectures/Physics" })));
     expect(facts.Folder).toBe("Lectures/Physics");
+  });
+
+  it("calls a streamed track a stream, not a file it never was", () => {
+    // An online track keeps its source's signed URL in `file_uri` and has no
+    // `source`, so without this the section would print an expiring link as a
+    // durable "Location" and describe the row as an "Imported file".
+    const facts = asMap(
+      buildFileFacts(
+        track({
+          fileName: null,
+          fileUri: "https://cdn.manahej.ir/audio/1.mp3?md5=abc&expires=1700000000",
+          sourceUri: null,
+          source: null,
+          origin: "online",
+        }),
+      ),
+    );
+
+    expect(facts.Location).toBeUndefined();
+    expect(facts.Stream).toBe("https://cdn.manahej.ir/audio/1.mp3?md5=abc&expires=1700000000");
+    expect(facts.Source).toBe("Streamed from its source");
   });
 });
 

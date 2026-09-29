@@ -77,6 +77,14 @@ function track(overrides: Partial<LocalTrack> & { id: string; contentHash: strin
     discNumber: null,
     year: null,
     availability: "present",
+    origin: "local",
+    streamUrl: null,
+    sourceId: null,
+    externalId: null,
+    collectionKey: null,
+    collectionTitle: null,
+    downloadedAt: null,
+    downloadPath: null,
     ...overrides,
   };
 }

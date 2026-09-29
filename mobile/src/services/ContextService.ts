@@ -17,6 +17,7 @@ import {
 } from "@/lib/playbackContext";
 import { FolderService } from "@/services/FolderService";
 import { LocalDBService } from "@/services/LocalDBService";
+import { OnlineCatalogService } from "@/services/OnlineCatalogService";
 import { PlaylistService } from "@/services/PlaylistService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 
@@ -52,6 +53,22 @@ async function resolveQueue(
       return null;
     }
     return { ids: plan.queueIds, context: FolderService.contextFor(data) };
+  }
+
+  if (context.type === "online") {
+    // A streamed collection is resolved the same way a folder is — through the
+    // current queue, not a snapshot — and it can answer while offline, because
+    // the catalogue falls back to the rows already on the device. That fallback
+    // is the whole reason this branch lives here rather than in a screen: a
+    // downloaded course must be resumable from History on a plane.
+    const loaded = await OnlineCatalogService.loadCollection(context.key);
+    if (loaded.tracks.length === 0) {
+      return null;
+    }
+    return {
+      ids: loaded.tracks.map((track) => track.id),
+      context: { type: "online", key: loaded.meta.key, title: loaded.meta.title },
+    };
   }
 
   const detail = await PlaylistService.loadDetail(context.key);

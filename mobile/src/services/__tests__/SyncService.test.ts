@@ -1,6 +1,7 @@
 import type {
   LocalAnnotation,
   LocalContextPlay,
+  LocalOnlineCollection,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
@@ -25,6 +26,10 @@ jest.mock("@/services/LocalDBService", () => ({
     getAllPlaylists: jest.fn(),
     getPendingContextPlays: jest.fn(),
     getAllContextPlays: jest.fn(),
+    getPendingOnlineCollections: jest.fn(),
+    getOnlineCollections: jest.fn(),
+    insertRemoteOnlineCollection: jest.fn(),
+    applyRemoteOnlineCollectionUpdate: jest.fn(),
     insertRemoteContextPlay: jest.fn(),
     insertRemoteSession: jest.fn(),
     setTrackSyncStatus: jest.fn(),
@@ -32,7 +37,9 @@ jest.mock("@/services/LocalDBService", () => ({
     setAnnotationSyncStatus: jest.fn(),
     setPlaylistSyncStatus: jest.fn(),
     setContextPlaySyncStatus: jest.fn(),
+    setOnlineCollectionSyncStatus: jest.fn(),
     hardDeleteAnnotation: jest.fn(),
+    hardDeleteOnlineCollection: jest.fn(),
     deletePlaylist: jest.fn(),
     insertRemotePlaylist: jest.fn(),
     applyRemotePlaylistUpdate: jest.fn(),
@@ -64,8 +71,16 @@ const getPendingPlaylists = jest.mocked(LocalDBService.getPendingPlaylists);
 const getAllPlaylists = jest.mocked(LocalDBService.getAllPlaylists);
 const getPendingContextPlays = jest.mocked(LocalDBService.getPendingContextPlays);
 const getAllContextPlays = jest.mocked(LocalDBService.getAllContextPlays);
+const getPendingOnlineCollections = jest.mocked(LocalDBService.getPendingOnlineCollections);
 const setPlaylistSyncStatus = jest.mocked(LocalDBService.setPlaylistSyncStatus);
 const setContextPlaySyncStatus = jest.mocked(LocalDBService.setContextPlaySyncStatus);
+const setOnlineCollectionSyncStatus = jest.mocked(LocalDBService.setOnlineCollectionSyncStatus);
+const hardDeleteOnlineCollection = jest.mocked(LocalDBService.hardDeleteOnlineCollection);
+const getOnlineCollections = jest.mocked(LocalDBService.getOnlineCollections);
+const insertRemoteOnlineCollection = jest.mocked(LocalDBService.insertRemoteOnlineCollection);
+const applyRemoteOnlineCollectionUpdate = jest.mocked(
+  LocalDBService.applyRemoteOnlineCollectionUpdate,
+);
 const deletePlaylist = jest.mocked(LocalDBService.deletePlaylist);
 const insertRemoteSession = jest.mocked(LocalDBService.insertRemoteSession);
 const setTrackSyncStatus = jest.mocked(LocalDBService.setTrackSyncStatus);
@@ -74,7 +89,10 @@ const setAnnotationSyncStatus = jest.mocked(LocalDBService.setAnnotationSyncStat
 const hardDeleteAnnotation = jest.mocked(LocalDBService.hardDeleteAnnotation);
 const setLastSyncAt = jest.mocked(SettingsService.setLastSyncAt);
 
-type Row = { id: string; serverId: string | null; syncStatus: SyncStatus };
+// Only what `pending` and `setSyncStatus` actually touch. An online collection
+// is keyed by `key`, not `id`, and neither helper reads the key — so requiring
+// one here would exclude the row for no reason.
+type Row = { serverId: string | null; syncStatus: SyncStatus };
 
 const db = {
   tracks: new Map<string, LocalTrack>(),
@@ -82,6 +100,7 @@ const db = {
   annotations: new Map<string, LocalAnnotation>(),
   playlists: new Map<string, LocalPlaylist>(),
   contextPlays: new Map<string, LocalContextPlay>(),
+  onlineCollections: new Map<string, LocalOnlineCollection>(),
 };
 
 function pending<T extends Row>(rows: Map<string, T>, limit: number): T[] {
@@ -109,11 +128,15 @@ function installClient(): void {
         (request.details?.set?.playlists as { clientId: string }[] | undefined) ?? [];
       const contextPlays =
         (request.details?.set?.contextPlays as { clientId: string }[] | undefined) ?? [];
+      const onlineCollections =
+        (request.details?.set?.onlineCollections as { clientId: string }[] | undefined) ??
+        [];
       return {
         syncedSessions: sessions.length,
         syncedAnnotations: annotations.length,
         syncedPlaylists: playlists.length,
         syncedContextPlays: contextPlays.length,
+        syncedOnlineCollections: onlineCollections.length,
         annotations: annotations.map((annotation) => ({
           clientId: annotation.clientId,
           serverId: `srv-${annotation.clientId}`,
@@ -125,6 +148,10 @@ function installClient(): void {
         contextPlays: contextPlays.map((run) => ({
           clientId: run.clientId,
           serverId: `srv-${run.clientId}`,
+        })),
+        onlineCollections: onlineCollections.map((saved) => ({
+          clientId: saved.clientId,
+          serverId: `srv-${saved.clientId}`,
         })),
       };
     }
@@ -141,6 +168,12 @@ function syncLocalDataPayloads(): {
     items: { contentHash: string; order: number }[];
   }[];
   contextPlays: { clientId: string }[];
+  onlineCollections: {
+    clientId: string;
+    isFavorite: boolean;
+    deleted: boolean;
+    pageUrl?: string;
+  }[];
 }[] {
   return callTypedActMock.mock.calls
     .filter(([request]) => request.act === "syncLocalData")
@@ -161,6 +194,13 @@ function syncLocalDataPayloads(): {
           items: { contentHash: string; order: number }[];
         }[]) ?? [],
       contextPlays: (request.details?.set?.contextPlays as { clientId: string }[]) ?? [],
+      onlineCollections:
+        (request.details?.set?.onlineCollections as {
+          clientId: string;
+          isFavorite: boolean;
+          deleted: boolean;
+          pageUrl?: string;
+        }[]) ?? [],
     }));
 }
 
@@ -203,6 +243,14 @@ function track(overrides: Partial<LocalTrack> = {}): LocalTrack {
     discNumber: null,
     year: null,
     availability: "present",
+    origin: "local",
+    streamUrl: null,
+    sourceId: null,
+    externalId: null,
+    collectionKey: null,
+    collectionTitle: null,
+    downloadedAt: null,
+    downloadPath: null,
     ...overrides,
   };
 }
@@ -269,6 +317,31 @@ function playlist(overrides: Partial<LocalPlaylist> = {}): LocalPlaylist {
   };
 }
 
+function onlineCollection(
+  overrides: Partial<LocalOnlineCollection> = {},
+): LocalOnlineCollection {
+  return {
+    key: "manahej:190",
+    serverId: null,
+    sourceId: "manahej",
+    externalId: "190",
+    title: "History of Shia",
+    subtitle: null,
+    artworkUrl: null,
+    languageCode: "fa",
+    trackCount: 12,
+    pageUrl: null,
+    isFavorite: false,
+    lastOpenedAt: null,
+    downloadState: "none",
+    deletedAt: null,
+    syncStatus: "pending",
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides,
+  };
+}
+
 function contextPlay(overrides: Partial<LocalContextPlay> = {}): LocalContextPlay {
   return {
     id: "r1",
@@ -313,6 +386,7 @@ beforeEach(() => {
   db.annotations.clear();
   db.playlists.clear();
   db.contextPlays.clear();
+  db.onlineCollections.clear();
   installClient();
 
   getPendingTracks.mockImplementation(async (limit = 50) => pending(db.tracks, limit));
@@ -327,6 +401,33 @@ beforeEach(() => {
     pending(db.contextPlays, limit),
   );
   getAllContextPlays.mockImplementation(async () => [...db.contextPlays.values()]);
+  getPendingOnlineCollections.mockImplementation(async (limit = 50) =>
+    pending(db.onlineCollections, limit),
+  );
+  getOnlineCollections.mockImplementation(async () => [...db.onlineCollections.values()]);
+  insertRemoteOnlineCollection.mockImplementation(async (input) => {
+    db.onlineCollections.set(input.key, {
+      ...onlineCollection({ ...input, syncStatus: "synced" }),
+    });
+  });
+  applyRemoteOnlineCollectionUpdate.mockImplementation(async (update) => {
+    const current = db.onlineCollections.get(update.id);
+    if (current) {
+      db.onlineCollections.set(update.id, {
+        ...current,
+        serverId: update.serverId,
+        title: update.title,
+        subtitle: update.subtitle,
+        artworkUrl: update.artworkUrl,
+        trackCount: update.trackCount,
+        pageUrl: update.pageUrl,
+        isFavorite: update.isFavorite,
+        lastOpenedAt: update.lastOpenedAt,
+        updatedAt: update.updatedAt,
+        syncStatus: "synced",
+      });
+    }
+  });
 
   setTrackSyncStatus.mockImplementation(async (id, status, serverId) => {
     setSyncStatus(db.tracks, id, status, serverId);
@@ -343,11 +444,17 @@ beforeEach(() => {
   setContextPlaySyncStatus.mockImplementation(async (id, status, serverId) => {
     setSyncStatus(db.contextPlays, id, status, serverId);
   });
+  setOnlineCollectionSyncStatus.mockImplementation(async (key, status, serverId) => {
+    setSyncStatus(db.onlineCollections, key, status, serverId);
+  });
   hardDeleteAnnotation.mockImplementation(async (id) => {
     db.annotations.delete(id);
   });
   deletePlaylist.mockImplementation(async (id) => {
     db.playlists.delete(id);
+  });
+  hardDeleteOnlineCollection.mockImplementation(async (key) => {
+    db.onlineCollections.delete(key);
   });
 });
 
@@ -365,6 +472,7 @@ describe("syncPending", () => {
       annotationsSynced: 1,
       playlistsSynced: 0,
       contextPlaysSynced: 0,
+      onlineCollectionsSynced: 0,
       failed: 0,
     });
     expect(registeredHashes()).toEqual(["hash-1"]);
@@ -424,6 +532,43 @@ describe("syncPending", () => {
       syncStatus: "synced",
       serverId: "srv-r1",
     });
+  });
+
+  it("pushes a saved collection with its address, and keeps the server id", async () => {
+    db.onlineCollections.set(
+      "manahej:190",
+      onlineCollection({ isFavorite: true, pageUrl: "https://manahej.ir/?p=190" }),
+    );
+
+    const summary = await syncPending();
+
+    expect(summary.onlineCollectionsSynced).toBe(1);
+    const [payload] = syncLocalDataPayloads();
+    expect(payload.onlineCollections).toEqual([
+      expect.objectContaining({
+        clientId: "manahej:190",
+        isFavorite: true,
+        deleted: false,
+        pageUrl: "https://manahej.ir/?p=190",
+      }),
+    ]);
+    expect(db.onlineCollections.get("manahej:190")).toMatchObject({
+      syncStatus: "synced",
+      serverId: "srv-manahej:190",
+    });
+  });
+
+  it("drops a collection locally once its tombstone is acknowledged", async () => {
+    db.onlineCollections.set(
+      "manahej:190",
+      onlineCollection({ deletedAt: 5000 }),
+    );
+
+    await syncPending();
+
+    const [payload] = syncLocalDataPayloads();
+    expect(payload.onlineCollections[0]).toMatchObject({ deleted: true });
+    expect(db.onlineCollections.has("manahej:190")).toBe(false);
   });
 
   it("leaves a run that has not ended queued", async () => {
@@ -585,6 +730,7 @@ describe("pullFromServer", () => {
       annotations: 0,
       playlists: 0,
       contextPlays: 0,
+      onlineCollections: 0,
     });
     expect(second).toEqual({
       tracks: 0,
@@ -592,7 +738,71 @@ describe("pullFromServer", () => {
       annotations: 0,
       playlists: 0,
       contextPlays: 0,
+      onlineCollections: 0,
     });
+  });
+
+  it("restores a saved collection, address and all, from the server", async () => {
+    callTypedActMock.mockImplementation(async (request) => {
+      if (request.act === "getMyOnlineCollections") {
+        return [
+          {
+            _id: "srv-c1",
+            clientId: "manahej:190",
+            sourceId: "manahej",
+            externalId: "190",
+            title: "History of Shia",
+            languageCode: "fa",
+            trackCount: 12,
+            pageUrl: "https://manahej.ir/?p=190",
+            isFavorite: true,
+            updatedAt: 2000,
+          },
+        ];
+      }
+      return [];
+    });
+
+    const summary = await pullFromServer();
+
+    expect(summary.onlineCollections).toBe(1);
+    expect(insertRemoteOnlineCollection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: "manahej:190",
+        serverId: "srv-c1",
+        pageUrl: "https://manahej.ir/?p=190",
+        isFavorite: true,
+      }),
+    );
+  });
+
+  it("does not resurrect a collection deleted on this device", async () => {
+    db.onlineCollections.set(
+      "manahej:190",
+      onlineCollection({ deletedAt: 5000, updatedAt: 100 }),
+    );
+    callTypedActMock.mockImplementation(async (request) => {
+      if (request.act === "getMyOnlineCollections") {
+        return [
+          {
+            _id: "srv-c1",
+            clientId: "manahej:190",
+            sourceId: "manahej",
+            externalId: "190",
+            title: "History of Shia",
+            languageCode: "fa",
+            updatedAt: 2000,
+          },
+        ];
+      }
+      return [];
+    });
+
+    const summary = await pullFromServer();
+
+    expect(summary.onlineCollections).toBe(0);
+    expect(insertRemoteOnlineCollection).not.toHaveBeenCalled();
+    expect(applyRemoteOnlineCollectionUpdate).not.toHaveBeenCalled();
   });
 
   it("keeps a pulled session in the stretch the origin device gave it", async () => {

@@ -6,6 +6,7 @@ import {
   writeAsStringAsync,
 } from "expo-file-system/legacy";
 
+import { isStreamUri } from "@/lib/audioLocation";
 import type { EmbeddedPicture } from "@/lib/audioTags";
 import { encodeBase64 } from "@/lib/base64";
 import { artworkExtension } from "@/lib/embeddedArtwork";
@@ -148,6 +149,12 @@ export type BackfillOutcome = {
    * only the first one is a settled fact about the library.
    */
   failed: number;
+  /**
+   * Tracks not examined at all, because their location is a stream. Counted
+   * apart from both of the above for the same reason: nothing was read, and
+   * nothing was attempted — there is no file here *yet*.
+   */
+  skipped: number;
 };
 
 /**
@@ -161,6 +168,12 @@ export type BackfillOutcome = {
  * that carries none is never read twice — that is the whole reason
  * `artwork_checked_at` exists. A row whose read *failed* is deliberately left
  * unstamped: the failure may be a revoked grant that a later pass can fix.
+ *
+ * A row that *streams* is skipped, and also left unstamped, for the same shape
+ * of reason: an online track keeps its source's URL in `file_uri` until it is
+ * downloaded, so there is nothing to read yet — and stamping it would record a
+ * verdict about a file that does not exist, permanently denying it the artwork
+ * that arrives with the download.
  */
 export async function backfillArtwork(
   options: {
@@ -171,7 +184,7 @@ export async function backfillArtwork(
 ): Promise<BackfillOutcome> {
   const limit = options.limit ?? 25;
   const tracks = await LocalDBService.getTracksMissingArtwork(limit);
-  const outcome: BackfillOutcome = { scanned: 0, found: 0, empty: 0, failed: 0 };
+  const outcome: BackfillOutcome = { scanned: 0, found: 0, empty: 0, failed: 0, skipped: 0 };
 
   for (const track of tracks) {
     if (options.isCancelled?.()) {
@@ -188,6 +201,16 @@ export async function backfillArtwork(
       // is a pass that never finishes.
       await LocalDBService.markTrackArtworkChecked(track.id);
       outcome.empty += 1;
+      continue;
+    }
+
+    if (isStreamUri(uri)) {
+      // The worklist already excludes streams, so arriving here means the row
+      // was a stream when the query ran and its location changed under this
+      // pass. Skipped without a stamp: a streamed track is not a track without
+      // cover art, it is a track whose bytes have not arrived yet, and a stamp
+      // would stop the backfill from ever looking once they do.
+      outcome.skipped += 1;
       continue;
     }
 

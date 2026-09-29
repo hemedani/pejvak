@@ -1,15 +1,18 @@
 import {
   reconcileAnnotations,
+  reconcileOnlineCollections,
   reconcilePlaylists,
   reconcileSessions,
   reconcileTracks,
   type RemoteAnnotation,
+  type RemoteOnlineCollection,
   type RemotePlaylist,
   type RemoteSession,
   type RemoteTrack,
 } from "@/lib/reconcile";
 import type {
   LocalAnnotation,
+  LocalOnlineCollection,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
@@ -48,6 +51,14 @@ function localTrack(overrides: Partial<LocalTrack> = {}): LocalTrack {
     discNumber: null,
     year: null,
     availability: "present",
+    origin: "local",
+    streamUrl: null,
+    sourceId: null,
+    externalId: null,
+    collectionKey: null,
+    collectionTitle: null,
+    downloadedAt: null,
+    downloadPath: null,
     ...overrides,
   };
 }
@@ -151,6 +162,47 @@ const remotePlaylist: RemotePlaylist = {
   description: null,
   isPublic: false,
   items: [{ trackId: "lt1", order: 0 }],
+  updatedAt: 200,
+};
+
+function localOnlineCollection(
+  overrides: Partial<LocalOnlineCollection> = {},
+): LocalOnlineCollection {
+  return {
+    key: "manahej:190",
+    serverId: null,
+    sourceId: "manahej",
+    externalId: "190",
+    title: "Local",
+    subtitle: null,
+    artworkUrl: null,
+    languageCode: "fa",
+    trackCount: 12,
+    pageUrl: null,
+    isFavorite: false,
+    lastOpenedAt: null,
+    downloadState: "none",
+    deletedAt: null,
+    syncStatus: "synced",
+    createdAt: 0,
+    updatedAt: 100,
+    ...overrides,
+  };
+}
+
+const remoteOnlineCollection: RemoteOnlineCollection = {
+  serverId: "srv-c",
+  clientId: "manahej:190",
+  sourceId: "manahej",
+  externalId: "190",
+  title: "Remote",
+  subtitle: null,
+  artworkUrl: null,
+  languageCode: "fa",
+  trackCount: 12,
+  pageUrl: "https://manahej.ir/?p=190",
+  isFavorite: true,
+  lastOpenedAt: null,
   updatedAt: 200,
 };
 
@@ -278,5 +330,73 @@ describe("reconcilePlaylists", () => {
     const result = reconcilePlaylists([localPlaylist({ updatedAt: 200 })], [remotePlaylist]);
     expect(result.updates).toEqual([]);
     expect(result.backfill).toEqual([{ id: "lp1", serverId: "srv-p" }]);
+  });
+});
+
+describe("reconcileOnlineCollections", () => {
+  it("inserts collections missing locally", () => {
+    expect(reconcileOnlineCollections([], [remoteOnlineCollection]).inserts).toEqual([
+      remoteOnlineCollection,
+    ]);
+  });
+
+  it("updates when the remote edit is newer (LWW)", () => {
+    const result = reconcileOnlineCollections(
+      [localOnlineCollection({ updatedAt: 50 })],
+      [remoteOnlineCollection],
+    );
+    expect(result.updates).toEqual([
+      {
+        id: "manahej:190",
+        serverId: "srv-c",
+        title: "Remote",
+        subtitle: null,
+        artworkUrl: null,
+        trackCount: 12,
+        pageUrl: "https://manahej.ir/?p=190",
+        isFavorite: true,
+        lastOpenedAt: null,
+        updatedAt: 200,
+      },
+    ]);
+  });
+
+  it("keeps a newer local edit", () => {
+    const result = reconcileOnlineCollections(
+      [localOnlineCollection({ updatedAt: 500 })],
+      [remoteOnlineCollection],
+    );
+    expect(result.updates).toEqual([]);
+  });
+
+  it("does not resurrect a collection deleted on this device", () => {
+    // A removal is a decision, not a gap. Re-inserting it would undo the
+    // listener's own action every time they synced.
+    const result = reconcileOnlineCollections(
+      [localOnlineCollection({ deletedAt: 999 })],
+      [remoteOnlineCollection],
+    );
+    expect(result.inserts).toEqual([]);
+    expect(result.updates).toEqual([]);
+  });
+
+  it("backfills the server id when unchanged", () => {
+    const result = reconcileOnlineCollections(
+      [localOnlineCollection({ updatedAt: 200 })],
+      [remoteOnlineCollection],
+    );
+    expect(result.updates).toEqual([]);
+    expect(result.backfill).toEqual([{ id: "manahej:190", serverId: "srv-c" }]);
+  });
+
+  it("matches on the derived key when the row arrived without a clientId", () => {
+    // The key is derivable from the source's own ids, so a row missing it is
+    // still the same collection rather than a second copy of it.
+    const result = reconcileOnlineCollections(
+      [localOnlineCollection({ updatedAt: 500 })],
+      [{ ...remoteOnlineCollection, clientId: null }],
+    );
+    expect(result.inserts).toEqual([]);
+    expect(result.updates).toEqual([]);
   });
 });

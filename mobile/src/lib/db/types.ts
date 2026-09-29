@@ -15,6 +15,16 @@ export type TrackSource =
  */
 export type TrackAvailability = "present" | "missing";
 
+/**
+ * Whether the audio is a file on this device, or a stream from a source.
+ *
+ * This is deliberately not the same question as `source`, which says *how* a
+ * local file was found. A downloaded course keeps `origin = 'online'` forever —
+ * it came from a source, and that is where the listener will look for it again —
+ * while its bytes now sit in app storage like any imported file.
+ */
+export type TrackOrigin = "local" | "online";
+
 export type PlaylistItem = {
   trackId: string;
   order: number;
@@ -29,7 +39,7 @@ export type PlaylistItem = {
  * ("how far through this collection am I?") and answering it twice would let
  * the two answers drift.
  */
-export type ContextType = "playlist" | "folder";
+export type ContextType = "playlist" | "folder" | "online";
 
 export type LocalTrack = {
   id: string;
@@ -70,6 +80,28 @@ export type LocalTrack = {
   discNumber: number | null;
   year: number | null;
   availability: TrackAvailability;
+  /** A file on this device, or a stream from an online source. */
+  origin: TrackOrigin;
+  /**
+   * The source's playable URL.
+   *
+   * Signed and expiring, so it is a cache of how to reach the audio right now —
+   * never an identity. Re-resolve it from the collection before relying on it
+   * later; see `OnlineCatalogService.refreshCollectionTracks`.
+   */
+  streamUrl: string | null;
+  /** Which source serves it (`manahej`). Null for local audio. */
+  sourceId: string | null;
+  /** The source's own id for the item — the part of its identity that is stable. */
+  externalId: string | null;
+  /** The online collection it belongs to, as `sourceId:externalId`. */
+  collectionKey: string | null;
+  /** The collection's title, captured so the track can name its course offline. */
+  collectionTitle: string | null;
+  /** When the collection was downloaded. Null while it only streams. */
+  downloadedAt: number | null;
+  /** Path inside app storage, once downloaded. */
+  downloadPath: string | null;
 };
 
 /** A container the user has access to. `treeUri` persists the SAF grant. */
@@ -268,6 +300,7 @@ export type PendingCounts = {
   annotations: number;
   playlists: number;
   contextPlays: number;
+  onlineCollections: number;
 };
 
 export type CreateTrackInput = {
@@ -294,6 +327,14 @@ export type CreateTrackInput = {
   trackNumber?: number | null;
   discNumber?: number | null;
   year?: number | null;
+  origin?: TrackOrigin;
+  streamUrl?: string | null;
+  sourceId?: string | null;
+  externalId?: string | null;
+  collectionKey?: string | null;
+  collectionTitle?: string | null;
+  downloadedAt?: number | null;
+  downloadPath?: string | null;
 };
 
 export type CreateSessionInput = {
@@ -380,6 +421,121 @@ export type InsertRemotePlaylistInput = {
   /** Items already resolved to local track ids via the track serverId map. */
   items: PlaylistItem[];
   updatedAt: number;
+};
+
+export type InsertRemoteOnlineCollectionInput = {
+  /** `sourceId:externalId` — the key the device mints for itself. */
+  key: string;
+  serverId: string;
+  sourceId: string;
+  externalId: string;
+  title: string;
+  subtitle: string | null;
+  artworkUrl: string | null;
+  languageCode: string;
+  trackCount: number;
+  pageUrl: string | null;
+  isFavorite: boolean;
+  lastOpenedAt: number | null;
+  updatedAt: number;
+};
+
+/** How far a collection's download has got. */
+export type DownloadState =
+  /** Nothing downloaded; the collection only streams. */
+  | "none"
+  /** Queued or in flight. */
+  | "downloading"
+  /** Every track is on the device. */
+  | "complete"
+  /** Stopped by an error; the finished tracks are kept. */
+  | "failed"
+  /** The listener stopped it. */
+  | "cancelled";
+
+/**
+ * An online collection the listener has saved, favourited or downloaded.
+ *
+ * One row per collection, and it is the only place an online collection exists
+ * locally as a first-class thing — the tracks inside it are ordinary
+ * `tracks` rows. `key` is `sourceId:externalId` and doubles as the run's
+ * `context_key`, which is what makes "how far through this course am I?"
+ * answerable by the same code that answers it for a folder.
+ */
+export type LocalOnlineCollection = {
+  key: string;
+  serverId: string | null;
+  sourceId: string;
+  externalId: string;
+  title: string;
+  subtitle: string | null;
+  artworkUrl: string | null;
+  languageCode: string;
+  /** The size the source reported when the row was written. */
+  trackCount: number;
+  /** The collection's address on the source's site. */
+  pageUrl: string | null;
+  /** Saved to Favorites. */
+  isFavorite: boolean;
+  lastOpenedAt: number | null;
+  downloadState: DownloadState;
+  /** Local tombstone timestamp; non-null means pending server-side delete. */
+  deletedAt: number | null;
+  syncStatus: SyncStatus;
+  createdAt: number;
+  updatedAt: number;
+};
+
+/**
+ * What a catalogue read knows about a collection.
+ *
+ * Deliberately *only* catalogue facts. Whether the listener favourited it,
+ * where they got to in it and how much of it is downloaded are their own
+ * decisions, and a background refresh of the catalogue must never be able to
+ * undo them — so those live on their own setters rather than riding along here.
+ */
+export type UpsertOnlineCollectionInput = {
+  key: string;
+  sourceId: string;
+  externalId: string;
+  title: string;
+  subtitle?: string | null;
+  artworkUrl?: string | null;
+  languageCode: string;
+  trackCount?: number;
+  pageUrl?: string | null;
+};
+
+/** One track's download, as a row so the queue survives a kill. */
+export type LocalDownloadJob = {
+  id: string;
+  collectionKey: string;
+  trackId: string;
+  externalId: string;
+  title: string;
+  /** 1-based position inside the collection, for the file name. */
+  orderIndex: number;
+  /** The URL as it was when the job was queued; re-resolved on a retry. */
+  url: string;
+  destPath: string;
+  state: "queued" | "running" | "done" | "failed" | "cancelled";
+  bytesTotal: number;
+  bytesDone: number;
+  attempts: number;
+  error: string | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type CreateDownloadJobInput = {
+  id?: string;
+  collectionKey: string;
+  trackId: string;
+  externalId: string;
+  title: string;
+  orderIndex: number;
+  url: string;
+  destPath: string;
 };
 
 export type SaveCheckpointInput = {

@@ -303,6 +303,99 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_sessions_stretch ON sessions(stretch_id, started_at)`,
     ],
   },
+  {
+    // Online audio: streaming and downloading from a content source.
+    //
+    // An online item is an ordinary `tracks` row, not a parallel table. Every
+    // derived figure in the app is per track — where playback resumes, what a
+    // play count means, which rows a run groups — so a second table would mean a
+    // second implementation of all of it, and the two would drift. `origin`
+    // is what tells them apart, and `file_uri` stays the one column the player
+    // reads: a local path for owned audio, the source's URL for a stream.
+    //
+    // `stream_url` is kept beside it rather than replacing it, because a
+    // downloaded course has both: `file_uri` is where the bytes are now, and
+    // `stream_url` is where they came from — which is what makes "play this
+    // course from the source" possible without re-resolving the collection.
+    //
+    // The source's signed URLs expire, so `external_id` is the identity that
+    // survives: `content_hash` is derived from it, never from the URL.
+    version: 11,
+    up: [
+      `ALTER TABLE tracks ADD COLUMN origin TEXT NOT NULL DEFAULT 'local'`,
+      `ALTER TABLE tracks ADD COLUMN stream_url TEXT`,
+      `ALTER TABLE tracks ADD COLUMN source_id TEXT`,
+      `ALTER TABLE tracks ADD COLUMN external_id TEXT`,
+      `ALTER TABLE tracks ADD COLUMN collection_key TEXT`,
+      `ALTER TABLE tracks ADD COLUMN collection_title TEXT`,
+      `ALTER TABLE tracks ADD COLUMN downloaded_at INTEGER`,
+      `ALTER TABLE tracks ADD COLUMN download_path TEXT`,
+      `CREATE INDEX IF NOT EXISTS idx_tracks_origin ON tracks(origin)`,
+      `CREATE INDEX IF NOT EXISTS idx_tracks_online ON tracks(source_id, external_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_tracks_collection ON tracks(collection_key, track_number)`,
+      // Saved and downloaded online collections.
+      //
+      // `key` is `sourceId:externalId` and is the row's identity, because that
+      // is also what a run stores as `context_key` — so the collection a run
+      // belongs to and the collection the listener saved are the same string and
+      // cannot drift. `track_count` is what the source reported, used for the
+      // card's "29 tracks"; the run's own denominator is captured separately.
+      //
+      // `page_url` is the collection's address on the source's site. Kept so a
+      // downloaded course can always be traced back to where it came from, which
+      // is the whole reason the listener is allowed to download it.
+      `CREATE TABLE IF NOT EXISTS online_collections (
+        key TEXT PRIMARY KEY NOT NULL,
+        server_id TEXT,
+        source_id TEXT NOT NULL,
+        external_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        subtitle TEXT,
+        artwork_url TEXT,
+        language_code TEXT NOT NULL,
+        track_count INTEGER NOT NULL DEFAULT 0,
+        page_url TEXT,
+        is_favorite INTEGER NOT NULL DEFAULT 0,
+        last_opened_at INTEGER,
+        download_state TEXT NOT NULL DEFAULT 'none',
+        deleted_at INTEGER,
+        sync_status TEXT NOT NULL DEFAULT 'pending',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_online_collections_favorite
+         ON online_collections(is_favorite, updated_at DESC)`,
+      `CREATE INDEX IF NOT EXISTS idx_online_collections_sync
+         ON online_collections(sync_status)`,
+      // The download queue, as rows rather than in memory.
+      //
+      // A course is tens of files and tens of megabytes: the listener will
+      // background the app, lose signal, or kill it outright, and a queue that
+      // only existed in JS would restart from zero every time. One row per track
+      // means progress is `COUNT(state = 'done')`, a retry is a state change, and
+      // an interrupted run resumes from the first row that is not done.
+      `CREATE TABLE IF NOT EXISTS download_jobs (
+        id TEXT PRIMARY KEY NOT NULL,
+        collection_key TEXT NOT NULL,
+        track_id TEXT NOT NULL,
+        external_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        order_index INTEGER NOT NULL DEFAULT 0,
+        url TEXT NOT NULL,
+        dest_path TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'queued',
+        bytes_total INTEGER NOT NULL DEFAULT 0,
+        bytes_done INTEGER NOT NULL DEFAULT 0,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        error TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_download_jobs_collection
+         ON download_jobs(collection_key, order_index)`,
+      `CREATE INDEX IF NOT EXISTS idx_download_jobs_state ON download_jobs(state)`,
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

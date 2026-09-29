@@ -2,6 +2,7 @@ import type {
   ContextType,
   LocalAnnotation,
   LocalContextPlay,
+  LocalOnlineCollection,
   LocalPlaylist,
   LocalSession,
   LocalTrack,
@@ -18,6 +19,8 @@ export type SyncLocalDataResult = {
   annotations?: { clientId: string; serverId?: string }[];
   playlists?: { clientId: string; serverId?: string }[];
   contextPlays?: { clientId: string; serverId?: string }[];
+  syncedOnlineCollections?: number;
+  onlineCollections?: { clientId: string; serverId?: string }[];
 };
 
 /** A playlist ready for the wire: item track ids replaced by content hashes. */
@@ -57,6 +60,30 @@ export type ContextPlaySyncPayload = {
   updatedAt: number;
 };
 
+/**
+ * An online collection the listener saved, favourited or downloaded.
+ *
+ * Like a run, it names itself by key rather than by content hash, so there is no
+ * parent row that has to exist server-side before it can be sent. `deleted`
+ * carries the device's tombstone: the server removes its row rather than keeping
+ * a favourite the listener has already dropped.
+ */
+export type OnlineCollectionSyncPayload = {
+  clientId: string;
+  sourceId: string;
+  externalId: string;
+  title: string;
+  languageCode: string;
+  subtitle: string | null;
+  artworkUrl: string | null;
+  trackCount: number;
+  pageUrl: string | null;
+  isFavorite: boolean;
+  lastOpenedAt: number | null;
+  updatedAt: number;
+  deleted: boolean;
+};
+
 export type SyncTransport = {
   registerTrack: (track: LocalTrack) => Promise<RegisterTrackResult>;
   syncLocalData: (
@@ -64,6 +91,7 @@ export type SyncTransport = {
     annotations: LocalAnnotation[],
     playlists: PlaylistSyncPayload[],
     contextPlays: ContextPlaySyncPayload[],
+    onlineCollections: OnlineCollectionSyncPayload[],
   ) => Promise<SyncLocalDataResult>;
 };
 
@@ -74,6 +102,7 @@ export type SyncStore = {
   getPendingAnnotations: (limit: number) => Promise<LocalAnnotation[]>;
   getPendingPlaylists: (limit: number) => Promise<LocalPlaylist[]>;
   getPendingContextPlays: (limit: number) => Promise<LocalContextPlay[]>;
+  getPendingOnlineCollections: (limit: number) => Promise<LocalOnlineCollection[]>;
   setTrackSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
   setSessionSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
   setAnnotationSyncStatus: (id: string, status: SyncStatus, serverId?: string) => Promise<void>;
@@ -83,9 +112,16 @@ export type SyncStore = {
     status: SyncStatus,
     serverId?: string,
   ) => Promise<void>;
+  setOnlineCollectionSyncStatus: (
+    key: string,
+    status: SyncStatus,
+    serverId?: string,
+  ) => Promise<void>;
   /** Hard-delete a row (used for acknowledged delete tombstones). */
   removeAnnotation: (id: string) => Promise<void>;
   removePlaylist: (id: string) => Promise<void>;
+  /** Hard-delete a row (used for an acknowledged collection tombstone). */
+  removeOnlineCollection: (key: string) => Promise<void>;
 };
 
 export type SyncSummary = {
@@ -94,6 +130,7 @@ export type SyncSummary = {
   annotationsSynced: number;
   playlistsSynced: number;
   contextPlaysSynced: number;
+  onlineCollectionsSynced: number;
   failed: number;
 };
 
@@ -127,6 +164,7 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     annotationsSynced: 0,
     playlistsSynced: 0,
     contextPlaysSynced: 0,
+    onlineCollectionsSynced: 0,
     failed: 0,
   };
 
@@ -231,11 +269,34 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     });
   }
 
+  // Online collections need nothing resolved first either. Tombstoned rows are
+  // sent as deletions rather than filtered out: the removal *is* the change, and
+  // the row may only be dropped once the server has acknowledged it.
+  const onlineCollectionPayloads: OnlineCollectionSyncPayload[] = [];
+  for (const saved of await store.getPendingOnlineCollections(limit)) {
+    onlineCollectionPayloads.push({
+      clientId: saved.key,
+      sourceId: saved.sourceId,
+      externalId: saved.externalId,
+      title: saved.title,
+      languageCode: saved.languageCode,
+      subtitle: saved.subtitle,
+      artworkUrl: saved.artworkUrl,
+      trackCount: saved.trackCount,
+      pageUrl: saved.pageUrl,
+      isFavorite: saved.isFavorite,
+      lastOpenedAt: saved.lastOpenedAt,
+      updatedAt: saved.updatedAt,
+      deleted: saved.deletedAt !== null,
+    });
+  }
+
   if (
     sessions.length === 0 &&
     annotations.length === 0 &&
     playlistPayloads.length === 0 &&
-    contextPlayPayloads.length === 0
+    contextPlayPayloads.length === 0 &&
+    onlineCollectionPayloads.length === 0
   ) {
     return summary;
   }
@@ -251,6 +312,9 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     ...contextPlayPayloads.map((run) =>
       store.setContextPlaySyncStatus(run.clientId, "syncing"),
     ),
+    ...onlineCollectionPayloads.map((saved) =>
+      store.setOnlineCollectionSyncStatus(saved.clientId, "syncing"),
+    ),
   ]);
 
   try {
@@ -259,6 +323,7 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
       annotations,
       playlistPayloads,
       contextPlayPayloads,
+      onlineCollectionPayloads,
     );
     const annotationServerIds = new Map(
       (result.annotations ?? []).map((mapping) => [mapping.clientId, mapping.serverId]),
@@ -268,6 +333,12 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     );
     const contextPlayServerIds = new Map(
       (result.contextPlays ?? []).map((mapping) => [mapping.clientId, mapping.serverId]),
+    );
+    const onlineCollectionServerIds = new Map(
+      (result.onlineCollections ?? []).map((mapping) => [
+        mapping.clientId,
+        mapping.serverId,
+      ]),
     );
     await Promise.all([
       ...sessions.map((session) => store.setSessionSyncStatus(session.id, "synced")),
@@ -296,11 +367,21 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
           contextPlayServerIds.get(run.clientId),
         ),
       ),
+      ...onlineCollectionPayloads.map((saved) =>
+        saved.deleted
+          ? store.removeOnlineCollection(saved.clientId)
+          : store.setOnlineCollectionSyncStatus(
+              saved.clientId,
+              "synced",
+              onlineCollectionServerIds.get(saved.clientId),
+            ),
+      ),
     ]);
     summary.sessionsSynced = result.syncedSessions ?? 0;
     summary.annotationsSynced = result.syncedAnnotations ?? 0;
     summary.playlistsSynced = result.syncedPlaylists ?? 0;
     summary.contextPlaysSynced = result.syncedContextPlays ?? 0;
+    summary.onlineCollectionsSynced = result.syncedOnlineCollections ?? 0;
   } catch {
     await Promise.all([
       ...sessions.map((session) => store.setSessionSyncStatus(session.id, "failed")),
@@ -313,12 +394,16 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
       ...contextPlayPayloads.map((run) =>
         store.setContextPlaySyncStatus(run.clientId, "failed"),
       ),
+      ...onlineCollectionPayloads.map((saved) =>
+        store.setOnlineCollectionSyncStatus(saved.clientId, "failed"),
+      ),
     ]);
     summary.failed +=
       sessions.length +
       annotations.length +
       playlistPayloads.length +
-      contextPlayPayloads.length;
+      contextPlayPayloads.length +
+      onlineCollectionPayloads.length;
   }
 
   return summary;

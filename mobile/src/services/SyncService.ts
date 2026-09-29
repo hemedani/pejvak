@@ -5,11 +5,13 @@ import type { LocalAnnotation, LocalSession, LocalTrack, SyncStatus } from "@/li
 import {
   reconcileAnnotations,
   reconcileContextPlays,
+  reconcileOnlineCollections,
   reconcilePlaylists,
   reconcileSessions,
   reconcileTracks,
   type RemoteAnnotation,
   type RemoteContextPlay,
+  type RemoteOnlineCollection,
   type RemotePlaylist,
   type RemoteSession,
   type RemoteTrack,
@@ -17,6 +19,7 @@ import {
 import {
   runSync,
   type ContextPlaySyncPayload,
+  type OnlineCollectionSyncPayload,
   type PlaylistSyncPayload,
   type RegisterTrackResult,
   type SyncLocalDataResult,
@@ -73,6 +76,7 @@ function syncLocalData(
   annotations: LocalAnnotation[],
   playlists: PlaylistSyncPayload[],
   contextPlays: ContextPlaySyncPayload[],
+  onlineCollections: OnlineCollectionSyncPayload[],
 ): Promise<SyncLocalDataResult> {
   const details: SyncLocalDataDetails = {
     set: {
@@ -92,6 +96,23 @@ function syncLocalData(
         interrupted: run.interrupted,
         updatedAt: run.updatedAt,
         ...(run.lastTrackId !== null ? { lastTrackId: run.lastTrackId } : {}),
+      })),
+      onlineCollections: onlineCollections.map((saved) => ({
+        clientId: saved.clientId,
+        sourceId: saved.sourceId,
+        externalId: saved.externalId,
+        title: saved.title,
+        languageCode: saved.languageCode,
+        trackCount: saved.trackCount,
+        isFavorite: saved.isFavorite,
+        updatedAt: saved.updatedAt,
+        deleted: saved.deleted,
+        // A null here means "the source never told us", which is not the same
+        // as zero, and an omitted field would leave the server's copy as it was.
+        ...(saved.subtitle !== null ? { subtitle: saved.subtitle } : {}),
+        ...(saved.artworkUrl !== null ? { artworkUrl: saved.artworkUrl } : {}),
+        ...(saved.pageUrl !== null ? { pageUrl: saved.pageUrl } : {}),
+        ...(saved.lastOpenedAt !== null ? { lastOpenedAt: saved.lastOpenedAt } : {}),
       })),
       playlists: playlists.map((playlist) => ({
         clientId: playlist.clientId,
@@ -147,6 +168,7 @@ function syncLocalData(
       annotations: [],
       playlists: [],
       contextPlays: [],
+      onlineCollections: [],
     },
   };
   return callTypedAct<"main", "track", "syncLocalData", SyncLocalDataResult>({
@@ -166,6 +188,8 @@ export const localStore: SyncStore = {
   getPendingAnnotations: (limit) => LocalDBService.getPendingAnnotations(limit),
   getPendingPlaylists: (limit) => LocalDBService.getPendingPlaylists(limit),
   getPendingContextPlays: (limit) => LocalDBService.getPendingContextPlays(limit),
+  getPendingOnlineCollections: (limit) =>
+    LocalDBService.getPendingOnlineCollections(limit),
   setTrackSyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
     LocalDBService.setTrackSyncStatus(id, status, serverId),
   setSessionSyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
@@ -176,8 +200,11 @@ export const localStore: SyncStore = {
     LocalDBService.setPlaylistSyncStatus(id, status, serverId),
   setContextPlaySyncStatus: (id: string, status: SyncStatus, serverId?: string) =>
     LocalDBService.setContextPlaySyncStatus(id, status, serverId),
+  setOnlineCollectionSyncStatus: (key: string, status: SyncStatus, serverId?: string) =>
+    LocalDBService.setOnlineCollectionSyncStatus(key, status, serverId),
   removeAnnotation: (id: string) => LocalDBService.hardDeleteAnnotation(id),
   removePlaylist: (id: string) => LocalDBService.deletePlaylist(id),
+  removeOnlineCollection: (key: string) => LocalDBService.hardDeleteOnlineCollection(key),
 };
 
 /** Push all pending local rows to the backend. Never throws for sync errors. */
@@ -371,6 +398,83 @@ async function fetchRemoteSessions(): Promise<RemoteSession[]> {
   });
 }
 
+type RemoteOnlineCollectionRow = {
+  _id?: string;
+  clientId?: string;
+  sourceId?: string;
+  externalId?: string;
+  title?: string;
+  subtitle?: string;
+  artworkUrl?: string;
+  languageCode?: string;
+  trackCount?: number;
+  pageUrl?: string;
+  isFavorite?: boolean;
+  lastOpenedAt?: number;
+  updatedAt?: string | number;
+};
+
+async function fetchRemoteOnlineCollections(): Promise<RemoteOnlineCollection[]> {
+  const details: BackendActRequest<
+    "main",
+    "onlineCollection",
+    "getMyOnlineCollections"
+  >["details"] = {
+    set: { page: 1, limit: PULL_PAGE_SIZE },
+    get: {
+      _id: 1,
+      clientId: 1,
+      sourceId: 1,
+      externalId: 1,
+      title: 1,
+      subtitle: 1,
+      artworkUrl: 1,
+      languageCode: 1,
+      trackCount: 1,
+      pageUrl: 1,
+      isFavorite: 1,
+      lastOpenedAt: 1,
+      updatedAt: 1,
+    },
+  };
+  const rows = await callTypedAct<
+    "main",
+    "onlineCollection",
+    "getMyOnlineCollections",
+    RemoteOnlineCollectionRow[]
+  >({
+    service: "main",
+    model: "onlineCollection",
+    act: "getMyOnlineCollections",
+    details,
+  });
+  return rows.flatMap((row) => {
+    // A collection without a source and an external id cannot be addressed, and
+    // one without a title cannot be shown. Either way there is nothing useful to
+    // restore, so it is dropped rather than stored as a nameless row.
+    if (!row._id || !row.sourceId || !row.externalId || !row.title) {
+      return [];
+    }
+    return [
+      {
+        serverId: row._id,
+        clientId: row.clientId ?? null,
+        sourceId: row.sourceId,
+        externalId: row.externalId,
+        title: row.title,
+        subtitle: row.subtitle ?? null,
+        artworkUrl: row.artworkUrl ?? null,
+        languageCode: row.languageCode ?? "und",
+        trackCount: row.trackCount ?? 0,
+        pageUrl: row.pageUrl ?? null,
+        isFavorite: row.isFavorite ?? false,
+        lastOpenedAt: row.lastOpenedAt ?? null,
+        updatedAt: toMillis(row.updatedAt),
+      },
+    ];
+  });
+}
+
 async function fetchRemoteContextPlays(): Promise<RemoteContextPlay[]> {
   const details: BackendActRequest<
     "main",
@@ -524,6 +628,7 @@ export type PullSummary = {
   annotations: number;
   playlists: number;
   contextPlays: number;
+  onlineCollections: number;
 };
 
 /**
@@ -532,14 +637,21 @@ export type PullSummary = {
  * annotations by `clientId`. Best-effort: throws only if a fetch fails.
  */
 export async function pullFromServer(): Promise<PullSummary> {
-  const [remoteTracks, remoteSessions, remoteAnnotations, remotePlaylists, remoteContextPlays] =
-    await Promise.all([
-      fetchRemoteTracks(),
-      fetchRemoteSessions(),
-      fetchRemoteAnnotations(),
-      fetchRemotePlaylists(),
-      fetchRemoteContextPlays(),
-    ]);
+  const [
+    remoteTracks,
+    remoteSessions,
+    remoteAnnotations,
+    remotePlaylists,
+    remoteContextPlays,
+    remoteOnlineCollections,
+  ] = await Promise.all([
+    fetchRemoteTracks(),
+    fetchRemoteSessions(),
+    fetchRemoteAnnotations(),
+    fetchRemotePlaylists(),
+    fetchRemoteContextPlays(),
+    fetchRemoteOnlineCollections(),
+  ]);
 
   const trackPlan = reconcileTracks(await LocalDBService.getAllTracks(), remoteTracks);
   for (const item of trackPlan.inserts) {
@@ -646,6 +758,36 @@ export async function pullFromServer(): Promise<PullSummary> {
     await LocalDBService.setPlaylistSyncStatus(item.id, "synced", item.serverId);
   }
 
+  // Online collections last, and without resolving anything: a collection is an
+  // address, so restoring one needs no parent row on this device.
+  const onlineCollectionPlan = reconcileOnlineCollections(
+    await LocalDBService.getOnlineCollections(),
+    remoteOnlineCollections,
+  );
+  for (const item of onlineCollectionPlan.inserts) {
+    await LocalDBService.insertRemoteOnlineCollection({
+      key: item.clientId ?? `${item.sourceId}:${item.externalId}`,
+      serverId: item.serverId,
+      sourceId: item.sourceId,
+      externalId: item.externalId,
+      title: item.title,
+      subtitle: item.subtitle,
+      artworkUrl: item.artworkUrl,
+      languageCode: item.languageCode,
+      trackCount: item.trackCount,
+      pageUrl: item.pageUrl,
+      isFavorite: item.isFavorite,
+      lastOpenedAt: item.lastOpenedAt,
+      updatedAt: item.updatedAt,
+    });
+  }
+  for (const item of onlineCollectionPlan.updates) {
+    await LocalDBService.applyRemoteOnlineCollectionUpdate(item);
+  }
+  for (const item of onlineCollectionPlan.backfill) {
+    await LocalDBService.setOnlineCollectionSyncStatus(item.id, "synced", item.serverId);
+  }
+
   return {
     tracks: trackPlan.inserts.length,
     sessions: sessionPlan.inserts.length,
@@ -653,6 +795,8 @@ export async function pullFromServer(): Promise<PullSummary> {
       annotationPlan.inserts.length + annotationPlan.updates.length,
     playlists: playlistPlan.inserts.length + playlistPlan.updates.length,
     contextPlays: contextPlan.inserts.length,
+    onlineCollections:
+      onlineCollectionPlan.inserts.length + onlineCollectionPlan.updates.length,
   };
 }
 

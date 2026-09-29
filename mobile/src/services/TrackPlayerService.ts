@@ -76,6 +76,15 @@ let configured = false;
 let lockScreenFailed = IS_EXPO_GO;
 let pendingSeekSec: number | null = null;
 let nextSessionStartSec = 0;
+/**
+ * Whether the current track's duration has already been handed to the database.
+ *
+ * An online item arrives with no duration at all — the source does not report
+ * one — so the first real reading comes from the audio itself. Writing it is a
+ * one-off per track, not a per-tick update, and the flag is what keeps a status
+ * event that fires every second from becoming a database write every second.
+ */
+let durationReported = false;
 
 /**
  * Tracks already reported as unreachable, so a player that keeps failing does
@@ -338,6 +347,14 @@ function reportUnreachableTrack(): void {
   if (!track || reportedUnreachable.has(track.id)) {
     return;
   }
+  // A stream is not a file. `availability` answers "are the bytes still where
+  // we left them?", and for online audio the answer is "the source owns that
+  // question" — a dropped connection, a captive portal or an expired signature
+  // all look identical from here, and none of them mean the track is missing.
+  // Flagging one would hide a perfectly good episode behind the relink screen.
+  if (track.origin === "online") {
+    return;
+  }
   reportedUnreachable.add(track.id);
   void (async () => {
     // `fileUri` is the URI that was actually handed to the player, and it cannot
@@ -394,6 +411,17 @@ function handleStatus(status: AudioStatus): void {
     positionSec: Math.floor(currentTime),
     durationSec: status.duration > 0 ? Math.floor(status.duration) : current.durationSec,
   });
+
+  // The source reports no duration for online audio, so the player is where the
+  // real figure comes from — and it is written back to the row because every
+  // resume position in the app is computed from it. Once per track: the update
+  // is a no-op after the first, but the flag keeps it off the per-second path.
+  if (status.duration > 0 && currentTrack && !durationReported) {
+    durationReported = true;
+    void LocalDBService.setTrackDuration(currentTrack.id, status.duration).catch(
+      () => undefined,
+    );
+  }
 
   if (status.error) {
     patch({ status: "error", error: status.error });
@@ -471,6 +499,7 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
   await finishSession({ completed: false, interrupted: true });
 
   currentTrack = track;
+  durationReported = false;
   nextSessionStartSec = Math.round(startPositionSec);
   pendingSeekSec = startPositionSec > 0 ? startPositionSec : null;
 
@@ -562,6 +591,7 @@ export async function stop(): Promise<void> {
   currentTrack = null;
   activeStretchId = null;
   pendingStretchId = null;
+  durationReported = false;
   seekReported = false;
   pendingSeekSec = null;
   nextSessionStartSec = 0;
@@ -790,6 +820,7 @@ export function __resetForTests(): void {
   nextSessionStartSec = 0;
   activeStretchId = null;
   pendingStretchId = null;
+  durationReported = false;
   seekReported = false;
   reportedUnreachable.clear();
 }
