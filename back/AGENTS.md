@@ -34,11 +34,18 @@ back/
 │   ├── track.ts
 │   ├── playbackSession.ts
 │   ├── annotation.ts
-│   └── playlist.ts
+│   ├── playlist.ts
+│   ├── playbackContext.ts
+│   └── onlineCollection.ts
 ├── src/                    # Lesan acts (one folder per domain, one folder per act)
 │   ├── mod.ts              # functionsSetup() — registers every domain
 │   ├── auth/               # register, login, getMe
-│   ├── tracks/             # registerTrack, getMyTracks
+│   ├── tracks/             # registerTrack, getMyTracks, getTrackDetail
+│   ├── sessions/           # getMyListeningHistory, getTrackSessions
+│   ├── stats/              # getMyStats
+│   ├── playlists/          # create/update/delete/getMyPlaylists
+│   ├── contexts/           # getMyPlaybackContexts
+│   ├── online/             # save/get/remove online collections
 │   └── sync/               # syncLocalData
 ├── utils/                  # shared helpers
 │   ├── mod.ts              # barrel (@lib)
@@ -101,6 +108,19 @@ Lesan models are declared in `models/*.ts` as a `*_pure` field map (Superstruct 
 - Pure: `title`, optional `description`, `isPublic`, and `items` — an embedded array of `{ trackId, order }`.
 - Relations: `user` (single, required) with reverse `playlists`.
 
+### OnlineCollection
+
+`models/onlineCollection.ts` — an online collection the listener saved, favourited or downloaded.
+
+- Pure: `clientId`, `sourceId`, `externalId`, `title`, optional `subtitle`/`artworkUrl`/`pageUrl`, `languageCode`, `trackCount`, `isFavorite`, `lastOpenedAt`, `deletedAt`.
+- Relations: `user` (single, required) with reverse `onlineCollections`.
+
+The server stores **addresses and user state, never media**. The audio stays on the source's own CDN and is fetched by the device.
+
+- **`clientId` is `sourceId:externalId`** — the same string the device uses as its primary key and as the run's `contextKey`. It is **not** unique: two listeners who save the same public course share it, so uniqueness is per user and lives in the act's lookup. Both `saveOnlineCollection` and `removeOnlineCollection` **derive** it rather than accepting it, so it can never disagree with what the device's history looks for.
+- **No `streamUrl` and no `downloadPath`.** The source signs its media URLs with an expiry, so a copy kept here would be a link that fails opaquely weeks later; `downloadPath` is an absolute path that means nothing on another device. The durable address is `pageUrl`.
+- **No `downloadedAt` on the collection.** Whether the audio is on a device is already recorded per track (`track.downloadedAt`), so a flag here would be a second source of truth — the rule already applied to play counts.
+
 ---
 
 ## Domain Rules (non-negotiable)
@@ -128,7 +148,11 @@ Every act lives in `src/<domain>/<actName>/` and consists of three files: `mod.t
 | `getMe` | `POST /user/getMe` | token | Return the current user with a deep `get` projection. |
 | `registerTrack` | `POST /track/registerTrack` | token | Insert a track owned by the caller. |
 | `getMyTracks` | `POST /track/getMyTracks` | token | Paginated/filterable list of the caller's tracks. |
-| `syncLocalData` | `POST /track/syncLocalData` | token | Batch-ingest offline sessions + annotations and bump track aggregates. |
+| `getMyPlaybackContexts` | `POST /playbackContext/getMyPlaybackContexts` | token | Paginated runs through a collection; `contextType`/`contextKey` narrow to one. |
+| `saveOnlineCollection` | `POST /onlineCollection/saveOnlineCollection` | token | Upsert a saved/favourite online collection. LWW on `updatedAt`; `deleted` removes the row. |
+| `getMyOnlineCollections` | `POST /onlineCollection/getMyOnlineCollections` | token | The listener's shelf, filterable by `isFavorite`, `sourceId`, `languageCode`. |
+| `removeOnlineCollection` | `POST /onlineCollection/removeOnlineCollection` | token | Delete by `sourceId` + `externalId`. Idempotent: an absent row is a success. |
+| `syncLocalData` | `POST /track/syncLocalData` | token | Batch-ingest offline sessions, annotations, playlists, runs and online collections; bump track aggregates. |
 
 **Request shape**: `{ "details": { "set": { ... }, "get": { ... } } }`; the token goes in the `token` header. `set` is validated by the act's validator; `get` drives the projection via `selectStruct(model, depth)`.
 
@@ -139,7 +163,9 @@ Every act lives in `src/<domain>/<actName>/` and consists of three files: `mod.t
 2. Skip any row whose `clientId` already exists.
 3. Insert the session/annotation with its `track` and `user` relations wired.
 4. For sessions, `$inc` the parent Track's `totalPlayCount` and `totalListenTimeSec`, and set `lastPlayedAt`.
-5. Return `{ syncedSessions, syncedAnnotations }`.
+5. Return `{ syncedSessions, syncedAnnotations, syncedPlaylists, syncedContextPlays, syncedOnlineCollections }` plus a `clientId -> serverId` mapping per collection.
+
+Runs are processed before sessions so a session that names one can be linked to a row that already exists. Playlists and online collections need nothing resolved first: a playlist carries content hashes, and a collection carries its own key. Every batchable row follows the same shape — idempotent on `clientId`, last-write-wins on `updatedAt`, and a `deleted` flag that removes the server row rather than resurrecting it.
 
 Unknown `contentHash` rows are skipped (the device registers the track first). Never surface partial failures as a blocking error — the device retries.
 

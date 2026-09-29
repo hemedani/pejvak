@@ -16,6 +16,38 @@ export const registerTrackFn: ActFn = async (body) => {
   });
 
   if (existing) {
+    // A track that is already known keeps its row, but its provenance may be
+    // new information: the first registration happened while it was only being
+    // streamed, and the download came later. These fields are facts about the
+    // collection the item came from, so re-writing them is idempotent and
+    // cannot lose a local edit — unlike the play counters, which are never
+    // touched here.
+    if (set.origin === "online") {
+      await track.findOneAndUpdate({
+        filter: { _id: existing._id },
+        update: {
+          $set: {
+            origin: "online",
+            ...(set.sourceId !== undefined ? { sourceId: set.sourceId } : {}),
+            ...(set.externalId !== undefined
+              ? { externalId: set.externalId }
+              : {}),
+            ...(set.collectionKey !== undefined
+              ? { collectionKey: set.collectionKey }
+              : {}),
+            ...(set.collectionTitle !== undefined
+              ? { collectionTitle: set.collectionTitle }
+              : {}),
+            ...(set.downloadedAt !== undefined
+              ? { downloadedAt: set.downloadedAt }
+              : {}),
+            updatedAt: new Date(),
+          },
+        },
+        projection: { _id: 1 },
+      });
+    }
+
     return await track.findOne({
       filters: { _id: existing._id },
       projection: get,

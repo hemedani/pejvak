@@ -90,12 +90,41 @@ export const syncLocalDataValidator = () =>
           }),
         ),
       ),
+      /**
+       * Saved / favourited / downloaded online collections.
+       *
+       * Nothing here is resolved server-side: the collection is named by its own
+       * key, so unlike a playlist there is no parent row that has to exist
+       * first. `updatedAt` drives last-write-wins and `deleted` carries the
+       * device's tombstone, so a removal is not resurrected by the next push of
+       * a stale local copy.
+       */
+      onlineCollections: optional(
+        array(
+          object({
+            clientId: string(),
+            sourceId: string(),
+            externalId: string(),
+            title: string(),
+            languageCode: string(),
+            subtitle: optional(string()),
+            artworkUrl: optional(string()),
+            trackCount: defaulted(number(), 0),
+            pageUrl: optional(string()),
+            isFavorite: defaulted(boolean(), false),
+            lastOpenedAt: optional(number()),
+            updatedAt: optional(number()),
+            deleted: defaulted(boolean(), false),
+          }),
+        ),
+      ),
     }),
     get: object({
       syncedSessions: optional(number()),
       syncedAnnotations: optional(number()),
       syncedPlaylists: optional(number()),
       syncedContextPlays: optional(number()),
+      syncedOnlineCollections: optional(number()),
       annotations: optional(
         array(
           object({
@@ -113,6 +142,14 @@ export const syncLocalDataValidator = () =>
         ),
       ),
       contextPlays: optional(
+        array(
+          object({
+            clientId: string(),
+            serverId: optional(string()),
+          }),
+        ),
+      ),
+      onlineCollections: optional(
         array(
           object({
             clientId: string(),

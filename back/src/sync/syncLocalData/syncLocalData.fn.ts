@@ -2,6 +2,7 @@ import { type ActFn, ObjectId } from "lesan";
 import {
   annotation,
   coreApp,
+  onlineCollection,
   playbackContext,
   playbackSession,
   playlist,
@@ -12,7 +13,13 @@ import { type MyContext } from "@lib";
 export const syncLocalDataFn: ActFn = async (body) => {
   const { user }: MyContext = coreApp.contextFns.getContextModel() as MyContext;
   const {
-    set: { sessions = [], annotations = [], playlists = [], contextPlays = [] },
+    set: {
+      sessions = [],
+      annotations = [],
+      playlists = [],
+      contextPlays = [],
+      onlineCollections = [],
+    },
   } = body.details;
 
   const userId = new ObjectId(user._id);
@@ -20,9 +27,12 @@ export const syncLocalDataFn: ActFn = async (body) => {
   let syncedAnnotations = 0;
   let syncedPlaylists = 0;
   let syncedContextPlays = 0;
+  let syncedOnlineCollections = 0;
   const annotationMappings: { clientId: string; serverId?: string }[] = [];
   const playlistMappings: { clientId: string; serverId?: string }[] = [];
   const contextPlayMappings: { clientId: string; serverId?: string }[] = [];
+  const onlineCollectionMappings: { clientId: string; serverId?: string }[] =
+    [];
 
   // Runs first, so a session that names one can be linked to a row that already
   // exists. A session whose run is missing is still stored — the session is the
@@ -313,13 +323,114 @@ export const syncLocalDataFn: ActFn = async (body) => {
     }
   }
 
+  // Online collections last: nothing else in the batch depends on them, and a
+  // collection is an address rather than a parent row — the tracks inside it are
+  // registered as tracks, so there is no ordering requirement either way.
+  for (const saved of onlineCollections) {
+    // The key is derived from the source's own ids rather than trusted from the
+    // payload, so it can never disagree with what the dedicated act writes.
+    const clientId = `${saved.sourceId}:${saved.externalId}`;
+
+    const existing = await onlineCollection.findOne({
+      filters: { clientId, "user._id": userId },
+      projection: { _id: 1, updatedAt: 1 },
+    });
+
+    // Tombstone from a local delete: remove the server row if present.
+    if (saved.deleted) {
+      if (existing) {
+        await onlineCollection.deleteOne({ filter: { _id: existing._id } });
+        syncedOnlineCollections += 1;
+      }
+      continue;
+    }
+
+    const incomingUpdatedAt = saved.updatedAt ?? Date.now();
+
+    if (existing) {
+      const existingUpdatedAt = existing.updatedAt
+        ? new Date(existing.updatedAt).getTime()
+        : 0;
+
+      // Last-write-wins: only overwrite when the local edit is newer.
+      if (incomingUpdatedAt > existingUpdatedAt) {
+        await onlineCollection.findOneAndUpdate({
+          filter: { _id: existing._id },
+          update: {
+            $set: {
+              title: saved.title,
+              languageCode: saved.languageCode,
+              trackCount: saved.trackCount,
+              isFavorite: saved.isFavorite,
+              ...(saved.subtitle !== undefined
+                ? { subtitle: saved.subtitle }
+                : {}),
+              ...(saved.artworkUrl !== undefined
+                ? { artworkUrl: saved.artworkUrl }
+                : {}),
+              ...(saved.pageUrl !== undefined
+                ? { pageUrl: saved.pageUrl }
+                : {}),
+              ...(saved.lastOpenedAt !== undefined
+                ? { lastOpenedAt: saved.lastOpenedAt }
+                : {}),
+              updatedAt: new Date(incomingUpdatedAt),
+            },
+          },
+          projection: { _id: 1 },
+        });
+      }
+
+      onlineCollectionMappings.push({
+        clientId: saved.clientId,
+        serverId: String(existing._id),
+      });
+      syncedOnlineCollections += 1;
+      continue;
+    }
+
+    const inserted = await onlineCollection.insertOne({
+      doc: {
+        clientId,
+        sourceId: saved.sourceId,
+        externalId: saved.externalId,
+        title: saved.title,
+        languageCode: saved.languageCode,
+        subtitle: saved.subtitle,
+        artworkUrl: saved.artworkUrl,
+        trackCount: saved.trackCount,
+        pageUrl: saved.pageUrl,
+        isFavorite: saved.isFavorite,
+        lastOpenedAt: saved.lastOpenedAt,
+        updatedAt: new Date(incomingUpdatedAt),
+      },
+      relations: {
+        user: {
+          _ids: userId,
+          relatedRelations: { onlineCollections: true },
+        },
+      } as never,
+      projection: { _id: 1 },
+    });
+
+    if (inserted) {
+      onlineCollectionMappings.push({
+        clientId: saved.clientId,
+        serverId: String(inserted._id),
+      });
+      syncedOnlineCollections += 1;
+    }
+  }
+
   return {
     syncedSessions,
     syncedAnnotations,
     syncedPlaylists,
     syncedContextPlays,
+    syncedOnlineCollections,
     annotations: annotationMappings,
     playlists: playlistMappings,
     contextPlays: contextPlayMappings,
+    onlineCollections: onlineCollectionMappings,
   };
 };

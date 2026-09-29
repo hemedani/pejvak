@@ -1,6 +1,7 @@
 import { lesan, MongoClient } from "lesan";
 import {
   annotations,
+  onlineCollections,
   playbackContexts,
   playbackSessions,
   playlists,
@@ -25,6 +26,7 @@ export const playbackSession = playbackSessions();
 export const annotation = annotations();
 export const playlist = playlists();
 export const playbackContext = playbackContexts();
+export const onlineCollection = onlineCollections();
 
 export const { setAct } = coreApp.acts;
 export const { selectStruct, getSchemas } = coreApp.schemas;
