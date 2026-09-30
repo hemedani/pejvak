@@ -125,6 +125,44 @@ Trigger sync on app start, on returning to the foreground, after each session en
 
 Annotation behavior: long-press (or a quick-add control) creates a note at the current position in one step; markers on the progress bar seek to their position and show the note.
 
+## Card system
+
+Everything the user **reads** is an opaque `Card`; everything that **floats** is `GlassSurface`. That split is the rule, not a preference — a frosted panel over a near-white canvas measured **1.04:1 against its own hairline**, so the text stayed technically legible while the card stopped being a shape. A hierarchy nobody can see is not a hierarchy.
+
+- **Glass is for what floats, and nothing else.** The tab bar, the mini-player, sheets, modals, action menus. Those are the only `GlassSurface` call sites left, and a new one has to justify itself against that list.
+- **This app is Android-only** (every `eas.json` profile and `build:*` script is `--platform android`). So `borderCurve: "continuous"` is a **no-op** — it exists in `BaseViewConfig.ios.js` and not in the Android one — and `expo-glass-effect`'s `GlassView` branch never executes. Do not spend a build on either. Material 3 / M3 Expressive is the reference, not iOS Settings.
+- **Never hard-code a corner.** `radius` is one strictly-increasing, even-numbered ramp with semantic aliases (`badge`, `tile`, `segment`, `panel`) pointing into it. The literals `20 / 22 / 24 / 26 / 28` are what made the old screens look assembled from parts.
+- **Elevation is a decision.** `Card` is elevated by default; a card inside a long list passes `elevated={false}`, because fifty elevated cards stop reading as cards and start reading as noise. The `surface` fill and the `outline` hairline already draw the edge.
+- **The three content tiers, in this order: label, value, detail.** A 13px grey label beside a 16px bold value inverts the reading order — you see *"Never"* and have no idea what it means. Label is `body`/`title` in `text`; value is `numeric`/`figure` in `textSecondary`; detail is `caption` in `textTertiary`.
+- **`textSecondary` and `textTertiary` must stay measurably different.** They shipped at **1.07:1** — the same grey twice — which is what made a stack of rows read as one flat block. `theme/__tests__/tokens.test.ts` pins the separation at ≥ 1.30:1, along with every text/surface pair, the card-to-canvas step, and the floating panel's own hairline. **A palette edit that breaks legibility fails the suite; do not weaken a threshold to make it pass.**
+- **Anything that counts gets tabular numerals** (`typeScale.figure` / `numeric`). A stat grid whose digits jitter sideways every second cannot be read at a glance.
+- **A chip is a filter, a segmented control is a choice.** A row of `GlassChip`s means *"show me the 14 things that match"*; using one for "pick a theme" says the wrong thing. Single-choice settings use `SegmentedControl`.
+- **A card's wash is `Card`'s job**, at a much lower alpha than the glass version needed — on an opaque fill it sits *behind* text instead of tinting a blur beneath it, so a stronger wash drowns the copy.
+- **Settings is grouped rows, not stacked panels.** One `CardSection` per topic, `CardRow`s inside it with a leading glyph badge, hairline dividers inset to the text, and an optional `footer` sentence. The layout it replaced numbered its `Reveal`s by hand across five sections, so adding a group silently reordered every entrance — `index` now lives on the section and the stagger is arithmetic.
+
+## The dock
+
+**The mini-player and the navigation are one panel.** `AppDock` owns both, inside a single `GlassSurface`. It used to be two absolutely-positioned surfaces, which made their geometry a negotiation the code lost: the centre button overhung the bar by 22pt, the now-playing row sat a fixed 80pt up, and **32pt of the button ended up underneath the row**. `layout.tabBarClearance` documented itself as guaranteeing no overlap — it guaranteed nothing, because it mirrored the bar's height and none of its overhang. A comment promising a guarantee the number did not provide is worse than no comment, because the next person trusts it.
+
+- **One panel makes the collision structurally impossible.** There is no clearance token left to get wrong, and one surface carries one shadow, so the stack reads as one object instead of two panels fighting over 32pt.
+- **There is no raised centre action.** All five destinations are peers. Discover used to be a 50pt saturated gradient circle among 22pt glyphs — a 2.3:1 ratio, and the most template-looking element in the app; Material specifies no such thing for a five-item bar. Do not reintroduce one.
+- **The nav row has no labels.** Material treats *three* destinations as "icon + label each" and *five* as "icons, label on the selected one if space permits". Forcing five labelled slots made every glyph carry a second element, which is what pushed the row to 82pt and left it heavy. Icon-only also removes the clipping bug class outright: a slot now holds exactly one thing, so there is no sum that can overflow.
+- **Selected = a solid accent circle with the glyph knocked out of it**, plus a filled-vs-outlined glyph swap. A true circle, not a pill: a 44×30 lozenge reads as a filter chip rather than as the button the listener is on. The solid fill is not decoration — it is the dock's *single accent rule*, shared with the now-playing row's play button, so the panel reads as one object where **a filled accent circle means "this is the current thing."** A 12%-alpha tint was tried first and is very little signal on a translucent surface. The circle carries a 3pt rim light on its top edge, exactly as `GlassSurface` does — never a highlight spread over its upper half, which blows out.
+- **No motion on a tab switch.** It happens hundreds of times a day, and the platform default is the only correct answer — no sliding indicator, no label fade. The pressed spring is the whole interaction.
+- **Both halves are the same height.** `playerHeight === navHeight`, so the seam divides the panel in half rather than cutting a tall nav off a short player.
+- **The dock's shadow is `elevation.dock`, not `elevation.float`.** A dock is a surface, not a lifted control; the deep drop darkened the canvas along the bottom edge of every list in the app.
+- **A screen owes the dock `dockInset`**, never a literal. Four tab screens carried a hardcoded `96` and the fifth used a token; they now all use the one exported number, sized for the dock at its **tallest** so a list's last row can never hide behind the now-playing half.
+- **The now-playing row's control sizes are visual, not touch.** `BouncyIconButton` pads every glyph to 44pt with `hitSlop`, so the artwork and the four trailing controls are sized for how much title is left — a Persian title on a 336pt dock has about 126pt to work with. The invariants (`dockGeometry.test.ts`) cover the row height, the indicator, and the tap target.
+
+## Keyboard and safe areas
+
+- **Android only auto-scrolls a *direct child* of a `ScrollView` into view when an input is focused.** Every field here sits at least two levels down (`Reveal` → the label wrapper → the `TextInput`), so the platform help never fires and a low field is simply covered. `KeyboardScrollView` replaces it: it measures the field on focus and scrolls it into the band the keyboard left.
+- **Never pair `KeyboardScrollView` with `KeyboardAvoidingView`.** The scroll view *is* the avoidance; both together count the keyboard twice and open a keyboard-tall gap under the form. The auth screens passed `behavior={undefined}` on Android before this, which reduced the component to a plain `View`.
+- **The overlap comes from the viewport's own loss when one exists, and from the keyboard's height when it does not.** Android resizes the window, so padding by the keyboard height again double-counts; iOS does not resize, so the space has to be supplied. `keyboardOverlapFor` picks between them by asking which one the viewport lost — no `Platform.OS` deciding the answer. Both are pure and tested.
+- **No keyboard-listener-plus-guessed-duration.** Nothing here tweens on a keyboard event; the listener feeds *layout* only. `react-native-keyboard-controller` is the better tool and is deliberately **not** installed: it is a native module Expo Go does not bundle, and Expo Go is how this app is tested.
+- **A hand-built full-screen screen applies its own insets.** `NowPlayingSheet` builds its own container and so inherits none of `Screen`'s `SafeAreaView`; the player's header must add `insets.top` itself, or the dismiss button draws under the status bar where the clock and battery live.
+- **A field is an inset track, not a frosted panel.** `TextField` uses `Card variant="inset"`: it is one step below the card it sits in, and it must be opaque so a focused field stays legible over whatever is behind it.
+
 ## Search
 
 - **Fold Persian before comparing, always.** The same word reaches the database written several ways — an Arabic yeh (ي) or a Persian one (ی), a kaf (ك/ک), a ZWNJ (نیمفاصله), Persian or Arabic-Indic digits, harakat. A raw comparison finds exactly one of those spellings, which for a listener who typed another is indistinguishable from a search that does not work. Use `lib/search.ts`; never write an `includes()` filter over text a user can see.
@@ -138,6 +176,8 @@ Annotation behavior: long-press (or a quick-add control) creates a note at the c
 
 - Jest + React Native Testing Library for units. Highest-value tests: `durationListenedSec` calculation, session finalization, checkpoint recovery, sync id mapping, and sync retry/idempotency.
 - Test offline → online recovery and the queue's bounded retry behavior.
+- `src/theme/__tests__/tokens.test.ts` is the palette's contract, not a formality — it asserts every text/surface pair, the tier separations, the card-to-canvas step, the shape ramp and the floating panel's hairline. **A palette change is not done until it passes, and it is never fixed by lowering a threshold.**
+- The visual layer has no render tests, so a redesign is free to change presentation — but a refactor of `planRowLayout`/`cardWidthFor` breaks `src/lib/__tests__/cardLayout.test.ts`, which is the contract that a library row never silently drops a control.
 - Run `npm run lint` after edits and the TypeScript check when applicable.
 - Do not claim a feature is complete until its offline, retry, and recovery states have been exercised.
 
