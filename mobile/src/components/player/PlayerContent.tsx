@@ -160,7 +160,7 @@ export function PlayerContent({
   });
 
   const header = (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
       <BouncyIconButton
         name="chevronDown"
         accessibilityLabel="Close player"
@@ -330,7 +330,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    // `paddingTop` is set inline from `insets.top`. The sheet is a hand-built
+    // full-screen container, so it does not inherit `Screen`'s `SafeAreaView` —
+    // without the inset the dismiss button is drawn under the status bar, which is
+    // exactly where the clock and the battery live.
     paddingBottom: spacing.xs,
   },
   headerGrabber: {

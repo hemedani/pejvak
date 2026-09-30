@@ -23,13 +23,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Modal,
-  ScrollView,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from "react-native";
+import { Modal, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useAnimatedStyle,
@@ -46,6 +40,7 @@ import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { ThemedText } from "@/components/themed-text";
+import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
 import { GlassSurface } from "@/components/ui/glass";
 import { triggerHaptic } from "@/components/ui/haptics";
 import { Icon } from "@/components/ui/icon";
@@ -65,7 +60,13 @@ import {
   useAddToPlaylistStore,
   type AddToPlaylistRequest,
 } from "@/store/addToPlaylistStore";
-import { curve, duration, easing, spring, useMotionEnabled } from "@/theme/motion";
+import {
+  curve,
+  duration,
+  easing,
+  spring,
+  useMotionEnabled,
+} from "@/theme/motion";
 import { hairline, radius as radii, spacing } from "@/theme/tokens";
 
 /** Share of the screen height the playlist list may occupy before it scrolls. */
@@ -88,7 +89,11 @@ export function AddToPlaylistSheet() {
   return <AddToPlaylistSheetContent request={request} />;
 }
 
-function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest }) {
+function AddToPlaylistSheetContent({
+  request,
+}: {
+  request: AddToPlaylistRequest;
+}) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const motionEnabled = useMotionEnabled();
@@ -129,11 +134,15 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
       dismiss();
       return;
     }
-    progress.value = withTiming(0, curve(easing.outQuint, duration.quick), (finished) => {
-      if (finished) {
-        scheduleOnRN(dismiss);
-      }
-    });
+    progress.value = withTiming(
+      0,
+      curve(easing.outQuint, duration.quick),
+      (finished) => {
+        if (finished) {
+          scheduleOnRN(dismiss);
+        }
+      },
+    );
   }, [closing, dismiss, motionEnabled, progress]);
 
   useEffect(() => {
@@ -157,7 +166,13 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
   const rows = useMemo(() => playlists ?? [], [playlists]);
 
   const memberships = useMemo(
-    () => new Map(rows.map((playlist) => [playlist.id, membershipOf(playlist.items, trackIds)])),
+    () =>
+      new Map(
+        rows.map((playlist) => [
+          playlist.id,
+          membershipOf(playlist.items, trackIds),
+        ]),
+      ),
     [rows, trackIds],
   );
 
@@ -200,10 +215,14 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
         .activeOffsetY([-8, 8])
         .onUpdate((event) => {
           const travel = sheetHeight || windowHeight;
-          progress.value = Math.max(0, Math.min(1, 1 - event.translationY / travel));
+          progress.value = Math.max(
+            0,
+            Math.min(1, 1 - event.translationY / travel),
+          );
         })
         .onEnd((event) => {
-          const committed = progress.value < 1 - DISMISS_FRACTION || event.velocityY > 900;
+          const committed =
+            progress.value < 1 - DISMISS_FRACTION || event.velocityY > 900;
           if (committed) {
             scheduleOnRN(close);
           } else {
@@ -232,7 +251,8 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
       animationType="none"
       statusBarTranslucent
       navigationBarTranslucent
-      onRequestClose={close}>
+      onRequestClose={close}
+    >
       <View style={styles.root}>
         <Animated.View style={[StyleSheet.absoluteFill, scrimStyle]}>
           <ElasticPressable
@@ -252,15 +272,20 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
             radius={34}
             clip
             elevated
-            onLayout={(event) => setSheetHeight(event.nativeEvent.layout.height)}
-            style={styles.sheet}>
+            onLayout={(event) =>
+              setSheetHeight(event.nativeEvent.layout.height)
+            }
+            style={styles.sheet}
+          >
             {/* Drag-to-dismiss covers the handle and the header only. Stretching
                 it across the list would race the ScrollView's own vertical drag,
                 and whichever won would make the other feel broken. */}
             <GestureDetector gesture={pan}>
               <View>
                 <View style={styles.grabberArea}>
-                  <View style={[styles.grabber, { backgroundColor: theme.track }]} />
+                  <View
+                    style={[styles.grabber, { backgroundColor: theme.track }]}
+                  />
                 </View>
 
                 <View style={styles.header}>
@@ -278,7 +303,11 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
                     <ThemedText type="bodyStrong" numberOfLines={1}>
                       {request.title}
                     </ThemedText>
-                    <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+                    <ThemedText
+                      type="caption"
+                      themeColor="textSecondary"
+                      numberOfLines={1}
+                    >
                       {request.subtitle ?? describeSelection(trackIds)}
                     </ThemedText>
                   </View>
@@ -296,11 +325,13 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
 
             <View style={[styles.divider, { backgroundColor: theme.track }]} />
 
-            <ScrollView
+            {/* Keyboard-aware: the composer sits at the top of a list that is
+                anchored to the bottom of the screen, so the keyboard lands
+                straight on top of it. */}
+            <KeyboardScrollView
               style={{ maxHeight: listMaxHeight }}
               contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled">
+            >
               {composing ? (
                 <View style={styles.composer}>
                   <TextField
@@ -338,27 +369,39 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
                     accessibilityLabel="Create a new playlist"
                     haptic="light"
                     onPress={() => setComposing(true)}
-                    style={styles.row}>
+                    style={styles.row}
+                  >
                     <View
                       style={[
                         styles.newTile,
-                        { backgroundColor: theme.accentSoft, borderColor: theme.accent },
-                      ]}>
+                        {
+                          backgroundColor: theme.accentSoft,
+                          borderColor: theme.accent,
+                        },
+                      ]}
+                    >
                       <Icon name="add" size={22} color={theme.accent} />
                     </View>
                     <View style={styles.rowCopy}>
                       <ThemedText type="bodyStrong">New playlist</ThemedText>
                       <ThemedText type="caption" themeColor="textSecondary">
-                        Name it and add {describeSelection(trackIds).toLowerCase()} in one step
+                        Name it and add{" "}
+                        {describeSelection(trackIds).toLowerCase()} in one step
                       </ThemedText>
                     </View>
-                    <Icon name="chevronRight" size={16} color={theme.textTertiary} />
+                    <Icon
+                      name="chevronRight"
+                      size={16}
+                      color={theme.textTertiary}
+                    />
                   </ElasticPressable>
                 </Reveal>
               )}
 
               {rows.length > 0 ? (
-                <View style={[styles.divider, { backgroundColor: theme.track }]} />
+                <View
+                  style={[styles.divider, { backgroundColor: theme.track }]}
+                />
               ) : null}
 
               {rows.map((playlist, index) => {
@@ -368,13 +411,18 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
                   total: 0,
                 };
                 return (
-                  <Reveal key={playlist.id} index={index + 2} limit={ROW_REVEAL_LIMIT}>
+                  <Reveal
+                    key={playlist.id}
+                    index={index + 2}
+                    limit={ROW_REVEAL_LIMIT}
+                  >
                     <ElasticPressable
                       accessibilityRole="button"
                       accessibilityLabel={`${actionFor(membership.state) === "remove" ? "Remove from" : "Add to"} ${playlist.title}`}
                       haptic="none"
                       onPress={() => void toggle(playlist)}
-                      style={styles.row}>
+                      style={styles.row}
+                    >
                       <PaletteTile
                         ramp={paletteFor(playlist.title)}
                         label={playlist.title}
@@ -385,8 +433,15 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
                         <ThemedText type="bodyStrong" numberOfLines={1}>
                           {playlist.title}
                         </ThemedText>
-                        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                          {describeMembership(membership, playlist.items.length)}
+                        <ThemedText
+                          type="caption"
+                          themeColor="textSecondary"
+                          numberOfLines={1}
+                        >
+                          {describeMembership(
+                            membership,
+                            playlist.items.length,
+                          )}
                         </ThemedText>
                       </View>
                       <MembershipBadge state={membership.state} />
@@ -396,12 +451,17 @@ function AddToPlaylistSheetContent({ request }: { request: AddToPlaylistRequest 
               })}
 
               {playlists !== null && rows.length === 0 && !composing ? (
-                <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-                  No playlists yet. Create one above and {describeSelection(trackIds).toLowerCase()}{" "}
-                  will go straight into it.
+                <ThemedText
+                  type="caption"
+                  themeColor="textTertiary"
+                  style={styles.empty}
+                >
+                  No playlists yet. Create one above and{" "}
+                  {describeSelection(trackIds).toLowerCase()} will go straight
+                  into it.
                 </ThemedText>
               ) : null}
-            </ScrollView>
+            </KeyboardScrollView>
           </GlassSurface>
 
           <View style={{ height: insets.bottom + spacing.md }} />
@@ -471,7 +531,7 @@ const styles = StyleSheet.create({
   newTile: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: radii.sm,
     borderWidth: hairline,
     alignItems: "center",
     justifyContent: "center",

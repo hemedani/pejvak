@@ -6,6 +6,7 @@ import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
 import { PlayerContent } from "@/components/player/PlayerContent";
 import { ThemedText } from "@/components/themed-text";
 import { GlassSheet } from "@/components/ui/glass";
+import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
 import { useTrackAnnotations } from "@/hooks/use-annotations";
@@ -40,7 +41,10 @@ function parsePositionParam(raw: string | undefined): number | undefined {
 }
 
 export default function PlayerScreen() {
-  const params = useLocalSearchParams<{ trackId?: string; positionSec?: string }>();
+  const params = useLocalSearchParams<{
+    trackId?: string;
+    positionSec?: string;
+  }>();
   const router = useRouter();
   const paramTrackId = params.trackId ?? null;
   const paramPositionSec = parsePositionParam(params.positionSec);
@@ -124,7 +128,8 @@ export default function PlayerScreen() {
   }, [activeTrackId, paramPositionSec]);
 
   const ramp = useMemo(
-    () => paletteFor(contentHash ?? track?.contentHash ?? title ?? activeTrackId),
+    () =>
+      paletteFor(contentHash ?? track?.contentHash ?? title ?? activeTrackId),
     [activeTrackId, contentHash, title, track?.contentHash],
   );
 
@@ -175,7 +180,9 @@ export default function PlayerScreen() {
       return;
     }
     if (editingId) {
-      const target = annotations.find((annotation) => annotation.id === editingId);
+      const target = annotations.find(
+        (annotation) => annotation.id === editingId,
+      );
       if (!target) {
         closeComposer();
         return;
@@ -200,27 +207,41 @@ export default function PlayerScreen() {
   };
 
   const confirmDelete = (annotation: LocalAnnotation) => {
-    Alert.alert("Delete note?", "This removes the note and syncs the deletion.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => void deleteNote(annotation) },
-    ]);
+    Alert.alert(
+      "Delete note?",
+      "This removes the note and syncs the deletion.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => void deleteNote(annotation),
+        },
+      ],
+    );
   };
 
   const selected = useMemo(
-    () => annotations.find((annotation) => annotation.id === selectedId) ?? null,
+    () =>
+      annotations.find((annotation) => annotation.id === selectedId) ?? null,
     [annotations, selectedId],
   );
 
   const composer = composerOpen ? (
+    // Keyboard-aware: the sheet is anchored to the bottom of the screen, so a
+    // focused note field opens straight into the keyboard. Without this the
+    // listener cannot see what they are writing.
     <GlassSheet open tone="surfaceStrong" style={styles.composer}>
-      <TextField
-        label={`${editingId ? "Edit" : "Note"} at ${formatClock(draftPositionSec)}`}
-        value={draft}
-        onChangeText={setDraft}
-        placeholder="What stood out here?"
-        multiline
-        autoFocus
-      />
+      <KeyboardScrollView contentContainerStyle={styles.composerFields}>
+        <TextField
+          label={`${editingId ? "Edit" : "Note"} at ${formatClock(draftPositionSec)}`}
+          value={draft}
+          onChangeText={setDraft}
+          placeholder="What stood out here?"
+          multiline
+          autoFocus
+        />
+      </KeyboardScrollView>
       <View style={styles.composerActions}>
         <Pressable accessibilityRole="button" onPress={closeComposer}>
           <ThemedText type="linkPrimary">Cancel</ThemedText>
@@ -237,7 +258,9 @@ export default function PlayerScreen() {
   ) : selected ? (
     <GlassSheet open tone="surfaceStrong" style={styles.composer}>
       <View style={styles.selectedHeader}>
-        <ThemedText type="smallBold">{formatClock(selected.positionSec)}</ThemedText>
+        <ThemedText type="smallBold">
+          {formatClock(selected.positionSec)}
+        </ThemedText>
         <View style={styles.selectedActions}>
           <Pressable
             accessibilityRole="button"
@@ -246,10 +269,14 @@ export default function PlayerScreen() {
               setDraftPositionSec(selected.positionSec);
               setDraft(selected.text);
               setComposerOpen(true);
-            }}>
+            }}
+          >
             <ThemedText type="linkPrimary">Edit</ThemedText>
           </Pressable>
-          <Pressable accessibilityRole="button" onPress={() => confirmDelete(selected)}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => confirmDelete(selected)}
+          >
             <ThemedText type="linkPrimary">Delete</ThemedText>
           </Pressable>
         </View>
@@ -285,7 +312,9 @@ export default function PlayerScreen() {
           durationSec={durationSec}
           playbackSpeed={playbackSpeed}
           sleepActive={sleep.active}
-          sleepLabel={sleep.active ? formatRemaining(sleep.remainingMs) : "Sleep"}
+          sleepLabel={
+            sleep.active ? formatRemaining(sleep.remainingMs) : "Sleep"
+          }
           error={statusMessage}
           annotations={annotations}
           selectedId={selectedId}
@@ -303,7 +332,9 @@ export default function PlayerScreen() {
           onToggle={() => TrackPlayerService.togglePlayPause()}
           onNext={() => void TrackPlayerService.next()}
           onPrevious={() => void TrackPlayerService.previous()}
-          onRewind={() => void TrackPlayerService.seekTo(Math.max(0, positionSec - 30))}
+          onRewind={() =>
+            void TrackPlayerService.seekTo(Math.max(0, positionSec - 30))
+          }
           onForward={() => void TrackPlayerService.seekTo(positionSec + 30)}
           onSeek={(target) => void TrackPlayerService.seekTo(target)}
           onCycleSpeed={cycleSpeed}
@@ -320,6 +351,11 @@ const styles = StyleSheet.create({
   composer: {
     gap: spacing.lg,
     padding: spacing.lg,
+  },
+  composerFields: {
+    // The scroll view is `flex: 1`, so without a ceiling it would stretch the
+    // sheet to the full window height the moment it opens.
+    maxHeight: 220,
   },
   composerActions: {
     flexDirection: "row",
