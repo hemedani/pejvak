@@ -2,7 +2,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
-import { AddToPlaylistButton } from "@/components/add-to-playlist";
+import { AddToPlaylistButton, useAddToPlaylist } from "@/components/add-to-playlist";
 import { ContextHistoryButton } from "@/components/context-history";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
@@ -10,9 +10,11 @@ import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { GlassChip, GlassProgress, GlassSurface } from "@/components/ui/glass";
+import { GlassChip, GlassSurface } from "@/components/ui/glass";
 import { Icon } from "@/components/ui/icon";
+import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { SearchField } from "@/components/ui/search-field";
 import { useArtworkBackfill } from "@/hooks/use-artwork-backfill";
 import { useFolders } from "@/hooks/use-folders";
 import { useMissingTracks } from "@/hooks/use-missing-tracks";
@@ -21,24 +23,41 @@ import { useTheme } from "@/hooks/use-theme";
 import type { FolderSummary, LocalTrack } from "@/lib/db/types";
 import { describeFolderProgress, folderProgressRatio } from "@/lib/folderPlay";
 import { formatDuration } from "@/lib/history";
+import {
+  folderSearchFields,
+  recentSearchFields,
+  TITLE_FIELD,
+  trackSearchFields,
+} from "@/lib/librarySearch";
 import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
 import { paletteFor } from "@/lib/palette";
 import { formatPlayCount } from "@/lib/playbackContext";
 import { describeRecentWhen, recentPlayKey, type RecentPlay } from "@/lib/recentPlays";
+import {
+  createSearchIndex,
+  describeField,
+  foldQuery,
+  searchIndex,
+  type Hit,
+  type Range,
+  type SearchFieldName,
+} from "@/lib/search";
 import { FolderService } from "@/services/FolderService";
 import { LocalDBService } from "@/services/LocalDBService";
 import { PlaylistService } from "@/services/PlaylistService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
-import { radius as radii, spacing } from "@/theme/tokens";
+import { useContextHistoryStore } from "@/store/contextHistoryStore";
+import { spacing } from "@/theme/tokens";
 
 /**
- * The header block occupies reveal indices 1–4 (view toggle, continue card,
- * missing-files alert, add-audio button), so list rows start at 5. Only the
- * opening screenful staggers in — recycled rows past this limit render
- * immediately instead of replaying a 320 ms-delayed fade. See `Reveal`'s `limit`.
+ * The header block occupies reveal indices 1–5 (search field, view toggle,
+ * continue card, missing-files alert, add-audio button), so list rows start at
+ * 6. Only the opening screenful staggers in — recycled rows past this limit
+ * render immediately instead of replaying a 320 ms-delayed fade. See `Reveal`'s
+ * `limit`.
  */
 const ROW_REVEAL_LIMIT = 12;
-const FIRST_ROW_REVEAL_INDEX = 5;
+const FIRST_ROW_REVEAL_INDEX = 6;
 
 /**
  * How many files one Library visit examines for cover art. Small on purpose:
@@ -53,7 +72,45 @@ const ARTWORK_BACKFILL_BATCH = 8;
  */
 const RECENT_LIMIT = 12;
 
+/**
+ * How many distinct recent plays are *read*, against the twelve the tab shows.
+ *
+ * The read is deliberately wider than the tab, because a search over the twelve
+ * rows the tab happens to show would answer "nothing found" for something the
+ * listener played a week ago — and a search that lies is worse than no search.
+ * It also keeps the Recent chip's count honest: that count is a promise about
+ * the whole list, not about the visible part of it.
+ *
+ * A constant rather than something that depends on the query, on purpose. A
+ * limit that changed when a search started would change the hook's identity,
+ * which would re-read the sessions table on the first keystroke and again when
+ * the field was cleared. The tab slices this back to `RECENT_LIMIT` instead.
+ */
+const RECENT_READ_LIMIT = 60;
+
 type LibraryView = "tracks" | "folders" | "recent";
+
+/** The three views, and the words the chips and the hint use for them. */
+const VIEW_LABELS: Record<LibraryView, string> = {
+  tracks: "Tracks",
+  folders: "Folders",
+  recent: "Recent",
+};
+
+type TrackHit = Hit<LocalTrack, SearchFieldName>;
+type FolderHit = Hit<FolderSummary, SearchFieldName>;
+type RecentHit = Hit<RecentPlay, SearchFieldName>;
+
+/**
+ * The part of a hit a row actually renders.
+ *
+ * Deliberately not `Hit<Item, …>`: the Recent tab draws the same folder card as
+ * the Folders tab, but the hit it holds was computed over a `RecentPlay` — the
+ * item type differs while everything the row draws is identical. Typing the
+ * parameter as the full generic would force a cast at the one call site that
+ * spans the two, and the cast would be the lie.
+ */
+type RowHit = { field: SearchFieldName; value: string; ranges: Range[] };
 
 function formatLastPlayed(value: number | null): string {
   if (!value) {
@@ -66,16 +123,62 @@ function describeTrackCount(count: number): string {
   return `${count} track${count === 1 ? "" : "s"}`;
 }
 
+/**
+ * The line that explains a hit the listener cannot see.
+ *
+ * A row found by its author, its file name or the folder it sits in shows that
+ * fact in place of its usual metadata — a result whose reason is invisible
+ * looks like a wrong result. Null when the match is in the title, where the
+ * highlight already says it.
+ */
+function describeHit(hit: { field: SearchFieldName; value: string } | null): string | null {
+  if (hit === null || hit.field === TITLE_FIELD) {
+    return null;
+  }
+  return `${describeField(hit.field)} · ${hit.value}`;
+}
+
+/**
+ * Where else a query matched, when it matched nothing in the current view.
+ *
+ * The chips carry the same numbers, but a listener staring at an empty list is
+ * not reading the chips. Naming the other tab is the difference between "your
+ * search found nothing" and "your search found it over there".
+ */
+function describeElsewhere(counts: Record<LibraryView, number>, view: LibraryView): string | null {
+  if (counts[view] > 0) {
+    return null;
+  }
+  const others = (Object.keys(counts) as LibraryView[]).filter(
+    (option) => option !== view && counts[option] > 0,
+  );
+  if (others.length === 0) {
+    return null;
+  }
+  return `Also ${others.map((option) => `${counts[option]} under ${VIEW_LABELS[option]}`).join(" · ")}`;
+}
+
 export default function LibraryScreen() {
   const router = useRouter();
   const theme = useTheme();
   const [view, setView] = useState<LibraryView>("tracks");
   const [tracks, setTracks] = useState<LocalTrack[]>([]);
   const [annotationCounts, setAnnotationCounts] = useState<Record<string, number>>({});
+  const [query, setQuery] = useState("");
   const { folders, refresh: refreshFolders } = useFolders();
   const { missing, refresh: refreshMissing } = useMissingTracks();
-  const { recent, refresh: refreshRecent } = useRecentPlays(RECENT_LIMIT);
   const { run: runArtworkBackfill } = useArtworkBackfill();
+  // The two card actions that open a global sheet. Taken here rather than
+  // through their button components so the overflow menu can offer the same
+  // action as a named row — a collapsed control that did nothing would be
+  // worse than one that clipped.
+  const openPlaylistPicker = useAddToPlaylist();
+  const openContextHistory = useContextHistoryStore((state) => state.open);
+
+  const terms = useMemo(() => foldQuery(query), [query]);
+  const searching = terms.length > 0;
+
+  const { recent, refresh: refreshRecent } = useRecentPlays(RECENT_READ_LIMIT);
 
   const continueTrack = useMemo(
     () =>
@@ -86,6 +189,78 @@ export default function LibraryScreen() {
   );
 
   const wash = continueTrack ? paletteFor(continueTrack.contentHash)[1] : theme.accent;
+
+  /**
+   * Every searchable field of every row, folded once per data load.
+   *
+   * Keyed on the data rather than on the query on purpose: folding is the
+   * expensive half of searching, and doing it per keystroke is what makes a
+   * large library's search field stutter. A query only ever scans strings that
+   * are already folded.
+   */
+  const trackIndex = useMemo(
+    () => createSearchIndex(tracks, trackSearchFields, TITLE_FIELD),
+    [tracks],
+  );
+  const folderIndex = useMemo(
+    () => createSearchIndex(folders, folderSearchFields, TITLE_FIELD),
+    [folders],
+  );
+  const recentIndex = useMemo(
+    () => createSearchIndex(recent, recentSearchFields, TITLE_FIELD),
+    [recent],
+  );
+
+  /**
+   * All three views are searched on every keystroke, not just the visible one.
+   *
+   * That is the whole point of the counts on the chips: a listener who searches
+   * for a folder while the Tracks tab is showing has to be told the folder
+   * exists, and the only way to know is to have looked. With the fields already
+   * folded this is a few thousand `indexOf` calls — cheap enough to run while
+   * the keyboard is open, and far cheaper than the fold it avoids.
+   */
+  const trackHits = useMemo(() => searchIndex(trackIndex, terms), [trackIndex, terms]);
+  const folderHits = useMemo(() => searchIndex(folderIndex, terms), [folderIndex, terms]);
+  const recentHits = useMemo(() => searchIndex(recentIndex, terms), [recentIndex, terms]);
+
+  const counts: Record<LibraryView, number> = {
+    tracks: trackHits.length,
+    folders: folderHits.length,
+    recent: recentHits.length,
+  };
+  const totalMatches = counts.tracks + counts.folders + counts.recent;
+  const hint = searching ? describeElsewhere(counts, view) : null;
+
+  /**
+   * What each tab shows: the hits while searching, the whole list otherwise.
+   *
+   * `hit` rides alongside the item rather than replacing it, so a row keeps
+   * everything it knows and gains only the reason it matched.
+   */
+  const trackRows = useMemo<{ track: LocalTrack; hit: TrackHit | null }[]>(
+    () =>
+      searching
+        ? trackHits.map((hit) => ({ track: hit.item, hit }))
+        : tracks.map((track) => ({ track, hit: null })),
+    [searching, trackHits, tracks],
+  );
+  const folderRows = useMemo<{ folder: FolderSummary; hit: FolderHit | null }[]>(
+    () =>
+      searching
+        ? folderHits.map((hit) => ({ folder: hit.item, hit }))
+        : folders.map((folder) => ({ folder, hit: null })),
+    [searching, folderHits, folders],
+  );
+  const recentRows = useMemo<{ play: RecentPlay; hit: RecentHit | null }[]>(
+    () =>
+      searching
+        ? recentHits.map((hit) => ({ play: hit.item, hit }))
+        : // The tab keeps its twelve; the read above is only wider so a search
+          // can reach past them.
+          recent.slice(0, RECENT_LIMIT).map((play) => ({ play, hit: null })),
+    [searching, recentHits, recent],
+  );
 
   /**
    * Fills in cover art for tracks imported before it was extracted, then
@@ -107,12 +282,12 @@ export default function LibraryScreen() {
   }, [refreshFolders, runArtworkBackfill]);
 
   const refresh = useCallback(async () => {
-    const [allTracks, counts] = await Promise.all([
+    const [allTracks, annotationTotals] = await Promise.all([
       LocalDBService.getAllTracks(),
       LocalDBService.getAnnotationCounts(),
     ]);
     setTracks(allTracks);
-    setAnnotationCounts(counts);
+    setAnnotationCounts(annotationTotals);
     // Folders are derived from the tracks table, so a rescan or an import can
     // add one without any screen noticing; re-read on focus alongside them.
     await refreshFolders();
@@ -131,14 +306,22 @@ export default function LibraryScreen() {
     }, [refresh]),
   );
 
+  /**
+   * Plays one track with the **whole library** behind it, so next/previous step
+   * through the library.
+   *
+   * Takes an id rather than an index because the list it is called from may be
+   * the search results, whose positions say nothing about the library's. The
+   * queue is deliberately still the full library while searching: a search is a
+   * way to *find* something, not a way to redefine what comes next.
+   */
   const playAt = useCallback(
-    (index: number) => {
+    (trackId: string) => {
       const ids = tracks.map((track) => track.id);
-      const trackId = ids[index];
-      if (!trackId) {
+      const index = ids.indexOf(trackId);
+      if (index < 0) {
         return;
       }
-      // The whole library becomes the queue, so next/previous step through it.
       void TrackPlayerService.playQueueAt(ids, index);
       router.push({ pathname: "/player", params: { trackId } });
     },
@@ -217,7 +400,13 @@ export default function LibraryScreen() {
       <ScreenHeader
         overline="YOUR LISTENING SPACE"
         title="Library"
-        subtitle={tracks.length > 0 ? `${tracks.length} tracks` : undefined}
+        subtitle={
+          searching
+            ? `${totalMatches} match${totalMatches === 1 ? "" : "es"}`
+            : tracks.length > 0
+              ? `${tracks.length} tracks`
+              : undefined
+        }
         action={
           <BouncyIconButton
             name="settings"
@@ -230,16 +419,39 @@ export default function LibraryScreen() {
         }
       />
 
+      {/* The field sits above the chips, not inside a tab, because it belongs
+          to the screen: it searches all three at once and the chips' counts are
+          how it reports that. See `describeElsewhere` for the empty case.
+
+          Note this is an *element*, not a component function — a header defined
+          as `() => <View/>` gets a fresh component type on every render, which
+          remounts the `TextInput` and drops the keyboard on the first
+          keystroke. */}
       <Reveal index={1}>
+        <SearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search titles, folders, files…"
+          hint={hint}
+          accessibilityLabel="Search your library"
+        />
+      </Reveal>
+
+      <Reveal index={2}>
         {/* Three chips share the row equally rather than sizing to their
             labels. "Tracks / Folders / Recent" at the chip's own padding is
             wider than a small phone's content column, and a clipped third
-            option is worse than a tighter one. */}
+            option is worse than a tighter one.
+
+            While a query is active each chip carries its match count, which is
+            what stops a search for a folder name being trapped in the Tracks
+            tab — "Folders 1" says where to look. */}
         <View style={styles.viewToggle}>
           <GlassChip
             label="Tracks"
             icon="music"
             selected={view === "tracks"}
+            count={searching ? counts.tracks : null}
             onPress={() => setView("tracks")}
             style={styles.viewChip}
           />
@@ -247,6 +459,7 @@ export default function LibraryScreen() {
             label="Folders"
             icon="folder"
             selected={view === "folders"}
+            count={searching ? counts.folders : null}
             onPress={() => setView("folders")}
             style={styles.viewChip}
           />
@@ -254,22 +467,24 @@ export default function LibraryScreen() {
             label="Recent"
             icon="history"
             selected={view === "recent"}
+            count={searching ? counts.recent : null}
             onPress={() => setView("recent")}
             style={styles.viewChip}
           />
         </View>
       </Reveal>
 
-      {continueTrack ? (
-        <Reveal index={2}>
+      {/* The continue card, the missing-files alert and the Add button all step
+          aside while searching. They are the screen's standing furniture, and a
+          search is a focused mode: results belong at the top, not below a
+          promotion for something else. */}
+      {continueTrack && !searching ? (
+        <Reveal index={3}>
           <GlassSurface tone="surfaceStrong" style={styles.continueCard}>
             <ElasticPressable
               accessibilityRole="button"
               accessibilityLabel={`Continue listening to ${continueTrack.title}`}
-              onPress={() => {
-                const index = tracks.findIndex((track) => track.id === continueTrack.id);
-                playAt(index >= 0 ? index : 0);
-              }}
+              onPress={() => playAt(continueTrack.id)}
               style={styles.continueMain}>
               <PaletteTile
                 ramp={paletteFor(continueTrack.contentHash)}
@@ -299,10 +514,7 @@ export default function LibraryScreen() {
               iconSize={22}
               tone="accent"
               style={{ backgroundColor: paletteFor(continueTrack.contentHash)[1] }}
-              onPress={() => {
-                const index = tracks.findIndex((track) => track.id === continueTrack.id);
-                playAt(index >= 0 ? index : 0);
-              }}
+              onPress={() => playAt(continueTrack.id)}
             />
           </GlassSurface>
         </Reveal>
@@ -310,8 +522,8 @@ export default function LibraryScreen() {
 
       {/* Only when something is actually broken. A standing "0 files missing"
           banner would just train the listener to ignore it. */}
-      {missing.length > 0 ? (
-        <Reveal index={3}>
+      {missing.length > 0 && !searching ? (
+        <Reveal index={4}>
           <GlassSurface tone="surfaceStrong" style={styles.missingCard}>
             <ElasticPressable
               accessibilityRole="button"
@@ -333,9 +545,11 @@ export default function LibraryScreen() {
         </Reveal>
       ) : null}
 
-      <Reveal index={4}>
-        <PrimaryButton label="Add audio" onPress={onImport} />
-      </Reveal>
+      {searching ? null : (
+        <Reveal index={5}>
+          <PrimaryButton label="Add audio" onPress={onImport} />
+        </Reveal>
+      )}
     </View>
   );
 
@@ -347,328 +561,422 @@ export default function LibraryScreen() {
    * tab it was reached from. `when` is the only thing Recent adds, and it goes
    * last in the fact line so it is the first clause to ellipsise.
    */
-  const renderFolder = (folder: FolderSummary, index: number, when?: string) => {
+  const renderFolder = (
+    folder: FolderSummary,
+    index: number,
+    when: string | undefined,
+    hit: RowHit | null,
+  ) => {
     const ramp = paletteFor(folder.key);
+    const matched = describeHit(hit);
+    /**
+     * Resolved on tap rather than per card: a folder holds counts, not its
+     * contents, and forty cards each running a query for a button nobody has
+     * pressed is the cost this avoids. Missing files are left out, matching the
+     * folder screen — a playlist is a promise to play something later, and a
+     * file whose bytes are gone cannot keep it.
+     */
+    const resolveTrackIds = async () =>
+      (await LocalDBService.getTracksByFolder(folder.key))
+        .filter((track) => track.availability !== "missing")
+        .map((track) => track.id);
+
     return (
-      <Reveal
-        index={FIRST_ROW_REVEAL_INDEX + index}
-        from="below"
-        limit={ROW_REVEAL_LIMIT}>
-        <GlassSurface flat style={styles.row}>
-          <ElasticPressable
-            accessibilityRole="button"
-            accessibilityLabel={`Open folder ${folder.name}`}
-            onPress={() => openFolder(folder.key)}
-            style={styles.rowMain}>
-            <PaletteTile
-              ramp={ramp}
-              label={folder.name}
-              source={folder.artworkUrl}
-              size={44}
-              radius={13}
-            />
-            <View style={styles.rowCopy}>
-              <ThemedText type="bodyStrong" numberOfLines={1}>
-                {folder.name}
-              </ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                {/* Progress first, so a card that runs out of width ellipsises
-                    the play count rather than the thing being tracked. */}
-                {[
-                  describeFolderProgress(folder.finishedCount, folder.trackCount),
-                  folder.totalDurationSec > 0 ? formatDuration(folder.totalDurationSec) : null,
-                  formatPlayCount(folder.playCount),
-                  when ?? null,
-                ]
-                  .filter((part): part is string => part !== null)
-                  .join(" · ")}
-              </ThemedText>
-              <GlassProgress
-                progress={folderProgressRatio(folder.finishedCount, folder.trackCount)}
-                tint={ramp[1]}
-                thickness={4}
-                style={styles.folderBar}
-              />
-            </View>
-          </ElasticPressable>
-
-          <BouncyIconButton
-            name="play"
-            accessibilityLabel={`Play folder ${folder.name}`}
-            size={40}
-            iconSize={18}
-            tone="glass"
-            onPress={() => void playFolder(folder.key)}
-          />
-
-          {/* The folder's contents are not loaded on this screen, so the ids are
-              resolved on tap rather than per card. Missing files are left out,
-              matching the folder screen: a playlist is a promise to play
-              something later, and a file whose bytes are gone cannot keep it.
-
-              No subtitle, so the sheet counts what was actually resolved
-              instead of repeating the card's total and disagreeing with it. */}
-          <AddToPlaylistButton
-            title={folder.name}
-            ramp={ramp}
-            artwork={folder.artworkUrl}
-            isBatch
-            size={40}
-            iconSize={18}
-            tone="glass"
-            resolveTrackIds={async () =>
-              (await LocalDBService.getTracksByFolder(folder.key))
-                .filter((track) => track.availability !== "missing")
-                .map((track) => track.id)
-            }
-          />
-
-          <ContextHistoryButton
-            type="folder"
-            contextKey={folder.key}
-            title={folder.name}
-            artwork={folder.artworkUrl}
-            size={40}
-            iconSize={18}
-            tone="glass"
-          />
-        </GlassSurface>
+      <Reveal index={FIRST_ROW_REVEAL_INDEX + index} from="below" limit={ROW_REVEAL_LIMIT}>
+        <MediaCard
+          title={folder.name}
+          titleRanges={hit?.ranges ?? []}
+          // Why it matched comes first while searching, then progress, so a card
+          // that runs out of width ellipsises the play count rather than either
+          // the reason or the thing being tracked.
+          meta={[
+            matched,
+            describeFolderProgress(folder.finishedCount, folder.trackCount),
+            folder.totalDurationSec > 0 ? formatDuration(folder.totalDurationSec) : null,
+            formatPlayCount(folder.playCount),
+            when ?? null,
+          ]
+            .filter((part): part is string => part !== null)
+            .join(" · ")}
+          artworkUrl={folder.artworkUrl}
+          paletteKey={folder.key}
+          progressRatio={folderProgressRatio(folder.finishedCount, folder.trackCount)}
+          onPress={() => openFolder(folder.key)}
+          accessibilityLabel={`Open folder ${folder.name}`}
+          accessibilityHint="Opens this folder"
+          actions={[
+            {
+              key: "play",
+              width: 40,
+              priority: 4,
+              icon: "play",
+              label: `Play ${folder.name}`,
+              onPress: () => void playFolder(folder.key),
+              node: (
+                <BouncyIconButton
+                  name="play"
+                  accessibilityLabel={`Play folder ${folder.name}`}
+                  size={40}
+                  iconSize={18}
+                  tone="glass"
+                  onPress={() => void playFolder(folder.key)}
+                />
+              ),
+            },
+            {
+              key: "add",
+              width: 40,
+              priority: 3,
+              icon: "playlistAdd",
+              label: "Add to a playlist",
+              onPress: () =>
+                void openPlaylistPicker({
+                  title: folder.name,
+                  ramp,
+                  artwork: folder.artworkUrl,
+                  isBatch: true,
+                  resolveTrackIds,
+                }),
+              node: (
+                <AddToPlaylistButton
+                  title={folder.name}
+                  ramp={ramp}
+                  artwork={folder.artworkUrl}
+                  isBatch
+                  size={40}
+                  iconSize={18}
+                  tone="glass"
+                  resolveTrackIds={resolveTrackIds}
+                />
+              ),
+            },
+            {
+              key: "history",
+              width: 40,
+              priority: 2,
+              icon: "history",
+              label: "Listening history",
+              onPress: () =>
+                openContextHistory({
+                  type: "folder",
+                  key: folder.key,
+                  title: folder.name,
+                  artwork: folder.artworkUrl,
+                }),
+              node: (
+                <ContextHistoryButton
+                  type="folder"
+                  contextKey={folder.key}
+                  title={folder.name}
+                  artwork={folder.artworkUrl}
+                  size={40}
+                  iconSize={18}
+                  tone="glass"
+                />
+              ),
+            },
+          ]}
+        />
       </Reveal>
     );
   };
 
-  const renderPlaylist = (play: Extract<RecentPlay, { kind: "playlist" }>, index: number) => {
+  const renderPlaylist = (
+    play: Extract<RecentPlay, { kind: "playlist" }>,
+    index: number,
+    hit: RowHit | null,
+  ) => {
     const { playlist } = play;
     const ramp = paletteFor(playlist.title);
+    const matched = describeHit(hit);
+    /**
+     * Resolved through the service rather than from the playlist's stored items,
+     * so this hands over exactly the queue playback would use — and drops
+     * missing files for the same reason the folder card does.
+     */
+    const resolveTrackIds = async () => {
+      const detail = await PlaylistService.loadDetail(playlist.id);
+      return (detail?.tracks ?? [])
+        .filter((track) => track.availability !== "missing")
+        .map((track) => track.id);
+    };
+
     return (
       <Reveal index={FIRST_ROW_REVEAL_INDEX + index} from="below" limit={ROW_REVEAL_LIMIT}>
-        <GlassSurface flat style={styles.row}>
-          <ElasticPressable
-            accessibilityRole="button"
-            accessibilityLabel={`Open playlist ${playlist.title}`}
-            onPress={() => openPlaylist(playlist.id)}
-            style={styles.rowMain}>
-            <PaletteTile ramp={ramp} label={playlist.title} size={44} radius={13} />
-            <View style={styles.rowCopy}>
-              <ThemedText type="bodyStrong" numberOfLines={1}>
-                {playlist.title}
-              </ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                {[describeTrackCount(playlist.items.length), describeRecentWhen(play.lastPlayedAt)]
-                  .filter((part) => part.length > 0)
-                  .join(" · ")}
-              </ThemedText>
-            </View>
-          </ElasticPressable>
-
-          <BouncyIconButton
-            name="play"
-            accessibilityLabel={`Play playlist ${playlist.title}`}
-            size={40}
-            iconSize={18}
-            tone="glass"
-            onPress={() => void playPlaylist(playlist.id)}
-          />
-
-          {/* Resolved through the service rather than from the playlist's stored
-              items, so this hands over exactly the queue playback would use —
-              and drops missing files for the same reason the folder card does. */}
-          <AddToPlaylistButton
-            title={playlist.title}
-            ramp={ramp}
-            isBatch
-            size={40}
-            iconSize={18}
-            tone="glass"
-            resolveTrackIds={async () => {
-              const detail = await PlaylistService.loadDetail(playlist.id);
-              return (detail?.tracks ?? [])
-                .filter((track) => track.availability !== "missing")
-                .map((track) => track.id);
-            }}
-          />
-
-          <ContextHistoryButton
-            type="playlist"
-            contextKey={playlist.id}
-            title={playlist.title}
-            size={40}
-            iconSize={18}
-            tone="glass"
-          />
-        </GlassSurface>
+        <MediaCard
+          title={playlist.title}
+          titleRanges={hit?.ranges ?? []}
+          meta={[
+            matched,
+            describeTrackCount(playlist.items.length),
+            describeRecentWhen(play.lastPlayedAt),
+          ]
+            .filter((part): part is string => part !== null && part.length > 0)
+            .join(" · ")}
+          paletteKey={playlist.title}
+          onPress={() => openPlaylist(playlist.id)}
+          accessibilityLabel={`Open playlist ${playlist.title}`}
+          accessibilityHint="Opens this playlist"
+          actions={[
+            {
+              key: "play",
+              width: 40,
+              priority: 4,
+              icon: "play",
+              label: `Play ${playlist.title}`,
+              onPress: () => void playPlaylist(playlist.id),
+              node: (
+                <BouncyIconButton
+                  name="play"
+                  accessibilityLabel={`Play playlist ${playlist.title}`}
+                  size={40}
+                  iconSize={18}
+                  tone="glass"
+                  onPress={() => void playPlaylist(playlist.id)}
+                />
+              ),
+            },
+            {
+              key: "add",
+              width: 40,
+              priority: 3,
+              icon: "playlistAdd",
+              label: "Add to a playlist",
+              onPress: () =>
+                void openPlaylistPicker({
+                  title: playlist.title,
+                  ramp,
+                  isBatch: true,
+                  resolveTrackIds,
+                }),
+              node: (
+                <AddToPlaylistButton
+                  title={playlist.title}
+                  ramp={ramp}
+                  isBatch
+                  size={40}
+                  iconSize={18}
+                  tone="glass"
+                  resolveTrackIds={resolveTrackIds}
+                />
+              ),
+            },
+            {
+              key: "history",
+              width: 40,
+              priority: 2,
+              icon: "history",
+              label: "Listening history",
+              onPress: () =>
+                openContextHistory({
+                  type: "playlist",
+                  key: playlist.id,
+                  title: playlist.title,
+                }),
+              node: (
+                <ContextHistoryButton
+                  type="playlist"
+                  contextKey={playlist.id}
+                  title={playlist.title}
+                  size={40}
+                  iconSize={18}
+                  tone="glass"
+                />
+              ),
+            },
+          ]}
+        />
       </Reveal>
     );
   };
 
-  const renderRecentTrack = (play: Extract<RecentPlay, { kind: "track" }>, index: number) => {
-    const { track } = play;
-    return (
-      <Reveal index={FIRST_ROW_REVEAL_INDEX + index} from="below" limit={ROW_REVEAL_LIMIT}>
-        <GlassSurface flat style={styles.row}>
-          <ElasticPressable
-            accessibilityRole="button"
-            accessibilityLabel={`Play ${track.title}`}
-            onPress={() => playTrack(track.id)}
-            style={styles.rowMain}>
-            <PaletteTile
-              ramp={paletteFor(track.contentHash)}
-              label={track.title}
-              source={track.artworkUrl}
-              size={44}
-              radius={13}
-            />
-            <View style={styles.rowCopy}>
-              <ThemedText type="bodyStrong" numberOfLines={1}>
-                {track.title}
-              </ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                {[
-                  `${track.totalPlayCount} play${track.totalPlayCount === 1 ? "" : "s"}`,
-                  describeRecentWhen(play.lastPlayedAt),
-                ].join(" · ")}
-              </ThemedText>
-            </View>
-          </ElasticPressable>
+  /**
+   * The two controls a bare track gets, in both the Tracks and the Recent tab.
+   *
+   * One function rather than two copies, because the pair is the same for the
+   * same reason: a bare track has no collection to show history for, so it gets
+   * "add to a playlist" and "open the track", where its own sessions are listed.
+   * Both tabs render the same card, so they must not offer different controls.
+   */
+  const trackActions = (track: LocalTrack): MediaCardAction[] => {
+    const ramp = paletteFor(track.contentHash);
+    const openDetails = () => router.push(`/track/${track.id}`);
 
-          {/* A bare track has no collection to show history for, so it gets the
-              same pair the Tracks tab gives it: add to a playlist, and open the
-              track — where its own sessions are listed. */}
+    return [
+      {
+        key: "add",
+        width: 40,
+        priority: 2,
+        icon: "playlistAdd",
+        label: "Add to a playlist",
+        onPress: () =>
+          void openPlaylistPicker({
+            title: track.title,
+            ramp,
+            artwork: track.artworkUrl,
+            trackIds: [track.id],
+          }),
+        node: (
           <AddToPlaylistButton
             trackIds={[track.id]}
             title={track.title}
-            ramp={paletteFor(track.contentHash)}
+            ramp={ramp}
             artwork={track.artworkUrl}
-            size={34}
-            iconSize={16}
+            size={40}
+            iconSize={18}
             tone="ghost"
           />
-
+        ),
+      },
+      {
+        key: "details",
+        width: 40,
+        priority: 1,
+        icon: "chevronRight",
+        label: "Details",
+        onPress: openDetails,
+        node: (
           <BouncyIconButton
             name="chevronRight"
             accessibilityLabel={`Details for ${track.title}`}
-            size={34}
-            iconSize={16}
+            size={40}
+            iconSize={18}
             tone="ghost"
-            onPress={() => router.push(`/track/${track.id}`)}
+            onPress={openDetails}
           />
-        </GlassSurface>
+        ),
+      },
+    ];
+  };
+
+  const renderRecentTrack = (
+    play: Extract<RecentPlay, { kind: "track" }>,
+    index: number,
+    hit: RowHit | null,
+  ) => {
+    const { track } = play;
+    const matched = describeHit(hit);
+
+    return (
+      <Reveal index={FIRST_ROW_REVEAL_INDEX + index} from="below" limit={ROW_REVEAL_LIMIT}>
+        <MediaCard
+          title={track.title}
+          titleRanges={hit?.ranges ?? []}
+          meta={[
+            matched,
+            `${track.totalPlayCount} play${track.totalPlayCount === 1 ? "" : "s"}`,
+            describeRecentWhen(play.lastPlayedAt),
+          ]
+            .filter((part): part is string => part !== null && part.length > 0)
+            .join(" · ")}
+          artworkUrl={track.artworkUrl}
+          paletteKey={track.contentHash}
+          onPress={() => playTrack(track.id)}
+          accessibilityLabel={`Play ${track.title}`}
+          accessibilityHint="Plays this track on its own"
+          actions={trackActions(track)}
+        />
       </Reveal>
     );
   };
 
-  const renderRecent = (play: RecentPlay, index: number) => {
+  const renderRecent = (play: RecentPlay, index: number, hit: RowHit | null) => {
     const when = describeRecentWhen(play.lastPlayedAt);
     switch (play.kind) {
       case "folder":
-        return renderFolder(play.folder, index, when);
+        return renderFolder(play.folder, index, when, hit);
       case "playlist":
-        return renderPlaylist(play, index);
+        return renderPlaylist(play, index, hit);
       case "track":
-        return renderRecentTrack(play, index);
+        return renderRecentTrack(play, index, hit);
     }
+  };
+
+  /**
+   * One list, three datasets. The lists are all `FlatList`s over the same row
+   * shape so the keyboard behaviour below is stated once per list rather than
+   * per branch — `keyboardShouldPersistTaps` is what makes a result tappable on
+   * the first tap while the keyboard is up.
+   */
+  const listProps = {
+    ListHeaderComponent: header,
+    contentContainerStyle: styles.list,
+    showsVerticalScrollIndicator: false,
+    keyboardShouldPersistTaps: "handled" as const,
+    keyboardDismissMode: "on-drag" as const,
   };
 
   return (
     <Screen wash={wash}>
       {view === "tracks" ? (
         <FlatList
-          data={tracks}
-          keyExtractor={(item) => item.id}
-          ListHeaderComponent={header}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
+          {...listProps}
+          data={trackRows}
+          keyExtractor={(item) => item.track.id}
           ListEmptyComponent={
             <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-              No tracks yet. Add an audio file to start listening.
+              {searching
+                ? `No track matches “${query.trim()}”.`
+                : "No tracks yet. Add an audio file to start listening."}
             </ThemedText>
           }
           renderItem={({ item, index }) => {
-            const notes = annotationCounts[item.id] ?? 0;
+            const { track, hit } = item;
+            const notes = annotationCounts[track.id] ?? 0;
+            const matched = describeHit(hit);
             return (
               <Reveal
                 index={FIRST_ROW_REVEAL_INDEX + index}
                 from="below"
                 limit={ROW_REVEAL_LIMIT}>
-                <GlassSurface flat style={styles.row}>
-                  <ElasticPressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Play ${item.title}`}
-                    onPress={() => playAt(index)}
-                    style={styles.rowMain}>
-                    <PaletteTile
-                      ramp={paletteFor(item.contentHash)}
-                      label={item.title}
-                      source={item.artworkUrl}
-                      size={44}
-                      radius={13}
-                    />
-                    <View style={styles.rowCopy}>
-                      <ThemedText type="bodyStrong" numberOfLines={1}>
-                        {item.title}
-                      </ThemedText>
-                      <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                        {item.totalPlayCount} play{item.totalPlayCount === 1 ? "" : "s"} · {notes}{" "}
-                        note{notes === 1 ? "" : "s"}
-                      </ThemedText>
-                      <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
-                        {formatLastPlayed(item.lastPlayedAt)}
-                      </ThemedText>
-                    </View>
-                  </ElasticPressable>
-
-                  <AddToPlaylistButton
-                    trackIds={[item.id]}
-                    title={item.title}
-                    ramp={paletteFor(item.contentHash)}
-                    artwork={item.artworkUrl}
-                    size={34}
-                    iconSize={16}
-                    tone="ghost"
-                  />
-
-                  <BouncyIconButton
-                    name="chevronRight"
-                    accessibilityLabel={`Details for ${item.title}`}
-                    size={34}
-                    iconSize={16}
-                    tone="ghost"
-                    onPress={() => router.push(`/track/${item.id}`)}
-                  />
-                </GlassSurface>
+                <MediaCard
+                  title={track.title}
+                  titleRanges={hit?.ranges ?? []}
+                  meta={`${track.totalPlayCount} play${track.totalPlayCount === 1 ? "" : "s"} · ${notes} note${notes === 1 ? "" : "s"}`}
+                  // While searching, the least important fact on the card gives
+                  // way to the most useful one: why this card is a result. With
+                  // no query it is the last-played stamp.
+                  detail={matched ?? formatLastPlayed(track.lastPlayedAt)}
+                  artworkUrl={track.artworkUrl}
+                  paletteKey={track.contentHash}
+                  onPress={() => playAt(track.id)}
+                  accessibilityLabel={`Play ${track.title}`}
+                  accessibilityHint="Plays this track, and continues through the library"
+                  actions={trackActions(track)}
+                />
               </Reveal>
             );
           }}
         />
       ) : view === "folders" ? (
         <FlatList
-          data={folders}
-          keyExtractor={(item) => item.key || "root"}
-          ListHeaderComponent={header}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
+          {...listProps}
+          data={folderRows}
+          keyExtractor={(item) => item.folder.key || "root"}
           ListEmptyComponent={
             <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-              No folders yet. They appear automatically once your audio sits in folders on the
-              device.
+              {searching
+                ? `No folder matches “${query.trim()}”.`
+                : "No folders yet. They appear automatically once your audio sits in folders on the device."}
             </ThemedText>
           }
-          renderItem={({ item, index }) => renderFolder(item, index)}
+          renderItem={({ item, index }) =>
+            renderFolder(item.folder, index, undefined, item.hit)
+          }
         />
       ) : (
         <FlatList
-          data={recent}
-          keyExtractor={recentPlayKey}
-          ListHeaderComponent={header}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
+          {...listProps}
+          data={recentRows}
+          keyExtractor={(item) => recentPlayKey(item.play)}
           ListEmptyComponent={
             <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-              Nothing played yet. Whatever you listen to next — a track, a playlist, or a whole
-              folder — shows up here.
+              {searching
+                ? `Nothing you played recently matches “${query.trim()}”.`
+                : "Nothing played yet. Whatever you listen to next — a track, a playlist, or a whole folder — shows up here."}
             </ThemedText>
           }
-          renderItem={({ item, index }) => renderRecent(item, index)}
+          renderItem={({ item, index }) => renderRecent(item.play, index, item.hit)}
         />
       )}
     </Screen>
@@ -726,27 +1034,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xxs,
     minWidth: 0,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radii.lg,
-  },
-  rowMain: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    minWidth: 0,
-  },
-  rowCopy: {
-    flex: 1,
-    gap: spacing.xxs,
-  },
-  folderBar: {
-    marginTop: spacing.xs,
   },
   empty: {
     textAlign: "center",
