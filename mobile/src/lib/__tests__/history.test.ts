@@ -54,6 +54,7 @@ function track(overrides: Partial<HistoryItem["track"]> = {}): HistoryItem["trac
     // leaving it to the spread would widen it to `undefined` and no longer
     // satisfy the projection the type declares.
     artworkUrl: overrides.artworkUrl ?? null,
+    durationSec: overrides.durationSec ?? 600,
   };
 }
 

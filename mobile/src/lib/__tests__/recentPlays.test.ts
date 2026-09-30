@@ -134,6 +134,7 @@ function item({
       contentHash: `hash-${trackId}`,
       isAudiobook: true,
       artworkUrl: null,
+      durationSec: 600,
     },
     contextTitle: contextType ? contextKey : null,
   };

@@ -34,6 +34,11 @@ module.exports = defineConfig([
       // The collection-history sheet is the third of those: same glass surface,
       // same drag-to-dismiss pan writing to a shared value.
       "src/components/context-history/**/*.{ts,tsx}",
+      // And the session-detail sheet is the fourth — the same pattern a third
+      // time. It lives under its own folder rather than in `context-history/`
+      // because the two answer different questions about different records (one
+      // listen vs one attempt at a collection) and only share the shell.
+      "src/components/session-detail/**/*.{ts,tsx}",
     ],
     rules: {
       "react-hooks/immutability": "off",

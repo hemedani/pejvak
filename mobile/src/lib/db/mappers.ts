@@ -139,6 +139,11 @@ export type HistoryRow = SessionRow & {
   track_is_audiobook: number;
   track_artwork_url: string | null;
   /**
+   * The track's whole length, so a session's timeline can draw the part that
+   * was *not* heard as well as the part that was.
+   */
+  track_duration_sec: number;
+  /**
    * Denormalised from the session's run. Null when the session was a track
    * played on its own — the History card has nothing to say about a collection
    * that was never involved.

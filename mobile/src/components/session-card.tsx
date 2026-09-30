@@ -1,11 +1,11 @@
 /**
  * One listening session in the History list.
  *
- * Tapping the body resumes playback at the position that session reached; the
- * trailing button removes the entry. The remove button is deliberately a
- * *sibling* of the pressable rather than a child of it — nested, the card would
- * run its press animation and fire its own `onPress` while the finger is on the
- * delete glyph.
+ * Tapping the body opens the session's own sheet, where the timeline, the facts,
+ * the resume and the remove control live; the trailing button removes the entry
+ * directly. The remove button is deliberately a *sibling* of the pressable
+ * rather than a child of it — nested, the card would run its press animation
+ * and fire its own `onPress` while the finger is on the delete glyph.
  */
 
 import { StyleSheet, View } from "react-native";
@@ -31,7 +31,14 @@ import { spacing } from "@/theme/tokens";
 
 export type SessionCardProps = {
   item: HistoryItem;
-  onPress?: (item: HistoryItem) => void;
+  /**
+   * Opens this session's own sheet — the timeline, the facts, resume, remove.
+   *
+   * The card deliberately does not resume on tap any more. What a session *was*
+   * is worth a look before acting on it, and the resume the row used to perform
+   * is now the sheet's primary button, one tap further in.
+   */
+  onOpen?: (item: HistoryItem) => void;
   /** Omit to hide the remove button — a session still in progress has no
    *  tombstone to write, since the tracker is still finalising it. */
   onDelete?: (item: HistoryItem) => void;
@@ -52,7 +59,7 @@ function outcome(item: HistoryItem): Outcome | null {
   return null;
 }
 
-export function SessionCard({ item, onPress, onDelete }: SessionCardProps) {
+export function SessionCard({ item, onOpen, onDelete }: SessionCardProps) {
   const theme = useTheme();
   const result = outcome(item);
   const resumeSec = resumeTargetSec(item);
@@ -96,18 +103,15 @@ export function SessionCard({ item, onPress, onDelete }: SessionCardProps) {
 
   return (
     <GlassSurface flat style={styles.card}>
-      {onPress ? (
+      {onOpen ? (
         <ElasticPressable
           accessibilityRole="button"
-          // A finished session replays from where it began, so the label has to
-          // say "replay" rather than promise a resume that would instantly end.
-          accessibilityLabel={
-            item.session.completed
-              ? `Replay ${item.track.title} from ${formatClock(resumeSec)}`
-              : `Resume ${item.track.title} at ${formatClock(resumeSec)}`
-          }
-          accessibilityHint={`Listened for ${formatDuration(item.session.durationListenedSec)}`}
-          onPress={() => onPress(item)}
+          accessibilityLabel={`Details for ${item.track.title}`}
+          // The hint names what the tap does *and* what is behind it: a listener
+          // who wanted the resume the card used to perform is told, in the same
+          // breath, that it is one tap further in and where it lands.
+          accessibilityHint={`Listened for ${formatDuration(item.session.durationListenedSec)}. Opens the timeline, and resumes at ${formatClock(resumeSec)}.`}
+          onPress={() => onOpen(item)}
           style={styles.body}>
           {body}
         </ElasticPressable>

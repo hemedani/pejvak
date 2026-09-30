@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, RefreshControl, SectionList, Share, StyleSheet, View } from "react-native";
+import { RefreshControl, SectionList, Share, StyleSheet, View } from "react-native";
 
 import { ContextPlayCard } from "@/components/context-play-card";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
@@ -10,6 +10,7 @@ import { ThemedText } from "@/components/themed-text";
 import { GlassChip } from "@/components/ui/glass/GlassChip";
 import { useContextHistory } from "@/hooks/use-context-history";
 import { useHistory } from "@/hooks/use-history";
+import { useResumeHistory } from "@/hooks/use-resume-history";
 import { useTheme } from "@/hooks/use-theme";
 import { buildRunSections } from "@/lib/contextHistory";
 import type { LocalContextPlay } from "@/lib/db/types";
@@ -18,13 +19,12 @@ import {
   buildStretchSections,
   groupHistoryIntoStretches,
   HISTORY_SORT_OPTIONS,
-  stretchResumeTarget,
   type HistoryStretch,
 } from "@/lib/history";
 import { contextRouteTarget } from "@/lib/playbackContext";
-import { confirmRemoveRun, confirmRemoveStretch, stretchResumeParams } from "@/lib/sessionActions";
-import { ContextService } from "@/services/ContextService";
+import { confirmRemoveRun, confirmRemoveStretch } from "@/lib/sessionActions";
 import { LocalDBService } from "@/services/LocalDBService";
+import { openSessionDetail } from "@/store/sessionDetailStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { spacing } from "@/theme/tokens";
 
@@ -53,6 +53,7 @@ export default function HistoryScreen() {
   const theme = useTheme();
   const { items, loading, refresh } = useHistory();
   const { runs, loading: runsLoading, refresh: refreshRuns } = useContextHistory();
+  const resumeHistory = useResumeHistory();
   const sort = useSettingsStore((state) => state.historySort);
   const setSort = useSettingsStore((state) => state.setHistorySort);
 
@@ -98,48 +99,32 @@ export default function HistoryScreen() {
   const showing = view === "sessions" ? stretches.length : runs.length;
 
   /**
-   * Tapping a stretch picks up where that listen left off.
+   * Tapping a listen opens its own sheet: what it was, how much of it was heard,
+   * and the two things a row cannot offer — a way back into that second, and a
+   * way to remove it.
    *
-   * When the stretch was part of a collection it resumes *the collection*, not
-   * the track: the listener stopped inside a folder or a playlist, and dropping
-   * them into a queue of one would end the series at that lecture — and would
-   * record a fresh single-track run against nothing. If the collection has since
-   * gone, or no longer holds that track, the plain single-track resume is still
-   * the right fallback.
+   * The resume itself lives in the sheet and goes through `useResumeHistory`,
+   * the same function the card's old tap used, so the sheet's button and the row
+   * can never disagree about where the playhead lands.
    */
-  const resume = async (entry: HistoryStretch) => {
-    const { stretch } = entry;
-    const target = stretchResumeTarget(entry);
-    if (stretch.contextType && stretch.contextKey !== null) {
-      const trackId = await ContextService.startAt(
-        { type: stretch.contextType, key: stretch.contextKey },
-        target.item.track.id,
-        target.positionSec,
-      );
-      if (trackId) {
-        router.push({ pathname: "/player", params: { trackId } });
-        return;
-      }
-    }
-    router.push({ pathname: "/player", params: stretchResumeParams(entry) });
-  };
+  const openStretch = useCallback(
+    (entry: HistoryStretch) => {
+      openSessionDetail({
+        target: { kind: "stretch", entry },
+        // A delete inside the sheet tombstones rows this list is still showing,
+        // so the screen is told to re-read rather than left with a ghost row.
+        onChanged: () => void refreshAll(),
+      });
+    },
+    [refreshAll],
+  );
 
   /**
    * Tapping a run picks the *collection* back up, not the track: the queue is
    * rebuilt from the folder or playlist as it stands now, so a lecture added
    * since the last listen is included and a removed one is not.
    */
-  const resumeRun = async (run: LocalContextPlay) => {
-    const trackId = await ContextService.resume(run);
-    if (!trackId) {
-      Alert.alert(
-        "Nothing to play",
-        `"${run.contextTitle}" has no playable tracks any more — it may have been deleted or emptied.`,
-      );
-      return;
-    }
-    router.push({ pathname: "/player", params: { trackId } });
-  };
+  const resumeRun = (run: LocalContextPlay) => void resumeHistory({ kind: "run", run });
 
   const openRun = (run: LocalContextPlay) => {
     router.push(contextRouteTarget({ type: run.contextType, key: run.contextKey }));
@@ -186,7 +171,7 @@ export default function HistoryScreen() {
           row.kind === "stretch" ? (
             <StretchCard
               entry={row.entry}
-              onPress={resume}
+              onOpen={openStretch}
               // A stretch that has not been finalised is still being written by
               // the tracker, so there is nothing sensible to tombstone yet.
               onDelete={

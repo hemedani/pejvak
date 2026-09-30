@@ -54,6 +54,7 @@ function item(
       contentHash: s.contentHash,
       isAudiobook,
       artworkUrl: null,
+      durationSec: 600,
     },
     contextTitle: null,
   };

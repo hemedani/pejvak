@@ -14,10 +14,11 @@
  * that means "you finished this" — everything else is a listen that stopped
  * somewhere. A marker that needed reading the captions to find would be no use.
  *
- * Tapping the body resumes playback; the trailing button removes the whole
- * stretch. Both trailing controls are deliberately *siblings* of the pressable
- * rather than children of it — nested, the card would run its press animation
- * and fire its own `onPress` while the finger is on the other glyph.
+ * Tapping the body opens the listen's own sheet, where the timeline, the facts,
+ * the resume and the remove control live; the trailing button removes the whole
+ * stretch directly. Both trailing controls are deliberately *siblings* of the
+ * pressable rather than children of it — nested, the card would run its press
+ * animation and fire its own `onPress` while the finger is on the other glyph.
  */
 
 import { StyleSheet, View } from "react-native";
@@ -49,7 +50,14 @@ import { spacing } from "@/theme/tokens";
 
 export type StretchCardProps = {
   entry: HistoryStretch;
-  onPress?: (entry: HistoryStretch) => void;
+  /**
+   * Opens this listen's own sheet — the timeline, the facts, resume, remove.
+   *
+   * The card deliberately does not resume on tap any more. A listen is a thing
+   * worth looking at before acting on, and the resume the row used to perform is
+   * now the sheet's primary button, one tap further in.
+   */
+  onOpen?: (entry: HistoryStretch) => void;
   /** Omit to hide the remove button — a stretch still in progress has no
    *  tombstone to write, since the tracker is still finalising it. */
   onDelete?: (entry: HistoryStretch) => void;
@@ -69,7 +77,7 @@ const OUTCOMES: Record<StretchOutcome, Outcome | null> = {
   open: null,
 };
 
-export function StretchCard({ entry, onPress, onDelete }: StretchCardProps) {
+export function StretchCard({ entry, onOpen, onDelete }: StretchCardProps) {
   const theme = useTheme();
   const { stretch } = entry;
   const outcome = OUTCOMES[describeStretchOutcome(stretch)];
@@ -138,18 +146,15 @@ export function StretchCard({ entry, onPress, onDelete }: StretchCardProps) {
         />
       ) : null}
 
-      {onPress ? (
+      {onOpen ? (
         <ElasticPressable
           accessibilityRole="button"
-          // A stretch heard through replays from where it began, so the label has
-          // to say "replay" rather than promise a resume that would instantly end.
-          accessibilityLabel={
-            stretch.completed
-              ? `Replay ${title} from ${formatClock(target.positionSec)}`
-              : `Resume ${title} at ${formatClock(target.positionSec)}`
-          }
-          accessibilityHint={`Listened for ${formatDuration(stretch.listenedSec)} over ${describeStretchTracks(stretch)}`}
-          onPress={() => onPress(entry)}
+          accessibilityLabel={`Details for ${title}`}
+          // The hint names what the tap does *and* what is behind it: a listener
+          // who wanted the resume the card used to perform is told, in the same
+          // breath, that it is one tap further in and where it lands.
+          accessibilityHint={`Listened for ${formatDuration(stretch.listenedSec)} over ${describeStretchTracks(stretch)}. Opens the timeline, and resumes at ${formatClock(target.positionSec)}.`}
+          onPress={() => onOpen(entry)}
           style={styles.body}>
           {body}
         </ElasticPressable>

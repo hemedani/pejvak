@@ -7,11 +7,13 @@ export type HistoryItem = {
   /**
    * A projection, not a whole `LocalTrack`: the history card is text-only and
    * the join is on a 200-row list. `artworkUrl` is here because the playlist
-   * picker opened from a history card shows the track's cover in its header.
+   * picker opened from a history card shows the track's cover in its header,
+   * and `durationSec` because the session's own modal draws a timeline across
+   * the *track*, which needs the whole of it to draw the rest of the bar.
    */
   track: Pick<
     LocalTrack,
-    "id" | "title" | "author" | "contentHash" | "isAudiobook" | "artworkUrl"
+    "id" | "title" | "author" | "contentHash" | "isAudiobook" | "artworkUrl" | "durationSec"
   >;
   /**
    * The collection this session was part of, if it was part of one. Resolved in

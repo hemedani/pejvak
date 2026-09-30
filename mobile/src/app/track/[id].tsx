@@ -42,10 +42,11 @@ import { useTrackDetail } from "@/hooks/use-track-detail";
 import { annotationsToMarkdown } from "@/lib/exportAnnotations";
 import { formatDuration, type HistoryItem } from "@/lib/history";
 import { paletteFor } from "@/lib/palette";
-import { confirmRemoveSession, sessionResumeParams } from "@/lib/sessionActions";
+import { confirmRemoveSession } from "@/lib/sessionActions";
 import { buildTrackFactSections } from "@/lib/trackFacts";
 import { computeTrackStats, summariseSessions } from "@/lib/trackStats";
 import { LocalDBService } from "@/services/LocalDBService";
+import { openSessionDetail } from "@/store/sessionDetailStore";
 import { spacing } from "@/theme/tokens";
 
 /**
@@ -112,9 +113,21 @@ export default function TrackDetailScreen() {
     }
   };
 
-  /** Replays a session from where it left off — the same rule History uses. */
-  const replay = (item: HistoryItem) => {
-    router.push({ pathname: "/player", params: sessionResumeParams(item) });
+  /**
+   * Opens the session's own sheet — the timeline, the facts, the resume and the
+   * remove control. The same sheet the History list opens, from the same store,
+   * so a listen behaves identically whichever list it was reached from.
+   *
+   * The resume the row used to perform on tap now lives in the sheet, one tap
+   * further in, sitting next to the timeline that explains where it lands.
+   */
+  const openDetail = (item: HistoryItem) => {
+    openSessionDetail({
+      target: { kind: "session", item },
+      // A delete inside the sheet tombstones a row this screen is still
+      // showing, so the screen is told to re-read rather than left with a ghost.
+      onChanged: () => void refresh(),
+    });
   };
 
   const remove = async (item: HistoryItem) => {
@@ -271,6 +284,10 @@ export default function TrackDetailScreen() {
                   contentHash: track?.contentHash ?? "",
                   isAudiobook: track?.isAudiobook ?? false,
                   artworkUrl: track?.artworkUrl ?? null,
+                  // The sheet draws its timeline across the whole track, so the
+                  // projection has to carry the whole of it, not just the span
+                  // this session covered.
+                  durationSec: track?.durationSec ?? 0,
                 },
                 // This list is the track's own sessions. The join that resolves
                 // a run's title lives on the History screen, which reads run
@@ -282,7 +299,7 @@ export default function TrackDetailScreen() {
                 <SessionCard
                   key={session.id}
                   item={item}
-                  onPress={replay}
+                  onOpen={openDetail}
                   // A session still being written has nothing to tombstone yet.
                   onDelete={session.endedAt === null ? undefined : confirmRemove}
                 />

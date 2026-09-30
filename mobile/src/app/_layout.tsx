@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import { AddToPlaylistSheet } from "@/components/add-to-playlist";
 import { ContextHistorySheet } from "@/components/context-history";
+import { SessionDetailSheet } from "@/components/session-detail";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -88,6 +89,9 @@ export default function RootLayout() {
         {/* Same reasoning: a collection's history is reachable from a library
             card, a collection screen, and the player alike. */}
         <ContextHistorySheet />
+        {/* And one listen's own detail: a History card and a track's own screen
+            both open it, and both are reachable while the player is open. */}
+        <SessionDetailSheet />
       </ThemeProvider>
     </GestureHandlerRootView>
   );
