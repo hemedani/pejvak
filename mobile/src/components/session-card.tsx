@@ -14,7 +14,7 @@ import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -27,7 +27,7 @@ import {
 } from "@/lib/history";
 import { paletteFor } from "@/lib/palette";
 import { formatClock } from "@/lib/time";
-import { spacing } from "@/theme/tokens";
+import { card as cardTokens, spacing } from "@/theme/tokens";
 
 export type SessionCardProps = {
   item: HistoryItem;
@@ -102,7 +102,7 @@ export function SessionCard({ item, onOpen, onDelete }: SessionCardProps) {
   );
 
   return (
-    <GlassSurface flat style={styles.card}>
+    <Card elevated={false} style={styles.card}>
       {onOpen ? (
         <ElasticPressable
           accessibilityRole="button"
@@ -141,7 +141,7 @@ export function SessionCard({ item, onOpen, onDelete }: SessionCardProps) {
           onPress={() => onDelete(item)}
         />
       ) : null}
-    </GlassSurface>
+    </Card>
   );
 }
 
@@ -150,8 +150,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: 24,
+    padding: cardTokens.rowPadding,
   },
   body: {
     flex: 1,

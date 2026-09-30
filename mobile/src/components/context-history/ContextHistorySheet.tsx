@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
   openTile: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: radii.sm,
     borderWidth: hairline,
     alignItems: "center",
     justifyContent: "center",

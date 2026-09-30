@@ -13,6 +13,15 @@
  *
  * Without `onPress` the cell is a plain display card, which keeps it usable
  * anywhere a non-interactive figure is wanted.
+ *
+ * ## Reading order
+ *
+ * The figure is set in `figure` (26/32, tabular) because it is the reason the
+ * cell exists, and the label sits under it in `text` — not above it in grey.
+ * The layout this replaces put a 13px `textSecondary` label above a 20px value,
+ * so the eye hit the label first and had to read it to know what the number
+ * meant; here the number is the first thing the cell says and the label is the
+ * plain-English gloss underneath.
  */
 
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
@@ -20,10 +29,10 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { Reveal } from "@/components/motion/Reveal";
 import { ThemedText } from "@/components/themed-text";
+import { Card } from "@/components/ui/card";
 import { Icon, type IconName } from "@/components/ui/icon";
-import { GlassSurface } from "@/components/ui/glass";
 import { useTheme } from "@/hooks/use-theme";
-import { spacing } from "@/theme/tokens";
+import { card as cardTokens, radius as radii, spacing } from "@/theme/tokens";
 
 export type StatCellProps = {
   label: string;
@@ -56,8 +65,7 @@ export function StatCell({
     affordance === "navigate" ? "chevronRight" : expanded ? "chevronUp" : "chevronDown";
 
   const cell = (
-    <GlassSurface
-      flat
+    <Card
       style={[
         styles.cell,
         // The open cell wears the accent so the detail panel below it is
@@ -65,16 +73,23 @@ export function StatCell({
         expanded ? { borderColor: theme.accent } : null,
       ]}>
       <View style={styles.head}>
-        {icon ? <Icon name={icon} size={16} color={theme.accent} /> : null}
-        {affordance ? <Icon name={caret} size={15} color={theme.textTertiary} /> : null}
+        {icon ? (
+          <View style={[styles.badge, { backgroundColor: theme.accentSoft }]}>
+            <Icon name={icon} size={17} color={theme.accent} />
+          </View>
+        ) : (
+          <View />
+        )}
+        {affordance ? <Icon name={caret} size={16} color={theme.textTertiary} /> : null}
       </View>
-      <ThemedText type="heading" numberOfLines={1}>
+
+      <ThemedText type="figure" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
         {value}
       </ThemedText>
       <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
         {label}
       </ThemedText>
-    </GlassSurface>
+    </Card>
   );
 
   return (
@@ -104,13 +119,21 @@ export function StatCell({
 
 const styles = StyleSheet.create({
   cell: {
-    gap: spacing.xs,
-    padding: spacing.lg,
-    borderRadius: 20,
+    gap: spacing.xxs,
+    minHeight: 104,
+    justifyContent: "space-between",
   },
   head: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    minHeight: cardTokens.badge,
+  },
+  badge: {
+    width: cardTokens.badge,
+    height: cardTokens.badge,
+    borderRadius: radii.badge,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

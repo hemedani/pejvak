@@ -27,7 +27,7 @@ import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import {
@@ -46,7 +46,7 @@ import {
 } from "@/lib/listeningStretch";
 import { paletteFor } from "@/lib/palette";
 import { formatClock } from "@/lib/time";
-import { spacing } from "@/theme/tokens";
+import { card as cardTokens, radius as radii, spacing } from "@/theme/tokens";
 
 export type StretchCardProps = {
   entry: HistoryStretch;
@@ -134,10 +134,10 @@ export function StretchCard({ entry, onOpen, onDelete }: StretchCardProps) {
   );
 
   return (
-    <GlassSurface
-      flat
-      style={complete ? [styles.card, styles.complete, { borderColor: theme.accent }] : styles.card}>
-      {/* First child, so it sits above the glass fill and below the content —
+    <Card
+      elevated={false}
+      style={complete ? [styles.card, { borderColor: theme.accent }] : styles.card}>
+      {/* First child, so it sits above the card fill and below the content —
           the wash has to tint the panel without washing out the text on it. */}
       {complete ? (
         <View
@@ -186,7 +186,7 @@ export function StretchCard({ entry, onOpen, onDelete }: StretchCardProps) {
           onPress={() => onDelete(entry)}
         />
       ) : null}
-    </GlassSurface>
+    </Card>
   );
 }
 
@@ -195,16 +195,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: 24,
-  },
-  complete: {
-    // Thicker than the hairline every other panel wears, so a complete listen is
-    // distinguishable at a glance and not only by reading the chip.
-    borderWidth: 1.5,
+    padding: cardTokens.rowPadding,
   },
   wash: {
-    borderRadius: 24,
+    // A complete listen is already announced by the accent border and the
+    // "Complete" chip; the wash is what makes it findable while scrolling.
+    borderRadius: radii.card,
   },
   body: {
     flex: 1,

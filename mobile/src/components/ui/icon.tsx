@@ -4,6 +4,12 @@
  * Screens ask for a semantic name (`"play"`, `"history"`, `"trash"`) rather than
  * a glyph, so the underlying family can change in one place. Ionicons covers
  * almost everything; the two 30-second skip glyphs only exist in MaterialIcons.
+ *
+ * A `*Filled` name means the *same* glyph filled in. Material's rule for a
+ * navigation item is a filled icon when the destination is selected and an
+ * outlined one when it is not, and in a label-free dock that change of shape is
+ * carrying most of the selected state — a tint alone is very little signal on a
+ * row of five.
  */
 
 import Ionicons from "@expo/vector-icons/Ionicons";
@@ -14,7 +20,9 @@ import type { StyleProp, TextStyle } from "react-native";
 type IoniconName = ComponentProps<typeof Ionicons>["name"];
 type MaterialName = ComponentProps<typeof MaterialIcons>["name"];
 
-type Glyph = { family: "ionicons"; name: IoniconName } | { family: "material"; name: MaterialName };
+type Glyph =
+  | { family: "ionicons"; name: IoniconName }
+  | { family: "material"; name: MaterialName };
 
 const glyphs = {
   play: { family: "ionicons", name: "play" },
@@ -46,15 +54,20 @@ const glyphs = {
   playlistAddCheck: { family: "material", name: "playlist-add-check" },
 
   library: { family: "ionicons", name: "library-outline" },
+  /** Filled variants, for a selected destination whose slot carries no label. */
+  libraryFilled: { family: "ionicons", name: "library" },
   folder: { family: "ionicons", name: "folder-outline" },
   folderOpen: { family: "ionicons", name: "folder-open-outline" },
   history: { family: "ionicons", name: "time-outline" },
+  historyFilled: { family: "ionicons", name: "time" },
   stats: { family: "ionicons", name: "stats-chart-outline" },
+  statsFilled: { family: "ionicons", name: "stats-chart" },
   playlists: { family: "ionicons", name: "list-outline" },
+  playlistsFilled: { family: "ionicons", name: "list" },
   settings: { family: "ionicons", name: "settings-outline" },
   notes: { family: "ionicons", name: "document-text-outline" },
 
-  /** Discover — the raised centre tab. Filled, because it is the destination. */
+  /** Discover. Filled, because it is the destination. */
   compass: { family: "ionicons", name: "compass" },
   compassOutline: { family: "ionicons", name: "compass-outline" },
   /** A language, in the Browse list. */
@@ -77,6 +90,10 @@ const glyphs = {
 
   speed: { family: "ionicons", name: "speedometer-outline" },
   moon: { family: "ionicons", name: "moon-outline" },
+  /** The other half of `moon` — a theme control needs two, not one. */
+  sunny: { family: "ionicons", name: "sunny-outline" },
+  /** "Follow the device" — not a gear, which says nothing about what it does. */
+  autoTheme: { family: "ionicons", name: "contrast-outline" },
   share: { family: "ionicons", name: "share-outline" },
   music: { family: "ionicons", name: "musical-notes-outline" },
   heart: { family: "ionicons", name: "heart-outline" },
@@ -101,7 +118,14 @@ export type IconProps = {
 export function Icon({ name, size = 20, color, style }: IconProps) {
   const glyph: Glyph = glyphs[name];
   if (glyph.family === "material") {
-    return <MaterialIcons name={glyph.name} size={size} color={color} style={style} />;
+    return (
+      <MaterialIcons
+        name={glyph.name}
+        size={size}
+        color={color}
+        style={style}
+      />
+    );
   }
   return <Ionicons name={glyph.name} size={size} color={color} style={style} />;
 }

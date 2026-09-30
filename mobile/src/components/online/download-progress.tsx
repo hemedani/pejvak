@@ -26,7 +26,8 @@
 import { StyleSheet, View } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
-import { GlassChip, GlassProgress, GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+import { GlassChip, GlassProgress } from "@/components/ui/glass";
 import { Icon } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import { formatBytes } from "@/lib/settings";
@@ -91,7 +92,7 @@ export function DownloadControl({
       : null;
 
   return (
-    <GlassSurface flat radius="card" style={styles.card}>
+    <Card style={styles.card}>
       <View style={styles.row}>
         <Icon
           name={complete ? "checkCircle" : running ? "cloudDownload" : "alert"}
@@ -125,14 +126,13 @@ export function DownloadControl({
           {detail}
         </ThemedText>
       ) : null}
-    </GlassSurface>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    padding: spacing.md,
-    gap: spacing.sm,
+    gap: spacing.md,
     // The control shares a wrapping row with the play chips, and a full-width
     // basis is what puts a running download on a line of its own instead of
     // squeezing it into the leftover space beside "Shuffle".

@@ -1,25 +1,35 @@
 /**
- * The glass card every list row is built from.
+ * The card every library row is built from.
  *
  * One component rather than a row per screen. A track, a folder, a playlist and
  * an online course all answer the same question — "what is this, and what can I
  * do with it?" — and four hand-rolled rows eventually disagree about the tile
  * size, the corner radius, or where the progress bar sits. Here those are props.
  *
- * ## What makes it read as glass
+ * ## What makes it read as a card
  *
- * Three things beyond the frosted panel itself:
+ * Three things beyond the panel itself:
  *
- *   1. **The item's own colour, bleeding into the panel.** Every row resolves to
- *      an aurora ramp (`paletteFor`), and that colour is laid over the glass as a
+ *   1. **The item's own colour, bleeding into the card.** Every row resolves to
+ *      an aurora ramp (`paletteFor`), and that colour is laid over the card as a
  *      soft diagonal wash and behind the artwork as a halo. A library of three
- *      thousand files then reads as a wall of colour rather than a wall of grey,
- *      and each card carries the identity of what is on it.
+ *      thousand files then reads as a wall of colour rather than a wall of white,
+ *      and each card carries the identity of what is on it. The wash is `Card`'s
+ *      job and its alpha is deliberately low — on an opaque fill it sits *behind*
+ *      text rather than tinting a blur beneath it, so it can afford to be
+ *      quieter than the version that used to sit on glass.
  *   2. **A lit tile.** The artwork sits on a coloured glow rather than a flat drop
  *      shadow — the same move the play button makes — so the picture looks lit
  *      rather than pasted on.
- *   3. **A full-bleed progress bar.** It reaches both edges of the panel, which is
+ *   3. **A full-bleed progress bar.** It reaches both edges of the card, which is
  *      what makes it read as part of the card rather than as a widget on it.
+ *
+ * ## No shadow
+ *
+ * `elevated={false}`, deliberately. This card is one of possibly three thousand
+ * on a screen, and fifty elevated cards stop reading as cards and start reading
+ * as noise — the `surface` fill and the `outline` hairline already draw the
+ * edge on their own.
  *
  * ## Responsiveness
  *
@@ -44,6 +54,7 @@ import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-n
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { ThemedText } from "@/components/themed-text";
+import { Card } from "@/components/ui/card";
 import { GlassProgress, GlassSurface } from "@/components/ui/glass";
 import { HighlightedText } from "@/components/ui/highlighted-text";
 import { Icon, type IconName } from "@/components/ui/icon";
@@ -53,8 +64,6 @@ import { paletteFor, withAlpha } from "@/lib/palette";
 import type { Range } from "@/lib/search";
 import { layout, radius as radii, spacing } from "@/theme/tokens";
 
-/** The card's corner radius — rounder than a plain panel, so it reads as a card. */
-const CARD_RADIUS = 28;
 /** How far the tile's halo reaches past the tile itself, per side. */
 const HALO_BLEED = 7;
 /** Touch target every action in the cluster is sized to. */
@@ -107,12 +116,6 @@ export type MediaCardProps = {
   onPress?: () => void;
   accessibilityLabel: string;
   accessibilityHint?: string;
-  /**
-   * Skip the blur. Defaults to true: a card in a long list must not stand up a
-   * blur view per row, and the fill, border and sheen carry the material on
-   * their own. Pass false only for a short list where the blur is affordable.
-   */
-  flat?: boolean;
 };
 
 export function MediaCard({
@@ -130,7 +133,6 @@ export function MediaCard({
   onPress,
   accessibilityLabel,
   accessibilityHint,
-  flat = true,
 }: MediaCardProps) {
   const theme = useTheme();
   const scheme = useScheme();
@@ -178,10 +180,9 @@ export function MediaCard({
     .map((key) => (actions ?? []).find((action) => action.key === key))
     .filter((action): action is MediaCardAction => action !== undefined);
 
-  // Two washes, two alphas: the same tint reads heavier on the dark canvas, and
-  // a wash that only looks right in one theme is a wash that washes out text in
-  // the other.
-  const washAlpha = scheme === "dark" ? 0.22 : 0.16;
+  // The card's own wash is Card's job now. The halo behind the artwork is
+  // still local, and it needs a scheme-dependent alpha: the same tint reads
+  // heavier on a dark canvas, and a halo tuned in one theme blooms in the other.
   const haloAlpha = scheme === "dark" ? 0.4 : 0.3;
 
   const body = (
@@ -234,20 +235,10 @@ export function MediaCard({
   );
 
   return (
-    <GlassSurface
-      flat={flat}
-      clip
-      radius={CARD_RADIUS}
+    <Card
+      wash={tint}
+      elevated={false}
       style={[styles.card, marked ? { borderWidth: 1.5, borderColor: tint } : null]}>
-      {/* First child, so it tints the glass without washing out the text on top
-          of it — and clipped by the surface, so it cannot bleed past the corner. */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={[withAlpha(tint, washAlpha), withAlpha(tint, 0)]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0.85 }}
-        style={StyleSheet.absoluteFill}
-      />
       {marked ? (
         <View
           pointerEvents="none"
@@ -313,7 +304,7 @@ export function MediaCard({
           onClose={() => setMenuOpen(false)}
         />
       ) : null}
-    </GlassSurface>
+    </Card>
   );
 }
 

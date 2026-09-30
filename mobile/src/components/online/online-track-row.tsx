@@ -7,9 +7,9 @@
  * course is thirty of these in a column and any row that shouts makes the list
  * unreadable.
  *
- * It owns its own glass panel rather than being wrapped by the screen, so the
- * panel and the row cannot drift apart — and so the leading marker can sit *on*
- * the panel, tinted, instead of floating beside it.
+ * It owns its own card rather than being wrapped by the screen, so the card and
+ * the row cannot drift apart — and so the leading marker can sit *on* the card,
+ * tinted, instead of floating beside it.
  *
  * Titles are the reason this file is not trivial. They arrive in Persian, and a
  * right-to-left line left-aligned in a left-to-right layout reads as a rendering
@@ -21,14 +21,14 @@ import { StyleSheet, View } from "react-native";
 
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
-import { useScheme, useTheme } from "@/hooks/use-theme";
+import { useTheme } from "@/hooks/use-theme";
 import type { LocalDownloadJob, LocalTrack } from "@/lib/db/types";
 import { formatDuration } from "@/lib/history";
 import { isRtlText } from "@/lib/online";
 import { withAlpha } from "@/lib/palette";
-import { colors, radius as radii, spacing } from "@/theme/tokens";
+import { radius as radii, spacing } from "@/theme/tokens";
 
 export type OnlineTrackRowProps = {
   track: LocalTrack;
@@ -63,7 +63,6 @@ export function OnlineTrackRow({
   onPress,
 }: OnlineTrackRowProps) {
   const theme = useTheme();
-  const palette = colors[useScheme()];
   const tint = theme.accent;
   const rtl = isRtlText(track.title);
   const downloaded = track.downloadedAt !== null;
@@ -82,7 +81,7 @@ export function OnlineTrackRow({
   }
 
   return (
-    <GlassSurface flat radius="control">
+    <Card elevated={false} style={styles.card}>
       <ElasticPressable
         accessibilityRole="button"
         accessibilityLabel={track.title}
@@ -98,8 +97,8 @@ export function OnlineTrackRow({
           style={[
             styles.leading,
             {
-              backgroundColor: isCurrent ? withAlpha(tint, 0.18) : palette.glass,
-              borderColor: isCurrent ? tint : palette.glassBorder,
+              backgroundColor: isCurrent ? withAlpha(tint, 0.18) : theme.surfaceSunken,
+              borderColor: isCurrent ? tint : theme.outlineVariant,
             },
           ]}>
           {isCurrent ? (
@@ -130,17 +129,20 @@ export function OnlineTrackRow({
           ) : downloaded ? (
             <Icon name="checkCircle" size={20} color={tint} />
           ) : job?.state === "failed" ? (
-            <Icon name="alert" size={20} color={palette.danger} />
+            <Icon name="alert" size={20} color={theme.danger} />
           ) : (
-            <Icon name="stream" size={20} color={palette.textTertiary} />
+            <Icon name="stream" size={20} color={theme.textTertiary} />
           )}
         </View>
       </ElasticPressable>
-    </GlassSurface>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
+  card: {
+    padding: 0,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",

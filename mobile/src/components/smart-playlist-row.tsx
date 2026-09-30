@@ -13,13 +13,13 @@ import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import { formatDuration } from "@/lib/history";
 import { paletteFor } from "@/lib/palette";
 import type { SmartPlaylist, SmartRuleId } from "@/lib/smartPlaylists";
-import { radius as radii, spacing } from "@/theme/tokens";
+import { card as cardTokens, spacing } from "@/theme/tokens";
 
 const RULE_ICONS: Record<SmartRuleId, IconName> = {
   continue: "play",
@@ -47,7 +47,7 @@ export function SmartPlaylistRow({ playlist, onPress }: SmartPlaylistRowProps) {
     : [summary.replace(/\.$/, ""), formatDuration(totalDurationSec)].filter(Boolean).join(" · ");
 
   return (
-    <GlassSurface flat style={styles.row}>
+    <Card elevated={false} style={styles.row}>
       <ElasticPressable
         accessibilityRole="button"
         accessibilityLabel={`Open smart playlist ${rule.title}`}
@@ -78,7 +78,7 @@ export function SmartPlaylistRow({ playlist, onPress }: SmartPlaylistRowProps) {
         disabled={empty}
         onPress={onPress}
       />
-    </GlassSurface>
+    </Card>
   );
 }
 
@@ -87,8 +87,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radii.lg,
+    padding: cardTokens.rowPadding,
   },
   rowMain: {
     flex: 1,

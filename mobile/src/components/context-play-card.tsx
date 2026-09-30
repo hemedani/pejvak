@@ -16,13 +16,13 @@ import { StyleSheet, View } from "react-native";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import type { LocalContextPlay } from "@/lib/db/types";
 import { formatDuration, formatTimeRange } from "@/lib/history";
 import { describeContextType, describeRunOutcome, describeRunScope } from "@/lib/playbackContext";
-import { spacing } from "@/theme/tokens";
+import { card as cardTokens, spacing } from "@/theme/tokens";
 
 export type ContextPlayCardProps = {
   run: LocalContextPlay;
@@ -77,7 +77,7 @@ export function ContextPlayCard({ run, onPress, onOpen, onDelete }: ContextPlayC
   );
 
   return (
-    <GlassSurface flat style={styles.card}>
+    <Card elevated={false} style={styles.card}>
       {onPress ? (
         <ElasticPressable
           accessibilityRole="button"
@@ -112,7 +112,7 @@ export function ContextPlayCard({ run, onPress, onOpen, onDelete }: ContextPlayC
           onPress={() => onDelete(run)}
         />
       ) : null}
-    </GlassSurface>
+    </Card>
   );
 }
 
@@ -121,8 +121,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: 24,
+    padding: cardTokens.rowPadding,
   },
   body: {
     flex: 1,

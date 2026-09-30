@@ -3,11 +3,11 @@ import { StyleSheet, View } from "react-native";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { Reveal } from "@/components/motion/Reveal";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
 import { useTheme } from "@/hooks/use-theme";
 import type { LocalAnnotation } from "@/lib/db/types";
 import { formatClock } from "@/lib/time";
-import { spacing } from "@/theme/tokens";
+import { card as cardTokens, spacing } from "@/theme/tokens";
 
 export type AnnotationListProps = {
   annotations: LocalAnnotation[];
@@ -38,11 +38,12 @@ export function AnnotationList({ annotations, selectedId = null, onSelect }: Ann
               accessibilityRole={onSelect ? "button" : undefined}
               accessibilityState={{ selected }}
               haptic="selection"
-              onPress={onSelect ? () => onSelect(annotation) : undefined}
-              style={styles.pressable}>
-              <GlassSurface
-                flat
-                tone={selected ? "surfaceStrong" : "surface"}
+              onPress={onSelect ? () => onSelect(annotation) : undefined}>
+              {/* Selection is the border, not a different material: an opaque
+                  card cannot go "stronger" the way a frosted one could, and a
+                  tinted outline is a clearer signal anyway. */}
+              <Card
+                elevated={false}
                 style={[styles.row, selected && { borderColor: dotColor }]}>
                 <View style={[styles.dot, { backgroundColor: dotColor, shadowColor: dotColor }]} />
                 <View style={styles.body}>
@@ -53,7 +54,7 @@ export function AnnotationList({ annotations, selectedId = null, onSelect }: Ann
                     {annotation.text}
                   </ThemedText>
                 </View>
-              </GlassSurface>
+              </Card>
             </ElasticPressable>
           </Reveal>
         );
@@ -66,9 +67,6 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.sm,
   },
-  pressable: {
-    borderRadius: 20,
-  },
   empty: {
     paddingVertical: spacing.sm,
   },
@@ -76,8 +74,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: 20,
+    padding: cardTokens.padding,
   },
   dot: {
     width: 9,

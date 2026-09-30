@@ -8,19 +8,21 @@
  * rather than to the list. Screens that spell that out themselves get one of
  * the three wrong.
  *
- * The field is `flat` on purpose. It sits in a scroll header above a list of
- * hundreds of rows, and a blur view per screen header is the expensive part of
- * `GlassSurface` for no visible gain over a solid frosted fill.
+ * It is an **inset** card, not glass and not a content card. Glass is for things
+ * that float, and this floats over nothing — it scrolls with the list. Inset is
+ * the one step *below* the surface, which is what a field inside a page wants:
+ * a track you can see you are typing into, without competing with the results
+ * underneath it for attention.
  */
 
 import { StyleSheet, TextInput, View } from "react-native";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
-import { spacing } from "@/theme/tokens";
+import { radius as radii, spacing } from "@/theme/tokens";
 
 export type SearchFieldProps = {
   value: string;
@@ -49,7 +51,7 @@ export function SearchField({
 
   return (
     <View style={styles.wrap}>
-      <GlassSurface flat radius="pill" style={styles.field}>
+      <Card variant="inset" padded={false} style={styles.field}>
         <Icon name="search" size={18} color={hasValue ? theme.text : theme.textTertiary} />
         <TextInput
           value={value}
@@ -79,7 +81,7 @@ export function SearchField({
             onPress={() => onChangeText("")}
           />
         ) : null}
-      </GlassSurface>
+      </Card>
 
       {hint ? (
         <ThemedText type="caption" themeColor="textTertiary" numberOfLines={2} style={styles.hint}>
@@ -101,6 +103,7 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.lg,
     paddingRight: spacing.xs,
     minHeight: 48,
+    borderRadius: radii.pill,
   },
   input: {
     flex: 1,
