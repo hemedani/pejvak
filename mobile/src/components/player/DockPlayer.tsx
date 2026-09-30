@@ -1,0 +1,185 @@
+/**
+ * The now-playing half of the dock.
+ *
+ * Carries the gesture and the measurement; the *surface* belongs to `AppDock`,
+ * which owns one panel for the now-playing row and the navigation together.
+ *
+ * Two jobs beyond showing the track:
+ *
+ *   1. **Measure itself** into `nowPlayingStore`, so the full-screen sheet can
+ *      grow out of exactly this rectangle. It measures its own row rather than
+ *      the whole dock, which is what keeps the morph starting from the bar and
+ *      not from a panel that also contains the navigation.
+ *   2. **Answer a drag upward** with a small lift-and-scale preview, then commit
+ *      to the full player once the drag passes a threshold or carries enough
+ *      upward velocity — the same gesture grammar as the sheet's dismiss. A tap
+ *      opens the player directly.
+ *
+ * It renders inline rather than absolutely positioned. That is the whole point of
+ * the merge: two absolutely-positioned panels had to be told how far apart to
+ * sit, and one of them got it wrong.
+ */
+
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useRef } from "react";
+import { StyleSheet, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
+import { scheduleOnRN } from "react-native-worklets";
+
+import { MiniPlayerRow } from "@/components/player/MiniPlayerRow";
+import { usePlaybackContext } from "@/hooks/use-playback-context";
+import { paletteFor } from "@/lib/palette";
+import { contextRouteTarget } from "@/lib/playbackContext";
+import * as TrackPlayerService from "@/services/TrackPlayerService";
+import { useNowPlayingStore } from "@/store/nowPlayingStore";
+import { usePlayerStore } from "@/store/playerStore";
+import { spring } from "@/theme/motion";
+import { layout, spacing } from "@/theme/tokens";
+
+/** Pixels of upward drag that map to a full "peek". */
+const DRAG_RANGE = 140;
+
+export function DockPlayer() {
+  const router = useRouter();
+  const hostRef = useRef<View>(null);
+
+  const status = usePlayerStore((state) => state.status);
+  const trackId = usePlayerStore((state) => state.trackId);
+  const title = usePlayerStore((state) => state.title);
+  const artist = usePlayerStore((state) => state.artist);
+  const artworkUrl = usePlayerStore((state) => state.artworkUrl);
+  const contentHash = usePlayerStore((state) => state.contentHash);
+  const positionSec = usePlayerStore((state) => state.positionSec);
+  const durationSec = usePlayerStore((state) => state.durationSec);
+  const skip = usePlayerStore((state) => state.skip);
+  const expanded = usePlayerStore((state) => state.expanded);
+
+  const setAnchor = useNowPlayingStore((state) => state.setAnchor);
+  const drag = useSharedValue(0);
+
+  const { context } = usePlaybackContext();
+
+  const ramp = paletteFor(contentHash ?? title ?? trackId);
+  const isPlaying = status === "playing";
+
+  const openContext = useCallback(() => {
+    if (context) {
+      router.push(contextRouteTarget(context));
+    }
+  }, [context, router]);
+
+  const measure = useCallback(() => {
+    const node = hostRef.current;
+    if (!node) {
+      return;
+    }
+    // Wait a frame: `measureInWindow` during layout can report stale values.
+    requestAnimationFrame(() => {
+      node.measureInWindow((x, y, width, height) => {
+        if (width > 0 && height > 0) {
+          setAnchor({ x, y, width, height });
+        }
+      });
+    });
+  }, [setAnchor]);
+
+  // Reset the peek once the sheet has closed, so the bar is at rest next time.
+  useEffect(() => {
+    if (!expanded) {
+      drag.value = 0;
+    }
+  }, [drag, expanded]);
+
+  const open = useCallback(() => {
+    router.push({ pathname: "/player", params: trackId ? { trackId } : {} });
+  }, [router, trackId]);
+
+  const tap = Gesture.Tap().onEnd((_event, success) => {
+    if (success) {
+      scheduleOnRN(open);
+    }
+  });
+
+  const pan = Gesture.Pan()
+    .activeOffsetY([-12, 12])
+    .onUpdate((event) => {
+      drag.value = Math.min(1, Math.max(0, -event.translationY / DRAG_RANGE));
+    })
+    .onEnd((event) => {
+      const commit = drag.value > 0.35 || event.velocityY < -700;
+      if (commit) {
+        drag.value = withSpring(1, spring.snappy);
+        scheduleOnRN(open);
+      } else {
+        drag.value = withSpring(0, spring.snappy);
+      }
+    });
+
+  const gesture = Gesture.Race(pan, tap);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: -drag.value * 10 },
+      { scale: 1 + drag.value * 0.02 },
+    ],
+  }));
+
+  if (!trackId || status === "idle") {
+    return null;
+  }
+
+  return (
+    <Animated.View
+      ref={hostRef}
+      onLayout={measure}
+      style={[styles.host, animatedStyle]}
+    >
+      <MiniPlayerRow
+        trackId={trackId}
+        title={title}
+        artist={artist}
+        artworkUrl={artworkUrl}
+        ramp={ramp}
+        positionSec={positionSec}
+        durationSec={durationSec}
+        isPlaying={isPlaying}
+        context={context}
+        onOpenContext={openContext}
+        skipNonce={skip?.nonce}
+        skipDirection={skip?.direction}
+        onToggle={() => TrackPlayerService.togglePlayPause()}
+        onClose={() => void TrackPlayerService.stop()}
+        renderMain={(content) => (
+          <GestureDetector gesture={gesture}>
+            <Animated.View
+              accessibilityRole="button"
+              accessibilityLabel={`Open now playing: ${title ?? "current track"}`}
+              style={styles.main}
+            >
+              {content}
+            </Animated.View>
+          </GestureDetector>
+        )}
+      />
+    </Animated.View>
+  );
+}
+
+const styles = StyleSheet.create({
+  host: {
+    height: layout.dock.playerHeight,
+    justifyContent: "center",
+  },
+  main: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    minWidth: 0,
+  },
+});

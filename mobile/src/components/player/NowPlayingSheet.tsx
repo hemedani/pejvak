@@ -70,14 +70,16 @@ export function NowPlayingSheet({ ramp, children }: NowPlayingSheetProps) {
   const progress = useSharedValue(0);
 
   // Fall back to a plausible bar position when there is no measurement yet
-  // (a deep link straight into the player, for instance).
+  // (a deep link straight into the player, for instance). The height is the
+  // dock's player half, not a private number, so the morph still starts from the
+  // right rectangle when the real measurement has not landed.
   const collapsed = useMemo(
     () =>
       anchor ?? {
-        x: layout.floatInset,
-        y: height - layout.miniPlayerHeight - 150,
-        width: width - layout.floatInset * 2,
-        height: layout.miniPlayerHeight,
+        x: layout.dock.inset,
+        y: height - layout.dock.playerHeight - layout.dock.navHeight - layout.dock.margin,
+        width: width - layout.dock.inset * 2,
+        height: layout.dock.playerHeight,
       },
     [anchor, height, width],
   );

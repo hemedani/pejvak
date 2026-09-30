@@ -1,11 +1,13 @@
 /**
  * The tab navigator.
  *
- * Registers the destinations from `TABS` and hands the drawing to `AppTabBar`,
- * so the route list and the bar's layout are the same array and cannot drift.
+ * Registers the destinations from `TABS` and hands the drawing to `AppDock`, so
+ * the route list and the dock's layout are the same array and cannot drift. The
+ * dock also carries the now-playing row, which is why the now-playing surface
+ * disappears from this layout entirely.
  *
  * The screens keep the full height of the window and the bar floats over them:
- * each screen reserves its own bottom space from `layout.tabBarInset`. That is
+ * each screen reserves its own bottom space from `dockInset`. That is
  * what lets a list scroll *under* the bar rather than stopping short of it,
  * which is the whole point of a floating bar — and why `tabBarStyle` reports a
  * zero height, so nothing below tries to reserve space for a bar that is not in
@@ -14,19 +16,24 @@
 
 import { Tabs } from "expo-router/tabs";
 
-import { AppTabBar, TABS } from "@/components/app-tab-bar";
+import { AppDock, TABS } from "@/components/app-dock";
 
 export default function AppTabs() {
   return (
     <Tabs
-      tabBar={(props) => <AppTabBar {...props} />}
+      tabBar={(props) => <AppDock {...props} />}
       screenOptions={{
         headerShown: false,
         tabBarStyle: { height: 0 },
         sceneStyle: { backgroundColor: "transparent" },
-      }}>
+      }}
+    >
       {TABS.map((tab) => (
-        <Tabs.Screen key={tab.name} name={tab.name} options={{ title: tab.label }} />
+        <Tabs.Screen
+          key={tab.name}
+          name={tab.name}
+          options={{ title: tab.label }}
+        />
       ))}
     </Tabs>
   );

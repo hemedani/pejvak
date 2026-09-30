@@ -1,9 +1,14 @@
 /**
- * The now-playing row: artwork, title, and a play/pause button on frosted glass.
+ * The now-playing row: artwork, title, and a play/pause button.
  *
- * Rendered by the collapsed mini-player, which wraps the artwork and copy in a
- * gesture detector through `renderMain` so the whole surface answers a tap and
- * an upward drag without the trailing buttons stealing either.
+ * Renders a plain row with **no surface of its own** — `AppDock` owns one frosted
+ * panel for this row and the navigation together. That is deliberate: as two
+ * separate panels they had to be told how far apart to sit, and the clearance
+ * they were given left the navigation's raised button underneath this row.
+ *
+ * `renderMain` lets the dock wrap the artwork and copy in a gesture detector, so
+ * the whole area answers a tap and an upward drag without the trailing buttons
+ * stealing either.
  */
 
 import type { ReactNode } from "react";
@@ -14,13 +19,41 @@ import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { CrossfadeArtwork } from "@/components/motion/CrossfadeArtwork";
 import { ThemedText } from "@/components/themed-text";
 import { GlassProgress } from "@/components/ui/glass/GlassProgress";
-import { GlassSurface } from "@/components/ui/glass/GlassSurface";
-import { describeContextType, type PlaybackContext } from "@/lib/playbackContext";
+import {
+  describeContextType,
+  type PlaybackContext,
+} from "@/lib/playbackContext";
 import { formatClock } from "@/lib/time";
 import type { AuroraRamp } from "@/theme/tokens";
-import { layout, spacing } from "@/theme/tokens";
+import { spacing } from "@/theme/tokens";
 
-const ART_SIZE = 46;
+/**
+ * The artwork, sized to leave the title room for four trailing controls.
+ *
+ * It was 46, which left the title 100pt on a 336pt dock — enough for about a
+ * dozen characters of a Persian title. 38 buys 40pt back, and at 38 a 12pt
+ * corner is still the same "a third of the diameter" shape the library tiles use.
+ */
+const ART_SIZE = 38;
+
+/**
+ * The trailing controls' visual sizes.
+ *
+ * Visual size, **not** touch size: `BouncyIconButton` pads every glyph out to a
+ * 44pt target with `hitSlop`, so shrinking these takes space away from the title
+ * without making any control harder to hit. The two are already separate
+ * concerns in that component, which is exactly why it has a `hitSlop` at all.
+ */
+const CONTROL = {
+  /** Open the collection this run belongs to. */
+  context: 28,
+  /** Add to a playlist. */
+  addToPlaylist: 28,
+  /** Play or pause — the one filled control in the row. */
+  play: 38,
+  /** Stop playback. Destructive, so a step below play. */
+  stop: 26,
+} as const;
 
 export type MiniPlayerRowProps = {
   /** The library row being played, for the playlist picker. */
@@ -76,7 +109,7 @@ export function MiniPlayerRow({
         source={artworkUrl}
         ramp={ramp}
         label={title}
-        radius={13}
+        radius={12}
         skipNonce={skipNonce}
         skipDirection={skipDirection}
         style={styles.art}
@@ -86,19 +119,16 @@ export function MiniPlayerRow({
           {title ?? "Now Playing"}
         </ThemedText>
         <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-          {artist ?? `${formatClock(positionSec)} / ${formatClock(durationSec)}`}
+          {artist ??
+            `${formatClock(positionSec)} / ${formatClock(durationSec)}`}
         </ThemedText>
       </View>
     </>
   );
 
   return (
-    <GlassSurface tone="surfaceStrong" radius="panel" clip style={[styles.surface, style]}>
-      {renderMain ? (
-        renderMain(main)
-      ) : (
-        <View style={styles.main}>{main}</View>
-      )}
+    <View style={[styles.surface, style]}>
+      {renderMain ? renderMain(main) : <View style={styles.main}>{main}</View>}
 
       {/* The way back into the collection, without opening the full player
           first. Icon-only because the bar already carries a title and two other
@@ -107,8 +137,8 @@ export function MiniPlayerRow({
         <BouncyIconButton
           name={context.type === "folder" ? "folder" : "playlists"}
           accessibilityLabel={`Open ${describeContextType(context.type).toLowerCase()} ${context.title}`}
-          size={34}
-          iconSize={17}
+          size={CONTROL.context}
+          iconSize={15}
           tone="ghost"
           onPress={onOpenContext}
         />
@@ -120,8 +150,8 @@ export function MiniPlayerRow({
           title={title ?? "This track"}
           ramp={ramp}
           artwork={artworkUrl}
-          size={34}
-          iconSize={17}
+          size={CONTROL.addToPlaylist}
+          iconSize={15}
           tone="ghost"
         />
       ) : null}
@@ -129,8 +159,8 @@ export function MiniPlayerRow({
       <BouncyIconButton
         name={isPlaying ? "pause" : "play"}
         accessibilityLabel={isPlaying ? "Pause" : "Play"}
-        size={42}
-        iconSize={20}
+        size={CONTROL.play}
+        iconSize={19}
         tone="accent"
         onPress={onToggle}
       />
@@ -143,27 +173,31 @@ export function MiniPlayerRow({
         <BouncyIconButton
           name="close"
           accessibilityLabel="Stop playback and close the player"
-          size={32}
-          iconSize={16}
+          size={CONTROL.stop}
+          iconSize={14}
           tone="ghost"
           onPress={onClose}
         />
       ) : null}
 
-      <GlassProgress progress={progress} tint={ramp[1]} thickness={2} style={styles.progress} />
-    </GlassSurface>
+      <GlassProgress
+        progress={progress}
+        tint={ramp[1]}
+        thickness={2}
+        style={styles.progress}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   surface: {
-    minHeight: layout.miniPlayerHeight,
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    paddingLeft: spacing.sm,
-    paddingRight: spacing.sm,
-    gap: spacing.sm,
-    overflow: "hidden",
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    gap: spacing.xs,
   },
   main: {
     flex: 1,
