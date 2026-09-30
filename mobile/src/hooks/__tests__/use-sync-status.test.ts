@@ -25,9 +25,7 @@ const counts = (n: number) => ({
   annotations: n,
   playlists: n,
   contextPlays: n,
-  // Deliberately not `n`: the assertions below count five buckets, and the
-  // online bucket is exercised by its own suite.
-  onlineCollections: 0,
+  onlineCollections: n,
 });
 
 beforeEach(() => jest.clearAllMocks());
@@ -39,8 +37,24 @@ describe("useSyncStatus", () => {
 
     const { result } = await renderHook(() => useSyncStatus());
 
-    await waitFor(() => expect(result.current.pendingTotal).toBe(10));
+    // Six syncable tables, so two of each is twelve.
+    await waitFor(() => expect(result.current.pendingTotal).toBe(12));
     expect(result.current.lastSyncAt).toBe(1234);
+  });
+
+  it("counts an unsynced online collection in the queue total", async () => {
+    // The regression: `pendingTotal` summed five of the six tables, so a device
+    // holding three unsynced collections reported a queue of zero — and a screen
+    // that trusts this number says "Everything synced" over work still queued.
+    getPendingCounts.mockResolvedValue({
+      ...counts(0),
+      onlineCollections: 3,
+    });
+    getLastSyncAt.mockResolvedValue(null);
+
+    const { result } = await renderHook(() => useSyncStatus());
+
+    await waitFor(() => expect(result.current.pendingTotal).toBe(3));
   });
 
   it("syncs now and refreshes the counts", async () => {
@@ -48,7 +62,7 @@ describe("useSyncStatus", () => {
     getLastSyncAt.mockResolvedValue(null);
 
     const { result } = await renderHook(() => useSyncStatus());
-    await waitFor(() => expect(result.current.pendingTotal).toBe(5));
+    await waitFor(() => expect(result.current.pendingTotal).toBe(6));
 
     await act(async () => {
       await result.current.syncNow();

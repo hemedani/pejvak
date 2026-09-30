@@ -66,12 +66,18 @@ export function useSyncStatus(): UseSyncStatusResult {
     }
   }, [refresh]);
 
-  const pendingTotal =
-    pending.tracks +
-    pending.sessions +
-    pending.annotations +
-    pending.playlists +
-    pending.contextPlays;
+  /**
+   * Every table that can hold an unsynced row.
+   *
+   * `onlineCollections` belongs here: a saved online collection is a fifth payload
+   * in the `syncLocalData` batch and it is the one table that was left out, so a
+   * device with three unsynced collections reported a queue of zero — and a
+   * settings screen that trusts this number would say "Everything synced" over
+   * work still queued. The list is derived from `PendingCounts` so a new syncable
+   * table cannot be forgotten here: a key that is missing is a type error, not a
+   * quiet zero.
+   */
+  const pendingTotal = Object.values(pending).reduce((total, count) => total + count, 0);
 
   return { pending, pendingTotal, lastSyncAt, syncing, refresh, syncNow };
 }
