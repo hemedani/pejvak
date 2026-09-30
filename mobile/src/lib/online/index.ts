@@ -14,6 +14,7 @@ import type { OnlineAdapter, OnlineSource, OnlineSourceKind } from "@/lib/online
 
 export * from "@/lib/online/languages";
 export * from "@/lib/online/naming";
+export * from "@/lib/online/series";
 export * from "@/lib/online/types";
 
 /**

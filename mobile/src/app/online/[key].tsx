@@ -36,13 +36,30 @@ import { useOnlineCollection } from "@/hooks/use-online-collection";
 import { useTheme } from "@/hooks/use-theme";
 import type { FolderPlayMode } from "@/lib/folderPlay";
 import { formatDuration } from "@/lib/history";
-import { describeKnownTrackCount, describeTrackCount, findSource } from "@/lib/online";
+import {
+  buildSeriesSections,
+  describeKnownTrackCount,
+  describeTrackCount,
+  findSource,
+  isRtlText,
+} from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
 import { describeContextStats } from "@/lib/playbackContext";
 import { OnlineCatalogService } from "@/services/OnlineCatalogService";
 import { OnlineCollectionService } from "@/services/OnlineCollectionService";
 import { usePlayerStore } from "@/store/playerStore";
 import { spacing } from "@/theme/tokens";
+
+/**
+ * A section header's alignment, decided by its own text.
+ *
+ * A Persian series title left-aligned in a left-to-right layout reads as a
+ * rendering bug, and the trailing bucket's English label would read as one if it
+ * were flipped. Same rule the rows already use, applied to the header above them.
+ */
+function rtlStyle(text: string) {
+  return isRtlText(text) ? styles.rtl : undefined;
+}
 
 export default function OnlineCollectionScreen() {
   const params = useLocalSearchParams<{ key?: string }>();
@@ -122,6 +139,50 @@ export default function OnlineCollectionScreen() {
     }
     return `${finishedCount} of ${tracks.length} finished`;
   }, [finishedCount, tracks.length]);
+
+  /**
+   * The collection's tracks, grouped into the series they actually are.
+   *
+   * Null when grouping would not help. A shelf whose every episode is a one-off
+   * — «خلاصه کتاب», where a summary is one per book — groups into a single
+   * "Standalone episodes" bucket, which is the flat list with a header on it. So
+   * the test is not "did anything group" but "is there more than one section",
+   * and a collection that is one series reads as the list it always was.
+   */
+  const sections = useMemo(() => {
+    const grouped = buildSeriesSections(tracks);
+    return grouped.length > 1 ? grouped : null;
+  }, [tracks]);
+
+  /**
+   * Reveal indices, laid out in reading order.
+   *
+   * A running counter rather than an index derived from the row: a section
+   * header takes a slot of its own, so the row's index alone would animate the
+   * second section's first row before the first section's last.
+   *
+   * Rows are numbered inside their section, not by collection position. A
+   * collection's own order is a publish date across *all* of its series, so the
+   * positions within one series are not consecutive — «ماجرای شیعه» would read
+   * 01, 04, 07 and look broken. Restricted to a series, 01, 02, 03 is both true
+   * and readable, and the header carries the name and how many parts there are.
+   */
+  const blocks = useMemo(() => {
+    if (!sections) {
+      return null;
+    }
+    let index = 4;
+    return sections.map((section) => {
+      const headerIndex = index;
+      index += 1;
+      const rows = section.tracks.map((track, position) => {
+        const revealIndex = index;
+        index += 1;
+        return { track, position: position + 1, revealIndex };
+      });
+      return { section, headerIndex, rows };
+    });
+  }, [sections]);
 
   /**
    * Start the collection, from a chosen plan.
@@ -331,13 +392,68 @@ export default function OnlineCollectionScreen() {
             <View style={styles.section}>
               <Reveal index={3}>
                 <ThemedText type="overline" themeColor="textTertiary">
-                  TRACKS
+                  {sections ? "SERIES" : "TRACKS"}
                 </ThemedText>
               </Reveal>
 
-              {tracks.map((track, index) => (
-                <Reveal key={track.id} index={index + 4}>
-                  <GlassSurface flat radius="control" style={styles.rowSurface}>
+              {blocks ? (
+                blocks.map((block) => (
+                  <View key={block.section.key} style={styles.series}>
+                    <Reveal index={block.headerIndex}>
+                      <View style={styles.seriesHeader}>
+                        <View style={styles.seriesCopy}>
+                          <ThemedText
+                            type="bodyStrong"
+                            numberOfLines={2}
+                            style={rtlStyle(block.section.title)}>
+                            {block.section.title}
+                          </ThemedText>
+                          <ThemedText
+                            type="caption"
+                            themeColor="textTertiary"
+                            style={rtlStyle(block.section.title)}>
+                            {describeTrackCount(block.section.tracks.length)}
+                          </ThemedText>
+                        </View>
+                        {/* The trailing bucket is not a series, so it gets no play
+                            control: "play the standalone episodes from the
+                            beginning" names no unit at all. A real series does —
+                            and its control starts at the series' first episode
+                            while the queue stays the whole collection, because a
+                            series is a reading of one list rather than a second
+                            one. Playback therefore carries on into whatever the
+                            collection plays next. */}
+                        {block.section.standalone ? null : (
+                          <BouncyIconButton
+                            name="play"
+                            accessibilityLabel={`Play ${block.section.title} from the beginning`}
+                            size={36}
+                            iconSize={16}
+                            tone="glass"
+                            onPress={() =>
+                              void start({ trackId: block.section.tracks[0].id })
+                            }
+                          />
+                        )}
+                      </View>
+                    </Reveal>
+
+                    {block.rows.map((row) => (
+                      <Reveal key={row.track.id} index={row.revealIndex}>
+                        <OnlineTrackRow
+                          track={row.track}
+                          position={row.position}
+                          isCurrent={currentTrackId === row.track.id}
+                          job={jobsByTrack[row.track.id] ?? null}
+                          onPress={() => void start({ trackId: row.track.id })}
+                        />
+                      </Reveal>
+                    ))}
+                  </View>
+                ))
+              ) : (
+                tracks.map((track, index) => (
+                  <Reveal key={track.id} index={index + 4}>
                     <OnlineTrackRow
                       track={track}
                       position={index + 1}
@@ -345,9 +461,9 @@ export default function OnlineCollectionScreen() {
                       job={jobsByTrack[track.id] ?? null}
                       onPress={() => void start({ trackId: track.id })}
                     />
-                  </GlassSurface>
-                </Reveal>
-              ))}
+                  </Reveal>
+                ))
+              )}
             </View>
           </>
         ) : (
@@ -391,8 +507,26 @@ const styles = StyleSheet.create({
   section: {
     gap: spacing.sm,
   },
-  rowSurface: {
-    padding: 0,
+  series: {
+    gap: spacing.sm,
+    // Sections sit a level above rows, so they are spaced further apart than the
+    // rows inside them — otherwise a header reads as one more row.
+    marginTop: spacing.md,
+  },
+  seriesHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    minWidth: 0,
+  },
+  seriesCopy: {
+    flex: 1,
+    gap: spacing.xxs,
+    minWidth: 0,
+  },
+  rtl: {
+    textAlign: "right",
+    writingDirection: "rtl",
   },
   empty: {
     textAlign: "center",
