@@ -1,23 +1,26 @@
 /**
  * A collection card — one show, album or course.
  *
- * Shared by Browse, Favorites and Continue, because the three lists answer the
- * same question ("what is this, and where am I in it?") and three cards would
- * eventually disagree about how to render it. What differs between them is only
- * the middle line and the trailing control, so both are props.
+ * Shared by Browse, Favorites, Continue and a source's own listing, because the
+ * four answer the same question ("what is this, and where am I in it?") and four
+ * cards would eventually disagree about how to render it. What differs between
+ * them is only the middle line and the trailing controls, so both are props.
+ *
+ * The drawing itself belongs to `MediaCard` — the same glass card a track row
+ * uses. A course and a file are the same kind of thing on screen, and giving
+ * them two different card languages was what made the online shelves read as a
+ * different app.
  */
 
-import type { ReactNode } from "react";
-import { StyleSheet, View } from "react-native";
+import { useMemo } from "react";
 
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
-import { PaletteTile } from "@/components/motion/PaletteTile";
-import { ThemedText } from "@/components/themed-text";
-import { GlassProgress, GlassSurface } from "@/components/ui/glass";
 import { Icon } from "@/components/ui/icon";
-import { useScheme } from "@/hooks/use-theme";
-import { paletteFor } from "@/lib/palette";
-import { colors, spacing } from "@/theme/tokens";
+import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
+import { useTheme } from "@/hooks/use-theme";
+
+/** The width of a circular control in the cluster, for the fit budget. */
+const CONTROL_WIDTH = 40;
 
 export type CollectionCardProps = {
   title: string;
@@ -26,13 +29,13 @@ export type CollectionCardProps = {
   artworkUrl?: string | null;
   /** Seeds the fallback gradient, so a coverless show still has an identity. */
   paletteKey: string;
-  /** 0–1, drawn as a thin bar under the row. Omit for no progress bar. */
+  /** 0–1, drawn as a full-bleed bar under the card. Omit for no bar. */
   progressRatio?: number | null;
   isFavorite?: boolean;
   /** Renders a filled bookmark. Omit for a read-only card. */
   onToggleFavorite?: () => void;
-  /** Trailing slot for a download control. */
-  trailing?: ReactNode;
+  /** Extra trailing controls — a per-row download button, say. */
+  actions?: readonly MediaCardAction[];
   onPress: () => void;
   accessibilityHint?: string;
 };
@@ -45,35 +48,32 @@ export function CollectionCard({
   progressRatio,
   isFavorite = false,
   onToggleFavorite,
-  trailing,
+  actions,
   onPress,
   accessibilityHint,
 }: CollectionCardProps) {
-  const palette = colors[useScheme()];
+  const theme = useTheme();
+  const accent = theme.accent;
+  const muted = theme.textTertiary;
 
-  return (
-    <GlassSurface radius="card" style={styles.card}>
-      <ElasticPressable
-        accessibilityRole="button"
-        accessibilityLabel={title}
-        accessibilityHint={accessibilityHint}
-        scaleTo={0.985}
-        overshootTo={1.004}
-        haptic="light"
-        onPress={onPress}
-        style={styles.pressable}>
-        <PaletteTile ramp={paletteFor(paletteKey)} label={title} source={artworkUrl} size={54} />
-        <View style={styles.copy}>
-          <ThemedText type="bodyStrong" numberOfLines={2}>
-            {title}
-          </ThemedText>
-          {meta ? (
-            <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-              {meta}
-            </ThemedText>
-          ) : null}
-        </View>
-        {onToggleFavorite ? (
+  /**
+   * The favourite toggle is declared as an action rather than drawn beside one.
+   *
+   * That is what puts it in the same responsive cluster as everything else: on a
+   * narrow card it moves with the rest instead of being the one control that
+   * stays put and squeezes the title.
+   */
+  const cluster = useMemo<MediaCardAction[]>(() => {
+    const list: MediaCardAction[] = [];
+    if (onToggleFavorite) {
+      list.push({
+        key: "favorite",
+        width: CONTROL_WIDTH,
+        priority: 3,
+        icon: isFavorite ? "bookmarkFilled" : "bookmark",
+        label: isFavorite ? "Remove from favorites" : "Add to favorites",
+        onPress: onToggleFavorite,
+        node: (
           <ElasticPressable
             accessibilityRole="button"
             accessibilityLabel={isFavorite ? "Remove from favorites" : "Add to favorites"}
@@ -81,53 +81,39 @@ export function CollectionCard({
             overshootTo={1.08}
             haptic="selection"
             onPress={onToggleFavorite}
-            style={styles.iconButton}>
+            style={{
+              width: CONTROL_WIDTH,
+              height: CONTROL_WIDTH,
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
             <Icon
               name={isFavorite ? "bookmarkFilled" : "bookmark"}
               size={21}
-              color={isFavorite ? palette.accent : palette.textTertiary}
+              color={isFavorite ? accent : muted}
             />
           </ElasticPressable>
-        ) : null}
-        {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
-      </ElasticPressable>
-      {progressRatio !== undefined && progressRatio !== null ? (
-        <GlassProgress
-          progress={progressRatio}
-          tint={palette.accent}
-          thickness={4}
-          style={styles.progress}
-        />
-      ) : null}
-    </GlassSurface>
+        ),
+      });
+    }
+    if (actions) {
+      list.push(...actions);
+    }
+    return list;
+  }, [accent, actions, isFavorite, muted, onToggleFavorite]);
+
+  return (
+    <MediaCard
+      title={title}
+      meta={meta}
+      artworkUrl={artworkUrl}
+      paletteKey={paletteKey}
+      tileSize={56}
+      progressRatio={progressRatio}
+      actions={cluster}
+      onPress={onPress}
+      accessibilityLabel={title}
+      accessibilityHint={accessibilityHint}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    padding: spacing.md,
-  },
-  pressable: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  copy: {
-    flex: 1,
-    gap: spacing.xxs,
-    minWidth: 0,
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  trailing: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  progress: {
-    marginTop: spacing.sm,
-  },
-});

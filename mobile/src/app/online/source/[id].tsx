@@ -98,22 +98,35 @@ export default function SourceCollectionsScreen() {
           onToggleFavorite={() => void catalog.toggleFavorite(item)}
           onPress={() => router.push({ pathname: "/online/[key]", params: { key: item.key } })}
           accessibilityHint="Opens this collection"
-          trailing={
-            <BouncyIconButton
-              name={glyph.icon}
-              accessibilityLabel={
+          actions={[
+            {
+              key: "download",
+              width: 38,
+              priority: 2,
+              icon: glyph.icon,
+              label:
                 local?.downloadState === "complete"
-                  ? `${item.title} is downloaded`
-                  : `Download ${item.title}`
-              }
-              disabled={local?.downloadState === "downloading"}
-              size={38}
-              iconSize={18}
-              tone="ghost"
-              color={glyph.accent ? theme.accent : undefined}
-              onPress={() => void catalog.download(item)}
-            />
-          }
+                  ? "Already downloaded"
+                  : "Download this collection",
+              onPress: () => void catalog.download(item),
+              node: (
+                <BouncyIconButton
+                  name={glyph.icon}
+                  accessibilityLabel={
+                    local?.downloadState === "complete"
+                      ? `${item.title} is downloaded`
+                      : `Download ${item.title}`
+                  }
+                  disabled={local?.downloadState === "downloading"}
+                  size={38}
+                  iconSize={18}
+                  tone="ghost"
+                  color={glyph.accent ? theme.accent : undefined}
+                  onPress={() => void catalog.download(item)}
+                />
+              ),
+            },
+          ]}
         />
       </Reveal>
     );

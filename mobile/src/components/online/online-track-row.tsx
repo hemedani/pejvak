@@ -7,6 +7,10 @@
  * course is thirty of these in a column and any row that shouts makes the list
  * unreadable.
  *
+ * It owns its own glass panel rather than being wrapped by the screen, so the
+ * panel and the row cannot drift apart — and so the leading marker can sit *on*
+ * the panel, tinted, instead of floating beside it.
+ *
  * Titles are the reason this file is not trivial. They arrive in Persian, and a
  * right-to-left line left-aligned in a left-to-right layout reads as a rendering
  * bug; `isRtlText` flips the alignment per row, so a Persian course and a Latin
@@ -17,12 +21,14 @@ import { StyleSheet, View } from "react-native";
 
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
+import { GlassSurface } from "@/components/ui/glass";
 import { Icon } from "@/components/ui/icon";
-import { useScheme } from "@/hooks/use-theme";
+import { useScheme, useTheme } from "@/hooks/use-theme";
 import type { LocalDownloadJob, LocalTrack } from "@/lib/db/types";
 import { formatDuration } from "@/lib/history";
 import { isRtlText } from "@/lib/online";
-import { colors, spacing } from "@/theme/tokens";
+import { withAlpha } from "@/lib/palette";
+import { colors, radius as radii, spacing } from "@/theme/tokens";
 
 export type OnlineTrackRowProps = {
   track: LocalTrack;
@@ -56,7 +62,9 @@ export function OnlineTrackRow({
   job,
   onPress,
 }: OnlineTrackRowProps) {
+  const theme = useTheme();
   const palette = colors[useScheme()];
+  const tint = theme.accent;
   const rtl = isRtlText(track.title);
   const downloaded = track.downloadedAt !== null;
   const pendingLabel = job && job.state !== "done" ? jobLabel(job) : null;
@@ -74,53 +82,61 @@ export function OnlineTrackRow({
   }
 
   return (
-    <ElasticPressable
-      accessibilityRole="button"
-      accessibilityLabel={track.title}
-      accessibilityHint={downloaded ? "Plays from this device" : "Streams from the source"}
-      scaleTo={0.985}
-      overshootTo={1.004}
-      haptic="light"
-      onPress={onPress}
-      style={styles.row}>
-      <View style={styles.leading}>
-        {isCurrent ? (
-          <Icon name="play" size={15} color={palette.accent} />
-        ) : (
-          <ThemedText type="numeric" themeColor="textTertiary">
-            {String(position).padStart(2, "0")}
+    <GlassSurface flat radius="control">
+      <ElasticPressable
+        accessibilityRole="button"
+        accessibilityLabel={track.title}
+        accessibilityHint={downloaded ? "Plays from this device" : "Streams from the source"}
+        scaleTo={0.985}
+        overshootTo={1.004}
+        haptic="light"
+        onPress={onPress}
+        style={styles.row}>
+        {/* The marker is a small glass chip rather than bare digits, so the row
+            that is playing is findable in a column of thirty without reading. */}
+        <View
+          style={[
+            styles.leading,
+            {
+              backgroundColor: isCurrent ? withAlpha(tint, 0.18) : palette.glass,
+              borderColor: isCurrent ? tint : palette.glassBorder,
+            },
+          ]}>
+          {isCurrent ? (
+            <Icon name="play" size={14} color={tint} />
+          ) : (
+            <ThemedText type="numeric" themeColor="textTertiary">
+              {String(position).padStart(2, "0")}
+            </ThemedText>
+          )}
+        </View>
+
+        <View style={styles.copy}>
+          <ThemedText type="body" numberOfLines={2} style={rtl ? styles.rtl : undefined}>
+            {track.title}
           </ThemedText>
-        )}
-      </View>
+          <ThemedText
+            type="caption"
+            themeColor="textSecondary"
+            numberOfLines={1}
+            style={rtl ? styles.rtl : undefined}>
+            {meta.join(" · ")}
+          </ThemedText>
+        </View>
 
-      <View style={styles.copy}>
-        <ThemedText
-          type="body"
-          numberOfLines={2}
-          style={rtl ? styles.rtl : undefined}>
-          {track.title}
-        </ThemedText>
-        <ThemedText
-          type="caption"
-          themeColor="textSecondary"
-          numberOfLines={1}
-          style={rtl ? styles.rtl : undefined}>
-          {meta.join(" · ")}
-        </ThemedText>
-      </View>
-
-      <View style={styles.trailing}>
-        {job?.state === "running" ? (
-          <Icon name="cloudDownload" size={20} color={palette.accent} />
-        ) : downloaded ? (
-          <Icon name="checkCircle" size={20} color={palette.accent} />
-        ) : job?.state === "failed" ? (
-          <Icon name="alert" size={20} color={palette.danger} />
-        ) : (
-          <Icon name="stream" size={20} color={palette.textTertiary} />
-        )}
-      </View>
-    </ElasticPressable>
+        <View style={styles.trailing}>
+          {job?.state === "running" ? (
+            <Icon name="cloudDownload" size={20} color={tint} />
+          ) : downloaded ? (
+            <Icon name="checkCircle" size={20} color={tint} />
+          ) : job?.state === "failed" ? (
+            <Icon name="alert" size={20} color={palette.danger} />
+          ) : (
+            <Icon name="stream" size={20} color={palette.textTertiary} />
+          )}
+        </View>
+      </ElasticPressable>
+    </GlassSurface>
   );
 }
 
@@ -129,12 +145,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   leading: {
-    width: 26,
+    width: 30,
+    height: 30,
+    borderRadius: radii.xs,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: "center",
+    justifyContent: "center",
   },
   copy: {
     flex: 1,
