@@ -6,17 +6,17 @@ import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { GlassChip } from "@/components/ui/glass/GlassChip";
-import { GlassSurface } from "@/components/ui/glass";
+import { CardRow, CardSection, SegmentedControl } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useTheme } from "@/hooks/use-theme";
 import { useSyncStatus } from "@/hooks/use-sync-status";
 import { SPEED_OPTIONS, THEME_PREFERENCES, formatBytes, type ThemePreference } from "@/lib/settings";
+import { formatRelativeTime } from "@/lib/time";
 import { LocalDBService } from "@/services/LocalDBService";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { spacing } from "@/theme/tokens";
+import { card as cardTokens, radius as radii, spacing } from "@/theme/tokens";
 
 const THEME_LABELS: Record<ThemePreference, string> = {
   system: "System",
@@ -24,37 +24,21 @@ const THEME_LABELS: Record<ThemePreference, string> = {
   dark: "Dark",
 };
 
-function Section({
-  title,
-  index,
-  children,
-}: {
-  title: string;
-  index: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      <Reveal index={index}>
-        <ThemedText type="overline" themeColor="textTertiary">
-          {title}
-        </ThemedText>
-      </Reveal>
-      <Reveal index={index + 1}>{children}</Reveal>
-    </View>
-  );
-}
+/**
+ * Each theme gets its own glyph. "System" is a contrast mark rather than a gear:
+ * a gear says *settings*, not *whatever your device is doing*.
+ */
+const THEME_OPTIONS = THEME_PREFERENCES.map((preference) => ({
+  value: preference,
+  label: THEME_LABELS[preference],
+  icon:
+    preference === "system" ? ("autoTheme" as const) : preference === "light" ? ("sunny" as const) : ("moon" as const),
+}));
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.rowBetween}>
-      <ThemedText type="caption" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-      <ThemedText type="bodyStrong">{value}</ThemedText>
-    </View>
-  );
-}
+const SPEED_SEGMENTS = SPEED_OPTIONS.map((speed) => ({
+  value: speed,
+  label: `${speed}×`,
+}));
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -67,7 +51,9 @@ export default function SettingsScreen() {
   const setDefaultSpeed = useSettingsStore((state) => state.setDefaultSpeed);
 
   const { pending, pendingTotal, lastSyncAt, syncing, syncNow } = useSyncStatus();
-  const [storageBytes, setStorageBytes] = useState(0);
+  // `null` until the figure is measured, so the row says "…" rather than
+  // asserting "0 B" for a frame.
+  const [storageBytes, setStorageBytes] = useState<number | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -77,90 +63,117 @@ export default function SettingsScreen() {
     }, []),
   );
 
+  // The breakdown belongs to the number above it, not beside it as a competing
+  // row — four counts on four lines read as four separate facts and add up to
+  // nothing.
+  const queueDetail =
+    pendingTotal === 0
+      ? "Everything on this device is on the server."
+      : `${pending.tracks} tracks · ${pending.sessions} sessions · ${pending.annotations} notes · ${pending.playlists} playlists`;
+
+  const name = user?.displayName ?? user?.username ?? "Signed in";
+
   return (
     <Screen wash={theme.accent}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <ScreenHeader
-          onBack={() => router.back()}
-          overline="PREFERENCES"
-          title="Settings"
-        />
+        <ScreenHeader onBack={() => router.back()} overline="PREFERENCES" title="Settings" />
 
-        <Section title="ACCOUNT" index={1}>
-          <GlassSurface style={styles.card}>
-            <View style={styles.accountRow}>
-              <View style={[styles.avatar, { backgroundColor: theme.accentSoft }]}>
-                <Icon name="person" size={20} color={theme.accent} />
-              </View>
-              <View style={styles.accountCopy}>
-                <ThemedText type="bodyStrong" numberOfLines={1}>
-                  {user?.displayName ?? user?.username ?? "Signed in"}
-                </ThemedText>
-                {user?.email ? (
-                  <ThemedText type="caption" themeColor="textSecondary" selectable>
-                    {user.email}
-                  </ThemedText>
-                ) : null}
-              </View>
+        {/* 1 — Account. Identity, then a destructive action that gets its own
+            bounded row rather than sitting under the avatar as a caption. */}
+        <CardSection title="ACCOUNT" index={1}>
+          <View style={styles.identity}>
+            <View style={[styles.avatar, { backgroundColor: theme.accentSoft }]}>
+              <Icon name="person" size={24} color={theme.accent} />
             </View>
-            <ElasticPressable
-              accessibilityRole="button"
-              onPress={() => void logout()}
-              style={styles.dangerRow}>
-              <Icon name="logout" size={16} color={theme.danger} />
-              <ThemedText type="label" style={{ color: theme.danger }}>
-                Sign out
+            <View style={styles.identityCopy}>
+              <ThemedText type="bodyStrong" numberOfLines={1}>
+                {name}
               </ThemedText>
-            </ElasticPressable>
-          </GlassSurface>
-        </Section>
+              {user?.email ? (
+                <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1} selectable>
+                  {user.email}
+                </ThemedText>
+              ) : null}
+            </View>
+          </View>
+        </CardSection>
 
-        <Section title="SYNC" index={3}>
-          <GlassSurface style={styles.card}>
-            <Row label="Waiting to sync" value={String(pendingTotal)} />
-            <ThemedText type="caption" themeColor="textTertiary">
-              {pending.tracks} tracks · {pending.sessions} sessions · {pending.annotations} notes ·{" "}
-              {pending.playlists} playlists
-            </ThemedText>
-            <Row
-              label="Last synced"
-              value={lastSyncAt ? new Date(lastSyncAt).toLocaleString() : "Never"}
+        {/* 2 — Playback and appearance. Both are single-choice, so both get a
+            segmented control: a row of chips said "filter", and a thumb's
+            position says "this one". */}
+        <CardSection title="PLAYBACK" index={4} footer="The speed a track starts at.">
+          <View style={styles.control}>
+            <SegmentedControl
+              accessibilityLabel="Default playback speed"
+              options={SPEED_SEGMENTS}
+              value={defaultSpeed}
+              onChange={(value) => void setDefaultSpeed(value)}
             />
-            <PrimaryButton label="Sync now" loading={syncing} onPress={() => void syncNow()} />
-          </GlassSurface>
-        </Section>
-
-        <Section title="STORAGE" index={5}>
-          <GlassSurface style={styles.card}>
-            <Row label="Imported audio" value={formatBytes(storageBytes)} />
-          </GlassSurface>
-        </Section>
-
-        <Section title="DEFAULT PLAYBACK SPEED" index={7}>
-          <View style={styles.chips}>
-            {SPEED_OPTIONS.map((speed) => (
-              <GlassChip
-                key={speed}
-                label={`${speed}×`}
-                selected={speed === defaultSpeed}
-                onPress={() => void setDefaultSpeed(speed)}
-              />
-            ))}
           </View>
-        </Section>
+        </CardSection>
 
-        <Section title="APPEARANCE" index={9}>
-          <View style={styles.chips}>
-            {THEME_PREFERENCES.map((preference) => (
-              <GlassChip
-                key={preference}
-                label={THEME_LABELS[preference]}
-                selected={preference === themePreference}
-                onPress={() => void setTheme(preference)}
-              />
-            ))}
+        <CardSection title="APPEARANCE" index={7} footer="System follows your device's light and dark setting.">
+          <View style={styles.control}>
+            <SegmentedControl
+              accessibilityLabel="Theme"
+              options={THEME_OPTIONS}
+              value={themePreference}
+              onChange={(value) => void setTheme(value)}
+            />
           </View>
-        </Section>
+        </CardSection>
+
+        {/* 3 — Storage and sync, merged. A whole card to say "1.2 GB" was
+            spending a panel on one number; these are the same question. */}
+        <CardSection
+          title="STORAGE & SYNC"
+          index={10}
+          footer="Pejvak writes everything here first and sends it when it can, so a lost connection never costs you a session.">
+          <CardRow
+            position="first"
+            icon="cloudDownload"
+            label="Imported audio"
+            value={storageBytes === null ? "…" : formatBytes(storageBytes)}
+          />
+          <CardRow
+            position="last"
+            icon="cloudDone"
+            label={pendingTotal === 0 ? "Everything synced" : "Waiting to sync"}
+            detail={queueDetail}
+            value={pendingTotal === 0 ? "Up to date" : String(pendingTotal)}
+            tone={pendingTotal === 0 ? "neutral" : "accent"}
+          />
+          <View style={styles.syncMeta}>
+            <ThemedText type="caption" themeColor="textTertiary">
+              {lastSyncAt === null
+                ? "This device has never synced."
+                : `Last synced ${formatRelativeTime(lastSyncAt)}`}
+            </ThemedText>
+            <PrimaryButton
+              label="Sync now"
+              loading={syncing}
+              onPress={() => void syncNow()}
+            />
+          </View>
+        </CardSection>
+
+        {/* 4 — Sign out, alone, in danger. The one control on the screen that
+            ends a session, so it does not share a card with anything. */}
+        <Reveal index={13}>
+          <ElasticPressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            accessibilityHint="Signs you out of this device"
+            scaleTo={0.97}
+            haptic="light"
+            onPress={() => void logout()}
+            style={styles.signOut}>
+            <Icon name="logout" size={18} color={theme.danger} />
+            <ThemedText type="body" style={{ color: theme.danger }}>
+              Sign out
+            </ThemedText>
+          </ElasticPressable>
+        </Reveal>
       </ScrollView>
     </Screen>
   );
@@ -172,47 +185,40 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.giant,
     gap: spacing.xl,
   },
-  section: {
-    gap: spacing.sm,
+  /** A group whose only child is a control, not a row. */
+  control: {
+    padding: cardTokens.padding,
   },
-  card: {
-    gap: spacing.md,
-    padding: spacing.lg,
-    borderRadius: 24,
-  },
-  accountRow: {
+  identity: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
+    padding: cardTokens.padding,
   },
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 52,
+    height: 52,
+    borderRadius: radii.sm,
     alignItems: "center",
     justifyContent: "center",
   },
-  accountCopy: {
+  identityCopy: {
     flex: 1,
     gap: spacing.xxs,
+    minWidth: 0,
   },
-  rowBetween: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.lg,
+  syncMeta: {
+    gap: spacing.md,
+    padding: cardTokens.padding,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  dangerRow: {
+  signOut: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
-    minHeight: 46,
-    borderRadius: 18,
-  },
-  chips: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
+    minHeight: cardTokens.rowMinHeight,
+    marginTop: spacing.sm,
   },
 });
