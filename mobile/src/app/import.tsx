@@ -6,7 +6,8 @@ import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { GlassChip, GlassProgress, GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+import { GlassChip, GlassProgress } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useTheme } from "@/hooks/use-theme";
 import { radius as radii, spacing } from "@/theme/tokens";
@@ -242,7 +243,7 @@ export default function ImportScreen() {
       return (
         <View style={styles.chooseBlock}>
           <Reveal index={1}>
-            <GlassSurface tone="surfaceStrong" style={styles.chooseCard}>
+            <Card style={styles.chooseCard}>
               <ThemedText type="bodyStrong">Scan this device</ThemedText>
               <ThemedText type="caption" themeColor="textSecondary">
                 {DEVICE_SCAN_SUPPORTED
@@ -254,11 +255,11 @@ export default function ImportScreen() {
                 disabled={!DEVICE_SCAN_SUPPORTED}
                 onPress={() => void runScan("device")}
               />
-            </GlassSurface>
+            </Card>
           </Reveal>
 
           <Reveal index={2}>
-            <GlassSurface tone="surfaceStrong" style={styles.chooseCard}>
+            <Card style={styles.chooseCard}>
               <ThemedText type="bodyStrong">Choose a folder</ThemedText>
               <ThemedText type="caption" themeColor="textSecondary">
                 Best for a lecture series. The folder becomes playable as one unit, and its order
@@ -269,7 +270,7 @@ export default function ImportScreen() {
                 disabled={Platform.OS !== "android"}
                 onPress={() => void runScan("folder")}
               />
-            </GlassSurface>
+            </Card>
           </Reveal>
         </View>
       );
@@ -279,7 +280,7 @@ export default function ImportScreen() {
       const label = phase === "importing" ? "Importing…" : busyLabel;
       return (
         <Reveal index={1}>
-          <GlassSurface tone="surfaceStrong" style={styles.progressCard}>
+          <Card style={styles.progressCard}>
             <ThemedText type="bodyStrong">{label}</ThemedText>
             <ThemedText type="caption" themeColor="textSecondary">
               {progress.total > 0
@@ -290,7 +291,7 @@ export default function ImportScreen() {
               progress={progress.total > 0 ? progress.done / progress.total : 0}
               tint={theme.accent}
             />
-          </GlassSurface>
+          </Card>
         </Reveal>
       );
     }
@@ -315,7 +316,7 @@ export default function ImportScreen() {
 
       return (
         <Reveal index={1}>
-          <GlassSurface tone="surfaceStrong" style={styles.progressCard}>
+          <Card style={styles.progressCard}>
             <ThemedText type="bodyStrong">
               {headlineParts.length > 0 ? headlineParts.join(" · ") : "Nothing new to add"}
             </ThemedText>
@@ -323,7 +324,7 @@ export default function ImportScreen() {
               {detail}
             </ThemedText>
             <PrimaryButton label="Back to library" onPress={() => router.back()} />
-          </GlassSurface>
+          </Card>
         </Reveal>
       );
     }
@@ -383,7 +384,7 @@ export default function ImportScreen() {
         }
         renderItem={({ item, index }) => (
           <Reveal index={index + 3} from="below" limit={ROW_REVEAL_LIMIT}>
-            <GlassSurface flat style={styles.row}>
+            <Card elevated={false} style={styles.row}>
               <View style={styles.rowCopy}>
                 <ThemedText type="bodyStrong" numberOfLines={1}>
                   {item.fileName}
@@ -397,7 +398,7 @@ export default function ImportScreen() {
                 themeColor={needsIdentification(item.status) ? "text" : "textTertiary"}>
                 {STATUS_LABEL[item.status]}
               </ThemedText>
-            </GlassSurface>
+            </Card>
           </Reveal>
         )}
       />
@@ -442,7 +443,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: radii.lg,
   },
   rowCopy: {
     flex: 1,

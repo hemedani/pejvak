@@ -10,7 +10,8 @@ import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { GlassChip, GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+import { GlassChip } from "@/components/ui/glass";
 import { Icon } from "@/components/ui/icon";
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
@@ -47,7 +48,7 @@ import { LocalDBService } from "@/services/LocalDBService";
 import { PlaylistService } from "@/services/PlaylistService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useContextHistoryStore } from "@/store/contextHistoryStore";
-import { spacing } from "@/theme/tokens";
+import { dockInset, spacing } from "@/theme/tokens";
 
 /**
  * The header block occupies reveal indices 1–5 (search field, view toggle,
@@ -480,7 +481,7 @@ export default function LibraryScreen() {
           promotion for something else. */}
       {continueTrack && !searching ? (
         <Reveal index={3}>
-          <GlassSurface tone="surfaceStrong" style={styles.continueCard}>
+          <Card style={styles.continueCard}>
             <ElasticPressable
               accessibilityRole="button"
               accessibilityLabel={`Continue listening to ${continueTrack.title}`}
@@ -516,7 +517,7 @@ export default function LibraryScreen() {
               style={{ backgroundColor: paletteFor(continueTrack.contentHash)[1] }}
               onPress={() => playAt(continueTrack.id)}
             />
-          </GlassSurface>
+          </Card>
         </Reveal>
       ) : null}
 
@@ -524,7 +525,7 @@ export default function LibraryScreen() {
           banner would just train the listener to ignore it. */}
       {missing.length > 0 && !searching ? (
         <Reveal index={4}>
-          <GlassSurface tone="surfaceStrong" style={styles.missingCard}>
+          <Card>
             <ElasticPressable
               accessibilityRole="button"
               accessibilityLabel={`${missing.length} file${missing.length === 1 ? "" : "s"} missing. Find them again.`}
@@ -541,7 +542,7 @@ export default function LibraryScreen() {
               </View>
               <Icon name="chevronRight" size={16} color={theme.textTertiary} />
             </ElasticPressable>
-          </GlassSurface>
+          </Card>
         </Reveal>
       ) : null}
 
@@ -987,7 +988,7 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant + 96,
+    paddingBottom: spacing.giant + dockInset,
   },
   headerBlock: {
     gap: spacing.lg,
@@ -1007,7 +1008,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     paddingRight: spacing.lg,
-    borderRadius: 26,
   },
   continueMain: {
     flex: 1,
@@ -1019,9 +1019,6 @@ const styles = StyleSheet.create({
   continueCopy: {
     flex: 1,
     gap: spacing.xxs,
-  },
-  missingCard: {
-    borderRadius: 22,
   },
   missingMain: {
     flexDirection: "row",

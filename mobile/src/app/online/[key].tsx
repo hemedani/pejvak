@@ -30,7 +30,8 @@ import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { DownloadControl } from "@/components/online/download-progress";
 import { OnlineTrackRow } from "@/components/online/online-track-row";
 import { ThemedText } from "@/components/themed-text";
-import { GlassChip, GlassProgress, GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+import { GlassChip, GlassProgress } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useOnlineCollection } from "@/hooks/use-online-collection";
 import { useTheme } from "@/hooks/use-theme";
@@ -317,7 +318,7 @@ export default function OnlineCollectionScreen() {
                 how far through the collection the listener is. The title is
                 deliberately absent — it is already the header's, and a screen
                 that says its own name twice reads as a template. */}
-            <GlassSurface radius="card" style={styles.hero}>
+            <Card style={styles.hero}>
               <PaletteTile
                 ramp={ramp}
                 label={meta.title}
@@ -338,7 +339,7 @@ export default function OnlineCollectionScreen() {
                   {completion ?? describeKnownTrackCount(meta.trackCount)}
                 </ThemedText>
               </View>
-            </GlassSurface>
+            </Card>
           </Reveal>
         ) : null}
 

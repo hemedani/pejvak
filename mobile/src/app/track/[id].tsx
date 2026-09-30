@@ -33,7 +33,8 @@ import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { SessionCard } from "@/components/session-card";
 import { StatCell } from "@/components/stat-cell";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+
 import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useAudioInspection } from "@/hooks/use-audio-inspection";
@@ -185,7 +186,7 @@ export default function TrackDetailScreen() {
             group further down. */}
         {missing ? (
           <Reveal index={2}>
-            <GlassSurface tone="surfaceStrong" style={styles.missingCard}>
+            <Card>
               <ElasticPressable
                 accessibilityRole="button"
                 accessibilityLabel="Find missing files"
@@ -200,7 +201,7 @@ export default function TrackDetailScreen() {
                 </View>
                 <Icon name="chevronRight" size={16} color={theme.textTertiary} />
               </ElasticPressable>
-            </GlassSurface>
+            </Card>
           </Reveal>
         ) : null}
 
@@ -354,9 +355,6 @@ const styles = StyleSheet.create({
   art: {
     width: "100%",
     aspectRatio: 1.35,
-  },
-  missingCard: {
-    borderRadius: 22,
   },
   missingRow: {
     flexDirection: "row",

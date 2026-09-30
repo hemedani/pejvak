@@ -26,7 +26,7 @@ import { confirmRemoveRun, confirmRemoveStretch } from "@/lib/sessionActions";
 import { LocalDBService } from "@/services/LocalDBService";
 import { openSessionDetail } from "@/store/sessionDetailStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { spacing } from "@/theme/tokens";
+import { dockInset, spacing } from "@/theme/tokens";
 
 /**
  * Which half of the history is showing.
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant + 96,
+    paddingBottom: spacing.giant + dockInset,
   },
   headerBlock: {
     gap: spacing.md,

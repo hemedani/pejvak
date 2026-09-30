@@ -28,7 +28,8 @@ import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { CollectionCard } from "@/components/online/collection-card";
 import { LanguageRow } from "@/components/online/language-row";
 import { ThemedText } from "@/components/themed-text";
-import { GlassChip, GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+import { GlassChip } from "@/components/ui/glass";
 import { TextField } from "@/components/ui/text-field";
 import {
   useContinueListening,
@@ -48,7 +49,7 @@ import {
 import { describeRunOutcome, runProgressRatio } from "@/lib/playbackContext";
 import { formatClock } from "@/lib/time";
 import { ContextService } from "@/services/ContextService";
-import { layout, spacing } from "@/theme/tokens";
+import { dockInset, spacing } from "@/theme/tokens";
 
 type DiscoverView = "continue" | "favorites" | "browse";
 
@@ -223,7 +224,7 @@ export default function DiscoverScreen() {
 
       return (
         <Reveal index={index} limit={10}>
-          <GlassSurface flat radius="control">
+          <Card>
             <LanguageRow
               language={item.item}
               sourceCount={item.sourceCount}
@@ -231,7 +232,7 @@ export default function DiscoverScreen() {
                 router.push({ pathname: "/online/language/[code]", params: { code: item.item.code } })
               }
             />
-          </GlassSurface>
+          </Card>
         </Reveal>
       );
     },
@@ -330,7 +331,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     // The floating tab bar sits over the list, so the last row has to be able
     // to scroll clear of it.
-    paddingBottom: spacing.giant + layout.tabBarInset,
+    paddingBottom: spacing.giant + dockInset,
   },
   headerBlock: {
     gap: spacing.md,

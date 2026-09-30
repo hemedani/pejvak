@@ -8,7 +8,8 @@ import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { GlassChip, GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+import { GlassChip } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useSmartPlaylist } from "@/hooks/use-smart-playlist";
 import { useTheme } from "@/hooks/use-theme";
@@ -127,12 +128,12 @@ export default function SmartPlaylistScreen() {
           </ThemedText>
         ) : picks.length === 0 ? (
           <Reveal index={0}>
-            <GlassSurface tone="surfaceStrong" style={styles.emptyCard}>
+            <Card style={styles.emptyCard}>
               <ThemedText type="bodyStrong">{rule.title}</ThemedText>
               <ThemedText type="caption" themeColor="textSecondary">
                 {data?.emptyReason ?? rule.tagline}
               </ThemedText>
-            </GlassSurface>
+            </Card>
           </Reveal>
         ) : (
           <>
@@ -183,7 +184,7 @@ export default function SmartPlaylistScreen() {
 
               {picks.map((pick, index) => (
                 <Reveal key={pick.track.id} index={FIRST_ROW_REVEAL_INDEX + index}>
-                  <GlassSurface flat style={styles.row}>
+                  <Card elevated={false} style={styles.row}>
                     <ElasticPressable
                       accessibilityRole="button"
                       accessibilityLabel={`Play ${pick.track.title}, ${pick.reason}`}
@@ -221,7 +222,7 @@ export default function SmartPlaylistScreen() {
                       iconSize={16}
                       tone="ghost"
                     />
-                  </GlassSurface>
+                  </Card>
                 </Reveal>
               ))}
             </View>
@@ -249,14 +250,12 @@ const styles = StyleSheet.create({
   emptyCard: {
     gap: spacing.xs,
     padding: spacing.lg,
-    borderRadius: 24,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: 20,
   },
   rowMain: {
     flex: 1,

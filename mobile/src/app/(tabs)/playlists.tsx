@@ -10,7 +10,8 @@ import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { SmartPlaylistRow } from "@/components/smart-playlist-row";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
 import { usePlaylists } from "@/hooks/use-playlists";
@@ -19,7 +20,7 @@ import { useTheme } from "@/hooks/use-theme";
 import type { LocalPlaylist } from "@/lib/db/types";
 import { paletteFor } from "@/lib/palette";
 import { PlaylistService } from "@/services/PlaylistService";
-import { radius as radii, spacing } from "@/theme/tokens";
+import { dockInset, spacing } from "@/theme/tokens";
 
 /**
  * The header block (create row, SMART section, SAVED heading) occupies reveal
@@ -148,7 +149,7 @@ export default function PlaylistsScreen() {
         }
         renderItem={({ item, index }) => (
           <Reveal index={FIRST_SAVED_ROW_REVEAL_INDEX + index} limit={ROW_REVEAL_LIMIT}>
-            <GlassSurface flat style={styles.row}>
+            <Card elevated={false} style={styles.row}>
               <ElasticPressable
                 accessibilityRole="button"
                 accessibilityLabel={`Open playlist ${item.title}`}
@@ -186,7 +187,7 @@ export default function PlaylistsScreen() {
                 tone="ghost"
                 onPress={() => confirmDelete(item)}
               />
-            </GlassSurface>
+            </Card>
           </Reveal>
         )}
       />
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant + 96,
+    paddingBottom: spacing.giant + dockInset,
   },
   headerBlock: {
     gap: spacing.lg,
@@ -223,7 +224,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: radii.lg,
   },
   rowMain: {
     flex: 1,

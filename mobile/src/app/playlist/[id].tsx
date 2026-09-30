@@ -10,7 +10,8 @@ import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
 import { useTheme } from "@/hooks/use-theme";
@@ -19,7 +20,7 @@ import type { LocalTrack } from "@/lib/db/types";
 import { paletteFor } from "@/lib/palette";
 import { describeContextStats } from "@/lib/playbackContext";
 import { PlaylistService } from "@/services/PlaylistService";
-import { spacing } from "@/theme/tokens";
+import { card as cardTokens, radius as radii, spacing } from "@/theme/tokens";
 
 export default function PlaylistDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -184,7 +185,7 @@ export default function PlaylistDetailScreen() {
               ) : (
                 tracks.map((track, index) => (
                   <Reveal key={track.id} index={index + 2}>
-                    <GlassSurface style={styles.row}>
+                    <Card elevated={false} style={styles.row}>
                       <ElasticPressable
                         accessibilityRole="button"
                         accessibilityLabel={`Play ${track.title}`}
@@ -267,7 +268,7 @@ export default function PlaylistDetailScreen() {
                           }
                         />
                       </View>
-                    </GlassSurface>
+                    </Card>
                   </Reveal>
                 ))
               )}
@@ -292,7 +293,7 @@ export default function PlaylistDetailScreen() {
                 ) : (
                   addable.map((track: LocalTrack, index: number) => (
                     <Reveal key={track.id} index={21 + index}>
-                      <GlassSurface flat style={styles.row}>
+                      <Card elevated={false} style={styles.row}>
                         <View style={styles.rowMain}>
                           <PaletteTile
                             ramp={paletteFor(track.contentHash)}
@@ -319,7 +320,7 @@ export default function PlaylistDetailScreen() {
                             void run(() => PlaylistService.addTrack(playlistId, track.id))
                           }
                         />
-                      </GlassSurface>
+                      </Card>
                     </Reveal>
                   ))
                 )
@@ -379,7 +380,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: 20,
   },
   rowMain: {
     flex: 1,
@@ -405,10 +405,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   dangerRow: {
-    minHeight: 52,
+    minHeight: cardTokens.rowMinHeight,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 20,
+    borderRadius: radii.lg,
   },
   empty: {
     textAlign: "center",

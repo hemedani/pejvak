@@ -20,7 +20,8 @@ import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+
 import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useMissingTracks } from "@/hooks/use-missing-tracks";
@@ -58,7 +59,7 @@ export default function MissingFilesScreen() {
 
         {missing.length === 0 ? (
           <Reveal index={1}>
-            <GlassSurface tone="surfaceStrong" style={styles.card}>
+            <Card style={styles.card}>
               <View style={styles.cardHead}>
                 <Icon name="check" size={18} color={theme.accent} />
                 <ThemedText type="bodyStrong">
@@ -68,12 +69,12 @@ export default function MissingFilesScreen() {
               <ThemedText type="caption" themeColor="textSecondary">
                 Nothing in your library is pointing at a file that has moved or been deleted.
               </ThemedText>
-            </GlassSurface>
+            </Card>
           </Reveal>
         ) : (
           <>
             <Reveal index={1}>
-              <GlassSurface tone="surfaceStrong" style={styles.card}>
+              <Card style={styles.card}>
                 <View style={styles.cardHead}>
                   <Icon name="alert" size={18} color={theme.danger} />
                   <ThemedText type="bodyStrong">Nothing here is lost</ThemedText>
@@ -85,7 +86,7 @@ export default function MissingFilesScreen() {
                   content is what identifies it, not its path.
                 </ThemedText>
                 <PrimaryButton label="Find them again" onPress={() => router.push("/import")} />
-              </GlassSurface>
+              </Card>
             </Reveal>
 
             {groups.map((group, groupIndex) => (
@@ -109,7 +110,7 @@ export default function MissingFilesScreen() {
                       key={item.track.id}
                       index={index + groupIndex + 3}
                       limit={ROW_REVEAL_LIMIT}>
-                      <GlassSurface flat style={styles.row}>
+                      <Card elevated={false} style={styles.row}>
                         <ElasticPressable
                           accessibilityRole="button"
                           accessibilityLabel={`Open ${item.track.title}`}
@@ -140,7 +141,7 @@ export default function MissingFilesScreen() {
                           </View>
                         </ElasticPressable>
                         <Icon name="chevronRight" size={16} color={theme.textTertiary} />
-                      </GlassSurface>
+                      </Card>
                     </Reveal>
                   );
                 })}
@@ -162,7 +163,6 @@ const styles = StyleSheet.create({
   card: {
     gap: spacing.sm,
     padding: spacing.lg,
-    borderRadius: 28,
   },
   cardHead: {
     flexDirection: "row",
@@ -182,7 +182,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: 20,
   },
   rowMain: {
     flex: 1,

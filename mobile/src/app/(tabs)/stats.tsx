@@ -23,7 +23,8 @@ import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { StatCell } from "@/components/stat-cell";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+
 import { Icon } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import { useHistory } from "@/hooks/use-history";
@@ -37,7 +38,7 @@ import {
   computeTrackLeaders,
   sessionsOnDay,
 } from "@/lib/stats";
-import { spacing } from "@/theme/tokens";
+import { dockInset, spacing } from "@/theme/tokens";
 
 /** Which stat cell has its detail panel open, if any. */
 type ExpandedStat = "listened" | "streak";
@@ -164,7 +165,7 @@ export default function StatsScreen() {
 
         {expandedStat ? (
           <Reveal key={expandedStat} index={4}>
-            <GlassSurface flat style={styles.detail}>
+            <Card style={styles.detail}>
               {expandedStat === "listened" ? (
                 <>
                   {stats.totalListenTimeSec > 0 ? (
@@ -199,7 +200,7 @@ export default function StatsScreen() {
                   <DetailRow label="Sessions" value={String(stats.sessionCount)} />
                 </>
               )}
-            </GlassSurface>
+            </Card>
           </Reveal>
         ) : null}
 
@@ -212,7 +213,7 @@ export default function StatsScreen() {
           {leaders.length > 0 ? (
             leaders.map((leader, index) => (
               <Reveal key={leader.contentHash} index={6 + index}>
-                <GlassSurface flat style={styles.row}>
+                <Card elevated={false} style={styles.row}>
                   <ElasticPressable
                     accessibilityRole="button"
                     accessibilityLabel={`Open ${leader.title}`}
@@ -228,7 +229,7 @@ export default function StatsScreen() {
                     </ThemedText>
                   </ElasticPressable>
                   <Icon name="chevronRight" size={16} color={theme.textTertiary} />
-                </GlassSurface>
+                </Card>
               </Reveal>
             ))
           ) : (
@@ -246,7 +247,7 @@ export default function StatsScreen() {
           </Reveal>
           {stats.longestSessionTitle ? (
             <Reveal index={12}>
-              <GlassSurface flat style={styles.row}>
+              <Card elevated={false} style={styles.row}>
                 <ElasticPressable
                   accessibilityRole="button"
                   accessibilityLabel={`Replay ${stats.longestSessionTitle}`}
@@ -261,7 +262,7 @@ export default function StatsScreen() {
                   </ThemedText>
                 </ElasticPressable>
                 <Icon name="play" size={18} color={theme.accent} />
-              </GlassSurface>
+              </Card>
             </Reveal>
           ) : (
             <ThemedText type="caption" themeColor="textTertiary">
@@ -278,7 +279,7 @@ export default function StatsScreen() {
           </Reveal>
           {recentDays.length > 0 ? (
             <Reveal index={14}>
-              <GlassSurface flat style={styles.daysCard}>
+              <Card style={styles.daysCard}>
                 {recentDays.map((day) => {
                   const ratio = peakDaySec > 0 ? day.listenTimeSec / peakDaySec : 0;
                   const open = expandedDay === day.key;
@@ -296,7 +297,7 @@ export default function StatsScreen() {
                         <ThemedText type="caption" style={styles.dayLabel} numberOfLines={1}>
                           {formatDay(day.key)}
                         </ThemedText>
-                        <View style={styles.dayTrack}>
+                        <View style={[styles.dayTrack, { backgroundColor: theme.track }]}>
                           <View
                             style={[
                               styles.dayFill,
@@ -318,7 +319,8 @@ export default function StatsScreen() {
                       </ElasticPressable>
 
                       {open ? (
-                        <View style={styles.daySessions}>
+                        <View
+                          style={[styles.daySessions, { borderLeftColor: theme.track }]}>
                           {sessions.length > 0 ? (
                             sessions.map((session) => (
                               <ElasticPressable
@@ -350,7 +352,7 @@ export default function StatsScreen() {
                     </View>
                   );
                 })}
-              </GlassSurface>
+              </Card>
             </Reveal>
           ) : (
             <ThemedText type="caption" themeColor="textTertiary">
@@ -377,7 +379,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant + 96,
+    paddingBottom: spacing.giant + dockInset,
     gap: spacing.xl,
   },
   empty: {
@@ -396,7 +398,6 @@ const styles = StyleSheet.create({
   detail: {
     gap: spacing.md,
     padding: spacing.lg,
-    borderRadius: 20,
   },
   detailRow: {
     flexDirection: "row",
@@ -422,7 +423,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.md,
     padding: spacing.lg,
-    borderRadius: 20,
   },
   rowMain: {
     flex: 1,
@@ -440,7 +440,6 @@ const styles = StyleSheet.create({
     // here would make the card taller than the screen.
     gap: spacing.xs,
     padding: spacing.lg,
-    borderRadius: 20,
   },
   dayBlock: {
     gap: spacing.sm,
@@ -460,7 +459,8 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "rgba(127,137,153,0.2)",
+    // Set inline from `theme.track`: a literal grey here is a surface colour no
+    // palette edit can reach, and it is the one the day bars are read against.
     overflow: "hidden",
   },
   dayFill: {
@@ -476,7 +476,6 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.md,
     paddingBottom: spacing.xs,
     borderLeftWidth: 2,
-    borderLeftColor: "rgba(127,137,153,0.25)",
   },
   daySession: {
     flexDirection: "row",

@@ -9,7 +9,8 @@ import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { GlassChip, GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+import { GlassChip } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useFolderDetail } from "@/hooks/use-folder-detail";
 import { useTheme } from "@/hooks/use-theme";
@@ -261,7 +262,7 @@ export default function FolderDetailScreen() {
                       : theme.textTertiary;
                 return (
                   <Reveal key={track.id} index={index + 4}>
-                    <GlassSurface flat style={styles.row}>
+                    <Card elevated={false} style={styles.row}>
                       <ElasticPressable
                         accessibilityRole="button"
                         accessibilityLabel={
@@ -323,7 +324,7 @@ export default function FolderDetailScreen() {
                           tone="ghost"
                         />
                       )}
-                    </GlassSurface>
+                    </Card>
                   </Reveal>
                 );
               })}
@@ -363,7 +364,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: 20,
   },
   rowMain: {
     flex: 1,

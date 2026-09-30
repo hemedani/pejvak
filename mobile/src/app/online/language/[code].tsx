@@ -19,12 +19,13 @@ import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { GlassSurface } from "@/components/ui/glass";
+import { Card } from "@/components/ui/card";
+
 import { Icon } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import { findLanguage, sourcesForLanguage, type OnlineSource } from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
-import { spacing } from "@/theme/tokens";
+import { radius as radii, spacing } from "@/theme/tokens";
 
 /** One provider, as a card. */
 function SourceCard({ source, onPress }: { source: OnlineSource; onPress: () => void }) {
@@ -32,7 +33,7 @@ function SourceCard({ source, onPress }: { source: OnlineSource; onPress: () => 
   const ramp = paletteFor(source.id);
 
   return (
-    <GlassSurface radius="card" style={styles.card}>
+    <Card style={styles.card}>
       <ElasticPressable
         accessibilityRole="button"
         accessibilityLabel={`${source.name}, ${source.nativeName}`}
@@ -61,7 +62,7 @@ function SourceCard({ source, onPress }: { source: OnlineSource; onPress: () => 
         </View>
         <Icon name="chevronRight" size={18} color={theme.textTertiary} />
       </ElasticPressable>
-    </GlassSurface>
+    </Card>
   );
 }
 
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
   mark: {
     width: 48,
     height: 48,
-    borderRadius: 16,
+    borderRadius: radii.md,
     alignItems: "center",
     justifyContent: "center",
   },
