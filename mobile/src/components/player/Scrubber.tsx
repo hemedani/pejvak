@@ -41,7 +41,7 @@ import { scheduleOnRN } from "react-native-worklets";
 
 import { ThemedText } from "@/components/themed-text";
 import { triggerHaptic } from "@/components/ui/haptics";
-import { withAlpha } from "@/lib/palette";
+import { useTheme } from "@/hooks/use-theme";
 import { formatClock } from "@/lib/time";
 import { spring } from "@/theme/motion";
 import { radius as radii } from "@/theme/tokens";
@@ -93,6 +93,7 @@ export function Scrubber({
   children,
   style,
 }: ScrubberProps) {
+  const theme = useTheme();
   const clamped = clamp01(progress);
 
   const width = useSharedValue(0);
@@ -273,7 +274,7 @@ export function Scrubber({
       }}>
       <GestureDetector gesture={gesture}>
         <View onLayout={onLayout} style={styles.hitArea}>
-          <Animated.View style={[styles.track, trackStyle]}>
+          <Animated.View style={[styles.track, { backgroundColor: theme.track }, trackStyle]}>
             <Animated.View
               style={[styles.fill, { backgroundColor: tint, shadowColor: tint }, fillStyle]}
             />
@@ -331,7 +332,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   track: {
-    backgroundColor: withAlpha("#7F8999", 0.24),
+    // The unfilled part is `theme.track`, set inline: a literal grey here is a
+    // surface colour no palette edit can reach.
     justifyContent: "center",
   },
   fill: {

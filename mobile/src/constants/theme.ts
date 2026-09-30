@@ -14,7 +14,7 @@ import "@/global.css";
 
 import { Platform } from "react-native";
 
-import { colors, layout, type SemanticColors } from "@/theme/tokens";
+import { colors, dockInset, layout, type SemanticColors } from "@/theme/tokens";
 
 /** The semantic palette plus the original shorthand keys. */
 export type AppColors = SemanticColors & {
@@ -82,5 +82,6 @@ export const Spacing = {
   six: 64,
 } as const;
 
-export const BottomTabInset = layout.tabBarInset;
+/** Room a screen owes the floating dock. See `dockInset`. */
+export const BottomTabInset = dockInset;
 export const MaxContentWidth = layout.maxContentWidth;

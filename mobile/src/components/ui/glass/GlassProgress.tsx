@@ -11,7 +11,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import { useEffect } from "react";
 
-import { withAlpha } from "@/lib/palette";
+import { useTheme } from "@/hooks/use-theme";
 import { spring } from "@/theme/motion";
 import { radius as radii } from "@/theme/tokens";
 
@@ -32,6 +32,7 @@ export function GlassProgress({
   style,
   thickness = 6,
 }: GlassProgressProps) {
+  const theme = useTheme();
   const clamped = Math.max(0, Math.min(1, progress));
   const value = useSharedValue(clamped);
 
@@ -47,7 +48,13 @@ export function GlassProgress({
     <View
       style={[
         styles.track,
-        { height: thickness, borderRadius: thickness / 2 },
+        {
+          height: thickness,
+          borderRadius: thickness / 2,
+          // The unfilled track is a token, not a literal: a hard-coded grey here
+          // is a surface colour no palette edit can reach.
+          backgroundColor: theme.track,
+        },
         style,
       ]}>
       <Animated.View
@@ -64,7 +71,6 @@ export function GlassProgress({
 
 const styles = StyleSheet.create({
   track: {
-    backgroundColor: withAlpha("#7F8999", 0.24),
     position: "relative",
     justifyContent: "center",
   },
