@@ -464,6 +464,275 @@ now passes, so the baseline is **three** suites, not four.
 
 ---
 
+## 13. Search across the Library — done
+
+The Library's three views (Tracks / Folders / Recent) had no search. With a few
+thousand files, "find the thing I know the name of" is the single most common
+thing a listener wants and the one thing the screen could not do.
+
+- [x] `src/lib/search.ts` — the engine: folding, an index, ranking, highlight
+- [x] `src/lib/librarySearch.ts` — which fields each entity is searchable by
+- [x] `src/components/ui/search-field.tsx` — a glass field, leading glyph, clear
+- [x] `src/components/ui/highlighted-text.tsx` — the matched run, tinted
+- [x] `src/components/ui/glass/GlassChip.tsx` — an optional `count` badge
+- [x] `(tabs)/index.tsx` — one field above the chips, filtering all three views
+- [x] Tests: `search.test.ts`, `librarySearch.test.ts`
+
+### It has to search Persian, or it does not work
+
+This is a Persian-first audio app, and the same word is written several ways in
+the wild. «ماجراي شيعه» with an Arabic yeh (ي) and «ماجرای شیعه» with a Persian
+one (ی) are the same title; so are «ك» / «ک», and a ZWNJ (نیمفاصله) is invisible
+but significant. A byte-comparison search would find neither. So the query and
+the haystack are both normalised first — Arabic → Persian letters, ZWNJ and
+tatweel dropped, Persian and Arabic-Indic digits → ASCII, diacritics removed —
+and matching happens on the normalised forms. It also means «قسمت ۱» and
+«قسمت 1» match each other.
+
+### What makes it comprehensive rather than a filter
+
+- **It searches files as well as music.** The brief says "music *and files*", so
+  a track matches on `title`, `author`, `album`, `narrator` **and** `fileName`,
+  `folderName`, `folderKey`. Someone looking for `Lectures/Physics` should find
+  it by the path they remember, not only by a tag they never wrote.
+- **A query is never trapped in the tab it was typed in.** The chips carry live
+  match counts (`Tracks 3 · Folders 1 · Recent 2`), so a listener who searches
+  for a folder name while on Tracks is told it exists under Folders instead of
+  seeing "no results".
+- **Ranked, not just filtered.** *How well* a row matched decides its place
+  before *which field* it matched in does — a prefix beats a word beats a
+  substring, wherever it was found — and the field is the tie-breaker, with the
+  title winning at equal quality because that is the field being read. So the
+  obvious answer is first rather than wherever `created_at` happened to put it.
+  (The first draft of this bullet promised the opposite — "a title match beats a
+  path match" — and the implementation is better than the promise: searching
+  «فیزیک» should put the folder *named* فیزیک above a track that merely contains
+  the word.)
+- **The matched run is highlighted** in the row title, so a hit inside a long
+  Persian title is visible rather than something the listener has to hunt for.
+- **A row found by a field it is not showing says so.** A hit in the author, the
+  file name or the folder puts `folder · Lectures/Physics` where the row's
+  least important fact was. A result whose reason is invisible looks wrong.
+
+### The fold happens once, not per keystroke
+
+`createSearchIndex` folds every searchable field of every row, once per data
+load, and keeps it; a keystroke only runs `indexOf` against strings that are
+already folded. Folding a 3,000-track library across seven fields on every
+keystroke is tens of thousands of allocations on the JS thread with the keyboard
+open, which is the difference between a search field and one that stutters. This
+is also why the module is split: `search.ts` knows about folding and ranking,
+`librarySearch.ts` knows what a track is, and a decision buried in a
+`renderItem` cannot be tested.
+
+### Three decisions the brief did not ask for
+
+- **The screen's furniture steps aside while searching.** The continue card, the
+  missing-files alert and the Add button are standing furniture; a search is a
+  focused mode, and results belong at the top rather than below a promotion.
+- **The chips trade their icon for the count.** The badge occupies the icon's
+  slot, so a row of chips cannot start clipping the moment a query is typed —
+  and the count is the information, where the icon was decoration.
+- **Recent is read 60 deep while a query is active**, not the 12 the tab shows.
+  A search over the visible twelve would answer "nothing found" for something
+  played last week, and would make the Recent chip's count a lie.
+
+### The one spelling the fold does not merge
+
+A ZWNJ folds to nothing, so the ZWNJ and joined spellings of a word are the same
+and the *spaced* spelling («نیم فاصله») is a different string. Five of the six
+combinations between the three spellings work — a spaced **query** finds all
+three, because it arrives as two terms that both hit — and the sixth is a joined
+query against a spaced title. Closing it needs a second, space-free form of every
+field to fall back on, which costs real memory and would lose the word boundaries
+the ranking depends on. Left open on purpose, and pinned by a test so the next
+session finds a documented boundary rather than a bug.
+
+## 14. Cards, redrawn in glass — done
+
+Track rows and online course cards were flat panels with a 44px tile: they carried
+the app's information but not its material. They now read as the same glass the
+tab bar, the sheets and the mini-player are made of.
+
+- [x] A shared card vocabulary rather than a row per screen
+- [x] Track rows and `online/collection-card` rebuilt on it
+- [x] Responsive: the action cluster collapses to what fits, and nothing clips
+
+**One card, `components/ui/media-card.tsx`.** `MediaCard` + `MediaCardAction` now
+back the Library's folders, playlists, recents and Tracks rows, the online
+collection card, and `OnlineTrackRow` (which owns its own `GlassSurface flat
+radius="control"` and a tinted leading chip). Each carries a tinted wash, a tile
+halo, a full-bleed `GlassProgress`, and a `marked` accent state.
+
+**Responsiveness without measurement.** A card cannot know how much room it has
+until layout, and a `onLayout` round-trip would make the action cluster jump on
+every first render. So the width is computed instead: `cardWidthFor` in
+`lib/cardLayout.ts` is `min(windowWidth, maxContentWidth) - inset * 2`, and the
+caller declares each action's own width. The pre-existing `planRowLayout` then
+decides inline / reflow / overflow from those numbers alone. Both are pure, so
+both are tested (`cardLayout.test.ts`, +5 cases) — the decision that "nothing
+clips" is not observable from a render and had to be pulled out of one.
+
+**Overflow opens a `Modal`, not a popover.** A popover anchored inside a
+virtualised list is clipped by the list's own bounds, and on Android by the
+sibling cell painted after it. `ActionMenu` is a `Modal` — its own window — which
+is also why it works identically from inside the player.
+
+## 15. A session's own modal, from the History card — done
+
+Tapping a History card did nothing. It now opens the session's own sheet: what it
+actually was, a **visual timeline of how much of the item was heard**, resume
+from that point, and the destructive control.
+
+- [x] `SessionDetailSheet` — the timeline, the facts, resume, delete
+- [x] Wired to `session-card` / `stretch-card` on History
+- [x] Resume goes through the existing resume path, not a second one
+
+**The timeline is arithmetic, and that is the whole design.** `lib/listeningTimeline.ts`
+is pure: it turns a stretch (or a single session) into weighted `TimelineSegment`s,
+and it is the *only* thing that decides where the playhead is. The bar's marker and
+the resume button's number come out of the same field (`markerRatio`), so they
+cannot disagree — pinned by a test, because a marker that points somewhere the
+button does not go is exactly the bug this shape prevents. 13 cases cover it: a
+half-heard track, a resumed one, per-track weights, a scrubbed listen, an open
+session (zero width, not negative), and a track whose stored duration is 0 — where
+the bar falls back to the furthest point reached and `heardSec` still keeps the
+truth while `ratio` clamps.
+
+**A `Modal`, for the same reason the sheets already are.** The player is itself a
+`transparentModal`; a route pushed from inside it renders *behind* it. A `Modal`
+is a separate window, so the sheet lands on top from anywhere — which is also what
+lets the Track Detail screen and the History list share one instance, mounted
+once in `app/_layout.tsx`.
+
+**One resume path.** `hooks/use-resume-history.ts` owns "where does this listen
+pick up" for both the History screen and the sheet. The card no longer resumes on
+tap at all (`onPress` → `onOpen` on both `session-card` and `stretch-card`): what a
+session *was* is worth a look before acting on it, and the resume is now the
+sheet's primary button, one tap further in and sitting beside the timeline that
+explains it.
+
+**The exit animates while the request still renders.** `sessionDetailStore` keeps
+`closing` separate from `request`: `close()` starts the animation, `dismiss()`
+clears the request when it finishes. That is why the content lives in a child that
+exists only while a request does — every open starts clean and no effect has to
+reset state. The same rule that made `ContextHistorySheet` need it.
+
+**Two things it pulled in behind it.** `getSessionsForHistory` now selects
+`t.duration_sec` and `HistoryItem.track` carries `durationSec` — the bar draws
+across the whole *track*, so the projection has to carry the whole of it and not
+just the span the session covered. Widening a projection is not free: five test
+fixtures that build a `HistoryItem` had to carry the field too, which `tsc` named
+one by one.
+
+**And one config change.** `SessionDetailSheet` writes `sharedValue.value` from a
+pan callback, so it is the fourth component to need the `react-hooks/immutability`
+/ `refs` carve-out in `eslint.config.js`. It lives under its own folder rather than
+in `context-history/` because the two answer different questions about different
+records — one listen vs one attempt at a collection — and share only the shell.
+
+## 16. Manahej: a category is not one course — done
+
+The complaint is exact, and the live API confirms it. `listCollections` returns
+only the **direct children of the `radio` category** — 11 of them — and each is
+shown as one collection. But a category is a *shelf*, not a course:
+«تاریخ شیعه» [190] holds **57 episodes that are really 9 series**, and WordPress's
+category query includes descendants, so opening it interleaves «ماجرای شیعه»
+(16) with «تاریخ از زبان علی» (16) and «نیزههای کاغذی» (10).
+
+- [x] Group a collection's tracks into series — but in `lib/online/series.ts`, not the adapter
+- [x] Render the series as sections with their own play control
+- [x] Handle the three shapes the real data has (below)
+
+### What the live data says
+
+The series is **not** in the category tree — I checked: all 82 categories are
+flat, `radio` has 11 children and **no grandchildren**. It is in the episode
+title, before the part marker. Measured across all 11 categories:
+
+| category | tracks | series | singletons |
+|---|---|---|---|
+| تاریخ شیعه | 57 | 9 | 5 |
+| تاریخ انبیا | 34 | 11 | 9 |
+| تاریخ ایران | 34 | 3 | 1 |
+| خلاصه کتاب | 29 | 25 | 22 |
+| علمای مجاهد | 29 | 11 | 4 |
+| مشترکین ویژه | 220 | 70 | 48 |
+
+Three shapes the rule has to survive, all present in the data:
+
+- **A part marker in the middle**: «پادپخش تاریخ قیام سیدالشهدا - قسمت 1» — and
+  the separator is sometimes `-`, sometimes `–`, sometimes nothing.
+- **A subtitle *after* the marker**: «نیزههای کاغذی - قسمت 1 - حمله به افکار تو».
+- **No marker at all, and a numbered sibling**: «تاریخ تمدن انسان» and
+  «تاریخ تمدن انسان 1/2/3»; and «مصطفی» (23 episodes) beside
+  «مصطفی - ماجرای بلال» (1) — the *same* series, split only because the marker
+  is absent. Cutting at the last ` - ` and stripping a trailing bare number is
+  what folds those back together.
+
+**Singletons are the point, not an edge case.** «خلاصه کتاب» is 29 tracks that
+are 25 series, 22 of them one-offs — book summaries are one per book. A grouping
+that rendered those as 22 sections of one would be worse than the flat list, so
+**only groups of two or more become sections** and the rest fall through to a
+single trailing "Standalone episodes" section.
+
+### The design decision, and why
+
+A series could have been made a *collection* (its own key, its own download
+folder, its own progress). I am deliberately not doing that: the source gives no
+series id, so the key would be derived from a mutable Persian title — and this
+project's own invariant is that **identity is the source's own id for an item,
+never something we computed from a string**. A title edited upstream would split
+a saved series in two. Sections keep the collection as the unit that syncs,
+downloads and remembers progress, and still give the listener the grouping.
+
+### What it took, and the one rule that changed
+
+`lib/online/series.ts` is pure and takes `{ title }[]`, so the grouping is
+testable without a network, a database or a screen — 23 cases, every fixture a
+real episode title.
+
+**Not in the adapter, though the plan above said so.** The adapter's contract is
+`OnlineTrack[]`: what the source has. A series is not something the source has —
+it is a *reading* of the list, and one specific to how this source writes its
+titles. Putting it in `getTracks` would change the shared `OnlineAdapter` shape
+for one provider's quirk, and would bake a display decision into the layer that
+downloads files. It sits beside `naming.ts` instead, where the other "how do we
+read this source's strings" rules already live.
+
+**The subtitle fold is evidence-based — and that is a change from the note
+above.** The plan said to cut every title at its last ` - `. That does fold
+«مصطفی - ماجرای بلال» into «مصطفی»; it also folds «تاریخ ایران - قاجار» into
+«تاریخ ایران - پهلوی», which are two different shows. The cut is now made only
+when the prefix is *itself* a series somewhere in this collection, so the rule
+fires exactly when it changes something and never on a guess. A test asserts the
+*refusal*, so relaxing it back to a plain cut fails loudly rather than quietly
+merging two shows.
+
+**One level of folding, not a loop.** A second pass could only fire on a name
+whose prefix is *also* a subtitle-bearing series here, and the source has no such
+shape. Documented rather than guarded — the same call `lib/search.ts` makes for
+the one ZWNJ spelling it does not merge.
+
+**The screen keeps the flat list when grouping would not help.** A shelf where
+every episode is a one-off — «خلاصه کتاب», where a summary is one per book —
+groups into a single "Standalone episodes" bucket, which is the flat list with a
+header on it. So the test is "more than one section", not "did anything group",
+and the heading reads TRACKS or SERIES accordingly.
+
+**Rows are numbered inside their section.** The collection's order is a publish
+date across *all* of its series, so one series' positions are not consecutive —
+«ماجرای شیعه» would have read 01, 04, 07 and looked broken. Restricted to a
+section, 01, 02, 03 is both true and readable.
+
+**A section's play control starts at that series' first episode; the queue stays
+the whole collection.** A series is a reading of one list, not a second one, so
+playback carries on into whatever the collection plays next. The standalone
+bucket gets no control at all — "play the standalone episodes from the beginning"
+names no unit.
+
+---
+
 ## Next session — pick up here
 
 1. **Device pass** (§12, the only unrun check): stream a collection, kill the app

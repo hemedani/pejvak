@@ -125,6 +125,15 @@ Trigger sync on app start, on returning to the foreground, after each session en
 
 Annotation behavior: long-press (or a quick-add control) creates a note at the current position in one step; markers on the progress bar seek to their position and show the note.
 
+## Search
+
+- **Fold Persian before comparing, always.** The same word reaches the database written several ways — an Arabic yeh (ي) or a Persian one (ی), a kaf (ك/ک), a ZWNJ (نیمفاصله), Persian or Arabic-Indic digits, harakat. A raw comparison finds exactly one of those spellings, which for a listener who typed another is indistinguishable from a search that does not work. Use `lib/search.ts`; never write an `includes()` filter over text a user can see.
+- **Fold once per data load, never per keystroke.** `createSearchIndex` folds every searchable field of every row and keeps it; a keystroke only runs `indexOf`. Build the index in a `useMemo` keyed on the data, and the hits in another keyed on the terms.
+- **The engine is generic; the domain lives in `lib/librarySearch.ts`.** A new searchable entity gets a `*SearchFields` function there — "can I find this file by the folder it sits in?" is a product decision, and one buried in a `renderItem` cannot be tested. A field with no value must be reported as `null`, never `""`: an empty string is a field every query matches.
+- **Ranking is quality first, then the title, then position, then the caller's order.** Do not let a non-title field take a hit the title also made — the title is the only field carrying highlight ranges, so the swap loses the highlight and puts nothing in its place.
+- **A `ListHeaderComponent` that holds a `TextInput` must be an element, not an inline component function.** `() => <View/>` is a fresh component type every render, so the input remounts and the keyboard drops on the first keystroke.
+- `GlassChip`'s optional `count` renders a badge **in place of** the icon, so a row of chips cannot start clipping the moment a query is typed.
+
 ## Testing and validation
 
 - Jest + React Native Testing Library for units. Highest-value tests: `durationListenedSec` calculation, session finalization, checkpoint recovery, sync id mapping, and sync retry/idempotency.
