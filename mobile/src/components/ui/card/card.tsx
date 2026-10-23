@@ -50,7 +50,13 @@
 
 import { LinearGradient } from "expo-linear-gradient";
 import type { ReactNode } from "react";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import {
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewProps,
+  type ViewStyle,
+} from "react-native";
 
 import { useScheme, useTheme } from "@/hooks/use-theme";
 import { withAlpha } from "@/lib/palette";
@@ -58,7 +64,7 @@ import { card as cardTokens, elevation, hairline, radius as radii } from "@/them
 
 export type CardVariant = "card" | "inset";
 
-export type CardProps = {
+export type CardProps = Omit<ViewProps, "children" | "style"> & {
   children?: ReactNode;
   /**
    * `card` is a content card. `inset` is a step *below* one — a segmented
@@ -88,6 +94,7 @@ export function Card({
   clip,
   padded = true,
   style,
+  ...rest
 }: CardProps) {
   const theme = useTheme();
   const scheme = useScheme();
@@ -99,6 +106,7 @@ export function Card({
 
   return (
     <View
+      {...rest}
       style={[
         styles.base,
         {

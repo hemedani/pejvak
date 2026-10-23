@@ -4,7 +4,8 @@
  * One component rather than a row per screen. A track, a folder, a playlist and
  * an online course all answer the same question — "what is this, and what can I
  * do with it?" — and four hand-rolled rows eventually disagree about the tile
- * size, the corner radius, or where the progress bar sits. Here those are props.
+ * size, the corner radius, or where the progress bar sits. Here those are props,
+ * and the *layout* comes from the one shared `RowShell`.
  *
  * ## What makes it read as a card
  *
@@ -33,11 +34,10 @@
  *
  * ## Responsiveness
  *
- * The action cluster is planned by `planRowLayout`, which decides from the card's
- * width whether the controls sit beside the copy, move to their own line, or
- * collapse. **Nothing is ever silently dropped**: a control that does not fit is
- * offered in the overflow menu instead. The width is never measured — it comes
- * from `cardWidthFor`, so the right layout is available on the first frame.
+ * `RowShell` plans the action cluster from the card's width: beside the copy,
+ * on its own line, or in the overflow menu. **Nothing is ever silently
+ * dropped.** The width is never measured — it comes from `cardWidthFor`, so the
+ * right layout is available on the first frame.
  *
  * ## Why the actions are siblings of the pressable
  *
@@ -47,47 +47,31 @@
  */
 
 import { LinearGradient } from "expo-linear-gradient";
-import type { ReactNode } from "react";
-import { useState } from "react";
-import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from "react-native";
+import { StyleSheet, View, useWindowDimensions } from "react-native";
 
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
-import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
-import { GlassProgress, GlassSurface } from "@/components/ui/glass";
-import { HighlightedText } from "@/components/ui/highlighted-text";
-import { Icon, type IconName } from "@/components/ui/icon";
+import { GlassProgress } from "@/components/ui/glass";
+import { RowShell } from "@/components/ui/row/row-shell";
+import type { RowAction } from "@/components/ui/row/row-actions";
 import { useScheme, useTheme } from "@/hooks/use-theme";
-import { cardWidthFor, planRowLayout, type RowActionSlot } from "@/lib/cardLayout";
+import { cardWidthFor } from "@/lib/cardLayout";
 import { paletteFor, withAlpha } from "@/lib/palette";
+import type { StatusSpec } from "@/lib/rowStatus";
 import type { Range } from "@/lib/search";
-import { layout, radius as radii, spacing } from "@/theme/tokens";
+import {
+  bar,
+  layout,
+  spacing,
+  tile,
+  tileRadius as radiusForTile,
+} from "@/theme/tokens";
 
 /** How far the tile's halo reaches past the tile itself, per side. */
 const HALO_BLEED = 7;
-/** Touch target every action in the cluster is sized to. */
-const ACTION_SIZE = 40;
 
-export type MediaCardAction = {
-  key: string;
-  /** Rendered width in px — what `planRowLayout` budgets with. */
-  width: number;
-  /** Higher survives longer when the card runs out of room. */
-  priority: number;
-  /** The inline control. */
-  node: ReactNode;
-  /**
-   * The overflow-menu row. An action needs words as well as a glyph because the
-   * menu is a list of names, not a toolbar of icons — a bare `play` glyph in a
-   * vertical menu says nothing about *what* it would play.
-   */
-  icon: IconName;
-  label: string;
-  onPress: () => void;
-  /** Draws the menu row in the danger colour. */
-  danger?: boolean;
-};
+/** The action type keeps its old name for the screens that already use it. */
+export type MediaCardAction = RowAction;
 
 export type MediaCardProps = {
   title: string;
@@ -97,6 +81,8 @@ export type MediaCardProps = {
   meta?: string | null;
   /** Third line, quieter than the second. */
   detail?: string | null;
+  /** At most one state, e.g. "File missing" or "Streams". */
+  status?: StatusSpec | null;
   artworkUrl?: string | null;
   /** Seeds the aurora ramp, and is the fallback tile's letter. */
   paletteKey: string;
@@ -116,6 +102,8 @@ export type MediaCardProps = {
   onPress?: () => void;
   accessibilityLabel: string;
   accessibilityHint?: string;
+  /** The column's width. Pass it from a list so it is measured once. */
+  cardWidth?: number;
 };
 
 export function MediaCard({
@@ -123,9 +111,10 @@ export function MediaCard({
   titleRanges,
   meta,
   detail,
+  status,
   artworkUrl,
   paletteKey,
-  tileSize = 46,
+  tileSize = tile.lg,
   progressRatio,
   accent,
   marked = false,
@@ -133,59 +122,37 @@ export function MediaCard({
   onPress,
   accessibilityLabel,
   accessibilityHint,
+  cardWidth,
 }: MediaCardProps) {
   const theme = useTheme();
   const scheme = useScheme();
   const { width: windowWidth } = useWindowDimensions();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const ramp = paletteFor(paletteKey);
   const tint = accent ?? ramp[1];
-  const tileRadius = Math.round(tileSize * 0.3);
+  const tileRadius = radiusForTile(tileSize);
 
   /**
    * The card's own width, and the layout that fits in it.
    *
    * `layout` here is the screen's max content width, and `spacing.xl` the list's
-   * own horizontal padding — the two numbers `cardWidthFor` needs. Memoised on
-   * the width so the plan is not rebuilt for every row on every render.
+   * own horizontal padding — the two numbers `cardWidthFor` needs. A screen that
+   * already knows the width passes it, so this is only the standalone fallback.
    */
-  const cardWidth = cardWidthFor({
-    windowWidth,
-    inset: spacing.xl,
-    maxContentWidth: layout.maxContentWidth,
-  });
-
-  const slots: RowActionSlot[] = (actions ?? []).map((action) => ({
-    key: action.key,
-    width: action.width,
-    priority: action.priority,
-  }));
-
-  const plan = planRowLayout({
-    width: cardWidth,
-    padding: spacing.md * 2,
-    tile: tileSize,
-    gap: spacing.md,
-    actionGap: spacing.sm,
-    copyMinWidth: 132,
-    actions: slots,
-    overflowWidth: ACTION_SIZE,
-  });
-
-  const inline = plan.inline
-    .map((key) => (actions ?? []).find((action) => action.key === key))
-    .filter((action): action is MediaCardAction => action !== undefined);
-  const overflow = plan.overflow
-    .map((key) => (actions ?? []).find((action) => action.key === key))
-    .filter((action): action is MediaCardAction => action !== undefined);
+  const width =
+    cardWidth ??
+    cardWidthFor({
+      windowWidth,
+      inset: spacing.xl,
+      maxContentWidth: layout.maxContentWidth,
+    });
 
   // The card's own wash is Card's job now. The halo behind the artwork is
   // still local, and it needs a scheme-dependent alpha: the same tint reads
   // heavier on a dark canvas, and a halo tuned in one theme blooms in the other.
   const haloAlpha = scheme === "dark" ? 0.4 : 0.3;
 
-  const body = (
+  const leading = (
     <View style={styles.tileWrap}>
       <LinearGradient
         pointerEvents="none"
@@ -213,27 +180,6 @@ export function MediaCard({
     </View>
   );
 
-  const copy = (
-    <View style={styles.copy}>
-      <HighlightedText
-        type="bodyStrong"
-        numberOfLines={1}
-        text={title}
-        ranges={titleRanges ?? []}
-      />
-      {meta ? (
-        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-          {meta}
-        </ThemedText>
-      ) : null}
-      {detail ? (
-        <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
-          {detail}
-        </ThemedText>
-      ) : null}
-    </View>
-  );
-
   return (
     <Card
       wash={tint}
@@ -246,130 +192,31 @@ export function MediaCard({
         />
       ) : null}
 
-      <View style={[styles.content, plan.reflow ? styles.stack : styles.inline]}>
-        {onPress ? (
-          <ElasticPressable
-            accessibilityRole="button"
-            accessibilityLabel={accessibilityLabel}
-            accessibilityHint={accessibilityHint}
-            scaleTo={0.985}
-            overshootTo={1.004}
-            haptic="tap"
-            onPress={onPress}
-            style={[styles.body, plan.reflow ? null : styles.bodyInline]}>
-            {body}
-            {copy}
-          </ElasticPressable>
-        ) : (
-          <View style={[styles.body, plan.reflow ? null : styles.bodyInline]}>
-            {body}
-            {copy}
-          </View>
-        )}
-
-        {inline.length > 0 || overflow.length > 0 ? (
-          <View style={[styles.actions, plan.reflow ? styles.actionsReflow : null]}>
-            {inline.map((action) => (
-              <View key={action.key}>{action.node}</View>
-            ))}
-            {overflow.length > 0 ? (
-              <ElasticPressable
-                accessibilityRole="button"
-                accessibilityLabel={`More actions for ${title}`}
-                scaleTo={0.86}
-                overshootTo={1.08}
-                haptic="select"
-                onPress={() => setMenuOpen(true)}
-                style={styles.overflowButton}>
-                <Icon name="more" size={18} color={theme.icon} />
-              </ElasticPressable>
-            ) : null}
-          </View>
-        ) : null}
-      </View>
+      <RowShell
+        density="shelf"
+        leading={leading}
+        leadingWidth={tileSize}
+        title={title}
+        titleRanges={titleRanges}
+        meta={meta}
+        detail={detail}
+        status={status}
+        actions={actions}
+        onPress={onPress}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityHint={accessibilityHint}
+        cardWidth={width}
+      />
 
       {progressRatio !== undefined && progressRatio !== null ? (
         <GlassProgress
           progress={progressRatio}
           tint={tint}
-          thickness={4}
+          thickness={bar.thin}
           style={styles.progress}
         />
       ) : null}
-
-      {menuOpen ? (
-        <ActionMenu
-          title={title}
-          actions={overflow}
-          onClose={() => setMenuOpen(false)}
-        />
-      ) : null}
     </Card>
-  );
-}
-
-/**
- * The controls that did not fit, as named rows.
- *
- * A `Modal` rather than an in-card popover: the card lives inside a virtualised
- * list, and anything absolutely positioned inside it is clipped by the list's
- * own bounds. A `Modal` is a separate window, so the menu lands above everything
- * and needs no measurement of where the card was.
- */
-function ActionMenu({
-  title,
-  actions,
-  onClose,
-}: {
-  title: string;
-  actions: readonly MediaCardAction[];
-  onClose: () => void;
-}) {
-  const theme = useTheme();
-
-  return (
-    <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Close menu"
-        onPress={onClose}
-        style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]}
-      />
-      <View style={styles.menuHost} pointerEvents="box-none">
-        <GlassSurface tone="surfaceStrong" radius={radii.panel} clip style={styles.menu}>
-          <ThemedText type="overline" themeColor="textTertiary" numberOfLines={1}>
-            {title}
-          </ThemedText>
-          {actions.map((action) => (
-            <ElasticPressable
-              key={action.key}
-              accessibilityRole="button"
-              accessibilityLabel={action.label}
-              haptic="tap"
-              onPress={() => {
-                // Closed before the action runs: the action is usually a
-                // navigation, and a menu that outlives the screen under it would
-                // be left floating over the destination.
-                onClose();
-                action.onPress();
-              }}
-              style={styles.menuRow}>
-              <Icon
-                name={action.icon}
-                size={20}
-                color={action.danger ? theme.danger : theme.icon}
-              />
-              <ThemedText
-                type="body"
-                numberOfLines={1}
-                style={action.danger ? { color: theme.danger } : undefined}>
-                {action.label}
-              </ThemedText>
-            </ElasticPressable>
-          ))}
-        </GlassSurface>
-      </View>
-    </Modal>
   );
 }
 
@@ -378,27 +225,6 @@ const styles = StyleSheet.create({
     // No padding of its own: the content owns it, so the progress bar can run
     // the full width of the panel without fighting a parent inset.
   },
-  content: {
-    padding: spacing.md,
-    paddingRight: spacing.sm,
-  },
-  inline: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  stack: {
-    gap: spacing.sm,
-  },
-  body: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    minWidth: 0,
-  },
-  bodyInline: {
-    flex: 1,
-  },
   tileWrap: {
     alignItems: "center",
     justifyContent: "center",
@@ -406,45 +232,7 @@ const styles = StyleSheet.create({
   halo: {
     position: "absolute",
   },
-  copy: {
-    flex: 1,
-    gap: spacing.xxs,
-    minWidth: 0,
-  },
-  actions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  actionsReflow: {
-    justifyContent: "flex-end",
-  },
-  overflowButton: {
-    width: ACTION_SIZE,
-    height: ACTION_SIZE,
-    borderRadius: ACTION_SIZE / 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   progress: {
     marginTop: spacing.xs,
-  },
-  menuHost: {
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: spacing.xl,
-  },
-  menu: {
-    padding: spacing.md,
-    gap: spacing.xxs,
-  },
-  menuRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.md,
-    minHeight: 48,
   },
 });

@@ -103,6 +103,7 @@ export const ICON_GLYPHS = {
   person: "account-outline",
   logout: "logout",
   sparkle: "auto-fix",
+  info: "information-outline",
 } as const satisfies Record<string, MciName>;
 
 export type IconName = keyof typeof ICON_GLYPHS;

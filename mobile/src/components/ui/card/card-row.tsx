@@ -117,17 +117,24 @@ export function CardRow({
     </>
   );
 
+  // The line starts where the words start, not at the card's edge: a full-bleed
+  // rule cuts the badge off the row it belongs to.
+  const dividerInset =
+    cardTokens.padding + (icon && !flush ? cardTokens.badge + spacing.md : 0);
+  const divided = position !== "first" && position !== "only";
+
   return (
-    <View
-      style={[
-        styles.row,
-        // Every row but the first carries the divider, so the card has no stray
-        // line against its own top edge.
-        position !== "first" && position !== "only"
-          ? { borderTopWidth: hairline, borderTopColor: theme.outlineVariant }
-          : null,
-        style,
-      ]}>
+    <View style={[styles.row, style]}>
+      {divided ? (
+        <View
+          testID="card-row-divider"
+          pointerEvents="none"
+          style={[
+            styles.divider,
+            { left: dividerInset, backgroundColor: theme.outlineVariant },
+          ]}
+        />
+      ) : null}
       {onPress ? (
         <ElasticPressable
           accessibilityRole="button"
@@ -148,7 +155,14 @@ export function CardRow({
 
 const styles = StyleSheet.create({
   row: {
+    position: "relative",
     minHeight: cardTokens.rowMinHeight,
+  },
+  divider: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    height: hairline,
   },
   content: {
     flexDirection: "row",

@@ -238,3 +238,52 @@ describe("cardWidthFor", () => {
     expect(layout.overflow).toEqual([]);
   });
 });
+
+describe("a dense row", () => {
+  const DENSE_ROW = {
+    padding: 16,
+    tile: 40,
+    gap: 12,
+    actionGap: 8,
+    copyMinWidth: 132,
+    overflowWidth: 40,
+  };
+
+  const four = [
+    action("play", 9),
+    action("add", 7),
+    action("history", 5),
+    action("delete", 3),
+  ];
+
+  it.each([320, 360])("reflows four controls at %ipt before hiding one", (width) => {
+    const layout = planRowLayout({ ...DENSE_ROW, width, actions: four });
+
+    expect(layout.reflow).toBe(true);
+    expect(layout.inline).toEqual(["play", "add", "history", "delete"]);
+    expect(layout.overflow).toEqual([]);
+  });
+
+  it("keeps a 52pt primary control beside a 40pt tile when it fits", () => {
+    const actions = [
+      action("play", 9, 52),
+      action("history", 5, 36),
+      action("delete", 3, 36),
+    ];
+
+    const wide = planRowLayout({ ...DENSE_ROW, width: 360, actions });
+    expect(wide.reflow).toBe(false);
+    expect(wide.overflow).toEqual([]);
+
+    const narrow = planRowLayout({ ...DENSE_ROW, width: 320, actions });
+    expect(narrow.reflow).toBe(true);
+    expect(narrow.overflow).toEqual([]);
+  });
+
+  it("hides everything rather than inventing room when the width is zero", () => {
+    const layout = planRowLayout({ ...DENSE_ROW, width: 0, actions: four });
+
+    expect(layout.inline).toEqual([]);
+    expect(layout.overflow).toEqual(["play", "add", "history", "delete"]);
+  });
+});
