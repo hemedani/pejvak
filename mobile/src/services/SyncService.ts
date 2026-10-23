@@ -55,11 +55,19 @@ function registerTrack(track: LocalTrack): Promise<RegisterTrackResult> {
       durationSec: track.durationSec,
       fileSizeBytes: track.fileSizeBytes,
       isAudiobook: track.isAudiobook,
+      origin: track.origin,
       ...(track.fileName ? { fileName: track.fileName } : {}),
       ...(track.mimeType ? { mimeType: track.mimeType } : {}),
       ...(track.author ? { author: track.author } : {}),
       ...(track.narrator ? { narrator: track.narrator } : {}),
       ...(isRemoteArtwork(track.artworkUrl) ? { artworkUrl: track.artworkUrl } : {}),
+      ...(track.sourceId !== null ? { sourceId: track.sourceId } : {}),
+      ...(track.externalId !== null ? { externalId: track.externalId } : {}),
+      ...(track.collectionKey !== null ? { collectionKey: track.collectionKey } : {}),
+      ...(track.collectionTitle !== null
+        ? { collectionTitle: track.collectionTitle }
+        : {}),
+      ...(track.downloadedAt !== null ? { downloadedAt: track.downloadedAt } : {}),
     },
     get: { _id: 1, title: 1, contentHash: 1 },
   };

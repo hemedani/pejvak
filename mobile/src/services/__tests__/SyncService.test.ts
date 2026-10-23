@@ -210,6 +210,12 @@ function registeredHashes(): string[] {
     .map(([request]) => String(request.details?.set?.contentHash));
 }
 
+function registeredSets(): Record<string, unknown>[] {
+  return callTypedActMock.mock.calls
+    .filter(([request]) => request.act === "registerTrack")
+    .map(([request]) => request.details?.set ?? {});
+}
+
 function track(overrides: Partial<LocalTrack> = {}): LocalTrack {
   return {
     id: "t1",
@@ -489,6 +495,38 @@ describe("syncPending", () => {
     ]);
     expect(payload.annotations).toEqual([
       expect.objectContaining({ clientId: "a1", deleted: false }),
+    ]);
+  });
+
+  it("sends a track's origin and online provenance when registering it", async () => {
+    db.tracks.set("t1", track());
+    db.tracks.set(
+      "t2",
+      track({
+        id: "t2",
+        contentHash: "hash-2",
+        origin: "online",
+        sourceId: "archive-fa",
+        externalId: "item-1",
+        collectionKey: "archive-fa:item-1",
+        collectionTitle: "Course",
+        downloadedAt: 123,
+      }),
+    );
+
+    await syncPending();
+
+    expect(registeredSets()).toEqual([
+      expect.objectContaining({ contentHash: "hash-1", origin: "local" }),
+      expect.objectContaining({
+        contentHash: "hash-2",
+        origin: "online",
+        sourceId: "archive-fa",
+        externalId: "item-1",
+        collectionKey: "archive-fa:item-1",
+        collectionTitle: "Course",
+        downloadedAt: 123,
+      }),
     ]);
   });
 
