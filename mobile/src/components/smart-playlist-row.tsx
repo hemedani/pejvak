@@ -7,34 +7,23 @@
  * act on it if the row says what is missing.
  */
 
-import { StyleSheet, View } from "react-native";
-
-import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
-import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
-import { Icon, type IconName } from "@/components/ui/icon";
+import { Icon } from "@/components/ui/icon";
+import { ListRow, type ListRowPosition } from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
 import { formatDuration } from "@/lib/history";
 import { paletteFor } from "@/lib/palette";
-import type { SmartPlaylist, SmartRuleId } from "@/lib/smartPlaylists";
-import { card as cardTokens, spacing } from "@/theme/tokens";
-
-const RULE_ICONS: Record<SmartRuleId, IconName> = {
-  continue: "play",
-  series: "folder",
-  commute: "speed",
-  forgotten: "heart",
-  review: "notes",
-};
+import type { SmartPlaylist } from "@/lib/smartPlaylists";
+import { tile, tileRadius } from "@/theme/tokens";
 
 export type SmartPlaylistRowProps = {
   playlist: SmartPlaylist;
   onPress: () => void;
+  /** Set by `ListGroup`; a row outside a group is its own whole card. */
+  position?: ListRowPosition;
 };
 
-export function SmartPlaylistRow({ playlist, onPress }: SmartPlaylistRowProps) {
+export function SmartPlaylistRow({ playlist, onPress, position }: SmartPlaylistRowProps) {
   const theme = useTheme();
   const { rule, picks, totalDurationSec, emptyReason, summary } = playlist;
   const empty = picks.length === 0;
@@ -47,65 +36,25 @@ export function SmartPlaylistRow({ playlist, onPress }: SmartPlaylistRowProps) {
     : [summary.replace(/\.$/, ""), formatDuration(totalDurationSec)].filter(Boolean).join(" · ");
 
   return (
-    <Card elevated={false} style={styles.row}>
-      <ElasticPressable
-        accessibilityRole="button"
-        accessibilityLabel={`Open smart playlist ${rule.title}`}
-        accessibilityState={{ disabled: empty }}
-        disabled={empty}
-        onPress={onPress}
-        style={styles.rowMain}>
-        <PaletteTile ramp={paletteFor(rule.id)} label={rule.title} size={44} radius={13} />
-        <View style={styles.rowCopy}>
-          <View style={styles.titleRow}>
-            <Icon name={RULE_ICONS[rule.id]} size={14} color={empty ? theme.textTertiary : theme.accent} />
-            <ThemedText type="bodyStrong" numberOfLines={1} style={styles.title}>
-              {rule.title}
-            </ThemedText>
-          </View>
-          <ThemedText type="caption" themeColor="textSecondary" numberOfLines={2}>
-            {detail}
-          </ThemedText>
-        </View>
-      </ElasticPressable>
-
-      <BouncyIconButton
-        name="chevronRight"
-        accessibilityLabel={`Open ${rule.title}`}
-        size={36}
-        iconSize={16}
-        tone="ghost"
-        disabled={empty}
-        onPress={onPress}
-      />
-    </Card>
+    <ListRow
+      position={position}
+      leading={
+        <PaletteTile
+          ramp={paletteFor(rule.id)}
+          label={rule.title}
+          size={tile.md}
+          radius={tileRadius(tile.md)}
+        />
+      }
+      leadingWidth={tile.md}
+      title={rule.title}
+      meta={detail}
+      disabled={empty}
+      disabledReason={empty ? (emptyReason ?? rule.tagline) : undefined}
+      onPress={onPress}
+      accessibilityLabel={`Open smart playlist ${rule.title}`}
+      accessibilityHint={empty ? (emptyReason ?? rule.tagline) : undefined}
+      trailing={<Icon name="chevronRight" size={16} color={theme.textTertiary} />}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: cardTokens.rowPadding,
-  },
-  rowMain: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    minWidth: 0,
-  },
-  rowCopy: {
-    flex: 1,
-    gap: spacing.xxs,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  title: {
-    flexShrink: 1,
-  },
-});

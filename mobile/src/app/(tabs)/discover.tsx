@@ -21,16 +21,15 @@
 
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { RefreshControl, StyleSheet, View } from "react-native";
+import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { CollectionCard } from "@/components/online/collection-card";
 import { LanguageRow } from "@/components/online/language-row";
-import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
-import { GlassChip } from "@/components/ui/glass";
+import { SegmentedControl } from "@/components/ui/card/segmented-control";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
+import { EmptyState, ListGroup } from "@/components/ui/row";
 import { SearchField } from "@/components/ui/search-field";
 import {
   useContinueListening,
@@ -44,10 +43,11 @@ import {
   describeKnownTrackCount,
   describeTrackCount,
   LANGUAGES,
+  languageSearchFields,
   sourcesForLanguage,
-  type OnlineLanguage,
 } from "@/lib/online";
 import { describeRunOutcome, runProgressRatio } from "@/lib/playbackContext";
+import { createSearchIndex, foldQuery, searchIndex } from "@/lib/search";
 import { formatClock } from "@/lib/time";
 import { ContextService } from "@/services/ContextService";
 import { dockInset, spacing } from "@/theme/tokens";
@@ -69,8 +69,7 @@ const DISCOVER_VIEWS: readonly { value: DiscoverView; label: string }[] = [
  */
 type DiscoverRow =
   | { kind: "continue"; item: ContinueItem }
-  | { kind: "favorite"; item: LocalOnlineCollection }
-  | { kind: "language"; item: OnlineLanguage; sourceCount: number };
+  | { kind: "favorite"; item: LocalOnlineCollection };
 
 /** The second line under a continued collection: how far in, and where. */
 function continueMeta(entry: ContinueItem): string {
@@ -139,32 +138,29 @@ export default function DiscoverScreen() {
     }, [refreshAll]),
   );
 
-  const query = search.trim().toLowerCase();
-  const languages = useMemo(() => {
-    if (query.length === 0) {
-      return LANGUAGES;
-    }
-    return LANGUAGES.filter(
-      (language) =>
-        language.name.toLowerCase().includes(query) ||
-        language.nativeName.toLowerCase().includes(query) ||
-        language.code === query,
-    );
-  }, [query]);
+  /**
+   * Every language field folded once per catalogue, never per keystroke.
+   *
+   * The catalogue is static, so the index is built once. Folding here is what
+   * makes «فارسي» with an Arabic yeh find «فارسی» — a raw `includes` would miss
+   * it, which to the listener is indistinguishable from a search that is broken.
+   */
+  const languageIndex = useMemo(
+    () => createSearchIndex(LANGUAGES, languageSearchFields, "title"),
+    [],
+  );
+  const languageHits = useMemo(
+    () => searchIndex(languageIndex, foldQuery(search)),
+    [languageIndex, search],
+  );
+  const searchingLanguages = search.trim().length > 0;
 
   const rows = useMemo<DiscoverRow[]>(() => {
     if (view === "continue") {
       return continuing.map((item) => ({ kind: "continue", item }));
     }
-    if (view === "favorites") {
-      return favorites.map((item) => ({ kind: "favorite", item }));
-    }
-    return languages.map((language) => ({
-      kind: "language",
-      item: language,
-      sourceCount: sourcesForLanguage(language.code).length,
-    }));
-  }, [view, continuing, favorites, languages]);
+    return favorites.map((item) => ({ kind: "favorite", item }));
+  }, [view, continuing, favorites]);
 
   /** Tapping a continued collection picks the collection up, not the track. */
   const resume = useCallback(
@@ -223,19 +219,7 @@ export default function DiscoverScreen() {
         );
       }
 
-      return (
-        <Reveal index={index} limit={10}>
-          <Card>
-            <LanguageRow
-              language={item.item}
-              sourceCount={item.sourceCount}
-              onPress={() =>
-                router.push({ pathname: "/online/language/[code]", params: { code: item.item.code } })
-              }
-            />
-          </Card>
-        </Reveal>
-      );
+      return null;
     },
     [removeFavorite, resume, router],
   );
@@ -254,17 +238,83 @@ export default function DiscoverScreen() {
 
   const loading = view === "continue" ? continueLoading : favoritesLoading;
 
-  const emptyMessage = (() => {
-    if (view === "continue") {
-      return "Nothing in progress. Start a collection and it will wait for you here.";
-    }
-    if (view === "favorites") {
-      return "No saved collections yet. Tap the bookmark on any collection to keep it here.";
-    }
-    return query.length > 0
-      ? `No language matches “${search.trim()}”.`
-      : "No languages to show.";
-  })();
+  const emptyView =
+    view === "continue" ? (
+      <EmptyState
+        icon="playCircle"
+        title="Nothing in progress"
+        message="Start a collection and it will wait for you here."
+      />
+    ) : (
+      <EmptyState
+        icon="bookmark"
+        title="No saved collections"
+        message="Tap the bookmark on any collection to keep it here."
+      />
+    );
+
+  const browseEmpty = (
+    <EmptyState
+      icon={searchingLanguages ? "search" : "globe"}
+      title={
+        searchingLanguages
+          ? `No language matches “${search.trim()}”`
+          : "No languages to show"
+      }
+    />
+  );
+
+  const header = (
+    <View style={styles.headerBlock}>
+      <ScreenHeader overline="DISCOVER" title="Listen online" subtitle={subtitle} />
+      <SegmentedControl
+        options={DISCOVER_VIEWS}
+        value={view}
+        onChange={setView}
+        accessibilityLabel="Discover lists"
+      />
+      {view === "browse" ? (
+        <SearchField
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Persian, فارسی…"
+          accessibilityLabel="Find a language"
+        />
+      ) : null}
+    </View>
+  );
+
+  if (view === "browse") {
+    return (
+      <Screen wash={theme.accent}>
+        <ScrollView
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled">
+          {header}
+          {languageHits.length > 0 ? (
+            <ListGroup>
+              {languageHits.map((hit) => (
+                <LanguageRow
+                  key={hit.item.code}
+                  language={hit.item}
+                  sourceCount={sourcesForLanguage(hit.item.code).length}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/online/language/[code]",
+                      params: { code: hit.item.code },
+                    })
+                  }
+                />
+              ))}
+            </ListGroup>
+          ) : (
+            browseEmpty
+          )}
+        </ScrollView>
+      </Screen>
+    );
+  }
 
   return (
     <Screen wash={theme.accent}>
@@ -273,50 +323,17 @@ export default function DiscoverScreen() {
         keyExtractor={(row) =>
           row.kind === "continue"
             ? `c:${row.item.run.contextKey}`
-            : row.kind === "favorite"
-              ? `f:${row.item.key}`
-              : `l:${row.item.code}`
+            : `f:${row.item.key}`
         }
         renderItem={renderItem}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
-          view === "browse" ? undefined : (
-            <RefreshControl refreshing={loading} onRefresh={() => void refreshAll()} />
-          )
+          <RefreshControl refreshing={loading} onRefresh={() => void refreshAll()} />
         }
-        ListHeaderComponent={
-          <View style={styles.headerBlock}>
-            <ScreenHeader overline="DISCOVER" title="Listen online" subtitle={subtitle} />
-            <View style={styles.filters}>
-              {DISCOVER_VIEWS.map((option) => (
-                <GlassChip
-                  key={option.value}
-                  label={option.label}
-                  selected={view === option.value}
-                  accessibilityLabel={`Show ${option.label.toLowerCase()}`}
-                  onPress={() => setView(option.value)}
-                />
-              ))}
-            </View>
-            {view === "browse" ? (
-              <SearchField
-                value={search}
-                onChangeText={setSearch}
-                placeholder="Persian, فارسی…"
-                accessibilityLabel="Find a language"
-              />
-            ) : null}
-          </View>
-        }
-        ListEmptyComponent={
-          loading ? null : (
-            <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-              {emptyMessage}
-            </ThemedText>
-          )
-        }
+        ListHeaderComponent={header}
+        ListEmptyComponent={loading ? null : emptyView}
       />
     </Screen>
   );
@@ -333,14 +350,5 @@ const styles = StyleSheet.create({
   headerBlock: {
     gap: spacing.md,
     paddingBottom: spacing.xs,
-  },
-  filters: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  empty: {
-    textAlign: "center",
-    paddingVertical: spacing.huge,
   },
 });

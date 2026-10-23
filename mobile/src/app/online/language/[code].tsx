@@ -15,61 +15,56 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
+import { EmptyState, ListGroup, ListRow, type ListRowPosition } from "@/components/ui/row";
 import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
-
 import { Icon } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import { findLanguage, sourcesForLanguage, type OnlineSource } from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
-import { radius as radii, spacing } from "@/theme/tokens";
+import { spacing, tile, tileRadius } from "@/theme/tokens";
 
-/** One provider, as a card. */
-function SourceCard({ source, onPress }: { source: OnlineSource; onPress: () => void }) {
+/** One provider, as a dense row. */
+function SourceRow({
+  source,
+  onPress,
+  position,
+}: {
+  source: OnlineSource;
+  onPress: () => void;
+  position?: ListRowPosition;
+}) {
   const theme = useTheme();
   const ramp = paletteFor(source.id);
 
   return (
-    <Card style={styles.card}>
-      <ElasticPressable
-        accessibilityRole="button"
-        accessibilityLabel={`${source.name}, ${source.nativeName}`}
-        accessibilityHint="Opens this source's collections"
-        scaleTo={0.985}
-        overshootTo={1.004}
-        haptic="tap"
-        onPress={onPress}
-        style={styles.cardPressable}>
-        {/* The mark is a gradient square rather than the provider's logo: we do
-            not hotlink their assets, and a deterministic tile keeps the row
-            recognisable without borrowing someone else's brand. */}
+    <ListRow
+      position={position}
+      leading={
+        /* The mark is a gradient square rather than the provider's logo: we
+           do not hotlink their assets, and a deterministic tile keeps the row
+           recognisable without borrowing someone else's brand. */
         <View style={[styles.mark, { backgroundColor: ramp[1] }]}>
-          <Icon name="radio" size={24} color={theme.onAccent} />
+          <Icon name="radio" size={20} color={theme.onAccent} />
         </View>
-        <View style={styles.cardCopy}>
-          <ThemedText type="bodyStrong" numberOfLines={1}>
-            {source.name}
-          </ThemedText>
-          <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-            {source.nativeName}
-          </ThemedText>
-          <ThemedText type="caption" themeColor="textTertiary" numberOfLines={2}>
-            {source.description}
-          </ThemedText>
-        </View>
-        <Icon name="chevronRight" size={18} color={theme.textTertiary} />
-      </ElasticPressable>
-    </Card>
+      }
+      leadingWidth={tile.md}
+      title={source.name}
+      titleLines={1}
+      meta={source.nativeName}
+      detail={source.description}
+      trailing={<Icon name="chevronRight" size={16} color={theme.textTertiary} />}
+      onPress={onPress}
+      accessibilityLabel={`${source.name}, ${source.nativeName}`}
+      accessibilityHint="Opens this source's collections"
+    />
   );
 }
 
 export default function LanguageSourcesScreen() {
   const params = useLocalSearchParams<{ code?: string }>();
   const router = useRouter();
-  const theme = useTheme();
   const code = params.code ?? "";
   const language = useMemo(() => findLanguage(code), [code]);
   const sources = useMemo(() => sourcesForLanguage(code), [code]);
@@ -91,25 +86,29 @@ export default function LanguageSourcesScreen() {
                 SOURCES
               </ThemedText>
             </Reveal>
-            {sources.map((source, index) => (
-              <Reveal key={source.id} index={index + 1}>
-                <SourceCard
-                  source={source}
-                  onPress={() =>
-                    router.push({ pathname: "/online/source/[id]", params: { id: source.id } })
-                  }
-                />
-              </Reveal>
-            ))}
+            <Reveal index={1} limit={8}>
+              <ListGroup>
+                {sources.map((source) => (
+                  <SourceRow
+                    key={source.id}
+                    source={source}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/online/source/[id]",
+                        params: { id: source.id },
+                      })
+                    }
+                  />
+                ))}
+              </ListGroup>
+            </Reveal>
           </View>
         ) : (
-          <View style={styles.empty}>
-            <Icon name="globe" size={28} color={theme.textTertiary} />
-            <ThemedText type="caption" themeColor="textTertiary" style={styles.emptyText}>
-              No free sources for {language?.name ?? "this language"} yet. We add them as we find
-              them, and the rest of the app is unaffected.
-            </ThemedText>
-          </View>
+          <EmptyState
+            icon="globe"
+            title={`No sources for ${language?.name ?? "this language"} yet`}
+            message="We add them as we find them, and the rest of the app is unaffected."
+          />
         )}
       </ScrollView>
     </Screen>
@@ -125,33 +124,11 @@ const styles = StyleSheet.create({
   section: {
     gap: spacing.sm,
   },
-  card: {
-    padding: spacing.md,
-  },
-  cardPressable: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
   mark: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
+    width: tile.md,
+    height: tile.md,
+    borderRadius: tileRadius(tile.md),
     alignItems: "center",
     justifyContent: "center",
-  },
-  cardCopy: {
-    flex: 1,
-    gap: spacing.xxs,
-    minWidth: 0,
-  },
-  empty: {
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.huge,
-    paddingHorizontal: spacing.xl,
-  },
-  emptyText: {
-    textAlign: "center",
   },
 });

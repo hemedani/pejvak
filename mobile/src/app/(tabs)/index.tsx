@@ -2,8 +2,6 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { StyleSheet, View } from "react-native";
 
-import { AddToPlaylistButton, useAddToPlaylist } from "@/components/add-to-playlist";
-import { ContextHistoryButton } from "@/components/context-history";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
@@ -12,10 +10,18 @@ import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip } from "@/components/ui/glass";
-import { Icon } from "@/components/ui/icon";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import {
+  addToPlaylistAction,
+  detailsAction,
+  EmptyState,
+  historyAction,
+  InlineNotice,
+  playFolderAction,
+  playPlaylistAction,
+} from "@/components/ui/row";
 import { SearchField } from "@/components/ui/search-field";
 import { useArtworkBackfill } from "@/hooks/use-artwork-backfill";
 import { useFolders } from "@/hooks/use-folders";
@@ -34,6 +40,7 @@ import {
 import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
 import { paletteFor } from "@/lib/palette";
 import { formatPlayCount } from "@/lib/playbackContext";
+import { describeTrackStatus } from "@/lib/trackStatus";
 import { describeRecentWhen, recentPlayKey, type RecentPlay } from "@/lib/recentPlays";
 import {
   createSearchIndex,
@@ -48,8 +55,14 @@ import { FolderService } from "@/services/FolderService";
 import { LocalDBService } from "@/services/LocalDBService";
 import { PlaylistService } from "@/services/PlaylistService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
-import { useContextHistoryStore } from "@/store/contextHistoryStore";
-import { dockInset, spacing } from "@/theme/tokens";
+import {
+  control,
+  dockInset,
+  iconSize,
+  spacing,
+  tile,
+  tileRadius,
+} from "@/theme/tokens";
 
 /**
  * The header block occupies reveal indices 1–5 (search field, view toggle,
@@ -170,13 +183,6 @@ export default function LibraryScreen() {
   const { folders, refresh: refreshFolders } = useFolders();
   const { missing, refresh: refreshMissing } = useMissingTracks();
   const { run: runArtworkBackfill } = useArtworkBackfill();
-  // The two card actions that open a global sheet. Taken here rather than
-  // through their button components so the overflow menu can offer the same
-  // action as a named row — a collapsed control that did nothing would be
-  // worse than one that clipped.
-  const openPlaylistPicker = useAddToPlaylist();
-  const openContextHistory = useContextHistoryStore((state) => state.open);
-
   const terms = useMemo(() => foldQuery(query), [query]);
   const searching = terms.length > 0;
 
@@ -413,8 +419,8 @@ export default function LibraryScreen() {
           <BouncyIconButton
             name="settings"
             accessibilityLabel="Settings"
-            size={42}
-            iconSize={20}
+            size={control.lg}
+            iconSize={iconSize.lg}
             tone="glass"
             onPress={() => router.push("/settings")}
           />
@@ -492,8 +498,8 @@ export default function LibraryScreen() {
                 ramp={paletteFor(continueTrack.contentHash)}
                 label={continueTrack.title}
                 source={continueTrack.artworkUrl}
-                size={58}
-                radius={16}
+                size={tile.xl}
+                radius={tileRadius(tile.xl)}
               />
               <View style={styles.continueCopy}>
                 <ThemedText type="overline" themeColor="textTertiary">
@@ -526,24 +532,19 @@ export default function LibraryScreen() {
           banner would just train the listener to ignore it. */}
       {missing.length > 0 && !searching ? (
         <Reveal index={4}>
-          <Card>
-            <ElasticPressable
-              accessibilityRole="button"
-              accessibilityLabel={`${missing.length} file${missing.length === 1 ? "" : "s"} missing. Find them again.`}
-              onPress={() => router.push("/missing")}
-              style={styles.missingMain}>
-              <Icon name="alert" size={20} color={theme.danger} />
-              <View style={styles.missingCopy}>
-                <ThemedText type="bodyStrong" numberOfLines={1}>
-                  {missing.length} file{missing.length === 1 ? "" : "s"} missing
-                </ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                  Your history is still here — find them again
-                </ThemedText>
-              </View>
-              <Icon name="chevronRight" size={16} color={theme.textTertiary} />
-            </ElasticPressable>
-          </Card>
+          <ElasticPressable
+            accessibilityRole="button"
+            accessibilityLabel={`${missing.length} file${missing.length === 1 ? "" : "s"} missing. Find them again.`}
+            scaleTo={0.985}
+            overshootTo={1.004}
+            haptic="tap"
+            onPress={() => router.push("/missing")}>
+            <InlineNotice
+              tone="danger"
+              title={`${missing.length} file${missing.length === 1 ? "" : "s"} missing`}
+              message="Your history is still here — find them again"
+            />
+          </ElasticPressable>
         </Reveal>
       ) : null}
 
@@ -607,76 +608,26 @@ export default function LibraryScreen() {
           accessibilityLabel={`Open folder ${folder.name}`}
           accessibilityHint="Opens this folder"
           actions={[
-            {
-              key: "play",
-              width: 40,
-              priority: 4,
-              icon: "play",
-              label: `Play ${folder.name}`,
+            playFolderAction({
+              title: folder.name,
               onPress: () => void playFolder(folder.key),
-              node: (
-                <BouncyIconButton
-                  name="play"
-                  accessibilityLabel={`Play folder ${folder.name}`}
-                  size={40}
-                  iconSize={18}
-                  tone="glass"
-                  onPress={() => void playFolder(folder.key)}
-                />
-              ),
-            },
-            {
-              key: "add",
-              width: 40,
-              priority: 3,
-              icon: "playlistAdd",
-              label: "Add to a playlist",
-              onPress: () =>
-                void openPlaylistPicker({
-                  title: folder.name,
-                  ramp,
-                  artwork: folder.artworkUrl,
-                  isBatch: true,
-                  resolveTrackIds,
-                }),
-              node: (
-                <AddToPlaylistButton
-                  title={folder.name}
-                  ramp={ramp}
-                  artwork={folder.artworkUrl}
-                  isBatch
-                  size={40}
-                  iconSize={18}
-                  tone="glass"
-                  resolveTrackIds={resolveTrackIds}
-                />
-              ),
-            },
-            {
-              key: "history",
-              width: 40,
-              priority: 2,
-              icon: "history",
-              label: "Listening history",
-              onPress: () =>
-                openContextHistory({
-                  type: "folder",
-                  key: folder.key,
-                  title: folder.name,
-                  artwork: folder.artworkUrl,
-                }),
-              node: (
-                <ContextHistoryButton
-                  type="folder"
-                  contextKey={folder.key}
-                  title={folder.name}
-                  artwork={folder.artworkUrl}
-                  size={40}
-                  iconSize={18}
-                  tone="glass"
-                />
-              ),
-            },
+              tone: "glass",
+            }),
+            addToPlaylistAction({
+              title: folder.name,
+              ramp,
+              artwork: folder.artworkUrl,
+              resolveTrackIds,
+              isBatch: true,
+              tone: "glass",
+            }),
+            historyAction({
+              type: "folder",
+              contextKey: folder.key,
+              title: folder.name,
+              artwork: folder.artworkUrl,
+              tone: "glass",
+            }),
           ]}
         />
       </Reveal>
@@ -720,72 +671,24 @@ export default function LibraryScreen() {
           accessibilityLabel={`Open playlist ${playlist.title}`}
           accessibilityHint="Opens this playlist"
           actions={[
-            {
-              key: "play",
-              width: 40,
-              priority: 4,
-              icon: "play",
-              label: `Play ${playlist.title}`,
+            playPlaylistAction({
+              title: playlist.title,
               onPress: () => void playPlaylist(playlist.id),
-              node: (
-                <BouncyIconButton
-                  name="play"
-                  accessibilityLabel={`Play playlist ${playlist.title}`}
-                  size={40}
-                  iconSize={18}
-                  tone="glass"
-                  onPress={() => void playPlaylist(playlist.id)}
-                />
-              ),
-            },
-            {
-              key: "add",
-              width: 40,
-              priority: 3,
-              icon: "playlistAdd",
-              label: "Add to a playlist",
-              onPress: () =>
-                void openPlaylistPicker({
-                  title: playlist.title,
-                  ramp,
-                  isBatch: true,
-                  resolveTrackIds,
-                }),
-              node: (
-                <AddToPlaylistButton
-                  title={playlist.title}
-                  ramp={ramp}
-                  isBatch
-                  size={40}
-                  iconSize={18}
-                  tone="glass"
-                  resolveTrackIds={resolveTrackIds}
-                />
-              ),
-            },
-            {
-              key: "history",
-              width: 40,
-              priority: 2,
-              icon: "history",
-              label: "Listening history",
-              onPress: () =>
-                openContextHistory({
-                  type: "playlist",
-                  key: playlist.id,
-                  title: playlist.title,
-                }),
-              node: (
-                <ContextHistoryButton
-                  type="playlist"
-                  contextKey={playlist.id}
-                  title={playlist.title}
-                  size={40}
-                  iconSize={18}
-                  tone="glass"
-                />
-              ),
-            },
+              tone: "glass",
+            }),
+            addToPlaylistAction({
+              title: playlist.title,
+              ramp,
+              resolveTrackIds,
+              isBatch: true,
+              tone: "glass",
+            }),
+            historyAction({
+              type: "playlist",
+              contextKey: playlist.id,
+              title: playlist.title,
+              tone: "glass",
+            }),
           ]}
         />
       </Reveal>
@@ -805,49 +708,13 @@ export default function LibraryScreen() {
     const openDetails = () => router.push(`/track/${track.id}`);
 
     return [
-      {
-        key: "add",
-        width: 40,
-        priority: 2,
-        icon: "playlistAdd",
-        label: "Add to a playlist",
-        onPress: () =>
-          void openPlaylistPicker({
-            title: track.title,
-            ramp,
-            artwork: track.artworkUrl,
-            trackIds: [track.id],
-          }),
-        node: (
-          <AddToPlaylistButton
-            trackIds={[track.id]}
-            title={track.title}
-            ramp={ramp}
-            artwork={track.artworkUrl}
-            size={40}
-            iconSize={18}
-            tone="ghost"
-          />
-        ),
-      },
-      {
-        key: "details",
-        width: 40,
-        priority: 1,
-        icon: "chevronRight",
-        label: "Details",
-        onPress: openDetails,
-        node: (
-          <BouncyIconButton
-            name="chevronRight"
-            accessibilityLabel={`Details for ${track.title}`}
-            size={40}
-            iconSize={18}
-            tone="ghost"
-            onPress={openDetails}
-          />
-        ),
-      },
+      addToPlaylistAction({
+        title: track.title,
+        ramp,
+        artwork: track.artworkUrl,
+        trackIds: [track.id],
+      }),
+      detailsAction({ title: track.title, onPress: openDetails }),
     ];
   };
 
@@ -873,6 +740,7 @@ export default function LibraryScreen() {
             .join(" · ")}
           artworkUrl={track.artworkUrl}
           paletteKey={track.contentHash}
+          status={describeTrackStatus(track)}
           onPress={() => playTrack(track.id)}
           accessibilityLabel={`Play ${track.title}`}
           accessibilityHint="Plays this track on its own"
@@ -916,11 +784,19 @@ export default function LibraryScreen() {
           data={trackRows}
           keyExtractor={(item) => item.track.id}
           ListEmptyComponent={
-            <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-              {searching
-                ? `No track matches “${query.trim()}”.`
-                : "No tracks yet. Add an audio file to start listening."}
-            </ThemedText>
+            searching ? (
+              <EmptyState
+                icon="search"
+                title={`No track matches “${query.trim()}”`}
+                message="Try another spelling — Persian variants are matched automatically."
+              />
+            ) : (
+              <EmptyState
+                icon="music"
+                title="No tracks yet"
+                message="Add an audio file to start listening."
+              />
+            )
           }
           renderItem={({ item, index }) => {
             const { track, hit } = item;
@@ -939,6 +815,7 @@ export default function LibraryScreen() {
                   // way to the most useful one: why this card is a result. With
                   // no query it is the last-played stamp.
                   detail={matched ?? formatLastPlayed(track.lastPlayedAt)}
+                  status={describeTrackStatus(track)}
                   artworkUrl={track.artworkUrl}
                   paletteKey={track.contentHash}
                   onPress={() => playAt(track.id)}
@@ -956,11 +833,19 @@ export default function LibraryScreen() {
           data={folderRows}
           keyExtractor={(item) => item.folder.key || "root"}
           ListEmptyComponent={
-            <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-              {searching
-                ? `No folder matches “${query.trim()}”.`
-                : "No folders yet. They appear automatically once your audio sits in folders on the device."}
-            </ThemedText>
+            searching ? (
+              <EmptyState
+                icon="search"
+                title={`No folder matches “${query.trim()}”`}
+                message="Try another spelling — Persian variants are matched automatically."
+              />
+            ) : (
+              <EmptyState
+                icon="folder"
+                title="No folders yet"
+                message="They appear automatically once your audio sits in folders on the device."
+              />
+            )
           }
           renderItem={({ item, index }) =>
             renderFolder(item.folder, index, undefined, item.hit)
@@ -972,11 +857,19 @@ export default function LibraryScreen() {
           data={recentRows}
           keyExtractor={(item) => recentPlayKey(item.play)}
           ListEmptyComponent={
-            <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-              {searching
-                ? `Nothing you played recently matches “${query.trim()}”.`
-                : "Nothing played yet. Whatever you listen to next — a track, a playlist, or a whole folder — shows up here."}
-            </ThemedText>
+            searching ? (
+              <EmptyState
+                icon="search"
+                title={`Nothing recent matches “${query.trim()}”`}
+                message="Try another spelling — Persian variants are matched automatically."
+              />
+            ) : (
+              <EmptyState
+                icon="history"
+                title="Nothing played yet"
+                message="Whatever you listen to next — a track, a playlist, or a whole folder — shows up here."
+              />
+            )
           }
           renderItem={({ item, index }) => renderRecent(item.play, index, item.hit)}
         />
@@ -1020,18 +913,6 @@ const styles = StyleSheet.create({
   continueCopy: {
     flex: 1,
     gap: spacing.xxs,
-  },
-  missingMain: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.md,
-    minWidth: 0,
-  },
-  missingCopy: {
-    flex: 1,
-    gap: spacing.xxs,
-    minWidth: 0,
   },
   empty: {
     textAlign: "center",

@@ -2,34 +2,38 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 
-import { ContextHistoryButton } from "@/components/context-history";
-import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
-import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { SmartPlaylistRow } from "@/components/smart-playlist-row";
 import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
+import { MediaCard } from "@/components/ui/media-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import {
+  addToPlaylistAction,
+  deleteAction,
+  EmptyState,
+  historyAction,
+  ListGroup,
+  playPlaylistAction,
+} from "@/components/ui/row";
 import { TextField } from "@/components/ui/text-field";
 import { usePlaylists } from "@/hooks/use-playlists";
 import { useSmartPlaylists } from "@/hooks/use-smart-playlists";
 import { useTheme } from "@/hooks/use-theme";
 import type { LocalPlaylist } from "@/lib/db/types";
-import { paletteFor } from "@/lib/palette";
 import { PlaylistService } from "@/services/PlaylistService";
 import { dockInset, spacing } from "@/theme/tokens";
 
 /**
- * The header block (create row, SMART section, SAVED heading) occupies reveal
- * indices 1–9, so saved-playlist rows start at 10. Only the opening screenful
- * staggers in — recycled rows past this limit render immediately instead of
- * replaying a delayed fade. See `Reveal`'s `limit`.
+ * Only the opening screenful staggers in — recycled rows past this limit render
+ * immediately instead of replaying a delayed fade. See `Reveal`'s `limit`.
+ *
+ * The header's reveal indices are derived below rather than numbered by hand:
+ * the SMART section is conditional, and a hardcoded "saved rows start at 10"
+ * would skip a beat whenever it was absent.
  */
 const ROW_REVEAL_LIMIT = 12;
-const FIRST_SAVED_ROW_REVEAL_INDEX = 10;
 
 function trackCount(playlist: LocalPlaylist): string {
   const count = playlist.items.length;
@@ -64,6 +68,16 @@ export default function PlaylistsScreen() {
     }
   };
 
+  const playPlaylist = useCallback(
+    async (playlistId: string) => {
+      const entryId = await PlaylistService.play(playlistId, 0);
+      if (entryId) {
+        router.push({ pathname: "/player", params: { trackId: entryId } });
+      }
+    },
+    [router],
+  );
+
   const confirmDelete = (playlist: LocalPlaylist) => {
     Alert.alert("Delete playlist?", `"${playlist.title}" will be removed.`, [
       { text: "Cancel", style: "cancel" },
@@ -76,6 +90,9 @@ export default function PlaylistsScreen() {
       },
     ]);
   };
+
+  const savedHeadingIndex = smart.length > 0 ? 4 : 2;
+  const firstSavedRowRevealIndex = savedHeadingIndex + 1;
 
   return (
     <Screen wash={theme.accent}>
@@ -120,23 +137,26 @@ export default function PlaylistsScreen() {
                     SMART
                   </ThemedText>
                 </Reveal>
-                {smart.map((playlist, index) => (
-                  <Reveal key={playlist.rule.id} index={index + 3} limit={ROW_REVEAL_LIMIT}>
-                    <SmartPlaylistRow
-                      playlist={playlist}
-                      onPress={() =>
-                        router.push({
-                          pathname: "/smart/[rule]",
-                          params: { rule: playlist.rule.id },
-                        })
-                      }
-                    />
-                  </Reveal>
-                ))}
+                <Reveal index={3} limit={ROW_REVEAL_LIMIT}>
+                  <ListGroup>
+                    {smart.map((playlist) => (
+                      <SmartPlaylistRow
+                        key={playlist.rule.id}
+                        playlist={playlist}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/smart/[rule]",
+                            params: { rule: playlist.rule.id },
+                          })
+                        }
+                      />
+                    ))}
+                  </ListGroup>
+                </Reveal>
               </View>
             ) : null}
 
-            <Reveal index={9}>
+            <Reveal index={savedHeadingIndex}>
               <ThemedText type="overline" themeColor="textTertiary">
                 SAVED
               </ThemedText>
@@ -145,54 +165,59 @@ export default function PlaylistsScreen() {
         }
         ListEmptyComponent={
           loading ? null : (
-            <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-              No playlists yet. Create one above, then add tracks to it.
-            </ThemedText>
+            <EmptyState
+              icon="playlists"
+              title="No playlists yet"
+              message="Create one above, then add tracks to it."
+            />
           )
         }
-        renderItem={({ item, index }) => (
-          <Reveal index={FIRST_SAVED_ROW_REVEAL_INDEX + index} limit={ROW_REVEAL_LIMIT}>
-            <Card elevated={false} style={styles.row}>
-              <ElasticPressable
-                accessibilityRole="button"
-                accessibilityLabel={`Open playlist ${item.title}`}
-                onPress={() => router.push(`/playlist/${item.id}`)}
-                style={styles.rowMain}>
-                <PaletteTile
-                  ramp={paletteFor(item.title)}
-                  label={item.title}
-                  size={44}
-                  radius={13}
-                />
-                <View style={styles.rowCopy}>
-                  <ThemedText type="bodyStrong" numberOfLines={1}>
-                    {item.title}
-                  </ThemedText>
-                  <ThemedText type="caption" themeColor="textSecondary">
-                    {trackCount(item)}
-                  </ThemedText>
-                </View>
-              </ElasticPressable>
+        renderItem={({ item, index }) => {
+          const resolveTrackIds = async () => {
+            const detail = await PlaylistService.loadDetail(item.id);
+            return (detail?.tracks ?? [])
+              .filter((track) => track.availability !== "missing")
+              .map((track) => track.id);
+          };
 
-              <ContextHistoryButton
-                type="playlist"
-                contextKey={item.id}
+          return (
+            <Reveal
+              index={firstSavedRowRevealIndex + index}
+              limit={ROW_REVEAL_LIMIT}>
+              <MediaCard
                 title={item.title}
-                size={36}
-                iconSize={17}
+                meta={trackCount(item)}
+                paletteKey={item.title}
+                onPress={() => router.push(`/playlist/${item.id}`)}
+                accessibilityLabel={`Open playlist ${item.title}`}
+                accessibilityHint="Opens this playlist"
+                actions={[
+                  playPlaylistAction({
+                    title: item.title,
+                    onPress: () => void playPlaylist(item.id),
+                    tone: "glass",
+                  }),
+                  addToPlaylistAction({
+                    title: item.title,
+                    resolveTrackIds,
+                    isBatch: true,
+                    tone: "glass",
+                  }),
+                  historyAction({
+                    type: "playlist",
+                    contextKey: item.id,
+                    title: item.title,
+                    tone: "glass",
+                  }),
+                  deleteAction({
+                    title: item.title,
+                    onPress: () => confirmDelete(item),
+                  }),
+                ]}
               />
-
-              <BouncyIconButton
-                name="trash"
-                accessibilityLabel={`Delete playlist ${item.title}`}
-                size={36}
-                iconSize={17}
-                tone="ghost"
-                onPress={() => confirmDelete(item)}
-              />
-            </Card>
-          </Reveal>
-        )}
+            </Reveal>
+          );
+        }}
       />
     </Screen>
   );
@@ -221,27 +246,6 @@ const styles = StyleSheet.create({
   },
   smartSection: {
     gap: spacing.sm,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  rowMain: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    minWidth: 0,
-  },
-  rowCopy: {
-    flex: 1,
-    gap: spacing.xxs,
-  },
-  empty: {
-    textAlign: "center",
-    paddingVertical: spacing.huge,
   },
 });
 

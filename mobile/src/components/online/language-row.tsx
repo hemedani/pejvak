@@ -13,15 +13,16 @@
  *
  * Alignment is deliberately *not* mirrored for a right-to-left language. These
  * names are single words with nothing to re-order, and a column of language
- * names that alternates its alignment is unreadable as a list. `writingDirection`
- * is still set so the shaping and any numerals inside the name are correct.
+ * names that alternates its alignment is unreadable as a list. `UserText` still
+ * sets `writingDirection`, so the shaping and any numerals inside the name are
+ * correct — only the alignment is pinned to the shell.
  */
 
 import { StyleSheet, View } from "react-native";
 
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
 import { Icon } from "@/components/ui/icon";
+import { ListRow, type ListRowPosition } from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
 import type { OnlineLanguage } from "@/lib/online";
 import { spacing } from "@/theme/tokens";
@@ -31,74 +32,52 @@ export type LanguageRowProps = {
   /** How many sources serve it. Zero means the row is inert. */
   sourceCount: number;
   onPress: () => void;
+  /** Supplied by `ListGroup`; not part of the row's own API. */
+  position?: ListRowPosition;
 };
 
-export function LanguageRow({ language, sourceCount, onPress }: LanguageRowProps) {
+export function LanguageRow({
+  language,
+  sourceCount,
+  onPress,
+  position,
+}: LanguageRowProps) {
   const theme = useTheme();
-  const rtl = language.direction === "rtl";
   const enabled = sourceCount > 0;
 
-  const trailing = enabled
-    ? `${sourceCount} source${sourceCount === 1 ? "" : "s"}`
-    : "Nothing yet";
-
   return (
-    <ElasticPressable
-      accessibilityRole="button"
+    <ListRow
+      position={position}
+      title={language.nativeName}
+      titleAlign="start"
+      titleLines={1}
+      meta={language.name}
+      disabled={!enabled}
+      disabledReason="No sources for this language yet"
+      onPress={onPress}
       accessibilityLabel={`${language.nativeName}, ${language.name}`}
       accessibilityHint={enabled ? undefined : "No sources for this language yet"}
-      accessibilityState={{ disabled: !enabled }}
-      disabled={!enabled}
-      scaleTo={0.985}
-      overshootTo={1.004}
-      haptic="tap"
-      onPress={onPress}
-      style={styles.row}>
-      <View style={styles.copy}>
-        <ThemedText
-          type="bodyStrong"
-          numberOfLines={1}
-          style={[rtl && styles.rtl, !enabled && styles.dim]}>
-          {language.nativeName}
-        </ThemedText>
-        <ThemedText
-          type="caption"
-          themeColor="textTertiary"
-          numberOfLines={1}
-          style={!enabled ? styles.dim : undefined}>
-          {language.name}
-        </ThemedText>
-      </View>
-
-      <ThemedText
-        type="overline"
-        numberOfLines={1}
-        style={{ color: enabled ? theme.accent : theme.textTertiary }}>
-        {trailing}
-      </ThemedText>
-
-      {enabled ? <Icon name="chevronRight" size={16} color={theme.textTertiary} /> : null}
-    </ElasticPressable>
+      trailing={
+        <View style={styles.trailing}>
+          <ThemedText
+            type="overline"
+            numberOfLines={1}
+            style={{ color: enabled ? theme.accent : theme.textTertiary }}>
+            {enabled ? `${sourceCount} source${sourceCount === 1 ? "" : "s"}` : "Nothing yet"}
+          </ThemedText>
+          {enabled ? (
+            <Icon name="chevronRight" size={16} color={theme.textTertiary} />
+          ) : null}
+        </View>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  trailing: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-  },
-  copy: {
-    flex: 1,
-    gap: spacing.xxs,
-    minWidth: 0,
-  },
-  rtl: {
-    writingDirection: "rtl",
-  },
-  dim: {
-    opacity: 0.55,
+    gap: spacing.xs,
   },
 });

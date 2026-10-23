@@ -15,22 +15,24 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
-
 import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import {
+  EmptyState,
+  InlineNotice,
+  ListGroup,
+  ListRow,
+  SkeletonRows,
+} from "@/components/ui/row";
 import { useMissingTracks } from "@/hooks/use-missing-tracks";
 import { useTheme } from "@/hooks/use-theme";
 import { paletteFor } from "@/lib/palette";
 import { describeStake, groupByFolder, summariseMissing } from "@/services/RelinkService";
-import { spacing } from "@/theme/tokens";
-
-const ROW_REVEAL_LIMIT = 12;
+import { iconSize, spacing, tile, tileRadius } from "@/theme/tokens";
 
 export default function MissingFilesScreen() {
   const router = useRouter();
@@ -58,35 +60,29 @@ export default function MissingFilesScreen() {
         />
 
         {missing.length === 0 ? (
-          <Reveal index={1}>
-            <Card style={styles.card}>
-              <View style={styles.cardHead}>
-                <Icon name="check" size={18} color={theme.accent} />
-                <ThemedText type="bodyStrong">
-                  {loading ? "Checking…" : "Every file is where it should be"}
-                </ThemedText>
-              </View>
-              <ThemedText type="caption" themeColor="textSecondary">
-                Nothing in your library is pointing at a file that has moved or been deleted.
-              </ThemedText>
-            </Card>
-          </Reveal>
+          loading ? (
+            <SkeletonRows count={3} />
+          ) : (
+            <EmptyState
+              icon="check"
+              title="Every file is where it should be"
+              message="Nothing in your library is pointing at a file that has moved or been deleted."
+            />
+          )
         ) : (
           <>
             <Reveal index={1}>
-              <Card style={styles.card}>
-                <View style={styles.cardHead}>
-                  <Icon name="alert" size={18} color={theme.danger} />
-                  <ThemedText type="bodyStrong">Nothing here is lost</ThemedText>
-                </View>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  Pejvak plays your audio where it already lives instead of copying it, so moving a
-                  folder leaves these tracks behind. Point a scan at the new location and they are
-                  re-pointed in place — your history and notes stay attached, because a file&apos;s
-                  content is what identifies it, not its path.
-                </ThemedText>
-                <PrimaryButton label="Find them again" onPress={() => router.push("/import")} />
-              </Card>
+              <InlineNotice
+                tone="danger"
+                icon="alert"
+                title="Nothing here is lost"
+                message={
+                  "Pejvak plays your audio where it already lives instead of copying it, so moving a folder leaves these tracks behind. Point a scan at the new location and they are re-pointed in place — your history and notes stay attached, because a file's content is what identifies it, not its path."
+                }
+                action={
+                  <PrimaryButton label="Find them again" onPress={() => router.push("/import")} />
+                }
+              />
             </Reveal>
 
             {groups.map((group, groupIndex) => (
@@ -103,48 +99,39 @@ export default function MissingFilesScreen() {
                   </View>
                 </Reveal>
 
-                {group.tracks.map((item, index) => {
-                  const stake = describeStake(item);
-                  return (
-                    <Reveal
-                      key={item.track.id}
-                      index={index + groupIndex + 3}
-                      limit={ROW_REVEAL_LIMIT}>
-                      <Card elevated={false} style={styles.row}>
-                        <ElasticPressable
-                          accessibilityRole="button"
-                          accessibilityLabel={`Open ${item.track.title}`}
-                          onPress={() =>
-                            router.push({
-                              pathname: "/track/[id]",
-                              params: { id: item.track.id },
-                            })
-                          }
-                          style={styles.rowMain}>
+                <ListGroup>
+                  {group.tracks.map((item) => {
+                    const stake = describeStake(item);
+                    return (
+                      <ListRow
+                        key={item.track.id}
+                        title={item.track.title}
+                        titleLines={1}
+                        detail={stake ?? "Never played"}
+                        leading={
                           <PaletteTile
                             ramp={paletteFor(item.track.contentHash)}
                             label={item.track.title}
                             source={item.track.artworkUrl}
-                            size={40}
-                            radius={12}
+                            size={tile.md}
+                            radius={tileRadius(tile.md)}
                           />
-                          <View style={styles.rowCopy}>
-                            <ThemedText type="bodyStrong" numberOfLines={1}>
-                              {item.track.title}
-                            </ThemedText>
-                            <ThemedText
-                              type="caption"
-                              style={{ color: stake ? theme.textSecondary : theme.textTertiary }}
-                              numberOfLines={1}>
-                              {stake ?? "Never played"}
-                            </ThemedText>
-                          </View>
-                        </ElasticPressable>
-                        <Icon name="chevronRight" size={16} color={theme.textTertiary} />
-                      </Card>
-                    </Reveal>
-                  );
-                })}
+                        }
+                        leadingWidth={tile.md}
+                        trailing={
+                          <Icon name="chevronRight" size={iconSize.sm} color={theme.textTertiary} />
+                        }
+                        accessibilityLabel={`Open ${item.track.title}`}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/track/[id]",
+                            params: { id: item.track.id },
+                          })
+                        }
+                      />
+                    );
+                  })}
+                </ListGroup>
               </View>
             ))}
           </>
@@ -160,15 +147,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.giant,
     gap: spacing.xl,
   },
-  card: {
-    gap: spacing.sm,
-    padding: spacing.lg,
-  },
-  cardHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
   section: {
     gap: spacing.sm,
   },
@@ -176,23 +154,5 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  rowMain: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    minWidth: 0,
-  },
-  rowCopy: {
-    flex: 1,
-    gap: spacing.xxs,
-    minWidth: 0,
   },
 });

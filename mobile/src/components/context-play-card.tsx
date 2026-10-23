@@ -1,28 +1,36 @@
 /**
- * One collection run in the History list.
+ * One collection run in a list.
  *
- * This is where a half-heard series becomes visible: the outcome line says
+ * This is where a half-heard series becomes visible: the status line says
  * "Stopped at 9 of 24" rather than leaving the reader to compare two numbers,
- * and the scope line names the collection it was a run through. Tapping the body
- * picks the collection back up; the two trailing buttons open the collection
+ * and the detail line names the collection it was a run through. Tapping the
+ * body picks the collection back up; the trailing controls open the collection
  * itself and remove the entry.
  *
- * The trailing buttons are deliberately *siblings* of the pressable rather than
- * children — nested, the card would resume playback on the way to the button.
+ * The trailing controls are deliberately *siblings* of the pressable rather
+ * than children — nested, the row would resume playback on the way to the
+ * button.
  */
 
 import { StyleSheet, View } from "react-native";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
-import { Icon, type IconName } from "@/components/ui/icon";
+import {
+  RecordRow,
+  type ListRowPosition,
+  type RowAction,
+} from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
+import { joinMeta } from "@/lib/cardMeta";
 import type { LocalContextPlay } from "@/lib/db/types";
 import { formatDuration, formatTimeRange } from "@/lib/history";
-import { describeContextType, describeRunOutcome, describeRunScope } from "@/lib/playbackContext";
-import { card as cardTokens, spacing } from "@/theme/tokens";
+import {
+  describeContextType,
+  describeRunScope,
+  describeRunStatus,
+} from "@/lib/playbackContext";
+import { control, spacing } from "@/theme/tokens";
 
 export type ContextPlayCardProps = {
   run: LocalContextPlay;
@@ -32,117 +40,99 @@ export type ContextPlayCardProps = {
   onOpen?: (run: LocalContextPlay) => void;
   /** Omit to hide the remove button. */
   onDelete?: (run: LocalContextPlay) => void;
+  /** Set by `ListGroup`; a row outside a group is its own whole card. */
+  position?: ListRowPosition;
 };
 
-/** The glyph a run's outcome gets: heard through, or left partway. */
-function outcomeIcon(tone: "done" | "partial"): IconName {
-  return tone === "done" ? "check" : "history";
-}
-
-export function ContextPlayCard({ run, onPress, onOpen, onDelete }: ContextPlayCardProps) {
+export function ContextPlayCard({
+  run,
+  onPress,
+  onOpen,
+  onDelete,
+  position,
+}: ContextPlayCardProps) {
   const theme = useTheme();
-  const outcome = describeRunOutcome(run);
+  const status = describeRunStatus(run);
   const typeLabel = describeContextType(run.contextType);
   // A finished run has nothing to continue, so tapping it starts the collection
   // over. Saying "Continue" there would promise a resume that never happens.
   const action = run.completed ? "Replay" : "Continue";
-  const outcomeColor = outcome.tone === "partial" ? theme.accent : theme.textTertiary;
 
-  const body = (
-    <>
-      <View style={styles.main}>
-        <ThemedText type="bodyStrong" numberOfLines={1}>
-          {run.contextTitle}
-        </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-          {typeLabel} · {formatTimeRange(run.startedAt, run.endedAt)}
-        </ThemedText>
-        <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
-          {describeRunScope(run)}
-        </ThemedText>
-      </View>
+  const actions: RowAction[] = [];
 
-      <View style={styles.meta}>
-        <ThemedText type="bodyStrong" style={{ color: theme.accent }}>
-          {formatDuration(run.listenedSec)}
-        </ThemedText>
-        <View style={styles.outcome}>
-          <Icon name={outcomeIcon(outcome.tone)} size={12} color={outcomeColor} />
-          <ThemedText type="caption" style={{ color: outcomeColor }}>
-            {outcome.label}
-          </ThemedText>
-        </View>
-      </View>
-    </>
-  );
-
-  return (
-    <Card elevated={false} style={styles.card}>
-      {onPress ? (
-        <ElasticPressable
-          accessibilityRole="button"
-          accessibilityLabel={`${action} ${run.contextTitle}`}
-          accessibilityHint={outcome.label}
-          onPress={() => onPress(run)}
-          style={styles.body}>
-          {body}
-        </ElasticPressable>
-      ) : (
-        <View style={styles.body}>{body}</View>
-      )}
-
-      {onOpen ? (
+  if (onOpen) {
+    const open = () => onOpen(run);
+    const icon = run.contextType === "folder" ? "folder" : "playlists";
+    const label = `Open ${typeLabel.toLowerCase()} ${run.contextTitle}`;
+    actions.push({
+      key: "open",
+      width: control.sm,
+      priority: 2,
+      icon,
+      label,
+      onPress: open,
+      node: (
         <BouncyIconButton
-          name={run.contextType === "folder" ? "folder" : "playlists"}
-          accessibilityLabel={`Open ${typeLabel.toLowerCase()} ${run.contextTitle}`}
-          size={36}
+          name={icon}
+          accessibilityLabel={label}
+          size={control.sm}
           iconSize={17}
           tone="ghost"
-          onPress={() => onOpen(run)}
+          onPress={open}
         />
-      ) : null}
+      ),
+    });
+  }
 
-      {onDelete ? (
+  if (onDelete) {
+    const remove = () => onDelete(run);
+    const label = `Remove ${run.contextTitle} from history`;
+    actions.push({
+      key: "delete",
+      width: control.sm,
+      priority: 1,
+      icon: "trash",
+      label,
+      danger: true,
+      onPress: remove,
+      node: (
         <BouncyIconButton
           name="trash"
-          accessibilityLabel={`Remove ${run.contextTitle} from history`}
-          size={36}
+          accessibilityLabel={label}
+          size={control.sm}
           iconSize={17}
           tone="ghost"
-          onPress={() => onDelete(run)}
+          onPress={remove}
         />
-      ) : null}
-    </Card>
+      ),
+    });
+  }
+
+  return (
+    <RecordRow
+      position={position}
+      title={run.contextTitle}
+      meta={joinMeta([typeLabel, formatTimeRange(run.startedAt, run.endedAt)])}
+      detail={describeRunScope(run)}
+      status={status}
+      trailing={
+        <View style={styles.meta}>
+          <ThemedText type="numeric" style={{ color: theme.accent }}>
+            {formatDuration(run.listenedSec)}
+          </ThemedText>
+        </View>
+      }
+      onPress={onPress ? () => onPress(run) : undefined}
+      accessibilityLabel={`${action} ${run.contextTitle}`}
+      accessibilityHint={status.label}
+      actions={actions}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: cardTokens.rowPadding,
-  },
-  body: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-    // Lets the title ellipsise instead of pushing the meta column off-screen.
-    minWidth: 0,
-  },
-  main: {
-    flex: 1,
-    gap: spacing.xxs,
-  },
   meta: {
     alignItems: "flex-end",
     gap: spacing.xxs,
-  },
-  outcome: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
   },
 });

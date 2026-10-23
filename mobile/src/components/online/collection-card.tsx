@@ -14,13 +14,9 @@
 
 import { useMemo } from "react";
 
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
-import { Icon } from "@/components/ui/icon";
+import { favoriteAction } from "@/components/ui/row";
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
-import { useTheme } from "@/hooks/use-theme";
-
-/** The width of a circular control in the cluster, for the fit budget. */
-const CONTROL_WIDTH = 40;
+import type { StatusSpec } from "@/lib/rowStatus";
 
 export type CollectionCardProps = {
   title: string;
@@ -31,6 +27,8 @@ export type CollectionCardProps = {
   paletteKey: string;
   /** 0–1, drawn as a full-bleed bar under the card. Omit for no bar. */
   progressRatio?: number | null;
+  /** The download state as one status line, when the caller knows it. */
+  status?: StatusSpec | null;
   isFavorite?: boolean;
   /** Renders a filled bookmark. Omit for a read-only card. */
   onToggleFavorite?: () => void;
@@ -46,16 +44,13 @@ export function CollectionCard({
   artworkUrl,
   paletteKey,
   progressRatio,
+  status,
   isFavorite = false,
   onToggleFavorite,
   actions,
   onPress,
   accessibilityHint,
 }: CollectionCardProps) {
-  const theme = useTheme();
-  const accent = theme.accent;
-  const muted = theme.textTertiary;
-
   /**
    * The favourite toggle is declared as an action rather than drawn beside one.
    *
@@ -66,41 +61,15 @@ export function CollectionCard({
   const cluster = useMemo<MediaCardAction[]>(() => {
     const list: MediaCardAction[] = [];
     if (onToggleFavorite) {
-      list.push({
-        key: "favorite",
-        width: CONTROL_WIDTH,
-        priority: 3,
-        icon: isFavorite ? "bookmarkFilled" : "bookmark",
-        label: isFavorite ? "Remove from favorites" : "Add to favorites",
-        onPress: onToggleFavorite,
-        node: (
-          <ElasticPressable
-            accessibilityRole="button"
-            accessibilityLabel={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            scaleTo={0.86}
-            overshootTo={1.08}
-            haptic="select"
-            onPress={onToggleFavorite}
-            style={{
-              width: CONTROL_WIDTH,
-              height: CONTROL_WIDTH,
-              alignItems: "center",
-              justifyContent: "center",
-            }}>
-            <Icon
-              name={isFavorite ? "bookmarkFilled" : "bookmark"}
-              size={21}
-              color={isFavorite ? accent : muted}
-            />
-          </ElasticPressable>
-        ),
-      });
+      list.push(
+        favoriteAction({ title, isFavorite, onPress: onToggleFavorite }),
+      );
     }
     if (actions) {
       list.push(...actions);
     }
     return list;
-  }, [accent, actions, isFavorite, muted, onToggleFavorite]);
+  }, [actions, isFavorite, onToggleFavorite, title]);
 
   return (
     <MediaCard
@@ -110,6 +79,7 @@ export function CollectionCard({
       paletteKey={paletteKey}
       tileSize={56}
       progressRatio={progressRatio}
+      status={status}
       actions={cluster}
       onPress={onPress}
       accessibilityLabel={title}

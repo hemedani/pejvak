@@ -37,6 +37,7 @@ import { Card } from "@/components/ui/card";
 
 import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { EmptyState, ListGroup, SkeletonRows } from "@/components/ui/row";
 import { useAudioInspection } from "@/hooks/use-audio-inspection";
 import { useTheme } from "@/hooks/use-theme";
 import { useTrackDetail } from "@/hooks/use-track-detail";
@@ -48,7 +49,7 @@ import { buildTrackFactSections } from "@/lib/trackFacts";
 import { computeTrackStats, summariseSessions } from "@/lib/trackStats";
 import { LocalDBService } from "@/services/LocalDBService";
 import { openSessionDetail } from "@/store/sessionDetailStore";
-import { spacing } from "@/theme/tokens";
+import { radius as radii, spacing } from "@/theme/tokens";
 
 /**
  * Reveal indices. The header, artwork and play button take 0–2, the stat grid
@@ -175,7 +176,7 @@ export default function TrackDetailScreen() {
               source={track?.artworkUrl}
               ramp={ramp}
               label={track?.title}
-              radius={28}
+              radius={radii.card}
               style={styles.art}
             />
           </View>
@@ -275,7 +276,8 @@ export default function TrackDetailScreen() {
             </ThemedText>
           </Reveal>
           {sessions.length > 0 ? (
-            sessions.map((session) => {
+            <ListGroup>
+              {sessions.map((session) => {
               const item: HistoryItem = {
                 session,
                 track: {
@@ -305,11 +307,16 @@ export default function TrackDetailScreen() {
                   onDelete={session.endedAt === null ? undefined : confirmRemove}
                 />
               );
-            })
+              })}
+            </ListGroup>
+          ) : loading ? (
+            <SkeletonRows count={3} />
           ) : (
-            <ThemedText type="caption" themeColor="textTertiary">
-              {loading ? "Loading…" : "No sessions recorded yet."}
-            </ThemedText>
+            <EmptyState
+              icon="history"
+              title="No sessions recorded yet"
+              message="Press play and this track's listening history will start here."
+            />
           )}
         </View>
 

@@ -22,41 +22,16 @@ import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { CollectionCard } from "@/components/online/collection-card";
 import { ThemedText } from "@/components/themed-text";
 import { useOnlineCatalog } from "@/hooks/use-online-catalog";
+import { downloadAction, EmptyState, InlineNotice, SkeletonRows } from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
-import type { DownloadState } from "@/lib/db/types";
 import {
-  describeDownloadState,
+  describeDownloadStatus,
   describeKnownTrackCount,
   findSource,
   type OnlineCollection,
 } from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
-import { spacing } from "@/theme/tokens";
-
-/**
- * The glyph and the accent for a collection's download state.
- *
- * The *words* are not here: `describeDownloadState` owns them, because the same
- * state is drawn on the Continue and Favorites cards too, and a second copy of
- * the mapping would eventually call `cancelled` something else on one of them.
- */
-function downloadGlyph(state: DownloadState | undefined): {
-  icon: "cloudDownload" | "checkCircle" | "refresh";
-  accent: boolean;
-} {
-  switch (state) {
-    case "complete":
-      return { icon: "checkCircle", accent: true };
-    case "downloading":
-      return { icon: "cloudDownload", accent: true };
-    case "failed":
-      return { icon: "refresh", accent: false };
-    case "cancelled":
-      return { icon: "refresh", accent: false };
-    default:
-      return { icon: "cloudDownload", accent: false };
-  }
-}
+import { control, iconSize, spacing } from "@/theme/tokens";
 
 export default function SourceCollectionsScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -79,13 +54,8 @@ export default function SourceCollectionsScreen() {
 
   const renderItem = ({ item, index }: { item: OnlineCollection; index: number }) => {
     const local = catalog.saved[item.key];
-    const glyph = downloadGlyph(local?.downloadState);
-    const meta = [
-      describeKnownTrackCount(item.trackCount),
-      describeDownloadState(local?.downloadState),
-    ]
-      .filter((part): part is string => part !== null)
-      .join(" · ");
+    const state = local?.downloadState;
+    const meta = describeKnownTrackCount(item.trackCount);
 
     return (
       <Reveal index={index} limit={10}>
@@ -98,34 +68,17 @@ export default function SourceCollectionsScreen() {
           onToggleFavorite={() => void catalog.toggleFavorite(item)}
           onPress={() => router.push({ pathname: "/online/[key]", params: { key: item.key } })}
           accessibilityHint="Opens this collection"
+          status={describeDownloadStatus(state)}
           actions={[
-            {
-              key: "download",
-              width: 38,
-              priority: 2,
-              icon: glyph.icon,
-              label:
-                local?.downloadState === "complete"
-                  ? "Already downloaded"
-                  : "Download this collection",
+            downloadAction({
+              title: item.title,
+              state,
               onPress: () => void catalog.download(item),
-              node: (
-                <BouncyIconButton
-                  name={glyph.icon}
-                  accessibilityLabel={
-                    local?.downloadState === "complete"
-                      ? `${item.title} is downloaded`
-                      : `Download ${item.title}`
-                  }
-                  disabled={local?.downloadState === "downloading"}
-                  size={38}
-                  iconSize={18}
-                  tone="ghost"
-                  color={glyph.accent ? theme.accent : undefined}
-                  onPress={() => void catalog.download(item)}
-                />
-              ),
-            },
+              color:
+                state === "complete" || state === "downloading"
+                  ? theme.accent
+                  : undefined,
+            }),
           ]}
         />
       </Reveal>
@@ -158,8 +111,8 @@ export default function SourceCollectionsScreen() {
                   <BouncyIconButton
                     name="external"
                     accessibilityLabel="Open the source's site"
-                    size={42}
-                    iconSize={20}
+                    size={control.lg}
+                    iconSize={iconSize.lg}
                     tone="glass"
                     onPress={onOpenHomepage}
                   />
@@ -172,17 +125,19 @@ export default function SourceCollectionsScreen() {
               </ThemedText>
             ) : null}
             {catalog.error ? (
-              <ThemedText type="caption" style={{ color: theme.danger }}>
-                {catalog.error}
-              </ThemedText>
+              <InlineNotice tone="danger" title="Could not load this source" message={catalog.error} />
             ) : null}
           </View>
         }
         ListEmptyComponent={
-          catalog.loading ? null : (
-            <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-              This source has nothing to play right now.
-            </ThemedText>
+          catalog.loading ? (
+            <SkeletonRows count={4} />
+          ) : (
+            <EmptyState
+              icon="compass"
+              title="Nothing to play right now"
+              message="This source has no collections at the moment. Try again later."
+            />
           )
         }
       />

@@ -41,6 +41,7 @@ import { Reveal } from "@/components/motion/Reveal";
 import { ThemedText } from "@/components/themed-text";
 import { GlassSurface } from "@/components/ui/glass";
 import { Icon } from "@/components/ui/icon";
+import { EmptyState, ListGroup, SkeletonRows } from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
 import type { ContextStats, LocalContextPlay } from "@/lib/db/types";
 import { paletteFor } from "@/lib/palette";
@@ -322,22 +323,30 @@ function ContextHistorySheetContent({ request }: { request: ContextHistoryReques
                 <View style={[styles.divider, { backgroundColor: theme.track }]} />
               ) : null}
 
-              {(runs ?? []).map((run, index) => (
-                <Reveal key={run.id} index={index + 2} limit={ROW_REVEAL_LIMIT}>
-                  <ContextPlayCard
-                    run={run}
-                    onPress={(entry) => void resume(entry)}
-                    onOpen={openCollection}
-                    onDelete={(entry) => confirmRemoveRun(entry, () => void remove(entry))}
-                  />
+              {runs !== null && runs.length > 0 ? (
+                <Reveal index={2} limit={ROW_REVEAL_LIMIT}>
+                  <ListGroup>
+                    {runs.map((run) => (
+                      <ContextPlayCard
+                        key={run.id}
+                        run={run}
+                        onPress={(entry) => void resume(entry)}
+                        onOpen={openCollection}
+                        onDelete={(entry) => confirmRemoveRun(entry, () => void remove(entry))}
+                      />
+                    ))}
+                  </ListGroup>
                 </Reveal>
-              ))}
+              ) : null}
 
-              {runs !== null && runs.length === 0 ? (
-                <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-                  Nothing has been played from this {typeLabel.toLowerCase()} yet. Start it and
-                  the play-through will show up here.
-                </ThemedText>
+              {runs === null ? (
+                <SkeletonRows count={2} />
+              ) : runs.length === 0 ? (
+                <EmptyState
+                  icon="history"
+                  title={`No plays from this ${typeLabel.toLowerCase()} yet`}
+                  message="Start it and the play-through will show up here."
+                />
               ) : null}
             </ScrollView>
           </GlassSurface>

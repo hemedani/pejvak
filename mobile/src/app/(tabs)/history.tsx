@@ -1,13 +1,14 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { RefreshControl, SectionList, Share, StyleSheet, View } from "react-native";
+import { FlatList, RefreshControl, Share, StyleSheet, View } from "react-native";
 
 import { ContextPlayCard } from "@/components/context-play-card";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { StretchCard } from "@/components/stretch-card";
 import { ThemedText } from "@/components/themed-text";
-import { GlassChip } from "@/components/ui/glass/GlassChip";
+import { SegmentedControl } from "@/components/ui/card/segmented-control";
+import { EmptyState, ListGroup } from "@/components/ui/row";
 import { useContextHistory } from "@/hooks/use-context-history";
 import { useHistory } from "@/hooks/use-history";
 import { useResumeHistory } from "@/hooks/use-resume-history";
@@ -26,7 +27,7 @@ import { confirmRemoveRun, confirmRemoveStretch } from "@/lib/sessionActions";
 import { LocalDBService } from "@/services/LocalDBService";
 import { openSessionDetail } from "@/store/sessionDetailStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { dockInset, spacing } from "@/theme/tokens";
+import { control, dockInset, iconSize, spacing } from "@/theme/tokens";
 
 /**
  * Which half of the history is showing.
@@ -47,6 +48,13 @@ const HISTORY_VIEWS: { value: HistoryView; label: string }[] = [
 type HistoryRow =
   | { kind: "stretch"; entry: HistoryStretch }
   | { kind: "run"; run: LocalContextPlay };
+
+/** One day's records, drawn as a single dense card. */
+type HistoryGroup = {
+  key: string;
+  title: string | null;
+  rows: HistoryRow[];
+};
 
 export default function HistoryScreen() {
   const router = useRouter();
@@ -81,18 +89,18 @@ export default function HistoryScreen() {
    */
   const stretches = useMemo(() => groupHistoryIntoStretches(items), [items]);
 
-  const sections = useMemo(() => {
+  const groups = useMemo<HistoryGroup[]>(() => {
     if (view === "sessions") {
       return buildStretchSections(stretches, sort).map((section) => ({
         key: section.key,
         title: section.title,
-        data: section.data.map((entry): HistoryRow => ({ kind: "stretch", entry })),
+        rows: section.data.map((entry): HistoryRow => ({ kind: "stretch", entry })),
       }));
     }
     return buildRunSections(runs, sort).map((section) => ({
       key: `runs-${section.key}`,
       title: section.title,
-      data: section.data.map((run): HistoryRow => ({ kind: "run", run })),
+      rows: section.data.map((run): HistoryRow => ({ kind: "run", run })),
     }));
   }, [view, stretches, runs, sort]);
 
@@ -162,43 +170,47 @@ export default function HistoryScreen() {
 
   return (
     <Screen wash={theme.accent}>
-      <SectionList
-        sections={sections}
-        keyExtractor={(row) =>
-          row.kind === "stretch" ? `s-${row.entry.stretch.id}` : `r-${row.run.id}`
-        }
-        renderItem={({ item: row }) =>
-          row.kind === "stretch" ? (
-            <StretchCard
-              entry={row.entry}
-              onOpen={openStretch}
-              // A stretch that has not been finalised is still being written by
-              // the tracker, so there is nothing sensible to tombstone yet.
-              onDelete={
-                row.entry.stretch.endedAt === null
-                  ? undefined
-                  : (entry) => confirmRemoveStretch(entry, () => void remove(entry))
-              }
-            />
-          ) : (
-            <ContextPlayCard
-              run={row.run}
-              onPress={(run) => void resumeRun(run)}
-              onOpen={openRun}
-              onDelete={(run) => confirmRemoveRun(run, () => void removeRun(run))}
-            />
-          )
-        }
-        renderSectionHeader={({ section }) =>
-          section.title ? (
-            <View style={styles.sectionHeader}>
-              <ThemedText type="overline" themeColor="textTertiary">
-                {section.title}
-              </ThemedText>
-            </View>
-          ) : null
-        }
-        stickySectionHeadersEnabled={false}
+      <FlatList
+        data={groups}
+        keyExtractor={(group) => group.key}
+        renderItem={({ item: group }) => (
+          <View style={styles.group}>
+            {group.title ? (
+              <View style={styles.sectionHeader}>
+                <ThemedText type="overline" themeColor="textTertiary">
+                  {group.title}
+                </ThemedText>
+              </View>
+            ) : null}
+            <ListGroup>
+              {group.rows.map((row) =>
+                row.kind === "stretch" ? (
+                  <StretchCard
+                    key={`s-${row.entry.stretch.id}`}
+                    entry={row.entry}
+                    onOpen={openStretch}
+                    // A stretch that has not been finalised is still being
+                    // written by the tracker, so there is nothing sensible to
+                    // tombstone yet.
+                    onDelete={
+                      row.entry.stretch.endedAt === null
+                        ? undefined
+                        : (entry) => confirmRemoveStretch(entry, () => void remove(entry))
+                    }
+                  />
+                ) : (
+                  <ContextPlayCard
+                    key={`r-${row.run.id}`}
+                    run={row.run}
+                    onPress={(run) => void resumeRun(run)}
+                    onOpen={openRun}
+                    onDelete={(run) => confirmRemoveRun(run, () => void removeRun(run))}
+                  />
+                ),
+              )}
+            </ListGroup>
+          </View>
+        )}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
         ListHeaderComponent={
@@ -221,37 +233,27 @@ export default function HistoryScreen() {
                   <BouncyIconButton
                     name="share"
                     accessibilityLabel="Export listening history"
-                    size={42}
-                    iconSize={19}
+                    size={control.lg}
+                    iconSize={iconSize.md}
                     tone="glass"
                     onPress={() => void exportHistory()}
                   />
                 ) : undefined
               }
             />
-            <View style={styles.filters}>
-              {HISTORY_VIEWS.map((option) => (
-                <GlassChip
-                  key={option.value}
-                  label={option.label}
-                  selected={view === option.value}
-                  accessibilityLabel={`Show ${option.label.toLowerCase()} in history`}
-                  onPress={() => setView(option.value)}
-                />
-              ))}
-            </View>
+            <SegmentedControl
+              options={HISTORY_VIEWS}
+              value={view}
+              onChange={setView}
+              accessibilityLabel="History view"
+            />
             {showing > 0 ? (
-              <View style={styles.filters}>
-                {HISTORY_SORT_OPTIONS.map((option) => (
-                  <GlassChip
-                    key={option.value}
-                    label={option.label}
-                    selected={sort === option.value}
-                    accessibilityLabel={`Sort history by ${option.label.toLowerCase()}`}
-                    onPress={() => void setSort(option.value)}
-                  />
-                ))}
-              </View>
+              <SegmentedControl
+                options={HISTORY_SORT_OPTIONS}
+                value={sort}
+                onChange={(next) => void setSort(next)}
+                accessibilityLabel="Sort history"
+              />
             ) : null}
           </View>
         }
@@ -263,11 +265,15 @@ export default function HistoryScreen() {
         }
         ListEmptyComponent={
           (view === "sessions" ? loading : runsLoading) ? null : (
-            <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-              {view === "sessions"
-                ? "No listening yet. Play a track and your sessions will show up here."
-                : "No collections played yet. Start a folder or a playlist and it will show up here."}
-            </ThemedText>
+            <EmptyState
+              icon={view === "sessions" ? "history" : "folder"}
+              title={view === "sessions" ? "No listening yet" : "No collections played yet"}
+              message={
+                view === "sessions"
+                  ? "Play a track and your sessions will show up here."
+                  : "Start a folder or a playlist and its play-through will show up here."
+              }
+            />
           )
         }
       />
@@ -277,7 +283,7 @@ export default function HistoryScreen() {
 
 const styles = StyleSheet.create({
   list: {
-    gap: spacing.sm,
+    gap: spacing.lg,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.giant + dockInset,
   },
@@ -285,17 +291,11 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingBottom: spacing.xs,
   },
-  filters: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  group: {
     gap: spacing.sm,
   },
   sectionHeader: {
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.sm,
-  },
-  empty: {
-    textAlign: "center",
-    paddingVertical: spacing.huge,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xxs,
   },
 });

@@ -4,56 +4,38 @@ import { ScrollView, StyleSheet, View } from "react-native";
 
 import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { ContextHistoryButton } from "@/components/context-history";
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
 import { GlassChip } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import {
+  addToPlaylistAction,
+  EmptyState,
+  historyAction,
+  InlineNotice,
+  ListGroup,
+  ListRow,
+  SkeletonRows,
+} from "@/components/ui/row";
 import { useFolderDetail } from "@/hooks/use-folder-detail";
-import { useTheme } from "@/hooks/use-theme";
-import type { LocalTrack } from "@/lib/db/types";
-import { describeFolderProgress, describeMissing } from "@/lib/folderPlay";
+import {
+  describeFolderProgress,
+  describeFolderTrackStatus,
+  describeMissing,
+} from "@/lib/folderPlay";
 import { formatDuration } from "@/lib/history";
 import { folderKeyFromRouteSegment } from "@/lib/mediaFolders";
 import { describeContextStats } from "@/lib/playbackContext";
 import { paletteFor } from "@/lib/palette";
 import { formatClock } from "@/lib/time";
 import { FolderService } from "@/services/FolderService";
-import { spacing } from "@/theme/tokens";
-
-/** How a row's state line should read, before the theme resolves it to a colour. */
-type TrackStateTone = "secondary" | "tertiary" | "danger";
-
-/**
- * A track's place in the folder, as one short line under its title.
- *
- * "Finished" and "Resume at 8:31" are the two facts that decide whether folder
- * play will skip a track or drop into the middle of it, so they are worth
- * stating rather than leaving to be inferred from a progress bar.
- */
-function trackStateLabel(
-  progress: { finished: boolean; resumeSec: number } | undefined,
-  track: LocalTrack,
-): { text: string; tone: TrackStateTone } {
-  if (track.availability === "missing") {
-    return { text: "File missing", tone: "danger" };
-  }
-  if (progress?.finished) {
-    return { text: "Finished", tone: "tertiary" };
-  }
-  if (progress && progress.resumeSec > 0) {
-    return { text: `Resume at ${formatClock(progress.resumeSec)}`, tone: "secondary" };
-  }
-  return { text: "Not started", tone: "tertiary" };
-}
+import { control, iconSize, spacing, tile, tileRadius } from "@/theme/tokens";
 
 export default function FolderDetailScreen() {
   const params = useLocalSearchParams<{ key?: string }>();
   const router = useRouter();
-  const theme = useTheme();
   const folderKey = folderKeyFromRouteSegment(params.key);
   const { data, loading, refresh } = useFolderDetail(folderKey);
   const [notice, setNotice] = useState<string | null>(null);
@@ -177,8 +159,8 @@ export default function FolderDetailScreen() {
                   contextKey={folderKey ?? ""}
                   title={data.name}
                   artwork={data.tracks[0]?.artworkUrl ?? null}
-                  size={42}
-                  iconSize={20}
+                  size={control.lg}
+                  iconSize={iconSize.lg}
                   tone="glass"
                 />
               ) : null}
@@ -192,8 +174,8 @@ export default function FolderDetailScreen() {
                   // library card this screen was opened from.
                   artwork={data?.tracks[0]?.artworkUrl ?? null}
                   isBatch
-                  size={42}
-                  iconSize={20}
+                  size={control.lg}
+                  iconSize={iconSize.lg}
                   tone="glass"
                 />
               ) : null}
@@ -203,9 +185,11 @@ export default function FolderDetailScreen() {
 
         {missingNote ? (
           <Reveal index={0}>
-            <ThemedText type="caption" style={{ color: theme.danger }}>
-              {missingNote} — those tracks are skipped during folder play.
-            </ThemedText>
+            <InlineNotice
+              tone="danger"
+              title={missingNote}
+              message="Those tracks are skipped during folder play."
+            />
           </Reveal>
         ) : null}
 
@@ -238,11 +222,7 @@ export default function FolderDetailScreen() {
               </View>
             </Reveal>
 
-            {notice ? (
-              <ThemedText type="caption" themeColor="textSecondary">
-                {notice}
-              </ThemedText>
-            ) : null}
+            {notice ? <InlineNotice tone="accent" title={notice} announce /> : null}
 
             <View style={styles.section}>
               <Reveal index={3}>
@@ -251,89 +231,76 @@ export default function FolderDetailScreen() {
                 </ThemedText>
               </Reveal>
 
-              {tracks.map((track, index) => {
-                const state = trackStateLabel(data.progress[track.id], track);
-                const missing = track.availability === "missing";
-                const stateColor =
-                  state.tone === "danger"
-                    ? theme.danger
-                    : state.tone === "secondary"
-                      ? theme.textSecondary
-                      : theme.textTertiary;
-                return (
-                  <Reveal key={track.id} index={index + 4}>
-                    <Card elevated={false} style={styles.row}>
-                      <ElasticPressable
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          missing ? `${track.title}, file missing` : `Play ${track.title}`
-                        }
-                        accessibilityState={{ disabled: missing }}
-                        disabled={missing}
-                        onPress={() =>
-                          void start(() => (data ? FolderService.planFromTrack(data, track.id) : null))
-                        }
-                        style={styles.rowMain}>
+              <ListGroup>
+                {tracks.map((track) => {
+                  const status = describeFolderTrackStatus(data.progress[track.id], track);
+                  const missing = track.availability === "missing";
+                  const rowActions = [
+                    historyAction({
+                      type: "folder",
+                      contextKey: folderKey ?? "",
+                      title: data.name,
+                      artwork: data.tracks[0]?.artworkUrl ?? null,
+                    }),
+                  ];
+                  // A missing file is skipped by folder play, so it is not
+                  // offered to a playlist either.
+                  if (!missing) {
+                    rowActions.push(
+                      addToPlaylistAction({
+                        title: track.title,
+                        ramp: paletteFor(track.contentHash),
+                        artwork: track.artworkUrl,
+                        trackIds: [track.id],
+                      }),
+                    );
+                  }
+                  return (
+                    <ListRow
+                      key={track.id}
+                      leading={
                         <PaletteTile
                           ramp={paletteFor(track.contentHash)}
                           label={track.title}
                           source={track.artworkUrl}
-                          size={40}
-                          radius={12}
+                          size={tile.md}
+                          radius={tileRadius(tile.md)}
                         />
-                        <View style={styles.rowCopy}>
-                          <ThemedText
-                            type="bodyStrong"
-                            numberOfLines={1}
-                            themeColor={missing ? "textTertiary" : undefined}>
-                            {track.title}
-                          </ThemedText>
-                          <ThemedText
-                            type="caption"
-                            style={{ color: stateColor }}
-                            numberOfLines={1}>
-                            {state.text}
-                          </ThemedText>
-                        </View>
-                      </ElasticPressable>
-
-                      <ThemedText type="caption" themeColor="textTertiary">
-                        {track.durationSec > 0 ? formatClock(track.durationSec) : "—"}
-                      </ThemedText>
-
-                      <ContextHistoryButton
-                        type="folder"
-                        contextKey={folderKey ?? ""}
-                        title={data.name}
-                        artwork={data.tracks[0]?.artworkUrl ?? null}
-                        size={34}
-                        iconSize={16}
-                      />
-
-                      {/* A missing file is skipped by folder play, so it is not
-                          offered to a playlist either. */}
-                      {missing ? null : (
-                        <AddToPlaylistButton
-                          trackIds={[track.id]}
-                          title={track.title}
-                          subtitle={`from ${data.name}`}
-                          ramp={paletteFor(track.contentHash)}
-                          artwork={track.artworkUrl}
-                          size={34}
-                          iconSize={16}
-                          tone="ghost"
-                        />
-                      )}
-                    </Card>
-                  </Reveal>
-                );
-              })}
+                      }
+                      leadingWidth={tile.md}
+                      title={track.title}
+                      titleLines={1}
+                      status={status}
+                      trailing={
+                        <ThemedText type="numeric" themeColor="textTertiary">
+                          {track.durationSec > 0 ? formatClock(track.durationSec) : "—"}
+                        </ThemedText>
+                      }
+                      disabled={missing}
+                      disabledReason="The file is no longer on this device"
+                      onPress={() =>
+                        void start(() =>
+                          data ? FolderService.planFromTrack(data, track.id) : null,
+                        )
+                      }
+                      accessibilityLabel={
+                        missing ? `${track.title}, file missing` : `Play ${track.title}`
+                      }
+                      actions={rowActions}
+                    />
+                  );
+                })}
+              </ListGroup>
             </View>
           </>
+        ) : loading ? (
+          <SkeletonRows count={4} />
         ) : (
-          <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-            {loading ? "Loading…" : "This folder has no playable audio."}
-          </ThemedText>
+          <EmptyState
+            icon="folder"
+            title="This folder has no playable audio"
+            message="Add audio to it, or scan again if the files moved."
+          />
         )}
       </ScrollView>
     </Screen>
@@ -358,26 +325,5 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.sm,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  rowMain: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    minWidth: 0,
-  },
-  rowCopy: {
-    flex: 1,
-    gap: spacing.xxs,
-  },
-  empty: {
-    textAlign: "center",
-    paddingVertical: spacing.huge,
   },
 });

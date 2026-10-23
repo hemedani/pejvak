@@ -3,16 +3,21 @@ import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
 import { AddToPlaylistButton, useAddToPlaylist } from "@/components/add-to-playlist";
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
+import { SegmentedControl } from "@/components/ui/card/segmented-control";
 import { GlassChip } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import {
+  addToPlaylistAction,
+  EmptyState,
+  ListGroup,
+  ListRow,
+  SkeletonRows,
+} from "@/components/ui/row";
 import { useSmartPlaylist } from "@/hooks/use-smart-playlist";
-import { useTheme } from "@/hooks/use-theme";
 import { formatDuration } from "@/lib/history";
 import { paletteFor } from "@/lib/palette";
 import {
@@ -24,15 +29,11 @@ import {
 } from "@/lib/smartPlaylists";
 import { formatClock } from "@/lib/time";
 import { SmartPlaylistService } from "@/services/SmartPlaylistService";
-import { spacing } from "@/theme/tokens";
-
-/** Reveal indices for the header block; list rows start after it. */
-const FIRST_ROW_REVEAL_INDEX = 5;
+import { control, iconSize, spacing, tile, tileRadius } from "@/theme/tokens";
 
 export default function SmartPlaylistScreen() {
   const params = useLocalSearchParams<{ rule?: string }>();
   const router = useRouter();
-  const theme = useTheme();
 
   const ruleId: SmartRuleId | null = isSmartRuleId(params.rule) ? params.rule : null;
   const [budgetSec, setBudgetSec] = useState<number>(DEFAULT_COMMUTE_BUDGET_SEC);
@@ -79,14 +80,13 @@ export default function SmartPlaylistScreen() {
     }
   }, [picks, router, rule]);
 
-  const budgetChips = useMemo(
+  const budgetOptions = useMemo(
     () =>
       COMMUTE_BUDGETS_SEC.map((value) => ({
         value,
         label: formatDuration(value),
-        selected: value === budgetSec,
       })),
-    [budgetSec],
+    [],
   );
 
   return (
@@ -114,8 +114,8 @@ export default function SmartPlaylistScreen() {
                 ramp={paletteFor(ruleId ?? "")}
                 artwork={picks[0]?.track.artworkUrl ?? null}
                 isBatch
-                size={42}
-                iconSize={20}
+                size={control.lg}
+                iconSize={iconSize.lg}
                 tone="glass"
               />
             ) : null
@@ -123,18 +123,21 @@ export default function SmartPlaylistScreen() {
         />
 
         {!rule ? (
-          <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-            That smart playlist does not exist.
-          </ThemedText>
+          <EmptyState
+            icon="info"
+            title="That smart playlist does not exist"
+            message="Pick one from the library."
+          />
         ) : picks.length === 0 ? (
-          <Reveal index={0}>
-            <Card style={styles.emptyCard}>
-              <ThemedText type="bodyStrong">{rule.title}</ThemedText>
-              <ThemedText type="caption" themeColor="textSecondary">
-                {data?.emptyReason ?? rule.tagline}
-              </ThemedText>
-            </Card>
-          </Reveal>
+          loading ? (
+            <SkeletonRows count={3} />
+          ) : (
+            <EmptyState
+              icon="info"
+              title={rule.title}
+              message={data?.emptyReason ?? rule.tagline}
+            />
+          )
         ) : (
           <>
             <Reveal index={1}>
@@ -143,16 +146,12 @@ export default function SmartPlaylistScreen() {
 
             {ruleId === "commute" ? (
               <Reveal index={2}>
-                <View style={styles.chipRow}>
-                  {budgetChips.map((chip) => (
-                    <GlassChip
-                      key={chip.value}
-                      label={chip.label}
-                      selected={chip.selected}
-                      onPress={() => setBudgetSec(chip.value)}
-                    />
-                  ))}
-                </View>
+                <SegmentedControl
+                  options={budgetOptions}
+                  value={budgetSec}
+                  onChange={setBudgetSec}
+                  accessibilityLabel="Commute length"
+                />
               </Reveal>
             ) : null}
 
@@ -182,49 +181,41 @@ export default function SmartPlaylistScreen() {
                 </ThemedText>
               </Reveal>
 
-              {picks.map((pick, index) => (
-                <Reveal key={pick.track.id} index={FIRST_ROW_REVEAL_INDEX + index}>
-                  <Card elevated={false} style={styles.row}>
-                    <ElasticPressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Play ${pick.track.title}, ${pick.reason}`}
-                      onPress={() => void onPlayFrom(index)}
-                      style={styles.rowMain}>
+              <ListGroup>
+                {picks.map((pick, index) => (
+                  <ListRow
+                    key={pick.track.id}
+                    title={pick.track.title}
+                    titleLines={1}
+                    detail={pick.reason}
+                    leading={
                       <PaletteTile
                         ramp={paletteFor(pick.track.contentHash)}
                         label={pick.track.title}
                         source={pick.track.artworkUrl}
-                        size={40}
-                        radius={12}
+                        size={tile.md}
+                        radius={tileRadius(tile.md)}
                       />
-                      <View style={styles.rowCopy}>
-                        <ThemedText type="bodyStrong" numberOfLines={1}>
-                          {pick.track.title}
-                        </ThemedText>
-                        {/* The reason is the point of the list, so it is stated
-                            rather than hidden behind a tap. */}
-                        <ThemedText type="caption" style={{ color: theme.textSecondary }} numberOfLines={2}>
-                          {pick.reason}
-                        </ThemedText>
-                      </View>
-                    </ElasticPressable>
-
-                    <ThemedText type="caption" themeColor="textTertiary">
-                      {pick.track.durationSec > 0 ? formatClock(pick.track.durationSec) : "—"}
-                    </ThemedText>
-
-                    <AddToPlaylistButton
-                      trackIds={[pick.track.id]}
-                      title={pick.track.title}
-                      ramp={paletteFor(pick.track.contentHash)}
-                      artwork={pick.track.artworkUrl}
-                      size={34}
-                      iconSize={16}
-                      tone="ghost"
-                    />
-                  </Card>
-                </Reveal>
-              ))}
+                    }
+                    leadingWidth={tile.md}
+                    onPress={() => void onPlayFrom(index)}
+                    accessibilityLabel={`Play ${pick.track.title}, ${pick.reason}`}
+                    trailing={
+                      <ThemedText type="numeric" themeColor="textTertiary">
+                        {pick.track.durationSec > 0 ? formatClock(pick.track.durationSec) : "—"}
+                      </ThemedText>
+                    }
+                    actions={[
+                      addToPlaylistAction({
+                        title: pick.track.title,
+                        ramp: paletteFor(pick.track.contentHash),
+                        artwork: pick.track.artworkUrl,
+                        trackIds: [pick.track.id],
+                      }),
+                    ]}
+                  />
+                ))}
+              </ListGroup>
             </View>
           </>
         )}
@@ -246,30 +237,5 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.sm,
-  },
-  emptyCard: {
-    gap: spacing.xs,
-    padding: spacing.lg,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  rowMain: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    minWidth: 0,
-  },
-  rowCopy: {
-    flex: 1,
-    gap: spacing.xxs,
-  },
-  empty: {
-    textAlign: "center",
-    paddingVertical: spacing.huge,
   },
 });

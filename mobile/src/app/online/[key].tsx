@@ -21,7 +21,7 @@
 
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Linking, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, FlatList, Linking, StyleSheet, View } from "react-native";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { PaletteTile } from "@/components/motion/PaletteTile";
@@ -33,6 +33,13 @@ import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip, GlassProgress } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import {
+  EmptyState,
+  InlineNotice,
+  ListGroup,
+  SkeletonRows,
+  UserText,
+} from "@/components/ui/row";
 import { useOnlineCollection } from "@/hooks/use-online-collection";
 import { useTheme } from "@/hooks/use-theme";
 import type { FolderPlayMode } from "@/lib/folderPlay";
@@ -42,25 +49,16 @@ import {
   describeKnownTrackCount,
   describeTrackCount,
   findSource,
-  isRtlText,
 } from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
 import { describeContextStats } from "@/lib/playbackContext";
 import { OnlineCatalogService } from "@/services/OnlineCatalogService";
 import { OnlineCollectionService } from "@/services/OnlineCollectionService";
 import { usePlayerStore } from "@/store/playerStore";
-import { spacing } from "@/theme/tokens";
+import { bar, control, iconSize, spacing, tile, tileRadius } from "@/theme/tokens";
 
-/**
- * A section header's alignment, decided by its own text.
- *
- * A Persian series title left-aligned in a left-to-right layout reads as a
- * rendering bug, and the trailing bucket's English label would read as one if it
- * were flipped. Same rule the rows already use, applied to the header above them.
- */
-function rtlStyle(text: string) {
-  return isRtlText(text) ? styles.rtl : undefined;
-}
+/** Only the opening screenful staggers in; recycled blocks render at once. */
+const ROW_REVEAL_LIMIT = 10;
 
 export default function OnlineCollectionScreen() {
   const params = useLocalSearchParams<{ key?: string }>();
@@ -156,34 +154,39 @@ export default function OnlineCollectionScreen() {
   }, [tracks]);
 
   /**
-   * Reveal indices, laid out in reading order.
+   * The list's blocks: one per series, or one block holding the whole shelf.
    *
-   * A running counter rather than an index derived from the row: a section
-   * header takes a slot of its own, so the row's index alone would animate the
-   * second section's first row before the first section's last.
+   * A block is a `FlatList` item, not a row. That is what lets each series own
+   * one `ListGroup` — a single card around its episodes — while the list still
+   * virtualises at the section level, where a course has a handful of entries
+   * and a series has its own bounded set of parts.
    *
-   * Rows are numbered inside their section, not by collection position. A
-   * collection's own order is a publish date across *all* of its series, so the
-   * positions within one series are not consecutive — «ماجرای شیعه» would read
-   * 01, 04, 07 and look broken. Restricted to a series, 01, 02, 03 is both true
-   * and readable, and the header carries the name and how many parts there are.
+   * Positions are counted *inside* a series, not by collection order: a
+   * collection's own order is a publish date across all its series, so
+   * «ماجرای شیعه» would read 01, 04, 07 and look broken. Restricted to a
+   * series, 01, 02, 03 is both true and readable, and the header carries the
+   * name and how many parts there are.
    */
   const blocks = useMemo(() => {
     if (!sections) {
-      return null;
+      return tracks.length > 0
+        ? [
+            {
+              key: "all",
+              title: null as string | null,
+              standalone: false,
+              rows: tracks.map((track, index) => ({ track, ordinal: index + 1 })),
+            },
+          ]
+        : [];
     }
-    let index = 4;
-    return sections.map((section) => {
-      const headerIndex = index;
-      index += 1;
-      const rows = section.tracks.map((track, position) => {
-        const revealIndex = index;
-        index += 1;
-        return { track, position: position + 1, revealIndex };
-      });
-      return { section, headerIndex, rows };
-    });
-  }, [sections]);
+    return sections.map((section) => ({
+      key: section.key,
+      title: section.title as string | null,
+      standalone: section.standalone,
+      rows: section.tracks.map((track, index) => ({ track, ordinal: index + 1 })),
+    }));
+  }, [sections, tracks]);
 
   /**
    * Start the collection, from a chosen plan.
@@ -277,210 +280,226 @@ export default function OnlineCollectionScreen() {
 
   return (
     <Screen wash={ramp[1]}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <ScreenHeader
-          onBack={() => router.back()}
-          overline={source ? source.name.toUpperCase() : "ONLINE"}
-          title={meta?.title ?? "Collection"}
-          subtitle={loading && tracks.length === 0 ? "Loading…" : subtitle}
-          action={
-            <View style={styles.headerActions}>
-              {meta ? (
-                <BouncyIconButton
-                  name={meta.isFavorite ? "bookmarkFilled" : "bookmark"}
-                  accessibilityLabel={
-                    meta.isFavorite ? "Remove from favorites" : "Save to favorites"
-                  }
-                  size={42}
-                  iconSize={20}
-                  tone="glass"
-                  color={meta.isFavorite ? theme.accent : undefined}
-                  onPress={() => void onToggleFavorite()}
-                />
-              ) : null}
-              {meta?.pageUrl ? (
-                <BouncyIconButton
-                  name="external"
-                  accessibilityLabel="Open on the source's site"
-                  size={42}
-                  iconSize={20}
-                  tone="glass"
-                  onPress={onOpenSource}
-                />
-              ) : null}
-            </View>
-          }
-        />
+      <FlatList
+        data={blocks}
+        keyExtractor={(block) => block.key}
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          <View style={styles.content}>
+            <ScreenHeader
+              onBack={() => router.back()}
+              overline={source ? source.name.toUpperCase() : "ONLINE"}
+              title={meta?.title ?? "Collection"}
+              subtitle={loading && tracks.length === 0 ? "Loading…" : subtitle}
+              action={
+                <View style={styles.headerActions}>
+                  {meta ? (
+                    <BouncyIconButton
+                      name={meta.isFavorite ? "bookmarkFilled" : "bookmark"}
+                      accessibilityLabel={
+                        meta.isFavorite ? "Remove from favorites" : "Save to favorites"
+                      }
+                      size={control.lg}
+                      iconSize={iconSize.lg}
+                      tone="glass"
+                      color={meta.isFavorite ? theme.accent : undefined}
+                      onPress={() => void onToggleFavorite()}
+                    />
+                  ) : null}
+                  {meta?.pageUrl ? (
+                    <BouncyIconButton
+                      name="external"
+                      accessibilityLabel="Open on the source's site"
+                      size={control.lg}
+                      iconSize={iconSize.lg}
+                      tone="glass"
+                      onPress={onOpenSource}
+                    />
+                  ) : null}
+                </View>
+              }
+            />
 
-        {meta ? (
-          <Reveal index={0}>
-            {/* The hero carries the two things the header cannot: the cover, and
-                how far through the collection the listener is. The title is
-                deliberately absent — it is already the header's, and a screen
-                that says its own name twice reads as a template. */}
-            <Card style={styles.hero}>
-              <PaletteTile
-                ramp={ramp}
-                label={meta.title}
-                source={meta.artworkUrl}
-                size={76}
-                radius={18}
-              />
-              <View style={styles.heroCopy}>
-                <ThemedText type="overline" themeColor="textTertiary" numberOfLines={1}>
-                  {(source?.nativeName ?? "Online").toUpperCase()}
-                </ThemedText>
-                <GlassProgress
-                  progress={tracks.length > 0 ? finishedCount / tracks.length : 0}
-                  tint={theme.accent}
-                  thickness={5}
-                />
-                <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-                  {completion ?? describeKnownTrackCount(meta.trackCount)}
-                </ThemedText>
-              </View>
-            </Card>
-          </Reveal>
-        ) : null}
-
-        {error ? (
-          <ThemedText type="caption" style={{ color: theme.danger }}>
-            {error}
-          </ThemedText>
-        ) : null}
-
-        {fromCache && !error ? (
-          <ThemedText type="caption" themeColor="textTertiary">
-            Showing what is already on this device — the source could not be reached.
-          </ThemedText>
-        ) : null}
-
-        {tracks.length > 0 ? (
-          <>
-            <Reveal index={1}>
-              <PrimaryButton label={primaryLabel} onPress={() => void start("resume")} />
-            </Reveal>
-
-            <Reveal index={2}>
-              <View style={styles.actions}>
-                <GlassChip
-                  label="Shuffle"
-                  onPress={() => void start("shuffle")}
-                />
-                {unfinishedCount > 0 && unfinishedCount < tracks.length ? (
-                  <GlassChip
-                    label={`Unfinished only (${unfinishedCount})`}
-                    onPress={() => void start("unfinished")}
+            {meta ? (
+              <Reveal index={0}>
+                {/* The hero carries the two things the header cannot: the cover,
+                    and how far through the collection the listener is. The title
+                    is deliberately absent — it is already the header's, and a
+                    screen that says its own name twice reads as a template. */}
+                <Card style={styles.hero}>
+                  <PaletteTile
+                    ramp={ramp}
+                    label={meta.title}
+                    source={meta.artworkUrl}
+                    size={tile.hero}
+                    radius={tileRadius(tile.hero)}
                   />
-                ) : null}
-                <GlassChip label="Add to queue" onPress={() => void onAddToQueue()} />
-                <DownloadControl
-                  summary={download}
-                  onStart={() => void startDownload()}
-                  onCancel={() => void cancelDownload()}
-                  onRetry={() => void retryDownload()}
-                  onDelete={confirmDeleteDownload}
-                />
-              </View>
-            </Reveal>
-
-            {notice ? (
-              <ThemedText type="caption" themeColor="textSecondary">
-                {notice}
-              </ThemedText>
+                  <View style={styles.heroCopy}>
+                    <UserText
+                      type="overline"
+                      themeColor="textTertiary"
+                      numberOfLines={1}
+                      text={(source?.nativeName ?? "Online").toUpperCase()}
+                    />
+                    <GlassProgress
+                      progress={tracks.length > 0 ? finishedCount / tracks.length : 0}
+                      tint={theme.accent}
+                      thickness={bar.thick}
+                    />
+                    <ThemedText
+                      type="caption"
+                      themeColor="textSecondary"
+                      numberOfLines={1}>
+                      {completion ?? describeKnownTrackCount(meta.trackCount)}
+                    </ThemedText>
+                  </View>
+                </Card>
+              </Reveal>
             ) : null}
 
-            <View style={styles.section}>
-              <Reveal index={3}>
-                <ThemedText type="overline" themeColor="textTertiary">
-                  {sections ? "SERIES" : "TRACKS"}
-                </ThemedText>
-              </Reveal>
+            {error ? (
+              <InlineNotice
+                tone="danger"
+                title="Could not load this collection"
+                message={error}
+                action={
+                  <GlassChip
+                    label="Try again"
+                    icon="refresh"
+                    onPress={() => void refresh()}
+                  />
+                }
+              />
+            ) : null}
 
-              {blocks ? (
-                blocks.map((block) => (
-                  <View key={block.section.key} style={styles.series}>
-                    <Reveal index={block.headerIndex}>
-                      <View style={styles.seriesHeader}>
-                        <View style={styles.seriesCopy}>
-                          <ThemedText
-                            type="bodyStrong"
-                            numberOfLines={2}
-                            style={rtlStyle(block.section.title)}>
-                            {block.section.title}
-                          </ThemedText>
-                          <ThemedText
-                            type="caption"
-                            themeColor="textTertiary"
-                            style={rtlStyle(block.section.title)}>
-                            {describeTrackCount(block.section.tracks.length)}
-                          </ThemedText>
-                        </View>
-                        {/* The trailing bucket is not a series, so it gets no play
-                            control: "play the standalone episodes from the
-                            beginning" names no unit at all. A real series does —
-                            and its control starts at the series' first episode
-                            while the queue stays the whole collection, because a
-                            series is a reading of one list rather than a second
-                            one. Playback therefore carries on into whatever the
-                            collection plays next. */}
-                        {block.section.standalone ? null : (
-                          <BouncyIconButton
-                            name="play"
-                            accessibilityLabel={`Play ${block.section.title} from the beginning`}
-                            size={36}
-                            iconSize={16}
-                            tone="glass"
-                            onPress={() =>
-                              void start({ trackId: block.section.tracks[0].id })
-                            }
-                          />
-                        )}
-                      </View>
-                    </Reveal>
+            {fromCache && !error ? (
+              <InlineNotice
+                title="Showing what is on this device"
+                message="The source could not be reached."
+              />
+            ) : null}
 
-                    {block.rows.map((row) => (
-                      <Reveal key={row.track.id} index={row.revealIndex}>
-                        <OnlineTrackRow
-                          track={row.track}
-                          position={row.position}
-                          isCurrent={currentTrackId === row.track.id}
-                          job={jobsByTrack[row.track.id] ?? null}
-                          onPress={() => void start({ trackId: row.track.id })}
-                        />
-                      </Reveal>
-                    ))}
-                  </View>
-                ))
-              ) : (
-                tracks.map((track, index) => (
-                  <Reveal key={track.id} index={index + 4}>
-                    <OnlineTrackRow
-                      track={track}
-                      position={index + 1}
-                      isCurrent={currentTrackId === track.id}
-                      job={jobsByTrack[track.id] ?? null}
-                      onPress={() => void start({ trackId: track.id })}
+            {tracks.length > 0 ? (
+              <>
+                <Reveal index={1}>
+                  <PrimaryButton label={primaryLabel} onPress={() => void start("resume")} />
+                </Reveal>
+
+                <Reveal index={2}>
+                  <View style={styles.actions}>
+                    <GlassChip label="Shuffle" onPress={() => void start("shuffle")} />
+                    {unfinishedCount > 0 && unfinishedCount < tracks.length ? (
+                      <GlassChip
+                        label={`Unfinished only (${unfinishedCount})`}
+                        onPress={() => void start("unfinished")}
+                      />
+                    ) : null}
+                    <GlassChip label="Add to queue" onPress={() => void onAddToQueue()} />
+                    <DownloadControl
+                      summary={download}
+                      onStart={() => void startDownload()}
+                      onCancel={() => void cancelDownload()}
+                      onRetry={() => void retryDownload()}
+                      onDelete={confirmDeleteDownload}
                     />
-                  </Reveal>
-                ))
-              )}
+                  </View>
+                </Reveal>
+
+                {notice ? (
+                  <InlineNotice tone="accent" title={notice} announce />
+                ) : null}
+
+                <Reveal index={3}>
+                  <ThemedText type="overline" themeColor="textTertiary">
+                    {sections ? "SERIES" : "TRACKS"}
+                  </ThemedText>
+                </Reveal>
+              </>
+            ) : null}
+          </View>
+        }
+        renderItem={({ item: block, index }) => (
+          <Reveal index={index + 4} limit={ROW_REVEAL_LIMIT}>
+            <View style={styles.series}>
+              {block.title ? (
+                <View style={styles.seriesHeader}>
+                  <View style={styles.seriesCopy}>
+                    <UserText
+                      type="bodyStrong"
+                      numberOfLines={2}
+                      text={block.title}
+                      align="content"
+                    />
+                    <UserText
+                      type="caption"
+                      themeColor="textTertiary"
+                      text={describeTrackCount(block.rows.length)}
+                      align="content"
+                    />
+                  </View>
+                  {/* The trailing bucket is not a series, so it gets no play
+                      control: "play the standalone episodes from the beginning"
+                      names no unit at all. A real series does — and its control
+                      starts at the series' first episode while the queue stays
+                      the whole collection, because a series is a reading of one
+                      list rather than a second one. Playback therefore carries
+                      on into whatever the collection plays next. */}
+                  {block.standalone ? null : (
+                    <BouncyIconButton
+                      name="play"
+                      accessibilityLabel={`Play ${block.title} from the beginning`}
+                      size={control.sm}
+                      iconSize={iconSize.sm}
+                      tone="glass"
+                      onPress={() =>
+                        void start({ trackId: block.rows[0].track.id })
+                      }
+                    />
+                  )}
+                </View>
+              ) : null}
+
+              <ListGroup>
+                {block.rows.map((row) => (
+                  <OnlineTrackRow
+                    key={row.track.id}
+                    track={row.track}
+                    ordinal={row.ordinal}
+                    isCurrent={currentTrackId === row.track.id}
+                    job={jobsByTrack[row.track.id] ?? null}
+                    onPress={() => void start({ trackId: row.track.id })}
+                  />
+                ))}
+              </ListGroup>
             </View>
-          </>
-        ) : (
-          <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-            {loading ? "Loading…" : "This collection has no playable audio."}
-          </ThemedText>
+          </Reveal>
         )}
-      </ScrollView>
+        ListEmptyComponent={
+          loading ? (
+            <View style={styles.emptyBlock}>
+              <SkeletonRows count={5} />
+            </View>
+          ) : error ? null : (
+            <EmptyState
+              icon="music"
+              title="No playable audio"
+              message="This collection has no playable audio."
+            />
+          )
+        }
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  content: {
+  list: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.giant,
+    gap: spacing.xl,
+  },
+  content: {
     gap: spacing.xl,
   },
   headerActions: {
@@ -525,12 +544,7 @@ const styles = StyleSheet.create({
     gap: spacing.xxs,
     minWidth: 0,
   },
-  rtl: {
-    textAlign: "right",
-    writingDirection: "rtl",
-  },
-  empty: {
-    textAlign: "center",
-    paddingVertical: spacing.huge,
+  emptyBlock: {
+    paddingTop: spacing.lg,
   },
 });

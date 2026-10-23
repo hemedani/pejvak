@@ -10,9 +10,16 @@ import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
 import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import {
+  EmptyState,
+  historyAction,
+  InlineNotice,
+  ListGroup,
+  ListRow,
+  SkeletonRows,
+} from "@/components/ui/row";
 import { TextField } from "@/components/ui/text-field";
 import { useTheme } from "@/hooks/use-theme";
 import { usePlaylistDetail } from "@/hooks/use-playlist-detail";
@@ -20,7 +27,7 @@ import type { LocalTrack } from "@/lib/db/types";
 import { paletteFor } from "@/lib/palette";
 import { describeContextStats } from "@/lib/playbackContext";
 import { PlaylistService } from "@/services/PlaylistService";
-import { card as cardTokens, radius as radii, spacing } from "@/theme/tokens";
+import { card as cardTokens, control, iconSize, radius as radii, spacing, tile, tileRadius } from "@/theme/tokens";
 
 export default function PlaylistDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -145,8 +152,8 @@ export default function PlaylistDetailScreen() {
                       contextKey={playlistId ?? ""}
                       title={data.playlist.title}
                       artwork={tracks[0]?.artworkUrl ?? null}
-                      size={42}
-                      iconSize={20}
+                      size={control.lg}
+                      iconSize={iconSize.lg}
                       tone="glass"
                     />
                     {/* The whole playlist, in one tap: the useful direction
@@ -160,16 +167,16 @@ export default function PlaylistDetailScreen() {
                         ramp={ramp}
                         artwork={tracks[0]?.artworkUrl ?? null}
                         isBatch
-                        size={42}
-                        iconSize={20}
+                        size={control.lg}
+                        iconSize={iconSize.lg}
                         tone="glass"
                       />
                     ) : null}
                     <BouncyIconButton
                       name="edit"
                       accessibilityLabel="Rename playlist"
-                      size={42}
-                      iconSize={18}
+                      size={control.lg}
+                      iconSize={iconSize.md}
                       tone="glass"
                       onPress={() => {
                         setTitleDraft(data.playlist.title);
@@ -188,98 +195,116 @@ export default function PlaylistDetailScreen() {
                 </ThemedText>
               </Reveal>
               {tracks.length === 0 ? (
-                <ThemedText type="caption" themeColor="textTertiary">
-                  {loading ? "Loading…" : "No tracks yet."}
-                </ThemedText>
+                loading ? (
+                  <SkeletonRows count={3} />
+                ) : (
+                  <EmptyState
+                    icon="playlists"
+                    title="No tracks yet"
+                    message="Add music below to start this playlist."
+                  />
+                )
               ) : (
-                tracks.map((track, index) => (
-                  <Reveal key={track.id} index={index + 2}>
-                    <Card elevated={false} style={styles.row}>
-                      <ElasticPressable
-                        accessibilityRole="button"
-                        accessibilityLabel={`Play ${track.title}`}
-                        onPress={() => play(index)}
-                        style={styles.rowMain}>
+                <ListGroup>
+                  {tracks.map((track, index) => (
+                    <ListRow
+                      key={track.id}
+                      title={`${index + 1}. ${track.title}`}
+                      titleLines={2}
+                      leading={
                         <PaletteTile
                           ramp={paletteFor(track.contentHash)}
                           label={track.title}
                           source={track.artworkUrl}
-                          size={40}
-                          radius={12}
+                          size={tile.md}
+                          radius={tileRadius(tile.md)}
                         />
-                        <View style={styles.rowCopy}>
-                          {/* Two lines because this row carries four trailing
-                              controls, which leaves the title roughly 100 pt on
-                              a 360 dp phone — enough for one line and an
-                              ellipsis. A second line fits inside the 40 pt
-                              tile, so the row does not grow. */}
-                          <ThemedText type="bodyStrong" numberOfLines={2}>
-                            {index + 1}. {track.title}
-                          </ThemedText>
-                        </View>
-                      </ElasticPressable>
-
-                      {/* Every row opens the playlist's own history. It is the
-                          same sheet from each of them — a track in a playlist
-                          has no history that is not already part of it — but
-                          the control is on the row the listener is looking at
-                          rather than only in the header. */}
-                      <ContextHistoryButton
-                        type="playlist"
-                        contextKey={playlistId ?? ""}
-                        title={data.playlist.title}
-                        artwork={tracks[0]?.artworkUrl ?? null}
-                        size={34}
-                        iconSize={16}
-                      />
-
-                      {/* No per-row "add to playlist" here, deliberately. The
-                          header above adds the whole list in one tap, and this
-                          row already carries four other controls — reorder up,
-                          reorder down, remove, and the history below. A fifth
-                          leaves the title about three characters wide, because
-                          every touch target pads out to 44 pt and the gap
-                          between them cannot be tightened to compensate. */}
-                      <View style={styles.rowActions}>
-                        <BouncyIconButton
-                          name="arrowUp"
-                          accessibilityLabel="Move up"
-                          size={34}
-                          iconSize={15}
-                          tone="ghost"
-                          disabled={index === 0}
-                          onPress={() =>
+                      }
+                      leadingWidth={tile.md}
+                      onPress={() => play(index)}
+                      accessibilityLabel={`Play ${track.title}`}
+                      actions={[
+                        historyAction({
+                          type: "playlist",
+                          contextKey: playlistId ?? "",
+                          title: data.playlist.title,
+                          artwork: tracks[0]?.artworkUrl ?? null,
+                        }),
+                        {
+                          key: "moveUp",
+                          width: control.md,
+                          priority: 0,
+                          icon: "arrowUp",
+                          label: `Move ${track.title} up`,
+                          onPress: () =>
                             playlistId &&
-                            void run(() => PlaylistService.moveTrack(playlistId, index, index - 1))
-                          }
-                        />
-                        <BouncyIconButton
-                          name="arrowDown"
-                          accessibilityLabel="Move down"
-                          size={34}
-                          iconSize={15}
-                          tone="ghost"
-                          disabled={index === tracks.length - 1}
-                          onPress={() =>
+                            void run(() => PlaylistService.moveTrack(playlistId, index, index - 1)),
+                          node: (
+                            <BouncyIconButton
+                              name="arrowUp"
+                              accessibilityLabel={`Move ${track.title} up`}
+                              size={control.sm}
+                              iconSize={iconSize.sm}
+                              tone="ghost"
+                              disabled={index === 0}
+                              onPress={() =>
+                                playlistId &&
+                                void run(() => PlaylistService.moveTrack(playlistId, index, index - 1))
+                              }
+                            />
+                          ),
+                        },
+                        {
+                          key: "moveDown",
+                          width: control.md,
+                          priority: 0,
+                          icon: "arrowDown",
+                          label: `Move ${track.title} down`,
+                          onPress: () =>
                             playlistId &&
-                            void run(() => PlaylistService.moveTrack(playlistId, index, index + 1))
-                          }
-                        />
-                        <BouncyIconButton
-                          name="close"
-                          accessibilityLabel={`Remove ${track.title}`}
-                          size={34}
-                          iconSize={15}
-                          tone="ghost"
-                          onPress={() =>
+                            void run(() => PlaylistService.moveTrack(playlistId, index, index + 1)),
+                          node: (
+                            <BouncyIconButton
+                              name="arrowDown"
+                              accessibilityLabel={`Move ${track.title} down`}
+                              size={control.sm}
+                              iconSize={iconSize.sm}
+                              tone="ghost"
+                              disabled={index === tracks.length - 1}
+                              onPress={() =>
+                                playlistId &&
+                                void run(() => PlaylistService.moveTrack(playlistId, index, index + 1))
+                              }
+                            />
+                          ),
+                        },
+                        {
+                          key: "remove",
+                          width: control.md,
+                          priority: 0,
+                          icon: "close",
+                          label: `Remove ${track.title}`,
+                          onPress: () =>
                             playlistId &&
-                            void run(() => PlaylistService.removeTrack(playlistId, track.id))
-                          }
-                        />
-                      </View>
-                    </Card>
-                  </Reveal>
-                ))
+                            void run(() => PlaylistService.removeTrack(playlistId, track.id)),
+                          node: (
+                            <BouncyIconButton
+                              name="close"
+                              accessibilityLabel={`Remove ${track.title}`}
+                              size={control.sm}
+                              iconSize={iconSize.sm}
+                              tone="ghost"
+                              onPress={() =>
+                                playlistId &&
+                                void run(() => PlaylistService.removeTrack(playlistId, track.id))
+                              }
+                            />
+                          ),
+                        },
+                      ]}
+                    />
+                  ))}
+                </ListGroup>
               )}
             </View>
 
@@ -296,42 +321,44 @@ export default function PlaylistDetailScreen() {
               </Reveal>
               {adding ? (
                 addable.length === 0 ? (
-                  <ThemedText type="caption" themeColor="textTertiary">
-                    Every library track is already here.
-                  </ThemedText>
+                  <InlineNotice
+                    tone="neutral"
+                    title="Every library track is already here."
+                  />
                 ) : (
-                  addable.map((track: LocalTrack, index: number) => (
-                    <Reveal key={track.id} index={21 + index}>
-                      <Card elevated={false} style={styles.row}>
-                        <View style={styles.rowMain}>
+                  <ListGroup>
+                    {addable.map((track: LocalTrack) => (
+                      <ListRow
+                        key={track.id}
+                        title={track.title}
+                        titleLines={1}
+                        leading={
                           <PaletteTile
                             ramp={paletteFor(track.contentHash)}
                             label={track.title}
                             source={track.artworkUrl}
-                            size={40}
-                            radius={12}
+                            size={tile.md}
+                            radius={tileRadius(tile.md)}
                           />
-                          <ThemedText
-                            type="bodyStrong"
-                            numberOfLines={1}
-                            style={styles.rowCopy}>
-                            {track.title}
-                          </ThemedText>
-                        </View>
-                        <BouncyIconButton
-                          name="add"
-                          accessibilityLabel={`Add ${track.title}`}
-                          size={36}
-                          iconSize={18}
-                          tone="glass"
-                          onPress={() =>
-                            playlistId &&
-                            void run(() => PlaylistService.addTrack(playlistId, track.id))
-                          }
-                        />
-                      </Card>
-                    </Reveal>
-                  ))
+                        }
+                        leadingWidth={tile.md}
+                        accessibilityLabel={`Add ${track.title}`}
+                        trailing={
+                          <BouncyIconButton
+                            name="add"
+                            accessibilityLabel={`Add ${track.title}`}
+                            size={control.md}
+                            iconSize={iconSize.md}
+                            tone="glass"
+                            onPress={() =>
+                              playlistId &&
+                              void run(() => PlaylistService.addTrack(playlistId, track.id))
+                            }
+                          />
+                        }
+                      />
+                    ))}
+                  </ListGroup>
                 )
               ) : null}
             </View>
@@ -347,10 +374,14 @@ export default function PlaylistDetailScreen() {
               </ElasticPressable>
             </Reveal>
           </>
+        ) : loading ? (
+          <SkeletonRows count={4} />
         ) : (
-          <ThemedText type="caption" themeColor="textTertiary" style={styles.empty}>
-            {loading ? "Loading…" : "Playlist not found."}
-          </ThemedText>
+          <EmptyState
+            icon="playlists"
+            title="Playlist not found"
+            message="It may have been deleted on another device."
+          />
         )}
       </KeyboardScrollView>
     </Screen>
@@ -387,30 +418,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  rowMain: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    minWidth: 0,
-  },
-  rowCopy: {
-    flex: 1,
-  },
-  rowActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    // 8 rather than 4: these buttons are 34 pt and pad their touch area out to
-    // 44, so a tighter gap would let neighbouring hit areas overlap and turn a
-    // missed "move down" into an accidental "remove".
-    gap: spacing.sm,
-  },
   textButton: {
     minHeight: 44,
     justifyContent: "center",
@@ -421,9 +428,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: radii.lg,
-  },
-  empty: {
-    textAlign: "center",
-    paddingVertical: spacing.huge,
   },
 });

@@ -99,6 +99,17 @@ export default function SettingsScreen() {
 
   const name = user?.displayName ?? user?.username ?? "Signed in";
 
+  // Reveal order is the order the sections appear; a conditional section (the
+  // dev gallery) therefore cannot leave a gap behind it.
+  let revealIndex = 1;
+  const accountIndex = revealIndex++;
+  const playbackIndex = revealIndex++;
+  const appearanceIndex = revealIndex++;
+  const motionIndex = revealIndex++;
+  const storageIndex = revealIndex++;
+  const developerIndex = revealIndex++;
+  const signOutIndex = revealIndex;
+
   return (
     <Screen wash={theme.accent}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -106,7 +117,7 @@ export default function SettingsScreen() {
 
         {/* 1 — Account. Identity, then a destructive action that gets its own
             bounded row rather than sitting under the avatar as a caption. */}
-        <CardSection title="ACCOUNT" index={1}>
+        <CardSection title="ACCOUNT" index={accountIndex}>
           <View style={styles.identity}>
             <View style={[styles.avatar, { backgroundColor: theme.accentSoft }]}>
               <Icon name="person" size={24} color={theme.accent} />
@@ -127,7 +138,7 @@ export default function SettingsScreen() {
         {/* 2 — Playback and appearance. Both are single-choice, so both get a
             segmented control: a row of chips said "filter", and a thumb's
             position says "this one". */}
-        <CardSection title="PLAYBACK" index={4} footer="The speed a track starts at.">
+        <CardSection title="PLAYBACK" index={playbackIndex} footer="The speed a track starts at.">
           <View style={styles.control}>
             <SegmentedControl
               accessibilityLabel="Default playback speed"
@@ -138,7 +149,7 @@ export default function SettingsScreen() {
           </View>
         </CardSection>
 
-        <CardSection title="APPEARANCE" index={7} footer="System follows your device's light and dark setting.">
+        <CardSection title="APPEARANCE" index={appearanceIndex} footer="System follows your device's light and dark setting.">
           <View style={styles.control}>
             <SegmentedControl
               accessibilityLabel="Theme"
@@ -151,7 +162,7 @@ export default function SettingsScreen() {
 
         <CardSection
           title="MOTION"
-          index={10}
+          index={motionIndex}
           footer="System follows your device's animation setting.">
           <View style={styles.control}>
             <SegmentedControl
@@ -181,7 +192,7 @@ export default function SettingsScreen() {
             spending a panel on one number; these are the same question. */}
         <CardSection
           title="STORAGE & SYNC"
-          index={13}
+          index={storageIndex}
           footer="Pejvak writes everything here first and sends it when it can, so a lost connection never costs you a session.">
           <CardRow
             position="first"
@@ -212,7 +223,7 @@ export default function SettingsScreen() {
         </CardSection>
 
         {__DEV__ ? (
-          <CardSection title="DEVELOPER" index={18}>
+          <CardSection title="DEVELOPER" index={developerIndex}>
             <CardRow
               icon="settings"
               label="Field gallery"
@@ -224,7 +235,7 @@ export default function SettingsScreen() {
 
         {/* 4 — Sign out, alone, in danger. The one control on the screen that
             ends a session, so it does not share a card with anything. */}
-        <Reveal index={16}>
+        <Reveal index={signOutIndex}>
           <ElasticPressable
             accessibilityRole="button"
             accessibilityLabel="Sign out"

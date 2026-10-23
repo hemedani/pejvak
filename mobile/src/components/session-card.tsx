@@ -1,23 +1,32 @@
 /**
- * One listening session in the History list.
+ * One listening session in a list.
  *
- * Tapping the body opens the session's own sheet, where the timeline, the facts,
- * the resume and the remove control live; the trailing button removes the entry
- * directly. The remove button is deliberately a *sibling* of the pressable
- * rather than a child of it — nested, the card would run its press animation
- * and fire its own `onPress` while the finger is on the delete glyph.
+ * A session is a *record*: the title identifies it, the time range and position
+ * say when and how much, and the duration, speed and outcome are why the row
+ * exists. It uses the same anatomy as every other dense row, so the History
+ * list and a track's own session list read as one system.
+ *
+ * Tapping the body opens the session's own sheet, where the timeline, the
+ * facts, the resume and the remove control live; the trailing controls add the
+ * track to a playlist and remove the entry. They are deliberately *siblings* of
+ * the pressable rather than children of it — nested, the row would fire its own
+ * `onPress` while the finger is on the other glyph.
  */
 
 import { StyleSheet, View } from "react-native";
 
-import { AddToPlaylistButton } from "@/components/add-to-playlist";
+import { useAddToPlaylist } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
-import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
-import { Icon, type IconName } from "@/components/ui/icon";
-import { useTheme } from "@/hooks/use-theme";
 import {
+  RecordRow,
+  type ListRowPosition,
+  type RowAction,
+} from "@/components/ui/row";
+import { useTheme } from "@/hooks/use-theme";
+import { joinMeta } from "@/lib/cardMeta";
+import {
+  describeSessionStatus,
   describeSpeed,
   formatDuration,
   formatPositionRange,
@@ -27,151 +36,115 @@ import {
 } from "@/lib/history";
 import { paletteFor } from "@/lib/palette";
 import { formatClock } from "@/lib/time";
-import { card as cardTokens, spacing } from "@/theme/tokens";
+import { control, spacing } from "@/theme/tokens";
 
 export type SessionCardProps = {
   item: HistoryItem;
   /**
    * Opens this session's own sheet — the timeline, the facts, resume, remove.
    *
-   * The card deliberately does not resume on tap any more. What a session *was*
-   * is worth a look before acting on it, and the resume the row used to perform
-   * is now the sheet's primary button, one tap further in.
+   * The card deliberately does not resume on tap. What a session *was* is worth
+   * a look before acting on it, and the resume the row used to perform is now
+   * the sheet's primary button, one tap further in.
    */
   onOpen?: (item: HistoryItem) => void;
   /** Omit to hide the remove button — a session still in progress has no
    *  tombstone to write, since the tracker is still finalising it. */
   onDelete?: (item: HistoryItem) => void;
+  /** Set by `ListGroup`; a row outside a group is its own whole card. */
+  position?: ListRowPosition;
 };
 
-type Outcome = {
-  label: string;
-  icon: IconName;
-};
-
-function outcome(item: HistoryItem): Outcome | null {
-  if (item.session.completed) {
-    return { label: "Finished", icon: "check" };
-  }
-  if (item.session.interrupted) {
-    return { label: "Interrupted", icon: "cloudOffline" };
-  }
-  return null;
-}
-
-export function SessionCard({ item, onOpen, onDelete }: SessionCardProps) {
+export function SessionCard({ item, onOpen, onDelete, position }: SessionCardProps) {
   const theme = useTheme();
-  const result = outcome(item);
+  const addToPlaylist = useAddToPlaylist();
   const resumeSec = resumeTargetSec(item);
 
-  const body = (
-    <>
-      <View style={styles.main}>
-        <ThemedText type="bodyStrong" numberOfLines={1}>
-          {item.track.title}
-        </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-          {formatTimeRange(item.session.startedAt, item.session.endedAt)}
-        </ThemedText>
-        <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
-          {formatPositionRange(item.session.startPositionSec, item.session.endPositionSec)}
-          {/* Which collection the session was part of, on the same line — the
-              row already carries three lines, and a fourth would grow every card
-              in a 200-entry list. */}
-          {item.contextTitle ? ` · ${item.contextTitle}` : ""}
-        </ThemedText>
-      </View>
+  const openPlaylistPicker = () =>
+    void addToPlaylist({
+      trackIds: [item.track.id],
+      title: item.track.title,
+      ramp: paletteFor(item.track.contentHash),
+      artwork: item.track.artworkUrl,
+    });
 
-      <View style={styles.meta}>
-        <ThemedText type="bodyStrong" style={{ color: theme.accent }}>
-          {formatDuration(item.session.durationListenedSec)}
-        </ThemedText>
-        <ThemedText type="caption" themeColor="textSecondary">
-          {describeSpeed(item.session.playbackSpeed)}
-        </ThemedText>
-        {result ? (
-          <View style={styles.outcome}>
-            <Icon name={result.icon} size={12} color={theme.textTertiary} />
-            <ThemedText type="caption" themeColor="textTertiary">
-              {result.label}
-            </ThemedText>
-          </View>
-        ) : null}
-      </View>
-    </>
-  );
+  const actions: RowAction[] = [
+    {
+      key: "add",
+      width: control.sm,
+      priority: 2,
+      icon: "playlistAdd",
+      label: `Add ${item.track.title} to a playlist`,
+      onPress: openPlaylistPicker,
+      node: (
+        <BouncyIconButton
+          name="playlistAdd"
+          accessibilityLabel={`Add ${item.track.title} to a playlist`}
+          size={control.sm}
+          iconSize={17}
+          tone="ghost"
+          onPress={openPlaylistPicker}
+        />
+      ),
+    },
+  ];
 
-  return (
-    <Card elevated={false} style={styles.card}>
-      {onOpen ? (
-        <ElasticPressable
-          accessibilityRole="button"
-          accessibilityLabel={`Details for ${item.track.title}`}
-          // The hint names what the tap does *and* what is behind it: a listener
-          // who wanted the resume the card used to perform is told, in the same
-          // breath, that it is one tap further in and where it lands.
-          accessibilityHint={`Listened for ${formatDuration(item.session.durationListenedSec)}. Opens the timeline, and resumes at ${formatClock(resumeSec)}.`}
-          onPress={() => onOpen(item)}
-          style={styles.body}>
-          {body}
-        </ElasticPressable>
-      ) : (
-        <View style={styles.body}>{body}</View>
-      )}
-
-      {/* Same sibling rule as the remove button: nested inside the pressable it
-          would resume playback on the way to opening the picker. */}
-      <AddToPlaylistButton
-        trackIds={[item.track.id]}
-        title={item.track.title}
-        ramp={paletteFor(item.track.contentHash)}
-        artwork={item.track.artworkUrl}
-        size={36}
-        iconSize={17}
-        tone="ghost"
-      />
-
-      {onDelete ? (
+  if (onDelete) {
+    actions.push({
+      key: "delete",
+      width: control.sm,
+      priority: 1,
+      icon: "trash",
+      label: `Remove ${item.track.title} from history`,
+      danger: true,
+      onPress: () => onDelete(item),
+      node: (
         <BouncyIconButton
           name="trash"
           accessibilityLabel={`Remove ${item.track.title} from history`}
-          size={36}
+          size={control.sm}
           iconSize={17}
           tone="ghost"
           onPress={() => onDelete(item)}
         />
-      ) : null}
-    </Card>
+      ),
+    });
+  }
+
+  return (
+    <RecordRow
+      position={position}
+      title={item.track.title}
+      meta={formatTimeRange(item.session.startedAt, item.session.endedAt)}
+      detail={joinMeta([
+        formatPositionRange(item.session.startPositionSec, item.session.endPositionSec),
+        item.contextTitle,
+      ])}
+      status={describeSessionStatus(item.session)}
+      trailing={
+        <View style={styles.meta}>
+          <ThemedText type="numeric" style={{ color: theme.accent }}>
+            {formatDuration(item.session.durationListenedSec)}
+          </ThemedText>
+          <ThemedText type="caption" themeColor="textSecondary">
+            {describeSpeed(item.session.playbackSpeed)}
+          </ThemedText>
+        </View>
+      }
+      onPress={onOpen ? () => onOpen(item) : undefined}
+      // The hint names what the tap does *and* what is behind it: a listener
+      // who wanted the resume the card used to perform is told, in the same
+      // breath, that it is one tap further in and where it lands.
+      accessibilityLabel={`Details for ${item.track.title}`}
+      accessibilityHint={`Listened for ${formatDuration(item.session.durationListenedSec)}. Opens the timeline, and resumes at ${formatClock(resumeSec)}.`}
+      actions={actions}
+    />
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: cardTokens.rowPadding,
-  },
-  body: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-    // Lets the title ellipsise instead of pushing the meta column off-screen.
-    minWidth: 0,
-  },
-  main: {
-    flex: 1,
-    gap: spacing.xxs,
-  },
   meta: {
     alignItems: "flex-end",
     gap: spacing.xxs,
-  },
-  outcome: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
   },
 });

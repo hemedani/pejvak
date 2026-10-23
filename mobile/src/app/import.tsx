@@ -9,8 +9,9 @@ import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip, GlassProgress } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { ListGroup, ListRow } from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
-import { radius as radii, spacing } from "@/theme/tokens";
+import { control, iconSize, radius as radii, spacing } from "@/theme/tokens";
 import {
   describePermissionRefusal,
   enumerateDeviceAudio,
@@ -228,8 +229,8 @@ export default function ImportScreen() {
           <BouncyIconButton
             name="close"
             accessibilityLabel="Close import"
-            size={42}
-            iconSize={20}
+            size={control.lg}
+            iconSize={iconSize.lg}
             tone="glass"
             onPress={() => router.back()}
           />
@@ -384,21 +385,21 @@ export default function ImportScreen() {
         }
         renderItem={({ item, index }) => (
           <Reveal index={index + 3} from="below" limit={ROW_REVEAL_LIMIT}>
-            <Card elevated={false} style={styles.row}>
-              <View style={styles.rowCopy}>
-                <ThemedText type="bodyStrong" numberOfLines={1}>
-                  {item.fileName}
-                </ThemedText>
-                <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
-                  {item.folderName ?? "No folder"}
-                </ThemedText>
-              </View>
-              <ThemedText
-                type="caption"
-                themeColor={needsIdentification(item.status) ? "text" : "textTertiary"}>
-                {STATUS_LABEL[item.status]}
-              </ThemedText>
-            </Card>
+            <ListGroup>
+              <ListRow
+                title={item.fileName}
+                titleLines={1}
+                detail={item.folderName ?? "No folder"}
+                accessibilityLabel={`${item.fileName}, ${STATUS_LABEL[item.status]}`}
+                trailing={
+                  <ThemedText
+                    type="caption"
+                    themeColor={needsIdentification(item.status) ? "text" : "textTertiary"}>
+                    {STATUS_LABEL[item.status]}
+                  </ThemedText>
+                }
+              />
+            </ListGroup>
           </Reveal>
         )}
       />
@@ -410,7 +411,7 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant + 96,
+    paddingBottom: spacing.giant,
   },
   headerBlock: {
     gap: spacing.lg,
@@ -437,17 +438,6 @@ const styles = StyleSheet.create({
   chipRow: {
     flexDirection: "row",
     gap: spacing.sm,
-  },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    padding: spacing.md,
-  },
-  rowCopy: {
-    flex: 1,
-    gap: spacing.xxs,
-    minWidth: 0,
   },
   empty: {
     textAlign: "center",

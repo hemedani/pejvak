@@ -9,14 +9,20 @@
  *
  * Rows are separated by a hairline rather than given their own cards: a fact is
  * a line in a list, not a destination, and twenty cards would be twenty taps
- * that do nothing.
+ * that do nothing. The hairline starts at the text, not at the card's edge.
  *
- * The label is the quieter half of the row on purpose. A fact's *value* is the
- * answer, so the value carries the contrast and the label recedes — the inverse
- * of the settings row, where the label names the thing and the value is a
- * footnote.
+ * ## Reading order
+ *
+ * The label leads — `body` in the primary text colour — and the value follows in
+ * `numeric`/`textSecondary`. That is the shared tier contract, and the inverse
+ * of what this file used to draw: a `caption`/`textTertiary` label above a
+ * `body` value made the answer louder than the question, which is exactly the
+ * inversion the design system forbids. A stacked technical value keeps the
+ * numeric face because it is read as a sequence of digits, but the label still
+ * comes first.
  */
 
+import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
@@ -27,9 +33,11 @@ import { card as cardTokens, hairline, spacing } from "@/theme/tokens";
 
 export type FactListProps = {
   facts: Fact[];
+  /** Drawn above the first fact, inside the same card. */
+  header?: ReactNode;
 };
 
-export function FactList({ facts }: FactListProps) {
+export function FactList({ facts, header }: FactListProps) {
   const theme = useTheme();
 
   if (facts.length === 0) {
@@ -38,27 +46,33 @@ export function FactList({ facts }: FactListProps) {
 
   return (
     <Card padded={false}>
+      {header ? <View style={styles.header}>{header}</View> : null}
       {facts.map((fact, index) => (
-        <View
-          key={fact.label}
-          style={[
-            fact.technical ? styles.stackedRow : styles.row,
-            // Every row but the first carries the divider, so the card has no
-            // stray line against its own border.
-            index > 0 ? { borderTopWidth: hairline, borderTopColor: theme.outlineVariant } : null,
-          ]}>
-          <ThemedText type="caption" themeColor="textTertiary">
-            {fact.label}
-          </ThemedText>
-          {fact.technical ? (
-            <ThemedText type="numeric" selectable style={styles.technicalValue}>
-              {fact.value}
-            </ThemedText>
-          ) : (
-            <ThemedText type="body" numberOfLines={1} style={styles.value}>
-              {fact.value}
-            </ThemedText>
-          )}
+        <View key={fact.label} style={styles.group}>
+          {/* Every row but the first carries the divider, so the card has no
+              stray line against its own border. The header counts as a row. */}
+          {index > 0 || header ? (
+            <View
+              pointerEvents="none"
+              style={[styles.divider, { backgroundColor: theme.outlineVariant }]}
+            />
+          ) : null}
+          <View style={fact.technical ? styles.stackedRow : styles.row}>
+            <ThemedText type="body">{fact.label}</ThemedText>
+            {fact.technical ? (
+              <ThemedText type="numeric" themeColor="textSecondary" selectable>
+                {fact.value}
+              </ThemedText>
+            ) : (
+              <ThemedText
+                type="numeric"
+                themeColor="textSecondary"
+                numberOfLines={1}
+                style={styles.value}>
+                {fact.value}
+              </ThemedText>
+            )}
+          </View>
         </View>
       ))}
     </Card>
@@ -66,6 +80,21 @@ export function FactList({ facts }: FactListProps) {
 }
 
 const styles = StyleSheet.create({
+  group: {
+    position: "relative",
+  },
+  divider: {
+    position: "absolute",
+    top: 0,
+    left: cardTokens.padding,
+    right: 0,
+    height: hairline,
+  },
+  header: {
+    paddingHorizontal: cardTokens.padding,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -83,8 +112,5 @@ const styles = StyleSheet.create({
   value: {
     flexShrink: 1,
     textAlign: "right",
-  },
-  technicalValue: {
-    lineHeight: 19,
   },
 });

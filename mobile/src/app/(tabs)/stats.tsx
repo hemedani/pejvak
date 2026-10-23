@@ -18,16 +18,18 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
+import { FactList } from "@/components/fact-list";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { StatCell } from "@/components/stat-cell";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
-
 import { Icon } from "@/components/ui/icon";
+import { ListGroup, ListRow } from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
 import { useHistory } from "@/hooks/use-history";
+import { joinMeta, plural } from "@/lib/cardMeta";
 import { formatDuration, resumeTargetSec, type HistoryItem } from "@/lib/history";
 import {
   computeBestStreak,
@@ -38,7 +40,7 @@ import {
   computeTrackLeaders,
   sessionsOnDay,
 } from "@/lib/stats";
-import { dockInset, spacing } from "@/theme/tokens";
+import { bar, card as cardTokens, dockInset, list, spacing } from "@/theme/tokens";
 
 /** Which stat cell has its detail panel open, if any. */
 type ExpandedStat = "listened" | "streak";
@@ -165,42 +167,47 @@ export default function StatsScreen() {
 
         {expandedStat ? (
           <Reveal key={expandedStat} index={4}>
-            <Card style={styles.detail}>
-              {expandedStat === "listened" ? (
-                <>
-                  {stats.totalListenTimeSec > 0 ? (
-                    // Decorative: the rows below state the same numbers, so the
-                    // bar is hidden from screen readers rather than repeated.
+            <FactList
+              header={
+                expandedStat === "listened" && stats.totalListenTimeSec > 0 ? (
+                  // Decorative: the rows below state the same numbers, so the
+                  // bar is hidden from screen readers rather than repeated.
+                  <View
+                    style={styles.split}
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants">
                     <View
-                      style={styles.split}
-                      accessibilityElementsHidden
-                      importantForAccessibility="no-hide-descendants">
-                      <View
-                        style={[styles.splitSegment, { flex: breakdown.audiobookSec, backgroundColor: theme.accent }]}
-                      />
-                      <View
-                        style={[
-                          styles.splitSegment,
-                          { flex: breakdown.musicSec, backgroundColor: theme.textTertiary },
-                        ]}
-                      />
-                    </View>
-                  ) : null}
-                  <DetailRow label="Audiobooks" value={formatDuration(breakdown.audiobookSec)} />
-                  <DetailRow label="Music" value={formatDuration(breakdown.musicSec)} />
-                  <DetailRow
-                    label="Average session"
-                    value={formatDuration(stats.averageSessionSec)}
-                  />
-                </>
-              ) : (
-                <>
-                  <DetailRow label="Best streak" value={days(bestStreak)} />
-                  <DetailRow label="Days listened" value={days(stats.activeDayCount)} />
-                  <DetailRow label="Sessions" value={String(stats.sessionCount)} />
-                </>
-              )}
-            </Card>
+                      style={[styles.splitSegment, { flex: breakdown.audiobookSec, backgroundColor: theme.accent }]}
+                    />
+                    <View
+                      style={[
+                        styles.splitSegment,
+                        { flex: breakdown.musicSec, backgroundColor: theme.textTertiary },
+                      ]}
+                    />
+                  </View>
+                ) : null
+              }
+              facts={
+                expandedStat === "listened"
+                  ? [
+                      {
+                        label: "Audiobooks",
+                        value: formatDuration(breakdown.audiobookSec),
+                      },
+                      { label: "Music", value: formatDuration(breakdown.musicSec) },
+                      {
+                        label: "Average session",
+                        value: formatDuration(stats.averageSessionSec),
+                      },
+                    ]
+                  : [
+                      { label: "Best streak", value: days(bestStreak) },
+                      { label: "Days listened", value: days(stats.activeDayCount) },
+                      { label: "Sessions", value: String(stats.sessionCount) },
+                    ]
+              }
+            />
           </Reveal>
         ) : null}
 
@@ -211,27 +218,26 @@ export default function StatsScreen() {
             </ThemedText>
           </Reveal>
           {leaders.length > 0 ? (
-            leaders.map((leader, index) => (
-              <Reveal key={leader.contentHash} index={6 + index}>
-                <Card elevated={false} style={styles.row}>
-                  <ElasticPressable
-                    accessibilityRole="button"
+            <Reveal index={6}>
+              <ListGroup>
+                {leaders.map((leader) => (
+                  <ListRow
+                    key={leader.contentHash}
+                    title={leader.title}
+                    meta={joinMeta([
+                      formatDuration(leader.listenTimeSec),
+                      plural(leader.playCount, "play"),
+                    ])}
+                    onPress={() => router.push(`/track/${leader.trackId}`)}
                     accessibilityLabel={`Open ${leader.title}`}
                     accessibilityHint={`${formatDuration(leader.listenTimeSec)} listened`}
-                    onPress={() => router.push(`/track/${leader.trackId}`)}
-                    style={styles.rowMain}>
-                    <ThemedText type="bodyStrong" numberOfLines={1} style={styles.rowTitle}>
-                      {leader.title}
-                    </ThemedText>
-                    <ThemedText type="caption" themeColor="textSecondary">
-                      {formatDuration(leader.listenTimeSec)} · {leader.playCount} play
-                      {leader.playCount === 1 ? "" : "s"}
-                    </ThemedText>
-                  </ElasticPressable>
-                  <Icon name="chevronRight" size={16} color={theme.textTertiary} />
-                </Card>
-              </Reveal>
-            ))
+                    trailing={
+                      <Icon name="chevronRight" size={16} color={theme.textTertiary} />
+                    }
+                  />
+                ))}
+              </ListGroup>
+            </Reveal>
           ) : (
             <ThemedText type="caption" themeColor="textTertiary">
               Nothing yet.
@@ -247,22 +253,22 @@ export default function StatsScreen() {
           </Reveal>
           {stats.longestSessionTitle ? (
             <Reveal index={12}>
-              <Card elevated={false} style={styles.row}>
-                <ElasticPressable
-                  accessibilityRole="button"
+              <ListGroup>
+                <ListRow
+                  title={stats.longestSessionTitle}
+                  trailing={
+                    <View style={styles.longestMeta}>
+                      <ThemedText type="numeric" style={{ color: theme.accent }}>
+                        {formatDuration(stats.longestSessionSec)}
+                      </ThemedText>
+                      <Icon name="play" size={18} color={theme.accent} />
+                    </View>
+                  }
+                  onPress={replayLongest}
                   accessibilityLabel={`Replay ${stats.longestSessionTitle}`}
                   accessibilityHint={`Starts at the point this ${formatDuration(stats.longestSessionSec)} session began`}
-                  onPress={replayLongest}
-                  style={styles.rowMain}>
-                  <ThemedText type="bodyStrong" numberOfLines={1} style={styles.rowTitle}>
-                    {stats.longestSessionTitle}
-                  </ThemedText>
-                  <ThemedText type="caption" style={{ color: theme.accent }}>
-                    {formatDuration(stats.longestSessionSec)}
-                  </ThemedText>
-                </ElasticPressable>
-                <Icon name="play" size={18} color={theme.accent} />
-              </Card>
+                />
+              </ListGroup>
             </Reveal>
           ) : (
             <ThemedText type="caption" themeColor="textTertiary">
@@ -291,7 +297,13 @@ export default function StatsScreen() {
                         accessibilityLabel={`${formatDay(day.key)}, ${formatDuration(day.listenTimeSec)}`}
                         accessibilityHint={open ? "Hides the sessions" : "Shows the sessions"}
                         accessibilityState={{ expanded: open }}
-                                haptic="select"
+                        accessibilityValue={{
+                          min: 0,
+                          max: peakDaySec,
+                          now: day.listenTimeSec,
+                          text: formatDuration(day.listenTimeSec),
+                        }}
+                        haptic="select"
                         onPress={() => setExpandedDay((current) => (current === day.key ? null : day.key))}
                         style={styles.dayRow}>
                         <ThemedText type="caption" style={styles.dayLabel} numberOfLines={1}>
@@ -365,17 +377,6 @@ export default function StatsScreen() {
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.detailRow}>
-      <ThemedText type="caption" themeColor="textSecondary">
-        {label}
-      </ThemedText>
-      <ThemedText type="bodyStrong">{value}</ThemedText>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
@@ -395,51 +396,30 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: "45%",
   },
-  detail: {
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.lg,
-  },
   split: {
     flexDirection: "row",
-    height: 8,
-    borderRadius: 4,
+    height: bar.thick,
+    borderRadius: bar.thick / 2,
     overflow: "hidden",
     marginBottom: spacing.xs,
   },
   splitSegment: {
-    height: 8,
+    height: bar.thick,
   },
   section: {
     gap: spacing.sm,
   },
-  row: {
+  longestMeta: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  rowMain: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.lg,
-    minWidth: 0,
-  },
-  rowTitle: {
-    flex: 1,
+    gap: spacing.sm,
   },
   daysCard: {
     // Tight gaps: the day rows are 44 pt touch targets, so generous spacing
     // here would make the card taller than the screen.
-    gap: spacing.xs,
-    padding: spacing.lg,
+    gap: list.groupGap,
+    paddingHorizontal: cardTokens.padding,
+    paddingVertical: list.rowPadding,
   },
   dayBlock: {
     gap: spacing.sm,
@@ -450,22 +430,22 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     // These were a static bar chart; now that a row opens its day, it has to be
     // a real touch target rather than the 20 pt the text happened to occupy.
-    minHeight: 44,
+    minHeight: list.rowMinHeight,
   },
   dayLabel: {
     width: 84,
   },
   dayTrack: {
     flex: 1,
-    height: 6,
-    borderRadius: 3,
+    height: bar.thick,
+    borderRadius: bar.thick / 2,
     // Set inline from `theme.track`: a literal grey here is a surface colour no
     // palette edit can reach, and it is the one the day bars are read against.
     overflow: "hidden",
   },
   dayFill: {
-    height: 6,
-    borderRadius: 3,
+    height: bar.thick,
+    borderRadius: bar.thick / 2,
   },
   dayValue: {
     width: 54,
@@ -481,7 +461,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    minHeight: 44,
+    minHeight: list.rowMinHeight,
   },
   daySessionTitle: {
     flex: 1,

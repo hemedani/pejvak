@@ -19,20 +19,22 @@
  * deleting gives the space back. The confirmation belongs to the screen, not
  * here — this file draws, it does not decide.
  *
- * Nothing here decides *how*; the callbacks are the screen's, and the numbers
- * come from the job rows, so this file holds no state of its own.
+ * The headline and its controls are one `RowShell`, so a running download wraps
+ * its chips onto a second line instead of squeezing the headline into a column
+ * of two words. Nothing here decides *how*; the callbacks are the screen's, and
+ * the numbers come from the job rows, so this file holds no state of its own.
  */
 
 import { StyleSheet, View } from "react-native";
 
 import { SwapIcon } from "@/components/motion/SwapIcon";
-import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip, GlassProgress } from "@/components/ui/glass";
+import { RowShell, type RowAction } from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
 import { formatBytes } from "@/lib/settings";
 import type { DownloadSummary } from "@/services/DownloadService";
-import { spacing } from "@/theme/tokens";
+import { bar, control, spacing } from "@/theme/tokens";
 
 export type DownloadControlProps = {
   /** Null until the collection's progress has been read. */
@@ -91,60 +93,84 @@ export function DownloadControl({
       ? `${formatBytes(bytesDone)} of ${formatBytes(bytesTotal)}`
       : null;
 
-  return (
-    <Card style={styles.card}>
-      <View style={styles.row}>
-        <SwapIcon
-          name={complete ? "checkCircle" : running ? "cloudDownload" : "alert"}
-          size={18}
-          color={complete ? theme.accent : failed > 0 ? theme.danger : theme.textSecondary}
-        />
-        <ThemedText type="bodyStrong" style={styles.headline} numberOfLines={1}>
-          {headline}
-        </ThemedText>
-        {complete ? null : running ? (
-          <GlassChip label="Stop" icon="stopCircle" onPress={onCancel} />
-        ) : (
-          <GlassChip label="Resume" icon="cloudDownload" onPress={onRetry} />
-        )}
-        {/* Bordered in the danger colour rather than filled with it: this is a
-            way out of the card, not the card's own action. */}
-        <GlassChip
-          label="Delete"
-          icon="trash"
-          accessibilityLabel="Delete the downloaded audio for this collection"
-          onPress={onDelete}
-          style={{ borderColor: theme.danger }}
-        />
-      </View>
+  const actions: RowAction[] = [];
+  if (!complete) {
+    actions.push(
+      running
+        ? {
+            key: "stop",
+            width: control.md * 2,
+            priority: 3,
+            icon: "stopCircle",
+            label: "Stop downloading",
+            onPress: onCancel,
+            node: <GlassChip label="Stop" icon="stopCircle" onPress={onCancel} />,
+          }
+        : {
+            key: "resume",
+            width: control.md * 2,
+            priority: 3,
+            icon: "cloudDownload",
+            label: "Resume downloading",
+            onPress: onRetry,
+            node: (
+              <GlassChip label="Resume" icon="cloudDownload" onPress={onRetry} />
+            ),
+          },
+    );
+  }
+  actions.push({
+    key: "delete",
+    width: control.md * 2,
+    priority: 1,
+    icon: "trash",
+    label: "Delete the downloaded audio",
+    danger: true,
+    onPress: onDelete,
+    node: (
+      <GlassChip
+        label="Delete"
+        icon="trash"
+        accessibilityLabel="Delete the downloaded audio for this collection"
+        onPress={onDelete}
+        style={{ borderColor: theme.danger }}
+      />
+    ),
+  });
 
+  return (
+    <Card padded={false} style={styles.card}>
+      <RowShell
+        density="dense"
+        leading={
+          <SwapIcon
+            name={complete ? "checkCircle" : running ? "cloudDownload" : "alert"}
+            size={18}
+            color={complete ? theme.accent : failed > 0 ? theme.danger : theme.textSecondary}
+          />
+        }
+        leadingWidth={18}
+        title={headline}
+        meta={detail}
+        actions={actions}
+        accessibilityLabel={headline}
+      />
       {/* The bar is shown for a finished download too: a full bar is the
           clearest statement that there is nothing left to fetch. */}
-      <GlassProgress progress={ratio} tint={theme.accent} thickness={4} />
-      {detail ? (
-        <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
-          {detail}
-        </ThemedText>
-      ) : null}
+      <View style={styles.progress}>
+        <GlassProgress progress={ratio} tint={theme.accent} thickness={bar.thin} />
+      </View>
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    gap: spacing.md,
-    // The control shares a wrapping row with the play chips, and a full-width
-    // basis is what puts a running download on a line of its own instead of
-    // squeezing it into the leftover space beside "Shuffle".
     width: "100%",
+    gap: spacing.xs,
+    paddingBottom: spacing.sm,
   },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  headline: {
-    flex: 1,
-    minWidth: 0,
+  progress: {
+    paddingHorizontal: spacing.md,
   },
 });
