@@ -15,6 +15,8 @@ if (!demo) {
       email,
       password: await hash(password),
       displayName: "Demo Listener",
+      createdAt: new Date(),
+      updatedAt: new Date(),
     },
     projection: { _id: 1 },
   });
@@ -72,6 +74,10 @@ for (const seed of seedTracks) {
       fileSizeBytes: seed.durationSec * 16000,
       mimeType: "audio/mpeg",
       isAudiobook: true,
+      totalPlayCount: 0,
+      totalListenTimeSec: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     },
     relations: {
       user: { _ids: userId, relatedRelations: { tracks: true } },
@@ -138,6 +144,8 @@ for (const session of seedSessions) {
       playbackSpeed: 1,
       completed: false,
       interrupted: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     },
     relations: {
       track: { _ids: parent._id, relatedRelations: { sessions: true } },
@@ -196,6 +204,8 @@ for (const note of seedAnnotations) {
       text: note.text,
       tags: note.tags,
       color: note.color,
+      timesPlayedBefore: 0,
+      createdAt: new Date(),
       updatedAt: new Date(),
     },
     relations: {
@@ -234,6 +244,8 @@ if (existingPlaylist) {
       description: "Seed playlist",
       isPublic: false,
       items,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     },
     relations: {
       user: { _ids: userId, relatedRelations: { playlists: true } },

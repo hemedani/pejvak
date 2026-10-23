@@ -16,7 +16,8 @@ const APP_PORT = Deno.env.get("APP_PORT") || 1405;
 const ENV = Deno.env.get("ENV") || "development";
 
 export const coreApp = lesan();
-const client = await new MongoClient(MONGO_URI).connect();
+const client = await new MongoClient(MONGO_URI, { ignoreUndefined: true })
+  .connect();
 const db = client.db(DB_NAME);
 coreApp.odm.setDb(db);
 
