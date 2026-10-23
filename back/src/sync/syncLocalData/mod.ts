@@ -10,4 +10,5 @@ export const syncLocalDataSetup = () =>
     actName: "syncLocalData",
     preAct: [setTokens, setUser],
     validator: syncLocalDataValidator(),
+    validationRunType: "create",
   });

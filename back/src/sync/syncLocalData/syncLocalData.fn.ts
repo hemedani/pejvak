@@ -68,6 +68,7 @@ export const syncLocalDataFn: ActFn = async (body) => {
         finishedCount: run.finishedCount,
         completed: run.completed,
         interrupted: run.interrupted,
+        createdAt: new Date(),
         updatedAt: new Date(run.updatedAt ?? Date.now()),
       },
       relations: {
@@ -96,7 +97,7 @@ export const syncLocalDataFn: ActFn = async (body) => {
     if (!parentTrack) continue;
 
     const alreadySynced = await playbackSession.findOne({
-      filters: { clientId: session.clientId },
+      filters: { clientId: session.clientId, "user._id": userId },
       projection: { _id: 1 },
     });
     if (alreadySynced) continue;
@@ -119,6 +120,8 @@ export const syncLocalDataFn: ActFn = async (body) => {
         contextKey: session.contextKey,
         stretchId: session.stretchId,
         seeked: session.seeked,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       },
       relations: {
         track: {
@@ -159,20 +162,27 @@ export const syncLocalDataFn: ActFn = async (body) => {
     if (!parentTrack) continue;
 
     const existing = await annotation.findOne({
-      filters: { clientId: note.clientId },
+      filters: { clientId: note.clientId, "user._id": userId },
       projection: { _id: 1, updatedAt: 1 },
     });
 
+    const incomingUpdatedAt = note.updatedAt ?? Date.now();
+
     // Tombstone from a local hard/soft delete: remove the server row if present.
+    // Like an edit, a delete is last-write-wins, so a stale tombstone cannot
+    // erase an annotation that was edited more recently on another device.
     if (note.deleted) {
       if (existing) {
-        await annotation.deleteOne({ filter: { _id: existing._id } });
-        syncedAnnotations += 1;
+        const existingUpdatedAt = existing.updatedAt
+          ? new Date(existing.updatedAt).getTime()
+          : 0;
+        if (incomingUpdatedAt > existingUpdatedAt) {
+          await annotation.deleteOne({ filter: { _id: existing._id } });
+          syncedAnnotations += 1;
+        }
       }
       continue;
     }
-
-    const incomingUpdatedAt = note.updatedAt ?? Date.now();
 
     if (existing) {
       const existingUpdatedAt = existing.updatedAt
@@ -210,6 +220,8 @@ export const syncLocalDataFn: ActFn = async (body) => {
         text: note.text,
         tags: note.tags,
         color: note.color,
+        timesPlayedBefore: 0,
+        createdAt: new Date(),
         updatedAt: new Date(incomingUpdatedAt),
       },
       relations: {
@@ -240,11 +252,19 @@ export const syncLocalDataFn: ActFn = async (body) => {
       projection: { _id: 1, updatedAt: 1 },
     });
 
-    // Tombstone from a local delete: remove the server row if present.
+    const incomingUpdatedAt = list.updatedAt ?? Date.now();
+
+    // Tombstone from a local delete: remove the server row if present. LWW, so
+    // a stale delete cannot beat a newer rename made on another device.
     if (list.deleted) {
       if (existing) {
-        await playlist.deleteOne({ filter: { _id: existing._id } });
-        syncedPlaylists += 1;
+        const existingUpdatedAt = existing.updatedAt
+          ? new Date(existing.updatedAt).getTime()
+          : 0;
+        if (incomingUpdatedAt > existingUpdatedAt) {
+          await playlist.deleteOne({ filter: { _id: existing._id } });
+          syncedPlaylists += 1;
+        }
       }
       continue;
     }
@@ -264,8 +284,6 @@ export const syncLocalDataFn: ActFn = async (body) => {
       }
     }
 
-    const incomingUpdatedAt = list.updatedAt ?? Date.now();
-
     if (existing) {
       const existingUpdatedAt = existing.updatedAt
         ? new Date(existing.updatedAt).getTime()
@@ -278,7 +296,9 @@ export const syncLocalDataFn: ActFn = async (body) => {
           update: {
             $set: {
               title: list.title,
-              description: list.description ?? null,
+              ...(list.description !== undefined
+                ? { description: list.description }
+                : {}),
               isPublic: list.isPublic ?? false,
               items: resolvedItems,
               updatedAt: new Date(incomingUpdatedAt),
@@ -300,9 +320,12 @@ export const syncLocalDataFn: ActFn = async (body) => {
       doc: {
         clientId: list.clientId,
         title: list.title,
-        description: list.description ?? null,
+        ...(list.description !== undefined
+          ? { description: list.description }
+          : {}),
         isPublic: list.isPublic ?? false,
         items: resolvedItems,
+        createdAt: new Date(),
         updatedAt: new Date(incomingUpdatedAt),
       },
       relations: {
@@ -336,16 +359,22 @@ export const syncLocalDataFn: ActFn = async (body) => {
       projection: { _id: 1, updatedAt: 1 },
     });
 
-    // Tombstone from a local delete: remove the server row if present.
+    const incomingUpdatedAt = saved.updatedAt ?? Date.now();
+
+    // Tombstone from a local delete: remove the server row if present. LWW, so
+    // a stale delete cannot erase a newer favourite from another device.
     if (saved.deleted) {
       if (existing) {
-        await onlineCollection.deleteOne({ filter: { _id: existing._id } });
-        syncedOnlineCollections += 1;
+        const existingUpdatedAt = existing.updatedAt
+          ? new Date(existing.updatedAt).getTime()
+          : 0;
+        if (incomingUpdatedAt > existingUpdatedAt) {
+          await onlineCollection.deleteOne({ filter: { _id: existing._id } });
+          syncedOnlineCollections += 1;
+        }
       }
       continue;
     }
-
-    const incomingUpdatedAt = saved.updatedAt ?? Date.now();
 
     if (existing) {
       const existingUpdatedAt = existing.updatedAt
@@ -382,7 +411,7 @@ export const syncLocalDataFn: ActFn = async (body) => {
       }
 
       onlineCollectionMappings.push({
-        clientId: saved.clientId,
+        clientId,
         serverId: String(existing._id),
       });
       syncedOnlineCollections += 1;
@@ -402,6 +431,7 @@ export const syncLocalDataFn: ActFn = async (body) => {
         pageUrl: saved.pageUrl,
         isFavorite: saved.isFavorite,
         lastOpenedAt: saved.lastOpenedAt,
+        createdAt: new Date(),
         updatedAt: new Date(incomingUpdatedAt),
       },
       relations: {
@@ -415,7 +445,7 @@ export const syncLocalDataFn: ActFn = async (body) => {
 
     if (inserted) {
       onlineCollectionMappings.push({
-        clientId: saved.clientId,
+        clientId,
         serverId: String(inserted._id),
       });
       syncedOnlineCollections += 1;

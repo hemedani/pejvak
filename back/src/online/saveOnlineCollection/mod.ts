@@ -10,4 +10,5 @@ export const saveOnlineCollectionSetup = () =>
     actName: "saveOnlineCollection",
     preAct: [setTokens, setUser],
     validator: saveOnlineCollectionValidator(),
+    validationRunType: "create",
   });

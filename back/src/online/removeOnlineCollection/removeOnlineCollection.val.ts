@@ -1,5 +1,4 @@
-import { object, string } from "lesan";
-import { selectStruct } from "../../../mod.ts";
+import { enums, object, optional, string } from "lesan";
 
 /**
  * Identified by the source's own ids, like `saveOnlineCollection` — the client
@@ -12,5 +11,9 @@ export const removeOnlineCollectionValidator = () =>
       sourceId: string(),
       externalId: string(),
     }),
-    get: selectStruct("onlineCollection", 1),
+    get: optional(
+      object({
+        success: optional(enums([0, 1])),
+      }),
+    ),
   });

@@ -2,6 +2,7 @@ import {
   array,
   boolean,
   defaulted,
+  enums,
   number,
   object,
   optional,
@@ -119,43 +120,45 @@ export const syncLocalDataValidator = () =>
         ),
       ),
     }),
-    get: object({
-      syncedSessions: optional(number()),
-      syncedAnnotations: optional(number()),
-      syncedPlaylists: optional(number()),
-      syncedContextPlays: optional(number()),
-      syncedOnlineCollections: optional(number()),
-      annotations: optional(
-        array(
-          object({
-            clientId: string(),
-            serverId: optional(string()),
-          }),
+    get: optional(
+      object({
+        syncedSessions: optional(enums([0, 1])),
+        syncedAnnotations: optional(enums([0, 1])),
+        syncedPlaylists: optional(enums([0, 1])),
+        syncedContextPlays: optional(enums([0, 1])),
+        syncedOnlineCollections: optional(enums([0, 1])),
+        annotations: optional(
+          array(
+            object({
+              clientId: optional(enums([0, 1])),
+              serverId: optional(enums([0, 1])),
+            }),
+          ),
         ),
-      ),
-      playlists: optional(
-        array(
-          object({
-            clientId: string(),
-            serverId: optional(string()),
-          }),
+        playlists: optional(
+          array(
+            object({
+              clientId: optional(enums([0, 1])),
+              serverId: optional(enums([0, 1])),
+            }),
+          ),
         ),
-      ),
-      contextPlays: optional(
-        array(
-          object({
-            clientId: string(),
-            serverId: optional(string()),
-          }),
+        contextPlays: optional(
+          array(
+            object({
+              clientId: optional(enums([0, 1])),
+              serverId: optional(enums([0, 1])),
+            }),
+          ),
         ),
-      ),
-      onlineCollections: optional(
-        array(
-          object({
-            clientId: string(),
-            serverId: optional(string()),
-          }),
+        onlineCollections: optional(
+          array(
+            object({
+              clientId: optional(enums([0, 1])),
+              serverId: optional(enums([0, 1])),
+            }),
+          ),
         ),
-      ),
-    }),
+      }),
+    ),
   });

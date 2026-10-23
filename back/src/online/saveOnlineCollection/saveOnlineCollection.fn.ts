@@ -17,16 +17,22 @@ export const saveOnlineCollectionFn: ActFn = async (body) => {
     projection: { _id: 1, updatedAt: 1 },
   });
 
+  const incomingUpdatedAt = set.updatedAt ?? Date.now();
+
   // A tombstone from the device: the collection is gone from the listener's
   // shelf, so the server row goes too rather than lingering as a favourite.
+  // It is still last-write-wins: a stale delete must not erase a newer save.
   if (set.deleted) {
     if (existing) {
-      await onlineCollection.deleteOne({ filter: { _id: existing._id } });
+      const existingUpdatedAt = existing.updatedAt
+        ? new Date(existing.updatedAt).getTime()
+        : 0;
+      if (incomingUpdatedAt > existingUpdatedAt) {
+        await onlineCollection.deleteOne({ filter: { _id: existing._id } });
+      }
     }
     return null;
   }
-
-  const incomingUpdatedAt = set.updatedAt ?? Date.now();
 
   if (existing) {
     const existingUpdatedAt = existing.updatedAt
@@ -80,6 +86,7 @@ export const saveOnlineCollectionFn: ActFn = async (body) => {
       pageUrl: set.pageUrl,
       isFavorite: set.isFavorite ?? false,
       lastOpenedAt: set.lastOpenedAt,
+      createdAt: new Date(),
       updatedAt: new Date(incomingUpdatedAt),
     },
     relations: {
