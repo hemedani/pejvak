@@ -30,7 +30,7 @@ export const registerTrackValidator = () =>
        * later. The address that lasts is the collection's page URL, which lives
        * on `onlineCollection`.
        */
-      origin: optional(enums(["local", "online"])),
+      origin: defaulted(enums(["local", "online"]), "local"),
       sourceId: optional(string()),
       externalId: optional(string()),
       collectionKey: optional(string()),

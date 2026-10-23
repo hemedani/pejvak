@@ -54,8 +54,15 @@ export const registerTrackFn: ActFn = async (body) => {
     });
   }
 
+  const now = new Date();
   const createdTrack = await track.insertOne({
-    doc: set,
+    doc: {
+      ...set,
+      totalPlayCount: 0,
+      totalListenTimeSec: 0,
+      createdAt: now,
+      updatedAt: now,
+    },
     relations: {
       user: {
         _ids: userId,

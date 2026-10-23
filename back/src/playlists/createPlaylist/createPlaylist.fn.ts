@@ -6,8 +6,15 @@ export const createPlaylistFn: ActFn = async (body) => {
   const { set, get } = body.details;
   const { user }: MyContext = coreApp.contextFns.getContextModel() as MyContext;
 
+  const now = new Date();
   const created = await playlist.insertOne({
-    doc: set,
+    doc: {
+      ...set,
+      isPublic: set.isPublic ?? false,
+      items: [],
+      createdAt: now,
+      updatedAt: now,
+    },
     relations: {
       user: {
         _ids: user._id,

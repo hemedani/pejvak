@@ -1,5 +1,5 @@
 import { type ActFn, ObjectId } from "lesan";
-import { coreApp, playlist } from "../../../mod.ts";
+import { coreApp, playlist, track } from "../../../mod.ts";
 import { type MyContext, throwError } from "@lib";
 
 export const updatePlaylistFn: ActFn = async (body) => {
@@ -15,6 +15,24 @@ export const updatePlaylistFn: ActFn = async (body) => {
   });
   if (!existing) {
     throwError("Playlist not found");
+  }
+
+  if (set.items !== undefined) {
+    const items = set.items as Array<{ trackId: string; order: number }>;
+    const trackIds = [
+      ...new Set(items.map((item) => String(item.trackId))),
+    ].map((id) => new ObjectId(id));
+    if (trackIds.length > 0) {
+      const ownedTracks = await track.countDocument({
+        filter: {
+          _id: { $in: trackIds },
+          "user._id": new ObjectId(user._id),
+        },
+      });
+      if (ownedTracks !== trackIds.length) {
+        throwError("Playlist contains a track you do not own");
+      }
+    }
   }
 
   await playlist.findOneAndUpdate({
