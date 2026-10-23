@@ -154,6 +154,14 @@ Everything the user **reads** is an opaque `Card`; everything that **floats** is
 - **A screen owes the dock `dockInset`**, never a literal. Four tab screens carried a hardcoded `96` and the fifth used a token; they now all use the one exported number, sized for the dock at its **tallest** so a list's last row can never hide behind the now-playing half.
 - **The now-playing row's control sizes are visual, not touch.** `BouncyIconButton` pads every glyph to 44pt with `hitSlop`, so the artwork and the four trailing controls are sized for how much title is left — a Persian title on a 336pt dock has about 126pt to work with. The invariants (`dockGeometry.test.ts`) cover the row height, the indicator, and the tap target.
 
+## Motion and icons
+
+- **One icon family: `MaterialCommunityIcons`, behind `Icon`.** `src/components/ui/icon.tsx` is the only file that imports an icon family; screens ask for semantic names (`"play"`, `"history"`, `"trash"`). The lint guard rejects direct `@expo/vector-icons` imports everywhere else. `ICON_GLYPHS` is the full vocabulary and `iconCatalog.test.ts` pins every name to a real glyph.
+- **Motion is governed by `useMotionEnabled()`**, which combines the OS reduced-motion setting with the in-app `motionPreference` (`system` | `full` | `reduced`). A component that animates must check it and substitute the final value when false; never rely on the Reanimated spec's `ReduceMotion.System` alone, because it cannot see the app preference.
+- **Haptics go through `triggerHaptic(intent)`** (`none`, `tap`, `select`, `press`, `success`, `warning`, `error`, `scrub`). Never call `expo-haptics` directly. The master switch lives in `settingsStore` and is mirrored into `lib/hapticsPreference` so the helper stays free of the store/DB. Haptics fire on `onPress`, not `onPressIn`, and every control fires at most once.
+- **The only unbounded animation is `WavyProgress`.** Ambient washes, splashes and decorative loops are static: an endless animation behind every screen is a continuous cost the listener only notices when it stops.
+- **A glyph that changes meaning cross-fades; a name that never changes costs nothing.** Use `SwapIcon` for play/pause and download state rather than swapping `<Icon>` in place.
+
 ## Keyboard and safe areas
 
 - **Android only auto-scrolls a *direct child* of a `ScrollView` into view when an input is focused.** Every field here sits at least two levels down (`Reveal` → the label wrapper → the `TextInput`), so the platform help never fires and a low field is simply covered. `KeyboardScrollView` replaces it: it measures the field on focus and scrolls it into the band the keyboard left.
@@ -164,6 +172,16 @@ Everything the user **reads** is an opaque `Card`; everything that **floats** is
 - **No keyboard-listener-plus-guessed-duration.** Nothing here tweens on a keyboard event; the listener feeds *layout* only. `react-native-keyboard-controller` is the better tool and is deliberately **not** installed: it is a native module Expo Go does not bundle, and Expo Go is how this app is tested.
 - **A hand-built full-screen screen applies its own insets.** `NowPlayingSheet` builds its own container and so inherits none of `Screen`'s `SafeAreaView`; the player's header must add `insets.top` itself, or the dismiss button draws under the status bar where the clock and battery live.
 - **A field is an inset track, not a frosted panel.** `TextField` uses `Card variant="inset"`: it is one step below the card it sits in, and it must be opaque so a focused field stays legible over whatever is behind it.
+
+## Fields
+
+- **One field system, no raw `TextInput` in a screen.** `TextField` is the primitive; `TextArea`, `PasswordField`, `SearchField`, `TimeField`, `NumberField`, and `TagInput` wrap it, and `ColorField` shares the label language. Raw `TextInput` lives only inside `text-field.tsx` and `tag-input.tsx`. Existing import paths (`@/components/ui/text-field`, `@/components/ui/search-field`) stay stable.
+- **Every form field has a visible label; search is the exception.** The label is `label` in `textSecondary`; `SearchField` is a pill with a leading glyph and an accessibility label, because search is a filter, not a form.
+- **The boundary is `outlineStrong`, the ring is `accent`/`danger`.** `outline` is too faint against the field fill; the rest border uses `outlineStrong`, focus draws a 2px accent ring, and invalid draws a danger ring. Both are overlays whose `opacity` animates; under reduced motion the value is assigned.
+- **`containerStyle` is the row's slot; `style` is the input's.** A field in a flex row passes `containerStyle={{ flex: 1 }}`; `style` reaches the `TextInput` itself.
+- **Chaining is `inputRef` + `submitBehavior`, not `Keyboard.dismiss`.** Intermediate fields use `submitBehavior="submit"` and focus the next ref in `onSubmitEditing`; the last uses `submitBehavior="blurAndSubmit"` and submits.
+- **A composer reveals its group.** Pass `revealTargetRef` the wrapper that also holds Cancel/Save, so the action stays above the keyboard.
+- **Fold Persian tags before de-duplicating.** `addTag` in `lib/tags.ts` uses `foldText`; `كتاب` and `کتاب` are the same tag.
 
 ## Search
 
