@@ -1,12 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
 
 import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
 import { PlayerContent } from "@/components/player/PlayerContent";
 import { ThemedText } from "@/components/themed-text";
 import { GlassSheet } from "@/components/ui/glass";
-import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
 import { useTrackAnnotations } from "@/hooks/use-annotations";
@@ -71,6 +70,7 @@ export default function PlayerScreen() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [draftPositionSec, setDraftPositionSec] = useState(0);
+  const composerGroupRef = useRef<View>(null);
 
   const sleep = useSleepTimer();
 
@@ -228,11 +228,14 @@ export default function PlayerScreen() {
   );
 
   const composer = composerOpen ? (
-    // Keyboard-aware: the sheet is anchored to the bottom of the screen, so a
-    // focused note field opens straight into the keyboard. Without this the
-    // listener cannot see what they are writing.
+    // Keyboard-aware: the composer sits below the transport controls, so the
+    // keyboard opens straight over it. Reveal the whole group — field and
+    // Cancel/Save — or the listener can type but not finish.
     <GlassSheet open tone="surfaceStrong" style={styles.composer}>
-      <KeyboardScrollView contentContainerStyle={styles.composerFields}>
+      <View
+        ref={composerGroupRef}
+        collapsable={false}
+        style={styles.composerGroup}>
         <TextField
           label={`${editingId ? "Edit" : "Note"} at ${formatClock(draftPositionSec)}`}
           value={draft}
@@ -240,19 +243,21 @@ export default function PlayerScreen() {
           placeholder="What stood out here?"
           multiline
           autoFocus
+          revealTargetRef={composerGroupRef}
+          style={styles.composerInput}
         />
-      </KeyboardScrollView>
-      <View style={styles.composerActions}>
-        <Pressable accessibilityRole="button" onPress={closeComposer}>
-          <ThemedText type="linkPrimary">Cancel</ThemedText>
-        </Pressable>
-        <PrimaryButton
-          label={editingId ? "Save changes" : "Save note"}
-          loading={creating}
-          disabled={draft.trim().length === 0}
-          onPress={() => void saveNote()}
-          style={styles.saveButton}
-        />
+        <View style={styles.composerActions}>
+          <Pressable accessibilityRole="button" onPress={closeComposer}>
+            <ThemedText type="linkPrimary">Cancel</ThemedText>
+          </Pressable>
+          <PrimaryButton
+            label={editingId ? "Save changes" : "Save note"}
+            loading={creating}
+            disabled={draft.trim().length === 0}
+            onPress={() => void saveNote()}
+            style={styles.saveButton}
+          />
+        </View>
       </View>
     </GlassSheet>
   ) : selected ? (
@@ -349,12 +354,14 @@ export default function PlayerScreen() {
 
 const styles = StyleSheet.create({
   composer: {
-    gap: spacing.lg,
     padding: spacing.lg,
   },
-  composerFields: {
-    // The scroll view is `flex: 1`, so without a ceiling it would stretch the
-    // sheet to the full window height the moment it opens.
+  composerGroup: {
+    gap: spacing.lg,
+  },
+  composerInput: {
+    // A long note scrolls inside the field instead of stretching the sheet down
+    // past the action row.
     maxHeight: 220,
   },
   composerActions: {

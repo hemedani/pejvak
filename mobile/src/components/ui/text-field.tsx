@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, type RefObject } from "react";
 import { StyleSheet, TextInput, View, type TextInputProps } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
@@ -11,9 +11,23 @@ export type TextFieldProps = Omit<TextInputProps, "style"> & {
   label: string;
   /** Forwarded to the input, for callers that need to style the text itself. */
   style?: TextInputProps["style"];
+  /**
+   * Reveal this node instead of the field's own box.
+   *
+   * A composer is not just its input: the Cancel/Save row underneath has to
+   * stay visible too, or the listener can type but not finish. Measuring the
+   * group is the only way to reserve room for both.
+   */
+  revealTargetRef?: RefObject<View | null>;
 };
 
-export function TextField({ label, style, onFocus, ...rest }: TextFieldProps) {
+export function TextField({
+  label,
+  style,
+  onFocus,
+  revealTargetRef,
+  ...rest
+}: TextFieldProps) {
   const theme = useTheme();
   const registrar = useFieldRegistrar();
   const containerRef = useRef<View>(null);
@@ -29,10 +43,10 @@ export function TextField({ label, style, onFocus, ...rest }: TextFieldProps) {
    */
   const handleFocus = useCallback<NonNullable<TextInputProps["onFocus"]>>(
     (event) => {
-      registrar?.reveal(containerRef.current);
+      registrar?.reveal(revealTargetRef?.current ?? containerRef.current);
       onFocus?.(event);
     },
-    [onFocus, registrar],
+    [onFocus, registrar, revealTargetRef],
   );
 
   return (

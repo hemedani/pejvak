@@ -22,7 +22,7 @@
  *      surviving into the next use, and no effect whose job is to reset state.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, StyleSheet, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -117,6 +117,7 @@ function AddToPlaylistSheetContent({
   const [composing, setComposing] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [busy, setBusy] = useState(false);
+  const composerRef = useRef<View>(null);
 
   const trackIds = useMemo(() => request.trackIds, [request]);
 
@@ -333,13 +334,17 @@ function AddToPlaylistSheetContent({
               contentContainerStyle={styles.listContent}
             >
               {composing ? (
-                <View style={styles.composer}>
+                <View
+                  ref={composerRef}
+                  collapsable={false}
+                  style={styles.composer}>
                   <TextField
                     label="New playlist"
                     value={draftTitle}
                     onChangeText={setDraftTitle}
                     placeholder="Name"
                     autoFocus
+                    revealTargetRef={composerRef}
                     returnKeyType="done"
                     onSubmitEditing={() => void submitNewPlaylist()}
                   />
