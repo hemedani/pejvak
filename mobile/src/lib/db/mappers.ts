@@ -9,8 +9,11 @@ import type {
   PlaybackCheckpoint,
   PlaylistItem,
   SyncStatus,
+  DownloadScopeKind,
   DownloadState,
+  LocalDownloadFile,
   LocalDownloadJob,
+  LocalDownloadScope,
   LocalOnlineCollection,
   TrackAvailability,
   TrackOrigin,
@@ -245,6 +248,15 @@ export function toDownloadState(value: string): DownloadState {
 }
 
 /**
+ * An unknown scope kind reads as `collection`, because that is the scope whose
+ * state lives outside this table — treating it as a series would look for a
+ * `download_scopes` row that does not exist and lose the download.
+ */
+export function toDownloadScopeKind(value: string): DownloadScopeKind {
+  return value === "series" ? "series" : "collection";
+}
+
+/**
  * An unreadable job state reads as `queued`, not as `failed`: a row that cannot
  * be classified is one the next run should simply try again, and marking it
  * failed would leave a track permanently un-downloadable for a schema reason.
@@ -357,9 +369,35 @@ export type OnlineCollectionRow = {
   updated_at: number;
 };
 
+export type DownloadScopeRow = {
+  key: string;
+  collection_key: string;
+  kind: string;
+  title: string;
+  series_key: string | null;
+  download_state: string;
+  created_at: number;
+  updated_at: number;
+};
+
+export type DownloadFileRow = {
+  scope_key: string;
+  scope_kind: string;
+  track_id: string;
+  file_uri: string;
+  file_path: string;
+  file_size_bytes: number;
+  duration_sec: number;
+  folder_key: string;
+  folder_name: string;
+  track_number: number;
+  created_at: number;
+};
+
 export type DownloadJobRow = {
   id: string;
   collection_key: string;
+  scope_key: string | null;
   track_id: string;
   external_id: string;
   title: string;
@@ -397,10 +435,42 @@ export function mapOnlineCollection(row: OnlineCollectionRow): LocalOnlineCollec
   };
 }
 
+export function mapDownloadScope(row: DownloadScopeRow): LocalDownloadScope {
+  return {
+    key: row.key,
+    collectionKey: row.collection_key,
+    kind: toDownloadScopeKind(row.kind),
+    title: row.title,
+    seriesKey: row.series_key,
+    downloadState: toDownloadState(row.download_state),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapDownloadFile(row: DownloadFileRow): LocalDownloadFile {
+  return {
+    scopeKey: row.scope_key,
+    scopeKind: toDownloadScopeKind(row.scope_kind),
+    trackId: row.track_id,
+    fileUri: row.file_uri,
+    filePath: row.file_path,
+    fileSizeBytes: row.file_size_bytes,
+    durationSec: row.duration_sec,
+    folderKey: row.folder_key,
+    folderName: row.folder_name,
+    trackNumber: row.track_number,
+    createdAt: row.created_at,
+  };
+}
+
 export function mapDownloadJob(row: DownloadJobRow): LocalDownloadJob {
   return {
     id: row.id,
     collectionKey: row.collection_key,
+    // Backfilled by v12, but a row read mid-migration still has an answer: the
+    // collection is the scope the old queue always meant.
+    scopeKey: row.scope_key ?? row.collection_key,
     trackId: row.track_id,
     externalId: row.external_id,
     title: row.title,

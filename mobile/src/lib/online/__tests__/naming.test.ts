@@ -14,6 +14,9 @@ import {
   extensionFromUrl,
   ONLINE_ROOT,
   sanitizeSegment,
+  seriesFolderKey,
+  seriesRelativePath,
+  seriesScopeKey,
   slugify,
   trackFileName,
 } from "@/lib/online/naming";
@@ -125,5 +128,46 @@ describe("extensionFromUrl", () => {
 
   it("refuses to treat a signed URL's tail as a file extension", () => {
     expect(extensionFromUrl("https://dl.x/audio.php?expires=17")).toBe("mp3");
+  });
+});
+
+describe("seriesScopeKey", () => {
+  it("is minted from the collection key and the first episode", () => {
+    expect(seriesScopeKey(`${ONLINE_ROOT}/manahej/190`, "7101")).toBe(
+      `${ONLINE_ROOT}/manahej/190::series::7101`,
+    );
+  });
+
+  it("does not change when the series title is edited upstream", () => {
+    const seed = "7101";
+    expect(seriesScopeKey("collection", seed)).toBe(seriesScopeKey("collection", seed));
+  });
+
+  it("cannot collide with the collection's own scope", () => {
+    expect(seriesScopeKey("collection", "7101")).not.toBe("collection");
+  });
+});
+
+describe("seriesFolderKey", () => {
+  it("is namespaced below the collection but distinct from it", () => {
+    expect(seriesFolderKey("manahej", "190", "7101")).toBe(
+      `${collectionFolderKey("manahej", "190")}::series::7101`,
+    );
+  });
+});
+
+describe("seriesRelativePath", () => {
+  it("is a sibling of the collection folder, never a child", () => {
+    const collection = collectionRelativePath("manahej", "تاریخ شیعه", "190");
+    const series = seriesRelativePath("manahej", "تاریخ شیعه", "190", "Series One", "7101");
+
+    expect(series).toBe(`${ONLINE_ROOT}/manahej/تاریخ شیعه - Series One (7101)`);
+    expect(series.startsWith(`${collection}/`)).toBe(false);
+  });
+
+  it("sanitises both titles", () => {
+    expect(seriesRelativePath("manahej", "a/b", "7", "c:d", "9")).toBe(
+      `${ONLINE_ROOT}/manahej/a-b - c-d (9)`,
+    );
   });
 });

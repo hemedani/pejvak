@@ -506,10 +506,82 @@ export type UpsertOnlineCollectionInput = {
   pageUrl?: string | null;
 };
 
+/**
+ * What a download is *for*.
+ *
+ * A collection is the saved shelf. A series is one show inside a shelf — it has
+ * no source id of its own and no syncable collection row, but its bytes still
+ * need a scope so they can be kept or deleted without touching the shelf.
+ */
+export type DownloadScopeKind = "collection" | "series";
+
+/**
+ * A download scope that has no collection row to keep its state.
+ *
+ * Only series scopes are stored here: the collection scope's state already
+ * lives on `online_collections.download_state`, and duplicating it would give
+ * two answers to the same question.
+ */
+export type LocalDownloadScope = {
+  key: string;
+  collectionKey: string;
+  kind: DownloadScopeKind;
+  title: string;
+  /** The folded series key within the collection. Null for a collection scope. */
+  seriesKey: string | null;
+  downloadState: DownloadState;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type CreateDownloadScopeInput = {
+  key: string;
+  collectionKey: string;
+  kind: DownloadScopeKind;
+  title: string;
+  seriesKey?: string | null;
+};
+
+/**
+ * One downloaded copy, belonging to one scope.
+ *
+ * A track can have several — the shelf's copy and a series' copy are separate
+ * files — which is exactly why the player's location is chosen from these rows
+ * rather than assumed from the track's own columns.
+ */
+export type LocalDownloadFile = {
+  scopeKey: string;
+  scopeKind: DownloadScopeKind;
+  trackId: string;
+  fileUri: string;
+  filePath: string;
+  fileSizeBytes: number;
+  durationSec: number;
+  folderKey: string;
+  folderName: string;
+  trackNumber: number;
+  createdAt: number;
+};
+
+export type RecordDownloadedFileInput = {
+  scopeKey: string;
+  scopeKind: DownloadScopeKind;
+  trackId: string;
+  fileUri: string;
+  filePath: string;
+  fileSizeBytes: number;
+  durationSec: number;
+  folderKey: string;
+  folderName: string;
+  trackNumber: number;
+};
+
 /** One track's download, as a row so the queue survives a kill. */
 export type LocalDownloadJob = {
   id: string;
   collectionKey: string;
+  /** The download this job belongs to: a collection key or a series scope key. */
+  scopeKey: string;
   trackId: string;
   externalId: string;
   title: string;
@@ -530,6 +602,7 @@ export type LocalDownloadJob = {
 export type CreateDownloadJobInput = {
   id?: string;
   collectionKey: string;
+  scopeKey: string;
   trackId: string;
   externalId: string;
   title: string;

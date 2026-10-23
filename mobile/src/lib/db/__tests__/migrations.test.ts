@@ -84,3 +84,32 @@ describe("schema migrations", () => {
     );
   });
 });
+
+describe("series download scopes at version 12", () => {
+  const v12 = MIGRATIONS.find((migration) => migration.version === 12);
+  const sql = (v12?.up ?? []).join("\n");
+
+  it("exists as the newest migration", () => {
+    expect(v12).toBeDefined();
+  });
+
+  it("creates one scope row per series download", () => {
+    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS download_scopes/i);
+    expect(sql).toMatch(/kind TEXT NOT NULL/i);
+  });
+
+  it("records one file per scope and track", () => {
+    expect(sql).toMatch(/CREATE TABLE IF NOT EXISTS download_files/i);
+    expect(sql).toMatch(/PRIMARY KEY \(scope_key, track_id\)/i);
+  });
+
+  it("keys every queue row by its scope, backfilled from the collection", () => {
+    expect(sql).toMatch(/ALTER TABLE download_jobs ADD COLUMN scope_key TEXT/i);
+    expect(sql).toMatch(/UPDATE download_jobs SET scope_key = collection_key/i);
+  });
+
+  it("backfills copies from rows that were already downloaded", () => {
+    expect(sql).toMatch(/INSERT OR IGNORE INTO download_files/i);
+    expect(sql).toMatch(/FROM tracks[\s\S]*?download_path IS NOT NULL/i);
+  });
+});

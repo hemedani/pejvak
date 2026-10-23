@@ -5,7 +5,9 @@ import {
   mapAnnotation,
   mapCheckpoint,
   mapContextPlay,
+  mapDownloadFile,
   mapDownloadJob,
+  mapDownloadScope,
   mapFolder,
   mapOnlineCollection,
   mapPlaylist,
@@ -14,7 +16,9 @@ import {
   type AnnotationRow,
   type CheckpointRow,
   type ContextPlayRow,
+  type DownloadFileRow,
   type DownloadJobRow,
+  type DownloadScopeRow,
   type FolderRow,
   type HistoryRow,
   type OnlineCollectionRow,
@@ -49,15 +53,20 @@ import type {
   SyncStatus,
   TouchContextPlayInput,
   CreateDownloadJobInput,
+  CreateDownloadScopeInput,
   DownloadState,
+  LocalDownloadFile,
   LocalDownloadJob,
+  LocalDownloadScope,
   LocalOnlineCollection,
+  RecordDownloadedFileInput,
   TrackAvailability,
   TrackDetailData,
   UpsertOnlineCollectionInput,
 } from "@/lib/db/types";
 import type { FolderTrackProgress } from "@/lib/folderPlay";
 import type { HistoryItem } from "@/lib/history";
+import { ONLINE_ROOT } from "@/lib/online/naming";
 import { clampResumePosition } from "@/lib/resume";
 import type {
   AnnotationUpdate,
@@ -1385,21 +1394,49 @@ async function deleteCheckpoint(sessionId: string): Promise<void> {
  * `finished` means the track has at least one completed session. That is the
  * definition folder play uses to decide where to drop the needle.
  */
+type FolderSummaryRow = {
+  key: string;
+  name: string;
+  tree_uri: string | null;
+  added_at: number;
+  last_played_at: number | null;
+  track_count: number;
+  finished_count: number;
+  play_count: number;
+  completed_play_count: number;
+  total_duration_sec: number;
+  artwork_url: string | null;
+};
+
+function toFolderSummary(row: FolderSummaryRow): FolderSummary {
+  return {
+    key: row.key,
+    name: row.name,
+    treeUri: row.tree_uri,
+    addedAt: row.added_at,
+    lastPlayedAt: row.last_played_at,
+    trackCount: row.track_count,
+    finishedCount: row.finished_count,
+    playCount: row.play_count,
+    completedPlayCount: row.completed_play_count,
+    totalDurationSec: row.total_duration_sec,
+    artworkUrl: row.artwork_url,
+  };
+}
+
+/**
+ * Every folder that has at least one track, with its progress.
+ *
+ * Two sources, because an online download can belong to more than one folder:
+ * the collection it was saved from and a series inside it. A local folder is
+ * still read from `tracks.folder_key`; an online one is read from
+ * `download_files`, where each scope's copy lives. Reading online folders from
+ * the download rows is what lets both the shelf and a series appear in the
+ * Library at once, without duplicating either track.
+ */
 async function getFolderSummaries(): Promise<FolderSummary[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<{
-    key: string;
-    name: string;
-    tree_uri: string | null;
-    added_at: number;
-    last_played_at: number | null;
-    track_count: number;
-    finished_count: number;
-    play_count: number;
-    completed_play_count: number;
-    total_duration_sec: number;
-    artwork_url: string | null;
-  }>(
+  const localRows = await db.getAllAsync<FolderSummaryRow>(
     `SELECT
        t.folder_key AS key,
        COALESCE(f.name, t.folder_name, t.folder_key) AS name,
@@ -1425,28 +1462,71 @@ async function getFolderSummaries(): Promise<FolderSummary[]> {
        SELECT DISTINCT track_id FROM sessions
        WHERE completed = 1 AND deleted_at IS NULL
      ) done ON done.track_id = t.id
-     WHERE t.folder_key IS NOT NULL
+     WHERE t.folder_key IS NOT NULL AND t.origin <> 'online'
      GROUP BY t.folder_key
      ORDER BY name COLLATE NOCASE ASC`,
   );
 
-  return rows.map((row) => ({
-    key: row.key,
-    name: row.name,
-    treeUri: row.tree_uri,
-    addedAt: row.added_at,
-    lastPlayedAt: row.last_played_at,
-    trackCount: row.track_count,
-    finishedCount: row.finished_count,
-    playCount: row.play_count,
-    completedPlayCount: row.completed_play_count,
-    totalDurationSec: row.total_duration_sec,
-    artworkUrl: row.artwork_url,
-  }));
+  const onlineRows = await db.getAllAsync<FolderSummaryRow>(
+    `SELECT
+       df.folder_key AS key,
+       df.folder_name AS name,
+       NULL AS tree_uri,
+       MIN(df.created_at) AS added_at,
+       NULL AS last_played_at,
+       COUNT(DISTINCT df.track_id) AS track_count,
+       SUM(CASE WHEN done.track_id IS NULL THEN 0 ELSE 1 END) AS finished_count,
+       (SELECT COUNT(*) FROM context_plays cp
+         WHERE cp.context_type = 'folder' AND cp.context_key = df.folder_key
+           AND cp.deleted_at IS NULL) AS play_count,
+       (SELECT COUNT(*) FROM context_plays cp
+         WHERE cp.context_type = 'folder' AND cp.context_key = df.folder_key
+           AND cp.completed = 1 AND cp.deleted_at IS NULL) AS completed_play_count,
+       COALESCE(SUM(t.duration_sec), 0) AS total_duration_sec,
+       (SELECT a.artwork_url FROM tracks a
+         JOIN download_files adf ON adf.track_id = a.id
+         WHERE adf.folder_key = df.folder_key AND a.artwork_url IS NOT NULL
+         ORDER BY adf.track_number ASC
+         LIMIT 1) AS artwork_url
+     FROM download_files df
+     JOIN tracks t ON t.id = df.track_id
+     LEFT JOIN (
+       SELECT DISTINCT track_id FROM sessions
+       WHERE completed = 1 AND deleted_at IS NULL
+     ) done ON done.track_id = t.id
+     GROUP BY df.folder_key
+     ORDER BY name COLLATE NOCASE ASC`,
+  );
+
+  const merged = new Map<string, FolderSummary>();
+  for (const row of localRows) {
+    merged.set(row.key, toFolderSummary(row));
+  }
+  for (const row of onlineRows) {
+    merged.set(row.key, toFolderSummary(row));
+  }
+  return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Whether a folder key names a downloaded online scope rather than a device folder. */
+function isOnlineFolder(folderKey: string): boolean {
+  return folderKey.startsWith(`${ONLINE_ROOT}/`);
 }
 
 async function getTracksByFolder(folderKey: string): Promise<LocalTrack[]> {
   const db = await getDatabase();
+  if (isOnlineFolder(folderKey)) {
+    // The track rows are the same rows as everywhere else; `download_files` only
+    // decides which folder they belong to and in what order.
+    const rows = await db.getAllAsync<TrackRow>(
+      `SELECT t.* FROM tracks t
+       JOIN download_files df ON df.track_id = t.id
+       WHERE df.folder_key = ?
+       ORDER BY df.track_number ASC, t.title COLLATE NOCASE ASC`,
+      [folderKey],
+    );
+    return rows.map(mapTrack);
+  }
   const rows = await db.getAllAsync<TrackRow>(
     "SELECT * FROM tracks WHERE folder_key = ? ORDER BY file_name COLLATE NOCASE ASC",
     [folderKey],
@@ -1472,6 +1552,9 @@ async function getFolderTrackProgress(
   folderKey: string,
 ): Promise<Record<string, FolderTrackProgress>> {
   const db = await getDatabase();
+  const from = isOnlineFolder(folderKey)
+    ? `tracks t JOIN download_files df ON df.track_id = t.id WHERE df.folder_key = ?`
+    : `tracks t WHERE t.folder_key = ?`;
   const rows = await db.getAllAsync<{
     track_id: string;
     duration_sec: number;
@@ -1486,8 +1569,7 @@ async function getFolderTrackProgress(
        (SELECT s.end_position_sec FROM sessions s
          WHERE s.track_id = t.id AND s.ended_at IS NOT NULL AND s.deleted_at IS NULL
          ORDER BY s.started_at DESC LIMIT 1) AS last_end_position_sec
-     FROM tracks t
-     WHERE t.folder_key = ?`,
+     FROM ${from}`,
     [folderKey],
   );
 
@@ -2390,20 +2472,21 @@ async function replaceDownloadJobs(
 ): Promise<LocalDownloadJob[]> {
   const db = await getDatabase();
   const now = Date.now();
-  const collectionKey = inputs[0]?.collectionKey;
-  if (!collectionKey) {
+  const scopeKey = inputs[0]?.scopeKey;
+  if (!scopeKey) {
     return [];
   }
-  await db.runAsync("DELETE FROM download_jobs WHERE collection_key = ?", [collectionKey]);
+  await db.runAsync("DELETE FROM download_jobs WHERE scope_key = ?", [scopeKey]);
   for (const input of inputs) {
     await db.runAsync(
       `INSERT INTO download_jobs (
-         id, collection_key, track_id, external_id, title, order_index, url,
+         id, collection_key, scope_key, track_id, external_id, title, order_index, url,
          dest_path, state, bytes_total, bytes_done, attempts, error, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, 0, 0, NULL, ?, ?)`,
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', 0, 0, 0, NULL, ?, ?)`,
       [
         input.id ?? newId(),
         input.collectionKey,
+        input.scopeKey,
         input.trackId,
         input.externalId,
         input.title,
@@ -2415,14 +2498,14 @@ async function replaceDownloadJobs(
       ],
     );
   }
-  return getDownloadJobs(collectionKey);
+  return getDownloadJobs(scopeKey);
 }
 
-async function getDownloadJobs(collectionKey: string): Promise<LocalDownloadJob[]> {
+async function getDownloadJobs(scopeKey: string): Promise<LocalDownloadJob[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<DownloadJobRow>(
-    "SELECT * FROM download_jobs WHERE collection_key = ? ORDER BY order_index ASC",
-    [collectionKey],
+    "SELECT * FROM download_jobs WHERE scope_key = ? ORDER BY order_index ASC",
+    [scopeKey],
   );
   return rows.map(mapDownloadJob);
 }
@@ -2434,14 +2517,14 @@ async function getDownloadJobs(collectionKey: string): Promise<LocalDownloadJob[
  * process behind it — treating it as work in progress would stall the queue
  * forever.
  */
-async function getNextDownloadJob(collectionKey: string): Promise<LocalDownloadJob | null> {
+async function getNextDownloadJob(scopeKey: string): Promise<LocalDownloadJob | null> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<DownloadJobRow>(
     `SELECT * FROM download_jobs
-     WHERE collection_key = ? AND state IN ('queued', 'running')
+     WHERE scope_key = ? AND state IN ('queued', 'running')
      ORDER BY order_index ASC
      LIMIT 1`,
-    [collectionKey],
+    [scopeKey],
   );
   return row ? mapDownloadJob(row) : null;
 }
@@ -2487,7 +2570,7 @@ export type DownloadProgress = {
   bytesTotal: number;
 };
 
-async function getDownloadProgress(collectionKey: string): Promise<DownloadProgress> {
+async function getDownloadProgress(scopeKey: string): Promise<DownloadProgress> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<{
     total: number;
@@ -2501,8 +2584,8 @@ async function getDownloadProgress(collectionKey: string): Promise<DownloadProgr
             SUM(CASE WHEN state = 'failed' THEN 1 ELSE 0 END) AS failed,
             SUM(bytes_done) AS bytes_done,
             SUM(bytes_total) AS bytes_total
-     FROM download_jobs WHERE collection_key = ?`,
-    [collectionKey],
+     FROM download_jobs WHERE scope_key = ?`,
+    [scopeKey],
   );
   return {
     total: row?.total ?? 0,
@@ -2523,13 +2606,13 @@ async function getDownloadJobsForTrack(trackId: string): Promise<LocalDownloadJo
   return rows.map(mapDownloadJob);
 }
 
-/** Marks every unfinished job in a collection as cancelled. */
-async function cancelDownloadJobs(collectionKey: string): Promise<void> {
+/** Marks every unfinished job in a scope as cancelled. */
+async function cancelDownloadJobs(scopeKey: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
     `UPDATE download_jobs SET state = 'cancelled', updated_at = ?
-     WHERE collection_key = ? AND state IN ('queued', 'running')`,
-    [Date.now(), collectionKey],
+     WHERE scope_key = ? AND state IN ('queued', 'running')`,
+    [Date.now(), scopeKey],
   );
 }
 
@@ -2541,9 +2624,236 @@ async function cancelDownloadJobs(collectionKey: string): Promise<void> {
  * described have been deleted, so a row pointing at one is a row that would
  * offer to resume a download of something that is already gone.
  */
-async function deleteDownloadJobs(collectionKey: string): Promise<void> {
+async function deleteDownloadJobs(scopeKey: string): Promise<void> {
   const db = await getDatabase();
-  await db.runAsync("DELETE FROM download_jobs WHERE collection_key = ?", [collectionKey]);
+  await db.runAsync("DELETE FROM download_jobs WHERE scope_key = ?", [scopeKey]);
+}
+
+// --- Download scopes and files -------------------------------------------
+
+/**
+ * A scope that has no collection row — in practice, a series.
+ *
+ * The collection scope's state stays on `online_collections`, so there is one
+ * answer for "is the shelf downloaded?" rather than two that can disagree.
+ */
+async function upsertDownloadScope(
+  input: CreateDownloadScopeInput,
+): Promise<LocalDownloadScope> {
+  const db = await getDatabase();
+  const now = Date.now();
+  await db.runAsync(
+    `INSERT INTO download_scopes (
+       key, collection_key, kind, title, series_key, download_state, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, 'none', ?, ?)
+     ON CONFLICT(key) DO UPDATE SET
+       collection_key = excluded.collection_key,
+       kind = excluded.kind,
+       title = excluded.title,
+       series_key = excluded.series_key,
+       updated_at = excluded.updated_at`,
+    [
+      input.key,
+      input.collectionKey,
+      input.kind,
+      input.title,
+      input.seriesKey ?? null,
+      now,
+      now,
+    ],
+  );
+  const saved = await getDownloadScope(input.key);
+  if (!saved) {
+    throw new Error("The download scope could not be saved.");
+  }
+  return saved;
+}
+
+async function getDownloadScope(key: string): Promise<LocalDownloadScope | null> {
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<DownloadScopeRow>(
+    "SELECT * FROM download_scopes WHERE key = ?",
+    [key],
+  );
+  return row ? mapDownloadScope(row) : null;
+}
+
+/** Series downloads a kill left mid-flight, so the worker can pick them up. */
+async function getDownloadingSeriesScopes(): Promise<LocalDownloadScope[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<DownloadScopeRow>(
+    `SELECT * FROM download_scopes
+     WHERE kind = 'series' AND download_state = 'downloading'
+     ORDER BY created_at ASC`,
+  );
+  return rows.map(mapDownloadScope);
+}
+
+async function setDownloadScopeState(
+  key: string,
+  state: DownloadState,
+): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    "UPDATE download_scopes SET download_state = ?, updated_at = ? WHERE key = ?",
+    [state, Date.now(), key],
+  );
+}
+
+async function deleteDownloadScope(key: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync("DELETE FROM download_scopes WHERE key = ?", [key]);
+}
+
+/**
+ * Record one downloaded copy and make it the track's location when it should be.
+ *
+ * A collection copy always outranks a series copy, because the collection is the
+ * thing the listener saved and the folder they expect the episode to live in.
+ * A series copy therefore becomes the location only when no collection copy
+ * exists — which is what lets a series be downloaded on its own and still play.
+ */
+async function recordDownloadedFile(input: RecordDownloadedFileInput): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `INSERT INTO download_files (
+       scope_key, scope_kind, track_id, file_uri, file_path, file_size_bytes,
+       duration_sec, folder_key, folder_name, track_number, created_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(scope_key, track_id) DO UPDATE SET
+       scope_kind = excluded.scope_kind,
+       file_uri = excluded.file_uri,
+       file_path = excluded.file_path,
+       file_size_bytes = excluded.file_size_bytes,
+       duration_sec = excluded.duration_sec,
+       folder_key = excluded.folder_key,
+       folder_name = excluded.folder_name,
+       track_number = excluded.track_number,
+       created_at = excluded.created_at`,
+    [
+      input.scopeKey,
+      input.scopeKind,
+      input.trackId,
+      input.fileUri,
+      input.filePath,
+      Math.round(input.fileSizeBytes),
+      Math.round(input.durationSec),
+      input.folderKey,
+      input.folderName,
+      input.trackNumber,
+      Date.now(),
+    ],
+  );
+  await refreshTrackLocation(input.trackId);
+}
+
+async function getDownloadedFiles(scopeKey: string): Promise<LocalDownloadFile[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<DownloadFileRow>(
+    "SELECT * FROM download_files WHERE scope_key = ? ORDER BY track_number ASC",
+    [scopeKey],
+  );
+  return rows.map(mapDownloadFile);
+}
+
+async function getDownloadedFilePaths(scopeKey: string): Promise<string[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ file_path: string }>(
+    "SELECT file_path FROM download_files WHERE scope_key = ?",
+    [scopeKey],
+  );
+  return rows.map((row) => row.file_path);
+}
+
+async function getDownloadedTrackIds(scopeKey: string): Promise<string[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<{ track_id: string }>(
+    "SELECT DISTINCT track_id FROM download_files WHERE scope_key = ?",
+    [scopeKey],
+  );
+  return rows.map((row) => row.track_id);
+}
+
+/**
+ * Drop one scope's copies, then re-point every affected track at a surviving
+ * copy — or at the stream when none is left.
+ *
+ * This is what makes deleting a series safe when the collection is also on the
+ * device: the series' files go, and the track falls back to the collection's
+ * copy rather than pretending it was never downloaded.
+ */
+async function deleteDownloadedFiles(scopeKey: string): Promise<string[]> {
+  const db = await getDatabase();
+  const trackIds = await getDownloadedTrackIds(scopeKey);
+  await db.runAsync("DELETE FROM download_files WHERE scope_key = ?", [scopeKey]);
+  for (const trackId of trackIds) {
+    await refreshTrackLocation(trackId);
+  }
+  return trackIds;
+}
+
+/**
+ * Recompute where one online track's player should read from.
+ *
+ * `download_files` is the truth; the track's own columns are a cache of the
+ * best copy for the player and the Library. Collection first, then the earliest
+ * series copy, then the stream. Local tracks are deliberately untouched: their
+ * `file_uri` is the file itself, not a download.
+ */
+async function refreshTrackLocation(trackId: string): Promise<void> {
+  const db = await getDatabase();
+  const now = Date.now();
+  const file = await db.getFirstAsync<DownloadFileRow>(
+    `SELECT * FROM download_files
+     WHERE track_id = ?
+     ORDER BY CASE scope_kind WHEN 'collection' THEN 0 ELSE 1 END, created_at ASC
+     LIMIT 1`,
+    [trackId],
+  );
+
+  if (file) {
+    await db.runAsync(
+      `UPDATE tracks
+       SET file_uri = ?, download_path = ?, downloaded_at = ?, file_size_bytes = ?,
+           duration_sec = CASE WHEN duration_sec = 0 THEN ? ELSE duration_sec END,
+           folder_key = ?, folder_name = ?, track_number = ?,
+           availability = 'present', updated_at = ?
+       WHERE id = ? AND origin = 'online'`,
+      [
+        file.file_uri,
+        file.file_path,
+        file.created_at,
+        file.file_size_bytes,
+        file.duration_sec,
+        file.folder_key,
+        file.folder_name,
+        file.track_number,
+        now,
+        trackId,
+      ],
+    );
+    return;
+  }
+
+  await db.runAsync(
+    `UPDATE tracks
+     SET file_uri = COALESCE(stream_url, file_uri),
+         download_path = NULL,
+         downloaded_at = NULL,
+         file_size_bytes = 0,
+         folder_key = NULL,
+         folder_name = NULL,
+         availability = CASE WHEN stream_url IS NULL THEN 'missing' ELSE 'present' END,
+         updated_at = ?
+     WHERE id = ? AND origin = 'online'`,
+    [now, trackId],
+  );
+}
+
+async function refreshTrackLocations(trackIds: readonly string[]): Promise<void> {
+  for (const trackId of trackIds) {
+    await refreshTrackLocation(trackId);
+  }
 }
 
 /**
@@ -2681,4 +2991,16 @@ export const LocalDBService = {
   getDownloadedTrackPaths,
   forgetDownloadedTracks,
   deleteDownloadJobs,
+  upsertDownloadScope,
+  getDownloadScope,
+  getDownloadingSeriesScopes,
+  setDownloadScopeState,
+  deleteDownloadScope,
+  recordDownloadedFile,
+  getDownloadedFiles,
+  getDownloadedFilePaths,
+  getDownloadedTrackIds,
+  deleteDownloadedFiles,
+  refreshTrackLocation,
+  refreshTrackLocations,
 };

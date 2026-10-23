@@ -13,7 +13,14 @@
  * forever would make every assertion here vacuous.
  */
 
-import type { LocalDownloadJob, LocalOnlineCollection, LocalTrack } from "@/lib/db/types";
+import type {
+  LocalDownloadFile,
+  LocalDownloadJob,
+  LocalDownloadScope,
+  LocalOnlineCollection,
+  LocalTrack,
+} from "@/lib/db/types";
+import { seriesFolderKey, seriesScopeKey } from "@/lib/online/naming";
 import * as DownloadService from "@/services/DownloadService";
 import { LocalDBService } from "@/services/LocalDBService";
 // Named, not the composed object: `DownloadService` imports this one function
@@ -38,6 +45,18 @@ jest.mock("@/services/LocalDBService", () => ({
     getDownloadedTrackPaths: jest.fn(),
     forgetDownloadedTracks: jest.fn(),
     deleteDownloadJobs: jest.fn(),
+    getDownloadedFiles: jest.fn(async () => []),
+    getDownloadedFilePaths: jest.fn(async () => []),
+    getDownloadedTrackIds: jest.fn(async () => []),
+    deleteDownloadedFiles: jest.fn(async () => []),
+    recordDownloadedFile: jest.fn(async () => undefined),
+    getDownloadScope: jest.fn(async () => null),
+    getDownloadingSeriesScopes: jest.fn(async () => []),
+    upsertDownloadScope: jest.fn(),
+    setDownloadScopeState: jest.fn(),
+    deleteDownloadScope: jest.fn(),
+    refreshTrackLocation: jest.fn(async () => undefined),
+    refreshTrackLocations: jest.fn(async () => undefined),
   },
 }));
 
@@ -168,9 +187,17 @@ const setOnlineCollectionDownloadState = jest.mocked(
 );
 const cancelDownloadJobs = jest.mocked(LocalDBService.cancelDownloadJobs);
 const markTrackDownloaded = jest.mocked(LocalDBService.markTrackDownloaded);
-const getDownloadedTrackPaths = jest.mocked(LocalDBService.getDownloadedTrackPaths);
-const forgetDownloadedTracks = jest.mocked(LocalDBService.forgetDownloadedTracks);
 const deleteDownloadJobs = jest.mocked(LocalDBService.deleteDownloadJobs);
+const getDownloadedFiles = jest.mocked(LocalDBService.getDownloadedFiles);
+const getDownloadedFilePaths = jest.mocked(LocalDBService.getDownloadedFilePaths);
+const getDownloadedTrackIds = jest.mocked(LocalDBService.getDownloadedTrackIds);
+const deleteDownloadedFiles = jest.mocked(LocalDBService.deleteDownloadedFiles);
+const recordDownloadedFile = jest.mocked(LocalDBService.recordDownloadedFile);
+const getDownloadScope = jest.mocked(LocalDBService.getDownloadScope);
+const getDownloadingSeriesScopes = jest.mocked(LocalDBService.getDownloadingSeriesScopes);
+const upsertDownloadScope = jest.mocked(LocalDBService.upsertDownloadScope);
+const setDownloadScopeState = jest.mocked(LocalDBService.setDownloadScopeState);
+const deleteDownloadScope = jest.mocked(LocalDBService.deleteDownloadScope);
 const resolveStreamUrlsMock = jest.mocked(resolveStreamUrls);
 
 const KEY = "manahej:190";
@@ -178,6 +205,8 @@ const TITLE = "تاریخ شیعه";
 
 /** The in-memory database. */
 let jobs: LocalDownloadJob[] = [];
+let files: LocalDownloadFile[] = [];
+let scopes = new Map<string, LocalDownloadScope>();
 let downloadState: LocalOnlineCollection["downloadState"] = "none";
 let nextJobId = 1;
 
@@ -249,16 +278,57 @@ function track(externalId: string, order: number, downloaded = false): LocalTrac
 
 let tracks = [track("7101", 1), track("7102", 2), track("7103", 3)];
 
+/** Point a track at its best copy, or back at the stream when none is left. */
+function applyTrackLocation(trackId: string): void {
+  const row = tracks.find((candidate) => candidate.id === trackId);
+  if (!row) {
+    return;
+  }
+  const copies = files
+    .filter((file) => file.trackId === trackId)
+    .sort((a, b) => {
+      if (a.scopeKind !== b.scopeKind) {
+        return a.scopeKind === "collection" ? -1 : 1;
+      }
+      return a.createdAt - b.createdAt;
+    });
+  const file = copies[0];
+  if (file) {
+    row.fileUri = file.fileUri;
+    row.downloadPath = file.filePath;
+    row.downloadedAt = file.createdAt;
+    row.fileSizeBytes = file.fileSizeBytes;
+    row.folderKey = file.folderKey;
+    row.folderName = file.folderName;
+    row.trackNumber = file.trackNumber;
+    row.availability = "present";
+    return;
+  }
+  row.fileUri = row.streamUrl;
+  row.downloadPath = null;
+  row.downloadedAt = null;
+  row.fileSizeBytes = 0;
+  row.folderKey = null;
+  row.folderName = null;
+  row.availability = row.streamUrl === null ? "missing" : "present";
+}
+
 /** Wires the in-memory database into the mocked service surface. */
 function installFakeDatabase(): void {
   getOnlineCollection.mockImplementation(async () => meta());
   getTracksByCollection.mockImplementation(async () => tracks);
+  getDownloadScope.mockImplementation(async (key) => scopes.get(key) ?? null);
+  getDownloadingSeriesScopes.mockImplementation(async () =>
+    [...scopes.values()].filter((scope) => scope.downloadState === "downloading"),
+  );
 
   replaceDownloadJobs.mockImplementation(async (inputs) => {
-    jobs = jobs.filter((job) => job.collectionKey !== inputs[0]?.collectionKey);
+    const scopeKey = inputs[0]?.scopeKey;
+    jobs = jobs.filter((job) => job.scopeKey !== scopeKey);
     const created = inputs.map((input) => ({
       id: `job-${nextJobId++}`,
       collectionKey: input.collectionKey,
+      scopeKey: input.scopeKey,
       trackId: input.trackId,
       externalId: input.externalId,
       title: input.title,
@@ -277,12 +347,12 @@ function installFakeDatabase(): void {
     return created;
   });
 
-  getDownloadJobs.mockImplementation(async (collectionKey) =>
-    jobs.filter((job) => job.collectionKey === collectionKey),
+  getDownloadJobs.mockImplementation(async (scopeKey) =>
+    jobs.filter((job) => job.scopeKey === scopeKey),
   );
 
-  getNextDownloadJob.mockImplementation(async (collectionKey) => {
-    const next = jobs.find((job) => job.collectionKey === collectionKey && job.state === "queued");
+  getNextDownloadJob.mockImplementation(async (scopeKey) => {
+    const next = jobs.find((job) => job.scopeKey === scopeKey && job.state === "queued");
     return next ?? null;
   });
 
@@ -309,8 +379,8 @@ function installFakeDatabase(): void {
     }
   });
 
-  getDownloadProgress.mockImplementation(async (collectionKey) => {
-    const mine = jobs.filter((job) => job.collectionKey === collectionKey);
+  getDownloadProgress.mockImplementation(async (scopeKey) => {
+    const mine = jobs.filter((job) => job.scopeKey === scopeKey);
     return {
       total: mine.length,
       done: mine.filter((job) => job.state === "done").length,
@@ -328,9 +398,9 @@ function installFakeDatabase(): void {
     downloadState = state;
   });
 
-  cancelDownloadJobs.mockImplementation(async (collectionKey) => {
+  cancelDownloadJobs.mockImplementation(async (scopeKey) => {
     for (const job of jobs) {
-      if (job.collectionKey === collectionKey && (job.state === "queued" || job.state === "running")) {
+      if (job.scopeKey === scopeKey && (job.state === "queued" || job.state === "running")) {
         job.state = "cancelled";
       }
     }
@@ -350,42 +420,77 @@ function installFakeDatabase(): void {
     }
   });
 
-  getDownloadedTrackPaths.mockImplementation(async (collectionKey) =>
-    tracks
-      .filter(
-        (row) =>
-          row.collectionKey === collectionKey &&
-          row.downloadedAt !== null &&
-          row.downloadPath !== null,
-      )
-      .map((row) => row.downloadPath as string),
+  getDownloadedFiles.mockImplementation(async (scopeKey) =>
+    files.filter((file) => file.scopeKey === scopeKey),
   );
 
-  forgetDownloadedTracks.mockImplementation(async (collectionKey) => {
-    for (const row of tracks) {
-      if (row.collectionKey !== collectionKey || row.downloadedAt === null) {
-        continue;
-      }
-      row.fileUri = row.streamUrl ?? row.fileUri;
-      row.downloadPath = null;
-      row.downloadedAt = null;
-      row.fileSizeBytes = 0;
-      row.folderKey = null;
-      row.folderName = null;
-      row.availability = row.streamUrl === null ? "missing" : "present";
-    }
+  getDownloadedFilePaths.mockImplementation(async (scopeKey) =>
+    files.filter((file) => file.scopeKey === scopeKey).map((file) => file.filePath),
+  );
+
+  getDownloadedTrackIds.mockImplementation(async (scopeKey) => [
+    ...new Set(files.filter((file) => file.scopeKey === scopeKey).map((file) => file.trackId)),
+  ]);
+
+  recordDownloadedFile.mockImplementation(async (input) => {
+    files = files.filter(
+      (file) => !(file.scopeKey === input.scopeKey && file.trackId === input.trackId),
+    );
+    files.push({ ...input, createdAt: Date.now() });
+    applyTrackLocation(input.trackId);
   });
 
-  deleteDownloadJobs.mockImplementation(async (collectionKey) => {
-    jobs = jobs.filter((job) => job.collectionKey !== collectionKey);
+  deleteDownloadedFiles.mockImplementation(async (scopeKey) => {
+    const trackIds = [
+      ...new Set(files.filter((file) => file.scopeKey === scopeKey).map((file) => file.trackId)),
+    ];
+    files = files.filter((file) => file.scopeKey !== scopeKey);
+    for (const trackId of trackIds) {
+      applyTrackLocation(trackId);
+    }
+    return trackIds;
+  });
+
+  upsertDownloadScope.mockImplementation(async (input) => {
+    const existing = scopes.get(input.key);
+    const scope: LocalDownloadScope = {
+      key: input.key,
+      collectionKey: input.collectionKey,
+      kind: input.kind,
+      title: input.title,
+      seriesKey: input.seriesKey ?? null,
+      downloadState: existing?.downloadState ?? "none",
+      createdAt: existing?.createdAt ?? 0,
+      updatedAt: 0,
+    };
+    scopes.set(input.key, scope);
+    return scope;
+  });
+  setDownloadScopeState.mockImplementation(async (key, state) => {
+    const scope = scopes.get(key);
+    if (scope) {
+      scope.downloadState = state;
+    }
+  });
+  deleteDownloadScope.mockImplementation(async (key) => {
+    scopes.delete(key);
+  });
+
+  deleteDownloadJobs.mockImplementation(async (scopeKey) => {
+    jobs = jobs.filter((job) => job.scopeKey !== scopeKey);
   });
 }
 
 /** Polls until the download settles, or fails the test on a timeout. */
-async function waitForSettled(timeoutMs = 20_000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
+async function waitForSettled(
+  scopeKeyOrTimeout: string | number = KEY,
+  timeoutMs = 20_000,
+): Promise<void> {
+  const scopeKey = typeof scopeKeyOrTimeout === "number" ? KEY : scopeKeyOrTimeout;
+  const timeout = typeof scopeKeyOrTimeout === "number" ? scopeKeyOrTimeout : timeoutMs;
+  const deadline = Date.now() + timeout;
   for (;;) {
-    const progress = await DownloadService.getSummary(KEY);
+    const progress = await DownloadService.getSummary(scopeKey);
     const settled = progress.total > 0 && progress.done + progress.failed === progress.total;
     if (settled && !progress.running) {
       return;
@@ -401,6 +506,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   DownloadService.__resetForTests();
   jobs = [];
+  files = [];
+  scopes = new Map();
   nextJobId = 1;
   downloadState = "none";
   tracks = [track("7101", 1), track("7102", 2), track("7103", 3)];
@@ -488,6 +595,115 @@ describe("startDownload", () => {
     await DownloadService.startDownload(KEY);
 
     expect(replaceDownloadJobs).not.toHaveBeenCalled();
+  });
+});
+
+describe("startSeriesDownload", () => {
+  it("queues only the series' episodes, in a folder beside the collection's", async () => {
+    await DownloadService.startSeriesDownload({
+      collectionKey: KEY,
+      title: "Series One",
+      seriesKey: "series-one",
+      trackIds: ["t-7101", "t-7102"],
+    });
+    const key = seriesScopeKey(KEY, "7101");
+    await waitForSettled(key);
+
+    expect(MockFile.downloadFileAsync).toHaveBeenCalledTimes(2);
+    expect(scopes.get(key)?.downloadState).toBe("complete");
+    const paths = files.map((file) => file.filePath);
+    expect(paths).toHaveLength(2);
+    // A sibling of "Online/…/<collection> (<id>)", never a child of it.
+    expect(paths.every((path) => path.includes(" - Series One (7101)"))).toBe(true);
+    expect(paths.every((path) => !path.includes(`${TITLE} (190)/`))).toBe(true);
+    expect(files.every((file) => file.folderKey === seriesFolderKey("manahej", "190", "7101"))).toBe(true);
+  });
+
+  it("downloads its own copy instead of borrowing the collection's file", async () => {
+    await DownloadService.startDownload(KEY);
+    await waitForSettled();
+    const collectionPath = files[0]?.filePath;
+    expect(collectionPath).toBeDefined();
+
+    await DownloadService.startSeriesDownload({
+      collectionKey: KEY,
+      title: "Series One",
+      seriesKey: "series-one",
+      trackIds: ["t-7101"],
+    });
+    await waitForSettled(seriesScopeKey(KEY, "7101"));
+
+    const seriesCopy = files.find((file) => file.scopeKind === "series");
+    expect(seriesCopy?.filePath).not.toBe(collectionPath);
+    // Both copies exist; the collection's stays primary for the track.
+    expect(files.filter((file) => file.trackId === "t-7101")).toHaveLength(2);
+    expect(tracks[0]?.fileUri).toBe(collectionPath);
+  });
+
+  it("does not restart a series that is already downloading", async () => {
+    const key = seriesScopeKey(KEY, "7101");
+    scopes.set(key, {
+      key,
+      collectionKey: KEY,
+      kind: "series",
+      title: "Series One",
+      seriesKey: "series-one",
+      downloadState: "downloading",
+      createdAt: 0,
+      updatedAt: 0,
+    });
+
+    await DownloadService.startSeriesDownload({
+      collectionKey: KEY,
+      title: "Series One",
+      seriesKey: "series-one",
+      trackIds: ["t-7101"],
+    });
+
+    expect(replaceDownloadJobs).not.toHaveBeenCalled();
+  });
+
+  it("refuses a series with no playable episodes", async () => {
+    await expect(
+      DownloadService.startSeriesDownload({
+        collectionKey: KEY,
+        title: "Series One",
+        seriesKey: "series-one",
+        trackIds: [],
+      }),
+    ).rejects.toThrow("nothing to download");
+  });
+});
+
+describe("deleting a series download", () => {
+  it("keeps the collection's copy and leaves its track downloaded", async () => {
+    await DownloadService.startDownload(KEY);
+    await waitForSettled();
+    const collectionPath = tracks[0]?.downloadPath;
+
+    await DownloadService.startSeriesDownload({
+      collectionKey: KEY,
+      title: "Series One",
+      seriesKey: "series-one",
+      trackIds: ["t-7101"],
+    });
+    const key = seriesScopeKey(KEY, "7101");
+    await waitForSettled(key);
+    const seriesPath = files.find((file) => file.scopeKind === "series")?.filePath;
+    if (seriesPath) {
+      seedExisting([seriesPath]);
+    }
+
+    await DownloadService.deleteDownload(key);
+
+    expect(files.some((file) => file.scopeKind === "series")).toBe(false);
+    expect(files.some((file) => file.filePath === collectionPath)).toBe(true);
+    expect(tracks[0]?.downloadPath).toBe(collectionPath);
+    expect(tracks[0]?.downloadedAt).not.toBeNull();
+    expect(downloadState).toBe("complete");
+    if (seriesPath) {
+      expect(__fs.deleted).toContain(seriesPath);
+    }
   });
 });
 
@@ -595,6 +811,7 @@ describe("resumeInterruptedDownloads", () => {
       {
         id: "job-1",
         collectionKey: KEY,
+        scopeKey: KEY,
         trackId: "t-7101",
         externalId: "7101",
         title: "Episode 1",
@@ -617,6 +834,46 @@ describe("resumeInterruptedDownloads", () => {
 
     expect(MockFile.downloadFileAsync).toHaveBeenCalledTimes(1);
     expect(downloadState).toBe("complete");
+  });
+
+  it("picks up a series a kill left mid-download", async () => {
+    const key = seriesScopeKey(KEY, "7101");
+    scopes.set(key, {
+      key,
+      collectionKey: KEY,
+      kind: "series",
+      title: "Series One",
+      seriesKey: "series-one",
+      downloadState: "downloading",
+      createdAt: 0,
+      updatedAt: 0,
+    });
+    jobs = [
+      {
+        id: "job-s1",
+        collectionKey: KEY,
+        scopeKey: key,
+        trackId: "t-7101",
+        externalId: "7101",
+        title: "Episode 1",
+        orderIndex: 1,
+        url: "https://dl.x/7101.mp3?md5=fresh",
+        destPath: `file:///documents/Online/manahej/${TITLE} - Series One (7101)/01 - Episode 1.mp3`,
+        state: "queued",
+        bytesTotal: 0,
+        bytesDone: 0,
+        attempts: 0,
+        error: null,
+        createdAt: 0,
+        updatedAt: 0,
+      },
+    ];
+
+    await DownloadService.resumeInterruptedDownloads();
+    await waitForSettled(key);
+
+    expect(MockFile.downloadFileAsync).toHaveBeenCalledTimes(1);
+    expect(scopes.get(key)?.downloadState).toBe("complete");
   });
 
   it("does nothing when nothing was interrupted", async () => {

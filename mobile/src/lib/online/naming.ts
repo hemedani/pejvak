@@ -102,6 +102,54 @@ export function collectionRelativePath(
   ].join("/");
 }
 
+/**
+ * The identity of a series download, anchored to a source id.
+ *
+ * A series has no id upstream; it exists only as a reading of episode titles.
+ * The one stable thing about it is the first episode it contains, so that
+ * episode's own external id is the seed. A title edited on the source therefore
+ * cannot split a downloaded series, and adding later episodes — which is what
+ * `date_ASC` makes them — leaves the scope exactly where it was.
+ */
+export function seriesScopeKey(collectionKey: string, seed: string): string {
+  return `${collectionKey}::series::${sanitizeSegment(seed, "series")}`;
+}
+
+/** The folder key for a series download, distinct from the collection's own. */
+export function seriesFolderKey(
+  sourceId: string,
+  collectionExternalId: string,
+  seed: string,
+): string {
+  return `${collectionFolderKey(sourceId, collectionExternalId)}::series::${sanitizeSegment(seed, "series")}`;
+}
+
+/**
+ * The on-disk folder for a series, a *sibling* of the collection's folder.
+ *
+ * It must not live inside the collection's folder: deleting the collection is
+ * recursive, and an independent series download that happened to be nested
+ * would lose its bytes to a delete that was never meant to touch it.
+ */
+export function seriesRelativePath(
+  sourceId: string,
+  collectionTitle: string,
+  collectionExternalId: string,
+  seriesTitle: string,
+  seed: string,
+): string {
+  const collection = sanitizeSegment(
+    collectionTitle,
+    slugify(collectionTitle, collectionExternalId),
+  );
+  const series = sanitizeSegment(seriesTitle, "Series");
+  return [
+    ONLINE_ROOT,
+    sanitizeSegment(sourceId, "source"),
+    `${collection} - ${series} (${sanitizeSegment(seed, "series")})`,
+  ].join("/");
+}
+
 /** The file extension to save a stream under, taken from its URL path. */
 export function extensionFromUrl(url: string, fallback = "mp3"): string {
   const path = url.split("?")[0]?.split("#")[0] ?? "";

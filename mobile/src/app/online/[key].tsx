@@ -29,6 +29,7 @@ import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { DownloadControl } from "@/components/online/download-progress";
 import { OnlineTrackRow } from "@/components/online/online-track-row";
+import { SeriesHeader, type SeriesDownloadTarget } from "@/components/online/series-header";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip, GlassProgress } from "@/components/ui/glass";
@@ -49,6 +50,7 @@ import {
   describeKnownTrackCount,
   describeTrackCount,
   findSource,
+  seriesScopeKey,
 } from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
 import { describeContextStats } from "@/lib/playbackContext";
@@ -175,18 +177,37 @@ export default function OnlineCollectionScreen() {
               key: "all",
               title: null as string | null,
               standalone: false,
+              target: null as SeriesDownloadTarget | null,
               rows: tracks.map((track, index) => ({ track, ordinal: index + 1 })),
             },
           ]
         : [];
     }
-    return sections.map((section) => ({
-      key: section.key,
-      title: section.title as string | null,
-      standalone: section.standalone,
-      rows: section.tracks.map((track, index) => ({ track, ordinal: index + 1 })),
-    }));
-  }, [sections, tracks]);
+    return sections.map((section) => {
+      const first = section.tracks[0];
+      return {
+        key: section.key,
+        title: section.title as string | null,
+        standalone: section.standalone,
+        // The seed is the first episode's own id, so the scope survives a title
+        // edit upstream. The standalone bucket is not a unit, so it gets none.
+        target:
+          !section.standalone && key && first
+            ? {
+                scopeKey: seriesScopeKey(key, first.externalId ?? first.id),
+                collectionKey: key,
+                title: section.title,
+                seriesKey: section.key,
+                trackIds: section.tracks.map((track) => track.id),
+              }
+            : null,
+        rows: section.tracks.map((track, index) => ({
+          track,
+          ordinal: index + 1,
+        })),
+      };
+    });
+  }, [key, sections, tracks]);
 
   /**
    * Start the collection, from a chosen plan.
@@ -423,41 +444,22 @@ export default function OnlineCollectionScreen() {
           <Reveal index={index + 4} limit={ROW_REVEAL_LIMIT}>
             <View style={styles.series}>
               {block.title ? (
-                <View style={styles.seriesHeader}>
-                  <View style={styles.seriesCopy}>
-                    <UserText
-                      type="bodyStrong"
-                      numberOfLines={2}
-                      text={block.title}
-                      align="content"
-                    />
-                    <UserText
-                      type="caption"
-                      themeColor="textTertiary"
-                      text={describeTrackCount(block.rows.length)}
-                      align="content"
-                    />
-                  </View>
-                  {/* The trailing bucket is not a series, so it gets no play
-                      control: "play the standalone episodes from the beginning"
-                      names no unit at all. A real series does — and its control
-                      starts at the series' first episode while the queue stays
-                      the whole collection, because a series is a reading of one
-                      list rather than a second one. Playback therefore carries
-                      on into whatever the collection plays next. */}
-                  {block.standalone ? null : (
-                    <BouncyIconButton
-                      name="play"
-                      accessibilityLabel={`Play ${block.title} from the beginning`}
-                      size={control.sm}
-                      iconSize={iconSize.sm}
-                      tone="glass"
-                      onPress={() =>
-                        void start({ trackId: block.rows[0].track.id })
-                      }
-                    />
-                  )}
-                </View>
+                /* The trailing bucket is not a series, so it gets no play
+                   control: "play the standalone episodes from the beginning"
+                   names no unit at all. A real series does — and its control
+                   starts at the series' first episode while the queue stays
+                   the whole collection, because a series is a reading of one
+                   list rather than a second one. Playback therefore carries
+                   on into whatever the collection plays next. */
+                <SeriesHeader
+                  title={block.title}
+                  trackCount={block.rows.length}
+                  target={block.target}
+                  subtitle={meta?.title}
+                  artwork={meta?.artworkUrl}
+                  ramp={ramp}
+                  onPlay={() => void start({ trackId: block.rows[0].track.id })}
+                />
               ) : null}
 
               <ListGroup>
@@ -532,17 +534,6 @@ const styles = StyleSheet.create({
     // Sections sit a level above rows, so they are spaced further apart than the
     // rows inside them — otherwise a header reads as one more row.
     marginTop: spacing.md,
-  },
-  seriesHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    minWidth: 0,
-  },
-  seriesCopy: {
-    flex: 1,
-    gap: spacing.xxs,
-    minWidth: 0,
   },
   emptyBlock: {
     paddingTop: spacing.lg,

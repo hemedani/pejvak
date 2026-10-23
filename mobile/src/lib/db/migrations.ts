@@ -396,6 +396,90 @@ export const MIGRATIONS: Migration[] = [
       `CREATE INDEX IF NOT EXISTS idx_download_jobs_state ON download_jobs(state)`,
     ],
   },
+  {
+    // Downloads that do not own a collection row.
+    //
+    // A manahej category is a shelf of several shows, and the listener wants to
+    // keep one of those shows on its own. A series is still *not* a collection:
+    // it has no source id and no syncable row, and playback of it remains a run
+    // of the collection. But its bytes do need their own record, because two
+    // scopes can hold the same track and deleting one must not take the other's
+    // file with it.
+    //
+    // `download_scopes` therefore exists only for the scopes that have nowhere
+    // else to keep their state — series downloads. The collection scope keeps
+    // its state on `online_collections.download_state`, exactly as before, so
+    // nothing that already reads it has to change.
+    //
+    // `download_files` is the per-scope copy: one row per (scope, track). The
+    // track row still points at the copy the player should use (collection copy
+    // preferred, then any series copy), which is why `refreshTrackLocation`
+    // exists — when a scope is deleted, the surviving copy has to become the
+    // row's location rather than the stream being assumed.
+    //
+    // The job rows gain `scope_key`; collection jobs are backfilled from
+    // `collection_key`, so a download interrupted before this migration resumes
+    // against the same queue it had.
+    version: 12,
+    up: [
+      `CREATE TABLE IF NOT EXISTS download_scopes (
+        key TEXT PRIMARY KEY NOT NULL,
+        collection_key TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        title TEXT NOT NULL,
+        series_key TEXT,
+        download_state TEXT NOT NULL DEFAULT 'none',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_download_scopes_collection
+         ON download_scopes(collection_key)`,
+      `CREATE INDEX IF NOT EXISTS idx_download_scopes_state
+         ON download_scopes(download_state)`,
+      `CREATE TABLE IF NOT EXISTS download_files (
+        scope_key TEXT NOT NULL,
+        scope_kind TEXT NOT NULL,
+        track_id TEXT NOT NULL,
+        file_uri TEXT NOT NULL,
+        file_path TEXT NOT NULL,
+        file_size_bytes INTEGER NOT NULL DEFAULT 0,
+        duration_sec INTEGER NOT NULL DEFAULT 0,
+        folder_key TEXT NOT NULL,
+        folder_name TEXT NOT NULL,
+        track_number INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (scope_key, track_id),
+        FOREIGN KEY (track_id) REFERENCES tracks(id)
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_download_files_track
+         ON download_files(track_id)`,
+      `CREATE INDEX IF NOT EXISTS idx_download_files_folder
+         ON download_files(folder_key, track_number)`,
+      `ALTER TABLE download_jobs ADD COLUMN scope_key TEXT`,
+      `UPDATE download_jobs SET scope_key = collection_key WHERE scope_key IS NULL`,
+      `CREATE INDEX IF NOT EXISTS idx_download_jobs_scope
+         ON download_jobs(scope_key, order_index)`,
+      // Existing collection downloads become the collection scope's files. The
+      // rows already carry everything the new table needs; this is a move, not
+      // a second copy of the truth, because from here on `download_files` is
+      // what the folder view and the delete path read.
+      `INSERT OR IGNORE INTO download_files (
+         scope_key, scope_kind, track_id, file_uri, file_path, file_size_bytes,
+         duration_sec, folder_key, folder_name, track_number, created_at
+       )
+       SELECT
+         collection_key, 'collection', id, file_uri, download_path, file_size_bytes,
+         duration_sec, folder_key, folder_name, COALESCE(track_number, 0),
+         COALESCE(downloaded_at, created_at)
+       FROM tracks
+       WHERE origin = 'online'
+         AND collection_key IS NOT NULL
+         AND downloaded_at IS NOT NULL
+         AND download_path IS NOT NULL
+         AND file_uri IS NOT NULL
+         AND folder_key IS NOT NULL`,
+    ],
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION = MIGRATIONS.reduce(

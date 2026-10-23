@@ -29,8 +29,22 @@ import { Directory, File, Paths } from "expo-file-system";
 import { inspectAudioFile } from "@/services/AudioInspectionService";
 import { LocalDBService, type DownloadProgress } from "@/services/LocalDBService";
 import { resolveStreamUrls } from "@/services/OnlineCatalogService";
-import type { CreateDownloadJobInput, LocalDownloadJob, LocalOnlineCollection } from "@/lib/db/types";
-import { collectionFolderKey, collectionRelativePath, trackFileName } from "@/lib/online";
+import type {
+  CreateDownloadJobInput,
+  DownloadScopeKind,
+  DownloadState,
+  LocalDownloadJob,
+  LocalOnlineCollection,
+  LocalTrack,
+} from "@/lib/db/types";
+import {
+  collectionFolderKey,
+  collectionRelativePath,
+  seriesFolderKey,
+  seriesRelativePath,
+  seriesScopeKey,
+  trackFileName,
+} from "@/lib/online";
 
 /** Attempts per file before it is written off. */
 const MAX_ATTEMPTS = 3;
@@ -115,11 +129,102 @@ function whenIdle(): Promise<void> {
 export type DownloadSummary = DownloadProgress & {
   collectionKey: string;
   running: boolean;
+  /** The scope's own state, so a card can tell "stopped" from "still going". */
+  state: DownloadState;
 };
 
-export async function getSummary(collectionKey: string): Promise<DownloadSummary> {
-  const progress = await LocalDBService.getDownloadProgress(collectionKey);
-  return { collectionKey, ...progress, running };
+/**
+ * What one download writes.
+ *
+ * A collection scope's key is the collection key, which is what lets every
+ * existing caller keep passing the key it already has. A series scope's key is
+ * minted from the collection key and the series' first episode, so it is
+ * stable across a title edit and distinct from the collection's own scope.
+ */
+export type DownloadScope = {
+  key: string;
+  kind: DownloadScopeKind;
+  collectionKey: string;
+  title: string;
+  seriesKey: string | null;
+  /** The first episode's external id. Null for a collection scope. */
+  seed: string | null;
+};
+
+export type SeriesDownloadInput = {
+  collectionKey: string;
+  title: string;
+  /** The folded series key the screen grouped the episodes under. */
+  seriesKey: string;
+  /** The episodes, in the series' own order. */
+  trackIds: readonly string[];
+};
+
+const SERIES_MARKER = "::series::";
+
+/** The seed a series scope was minted from, read back out of its key. */
+function seriesSeedOf(scopeKey: string): string | null {
+  const index = scopeKey.indexOf(SERIES_MARKER);
+  return index < 0 ? null : scopeKey.slice(index + SERIES_MARKER.length);
+}
+
+function collectionScope(meta: LocalOnlineCollection): DownloadScope {
+  return {
+    key: meta.key,
+    kind: "collection",
+    collectionKey: meta.key,
+    title: meta.title,
+    seriesKey: null,
+    seed: null,
+  };
+}
+
+function seriesScope(
+  meta: LocalOnlineCollection,
+  title: string,
+  seriesKey: string,
+  seed: string,
+): DownloadScope {
+  return {
+    key: seriesScopeKey(meta.key, seed),
+    kind: "series",
+    collectionKey: meta.key,
+    title,
+    seriesKey,
+    seed,
+  };
+}
+
+/**
+ * Write a scope's state where that scope keeps it.
+ *
+ * The collection's state lives on its own row; a series has no row, so its
+ * state lives in `download_scopes`. One setter so the worker never has to
+ * remember which kind it is holding.
+ */
+async function setScopeState(
+  scopeKey: string,
+  state: DownloadState,
+): Promise<void> {
+  const series = await LocalDBService.getDownloadScope(scopeKey);
+  if (series) {
+    await LocalDBService.setDownloadScopeState(scopeKey, state);
+    return;
+  }
+  await LocalDBService.setOnlineCollectionDownloadState(scopeKey, state);
+}
+
+export async function getSummary(scopeKey: string): Promise<DownloadSummary> {
+  const [progress, series, collection] = await Promise.all([
+    LocalDBService.getDownloadProgress(scopeKey),
+    LocalDBService.getDownloadScope(scopeKey),
+    LocalDBService.getOnlineCollection(scopeKey),
+  ]);
+  const state =
+    series?.downloadState ??
+    collection?.downloadState ??
+    (progress.total === 0 ? "none" : "downloading");
+  return { collectionKey: scopeKey, ...progress, running, state };
 }
 
 function delay(ms: number): Promise<void> {
@@ -130,10 +235,36 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** The on-disk folder for a collection: `Online/<source>/<title>`. */
-function collectionDirectory(meta: LocalOnlineCollection): Directory {
-  const relative = collectionRelativePath(meta.sourceId, meta.title, meta.externalId);
+/** The on-disk folder for a download scope. */
+function scopeDirectory(scope: DownloadScope, meta: LocalOnlineCollection): Directory {
+  const relative =
+    scope.kind === "series" && scope.seed
+      ? seriesRelativePath(
+          meta.sourceId,
+          meta.title,
+          meta.externalId,
+          scope.title,
+          scope.seed,
+        )
+      : collectionRelativePath(meta.sourceId, meta.title, meta.externalId);
   return new Directory(Paths.document, ...relative.split("/"));
+}
+
+/** The folder key and display name one scope's tracks belong to in the Library. */
+function scopeFolder(
+  scope: DownloadScope,
+  meta: LocalOnlineCollection,
+): { key: string; name: string } {
+  if (scope.kind === "series" && scope.seed) {
+    return {
+      key: seriesFolderKey(meta.sourceId, meta.externalId, scope.seed),
+      name: scope.title,
+    };
+  }
+  return {
+    key: collectionFolderKey(meta.sourceId, meta.externalId),
+    name: meta.title,
+  };
 }
 
 async function ensureDirectory(directory: Directory): Promise<void> {
@@ -169,8 +300,70 @@ export async function startDownload(collectionKey: string): Promise<void> {
     throw new Error("There is nothing to download in this collection yet.");
   }
 
-  const fresh = await resolveStreamUrls(collectionKey);
-  const directory = collectionDirectory(meta);
+  await startScope(
+    collectionScope(meta),
+    meta,
+    tracks.map((track, index) => ({
+      track,
+      orderIndex: track.trackNumber ?? index + 1,
+    })),
+  );
+}
+
+/**
+ * Download one series inside a collection, into its own folder.
+ *
+ * The category and the series are independent: this queues only the series'
+ * episodes, writes them under a folder of their own, and leaves a collection
+ * download that already exists untouched. The reverse is true too — a category
+ * download never claims a series' copy.
+ */
+export async function startSeriesDownload(input: SeriesDownloadInput): Promise<void> {
+  const meta = await LocalDBService.getOnlineCollection(input.collectionKey);
+  if (!meta) {
+    throw new Error("Save this collection before downloading it.");
+  }
+  const all = await LocalDBService.getTracksByCollection(input.collectionKey);
+  const byId = new Map(all.map((track) => [track.id, track]));
+  const selected = input.trackIds
+    .map((id) => byId.get(id))
+    .filter((track): track is LocalTrack => track !== undefined);
+  if (selected.length === 0) {
+    throw new Error("There is nothing to download in this series yet.");
+  }
+
+  // The first episode is the series' stable seed, so the scope survives both a
+  // title edit upstream and new episodes arriving after it.
+  const first = selected[0];
+  const seed = first.externalId ?? first.id;
+  const scope = seriesScope(meta, input.title, input.seriesKey, seed);
+  const existing = await LocalDBService.getDownloadScope(scope.key);
+  if (existing?.downloadState === "downloading") {
+    return;
+  }
+  await LocalDBService.upsertDownloadScope({
+    key: scope.key,
+    collectionKey: meta.key,
+    kind: "series",
+    title: input.title,
+    seriesKey: input.seriesKey,
+  });
+
+  await startScope(
+    scope,
+    meta,
+    selected.map((track, index) => ({ track, orderIndex: index + 1 })),
+  );
+}
+
+/** Shared by the category and series paths: resolve URLs, queue rows, start. */
+async function startScope(
+  scope: DownloadScope,
+  meta: LocalOnlineCollection,
+  items: readonly { track: LocalTrack; orderIndex: number }[],
+): Promise<void> {
+  const fresh = await resolveStreamUrls(meta.key);
+  const directory = scopeDirectory(scope, meta);
   await ensureDirectory(directory);
 
   // No folder key is set here: a track only joins the Library's folder view
@@ -178,19 +371,21 @@ export async function startDownload(collectionKey: string): Promise<void> {
   // that — per file, so an interrupted course shows the lectures it did get
   // rather than appearing as an empty folder.
   const inputs: CreateDownloadJobInput[] = [];
-  const alreadyDownloaded: string[] = [];
+  const alreadyDownloaded = new Set(
+    (await LocalDBService.getDownloadedFiles(scope.key)).map((file) => file.trackId),
+  );
 
-  for (const track of tracks) {
+  for (const { track, orderIndex } of items) {
     const remote = track.externalId ? fresh.get(track.externalId) : undefined;
     const url = remote?.streamUrl ?? track.streamUrl;
     if (!url) {
       continue;
     }
-    const orderIndex = track.trackNumber ?? inputs.length + 1;
     const title = remote?.title ?? track.title;
     const destination = new File(directory, trackFileName(orderIndex, title, url));
     inputs.push({
-      collectionKey,
+      collectionKey: meta.key,
+      scopeKey: scope.key,
       trackId: track.id,
       externalId: track.externalId ?? track.id,
       title,
@@ -198,23 +393,24 @@ export async function startDownload(collectionKey: string): Promise<void> {
       url,
       destPath: destination.uri,
     });
-    if (track.downloadedAt !== null && track.fileUri === destination.uri) {
-      alreadyDownloaded.push(track.id);
-    }
   }
 
   if (inputs.length === 0) {
-    throw new Error("This collection has no playable audio to download.");
+    throw new Error(
+      scope.kind === "series"
+        ? "This series has no playable audio to download."
+        : "This collection has no playable audio to download.",
+    );
   }
 
-  cancelled.delete(collectionKey);
+  cancelled.delete(scope.key);
   const jobs = await LocalDBService.replaceDownloadJobs(inputs);
   for (const job of jobs) {
-    if (alreadyDownloaded.includes(job.trackId)) {
+    if (alreadyDownloaded.has(job.trackId)) {
       await LocalDBService.setDownloadJobState(job.id, "done");
     }
   }
-  await LocalDBService.setOnlineCollectionDownloadState(collectionKey, "downloading");
+  await setScopeState(scope.key, "downloading");
   void pump();
 }
 
@@ -226,18 +422,18 @@ export async function startDownload(collectionKey: string): Promise<void> {
  * the jobs that had not finished are marked cancelled, which is what lets a
  * later resume pick up exactly where this left off.
  */
-export async function cancelDownload(collectionKey: string): Promise<void> {
-  cancelled.add(collectionKey);
+export async function cancelDownload(scopeKey: string): Promise<void> {
+  cancelled.add(scopeKey);
   inFlight?.abort();
   inFlight = null;
-  await LocalDBService.cancelDownloadJobs(collectionKey);
-  await LocalDBService.setOnlineCollectionDownloadState(collectionKey, "cancelled");
+  await LocalDBService.cancelDownloadJobs(scopeKey);
+  await setScopeState(scopeKey, "cancelled");
   emitProgress(true);
 }
 
 /** Re-queue the files that failed and try again. */
-export async function retryDownload(collectionKey: string): Promise<void> {
-  const jobs = await LocalDBService.getDownloadJobs(collectionKey);
+export async function retryDownload(scopeKey: string): Promise<void> {
+  const jobs = await LocalDBService.getDownloadJobs(scopeKey);
   let requeued = false;
   for (const job of jobs) {
     if (job.state === "failed" || job.state === "cancelled") {
@@ -248,8 +444,8 @@ export async function retryDownload(collectionKey: string): Promise<void> {
   if (!requeued) {
     return;
   }
-  cancelled.delete(collectionKey);
-  await LocalDBService.setOnlineCollectionDownloadState(collectionKey, "downloading");
+  cancelled.delete(scopeKey);
+  await setScopeState(scopeKey, "downloading");
   void pump();
 }
 
@@ -281,30 +477,58 @@ export async function retryDownload(collectionKey: string): Promise<void> {
  * files, so downloading again starts from the first track. That is what
  * deleting rather than cancelling was a request for.
  */
-export async function deleteDownload(collectionKey: string): Promise<void> {
+export async function deleteDownload(scopeKey: string): Promise<void> {
+  const series = await LocalDBService.getDownloadScope(scopeKey);
+  const collectionKey = series?.collectionKey ?? scopeKey;
   const meta = await LocalDBService.getOnlineCollection(collectionKey);
-  if (!meta) {
-    return;
-  }
 
-  // Stopping the worker is what lets the loop finish: it re-reads the
-  // collection each pass and sees it cancelled. Nothing is removed until it has.
-  cancelled.add(collectionKey);
+  // Stopping the worker is what lets the loop finish: it re-reads the scope
+  // each pass and sees it cancelled. Nothing is removed until it has.
+  cancelled.add(scopeKey);
   inFlight?.abort();
   inFlight = null;
   await whenIdle();
 
-  const paths = await LocalDBService.getDownloadedTrackPaths(collectionKey);
+  const paths = await LocalDBService.getDownloadedFilePaths(scopeKey);
 
-  await LocalDBService.forgetDownloadedTracks(collectionKey);
-  await LocalDBService.deleteDownloadJobs(collectionKey);
+  // Removing the copy rows re-points each affected track at a surviving copy —
+  // the collection's file when a series is being deleted, a series' file when
+  // the collection is. Only a track with no copy at all returns to streaming.
+  await LocalDBService.deleteDownloadedFiles(scopeKey);
+  await LocalDBService.deleteDownloadJobs(scopeKey);
 
   for (const path of paths) {
     removeFile(path);
   }
-  removeDirectory(collectionDirectory(meta));
 
-  await LocalDBService.setOnlineCollectionDownloadState(collectionKey, "none");
+  if (series) {
+    const seed = seriesSeedOf(scopeKey);
+    if (meta && seed) {
+      removeDirectory(
+        new Directory(
+          Paths.document,
+          ...seriesRelativePath(
+            meta.sourceId,
+            meta.title,
+            meta.externalId,
+            series.title,
+            seed,
+          ).split("/"),
+        ),
+      );
+    }
+    await LocalDBService.deleteDownloadScope(scopeKey);
+  } else {
+    if (meta) {
+      removeDirectory(
+        new Directory(
+          Paths.document,
+          ...collectionRelativePath(meta.sourceId, meta.title, meta.externalId).split("/"),
+        ),
+      );
+    }
+    await LocalDBService.setOnlineCollectionDownloadState(scopeKey, "none");
+  }
   emitProgress(true);
 }
 
@@ -360,8 +584,11 @@ function removeDirectory(directory: Directory): void {
  * and returns.
  */
 export async function resumeInterruptedDownloads(): Promise<void> {
-  const pending = await LocalDBService.getDownloadingOnlineCollections();
-  if (pending.length === 0) {
+  const [collections, series] = await Promise.all([
+    LocalDBService.getDownloadingOnlineCollections(),
+    LocalDBService.getDownloadingSeriesScopes(),
+  ]);
+  if (collections.length === 0 && series.length === 0) {
     return;
   }
   void pump();
@@ -382,23 +609,44 @@ async function pump(): Promise<void> {
   emitProgress(true);
   try {
     for (;;) {
-      const collections = await LocalDBService.getDownloadingOnlineCollections();
-      if (collections.length === 0) {
+      const [collections, series] = await Promise.all([
+        LocalDBService.getDownloadingOnlineCollections(),
+        LocalDBService.getDownloadingSeriesScopes(),
+      ]);
+      const scope: DownloadScope | null = collections[0]
+        ? {
+            key: collections[0].key,
+            kind: "collection",
+            collectionKey: collections[0].key,
+            title: collections[0].title,
+            seriesKey: null,
+            seed: null,
+          }
+        : series[0]
+          ? {
+              key: series[0].key,
+              kind: "series",
+              collectionKey: series[0].collectionKey,
+              title: series[0].title,
+              seriesKey: series[0].seriesKey,
+              seed: seriesSeedOf(series[0].key),
+            }
+          : null;
+      if (!scope) {
         break;
       }
-      const collection = collections[0];
-      if (cancelled.has(collection.key)) {
-        await LocalDBService.setOnlineCollectionDownloadState(collection.key, "cancelled");
+      if (cancelled.has(scope.key)) {
+        await setScopeState(scope.key, "cancelled");
         continue;
       }
 
-      const job = await LocalDBService.getNextDownloadJob(collection.key);
+      const job = await LocalDBService.getNextDownloadJob(scope.key);
       if (!job) {
-        await finalizeCollection(collection.key);
+        await finalizeScope(scope.key);
         continue;
       }
 
-      await runJob(job);
+      await runJob(job, scope);
       emitProgress(true);
     }
   } finally {
@@ -415,8 +663,8 @@ async function pump(): Promise<void> {
  * without finishing everything" — from the listener's side those are the same
  * fact (the course is incomplete) and both are fixed by the same button.
  */
-async function finalizeCollection(collectionKey: string): Promise<void> {
-  const progress = await LocalDBService.getDownloadProgress(collectionKey);
+async function finalizeScope(scopeKey: string): Promise<void> {
+  const progress = await LocalDBService.getDownloadProgress(scopeKey);
   // No rows at all is not "nothing left to fetch". A queue is only ever created
   // with at least one job in it, so an empty one means the rows were removed
   // underneath the worker: the listener deleted the download while it ran, or
@@ -425,17 +673,14 @@ async function finalizeCollection(collectionKey: string): Promise<void> {
   // not *incomplete* — which is the one thing it certainly is not.
   //
   // The state still has to be *written*, to `none` rather than by returning
-  // early: the worker stops when the collection leaves `downloading`, so
-  // returning here would spin this loop on the same row forever.
+  // early: the worker stops when the scope leaves `downloading`, so returning
+  // here would spin this loop on the same row forever.
   if (progress.total === 0) {
-    await LocalDBService.setOnlineCollectionDownloadState(collectionKey, "none");
+    await setScopeState(scopeKey, "none");
     return;
   }
   const incomplete = progress.failed > 0 || progress.done < progress.total;
-  await LocalDBService.setOnlineCollectionDownloadState(
-    collectionKey,
-    incomplete ? "failed" : "complete",
-  );
+  await setScopeState(scopeKey, incomplete ? "failed" : "complete");
 }
 
 /**
@@ -445,9 +690,9 @@ async function finalizeCollection(collectionKey: string): Promise<void> {
  * native download rather than waiting for the current file to finish — the whole
  * point of cancelling is to stop now.
  */
-async function runJob(job: LocalDownloadJob): Promise<void> {
+async function runJob(job: LocalDownloadJob, scope: DownloadScope): Promise<void> {
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-    if (cancelled.has(job.collectionKey)) {
+    if (cancelled.has(scope.key)) {
       await LocalDBService.setDownloadJobState(job.id, "cancelled");
       return;
     }
@@ -470,11 +715,11 @@ async function runJob(job: LocalDownloadJob): Promise<void> {
           emitProgress();
         },
       });
-      await finishTrack(job, downloaded);
+      await finishTrack(job, downloaded, scope);
       await LocalDBService.setDownloadJobState(job.id, "done");
       return;
     } catch (error) {
-      if (cancelled.has(job.collectionKey)) {
+      if (cancelled.has(scope.key)) {
         await LocalDBService.setDownloadJobState(job.id, "cancelled");
         return;
       }
@@ -500,8 +745,12 @@ async function runJob(job: LocalDownloadJob): Promise<void> {
  * the download; the player writes the true figure back the first time it opens
  * the track.
  */
-async function finishTrack(job: LocalDownloadJob, downloaded: File): Promise<void> {
-  const meta = await LocalDBService.getOnlineCollection(job.collectionKey);
+async function finishTrack(
+  job: LocalDownloadJob,
+  downloaded: File,
+  scope: DownloadScope,
+): Promise<void> {
+  const meta = await LocalDBService.getOnlineCollection(scope.collectionKey);
   if (!meta) {
     throw new Error("The collection was removed while it was downloading.");
   }
@@ -518,14 +767,35 @@ async function finishTrack(job: LocalDownloadJob, downloaded: File): Promise<voi
     // A container we cannot read is still a playable file.
   }
 
-  await LocalDBService.markTrackDownloaded({
-    id: job.trackId,
+  const folder = scopeFolder(scope, meta);
+
+  // The collection scope keeps writing the track's own columns as well: those
+  // are the primary location the player reads, and a collection copy always
+  // outranks a series copy. A series copy is recorded in `download_files` and
+  // only becomes primary when there is no collection copy.
+  if (scope.kind === "collection") {
+    await LocalDBService.markTrackDownloaded({
+      id: job.trackId,
+      fileUri: downloaded.uri,
+      downloadPath: job.destPath,
+      fileSizeBytes,
+      durationSec,
+      folderKey: folder.key,
+      folderName: folder.name,
+      trackNumber: job.orderIndex,
+    });
+  }
+
+  await LocalDBService.recordDownloadedFile({
+    scopeKey: scope.key,
+    scopeKind: scope.kind,
+    trackId: job.trackId,
     fileUri: downloaded.uri,
-    downloadPath: job.destPath,
+    filePath: job.destPath,
     fileSizeBytes,
     durationSec,
-    folderKey: collectionFolderKey(meta.sourceId, meta.externalId),
-    folderName: meta.title,
+    folderKey: folder.key,
+    folderName: folder.name,
     trackNumber: job.orderIndex,
   });
 }

@@ -205,6 +205,7 @@ export const OnlineCollectionService = {
   progressRatio,
 
   download: DownloadService.startDownload,
+  downloadSeries: DownloadService.startSeriesDownload,
   cancelDownload: DownloadService.cancelDownload,
   retryDownload: DownloadService.retryDownload,
   downloadSummary: DownloadService.getSummary,
