@@ -20,9 +20,16 @@
  */
 
 import {
+  bar,
   colors,
+  control,
   field,
+  list,
+  listDividerInset,
   radius,
+  spacing,
+  tile,
+  tileRadius,
   typeScale,
   type ColorScheme,
 } from "@/theme/tokens";
@@ -332,5 +339,64 @@ describe("type scale", () => {
   it("marks the readouts that count, so digits do not jitter", () => {
     expect(typeScale.figure.fontVariant).toEqual(["tabular-nums"]);
     expect(typeScale.numeric.fontVariant).toEqual(["tabular-nums"]);
+  });
+});
+
+describe("geometry ramps", () => {
+  const rampValues = (ramp: Record<string, number>) => Object.values(ramp);
+
+  it("keeps every tile and control positive", () => {
+    for (const value of [...rampValues(tile), ...rampValues(control)]) {
+      expect(value).toBeGreaterThan(0);
+    }
+  });
+
+  it("makes each ramp strictly increasing", () => {
+    for (const ramp of [tile, control, bar]) {
+      const values = rampValues(ramp);
+      for (let index = 1; index < values.length; index += 1) {
+        expect(values[index]).toBeGreaterThan(values[index - 1]);
+      }
+    }
+  });
+
+  it("gives a dense row room for a 40pt tile", () => {
+    expect(list.rowMinHeight).toBe(tile.md + list.rowPadding * 2);
+    expect(list.groupGap).toBe(spacing.sm);
+  });
+
+  it("starts the divider at the text, not the card edge", () => {
+    expect(listDividerInset(tile.md)).toBe(
+      list.rowPadding + tile.md + spacing.md,
+    );
+    expect(listDividerInset(tile.md)).toBeGreaterThan(list.rowPadding + tile.md);
+  });
+
+  it("chooses a tile radius from the shape ramp", () => {
+    const allowed = new Set(rampValues(radius).filter((value) => value !== radius.pill));
+    for (let size = 0; size <= 240; size += 1) {
+      const value = tileRadius(size);
+      expect(value % 2).toBe(0);
+      expect(allowed.has(value)).toBe(true);
+    }
+  });
+
+  it("never shrinks the radius as the tile grows", () => {
+    let previous = 0;
+    for (let size = 0; size <= 240; size += 1) {
+      const value = tileRadius(size);
+      expect(value).toBeGreaterThanOrEqual(previous);
+      previous = value;
+    }
+  });
+
+  it("steps at the documented boundaries", () => {
+    expect(tileRadius(40)).toBe(radius.tile);
+    expect(tileRadius(48)).toBe(radius.tile);
+    expect(tileRadius(49)).toBe(radius.md);
+    expect(tileRadius(56)).toBe(radius.md);
+    expect(tileRadius(61)).toBe(radius.lg);
+    expect(tileRadius(76)).toBe(radius.lg);
+    expect(tileRadius(81)).toBe(radius.card);
   });
 });

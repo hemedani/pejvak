@@ -101,6 +101,59 @@ export const radius = {
   pill: 999,
 } as const;
 
+/**
+ * The tile ramp. One size for each place a leading image appears: a language
+ * marker, a dense row, a shelf card, a collection card, a hero. A screen that
+ * needs a tile asks for a step, never for pixels.
+ */
+export const tile = { sm: 32, md: 40, lg: 48, xl: 56, hero: 76 } as const;
+
+/**
+ * The control ramp. `sm` is the visual size a dense row may use — the touch
+ * target still reaches 44 through `hitSlop`. Header and primary controls use
+ * `lg` and `xl`; 34, 38 and 42 are not steps and must not reappear.
+ */
+export const control = { sm: 36, md: 40, lg: 44, xl: 52 } as const;
+
+/**
+ * A dense list row. The minimum is a floor, not a fixed height: a two-line
+ * title in a large font may grow the row, and it must.
+ */
+export const list = {
+  rowMinHeight: 56,
+  rowPadding: spacing.sm,
+  groupGap: spacing.sm,
+} as const;
+
+/** Progress and chart bars: one thin track, one thick readout. */
+export const bar = { thin: 4, thick: 6 } as const;
+
+/**
+ * The radius a tile of `size` uses. A tile's corner should grow with it, but
+ * only along the one shape ramp — never a `Math.round(size * 0.3)` that lands
+ * between two steps and makes two neighbouring cards disagree.
+ */
+export function tileRadius(size: number): number {
+  if (size <= 48) {
+    return radius.tile;
+  }
+  if (size <= 60) {
+    return radius.md;
+  }
+  if (size <= 80) {
+    return radius.lg;
+  }
+  return radius.card;
+}
+
+/**
+ * Where a row's inset hairline starts: at the text, past the leading tile and
+ * its gap, not at the card's edge.
+ */
+export function listDividerInset(leading: number): number {
+  return list.rowPadding + leading + spacing.md;
+}
+
 export const hairline = StyleSheet.hairlineWidth;
 
 /**
