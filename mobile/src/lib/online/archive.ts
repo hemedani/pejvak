@@ -113,6 +113,17 @@ type ArchiveLanguage = {
  * them. Where ISO 639-2 has two forms — a bibliographic one (`per`) and a
  * terminology one (`fas`) — both are listed, because the archive uses both.
  */
+/**
+ * The spellings the archive files a language under.
+ *
+ * Exported so search can index the ISO 639-2 codes the listener may type — a
+ * catalogue entry says "Persian", but the archive also answers to `per` and
+ * `fas`, and those are not the same word.
+ */
+export function archiveLanguageFacets(code: string): readonly string[] {
+  return ARCHIVE_LANGUAGES.find((language) => language.code === code)?.facets ?? [];
+}
+
 const ARCHIVE_LANGUAGES: readonly ArchiveLanguage[] = [
   { code: "ar", name: "Arabic", facets: ["Arabic", "ar", "ara"] },
   { code: "az", name: "Azerbaijani", facets: ["Azerbaijani", "az", "aze"] },

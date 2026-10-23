@@ -10,6 +10,7 @@
 
 import type { ContextStats, ContextType, LocalContextPlay } from "@/lib/db/types";
 import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
+import type { StatusSpec } from "@/lib/rowStatus";
 
 /**
  * The collection currently being played. `key` is a local playlist id, a folder
@@ -141,6 +142,21 @@ export function describeRunOutcome(run: RunShape): { label: string; tone: "done"
     };
   }
   return { label: "Left early", tone: "partial" };
+}
+
+/**
+ * The same outcome as one row status.
+ *
+ * A run that reached the end is `finished`; a run that was left partway keeps
+ * the domain's own sentence ("Stopped at 9 of 24") and the accent tone that
+ * made it the one coloured line in the card. `StatusLine` decides the glyph, so
+ * the wording stays with the run and the drawing stays with the row.
+ */
+export function describeRunStatus(run: RunShape): StatusSpec {
+  const outcome = describeRunOutcome(run);
+  return outcome.tone === "done"
+    ? { kind: "finished", label: outcome.label }
+    : { kind: "stopped", label: outcome.label, tone: "accent" };
 }
 
 /**

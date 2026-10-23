@@ -1,5 +1,12 @@
 import type { LocalSession, LocalTrack } from "@/lib/db/types";
-import { groupSessionsIntoStretches, stretchResumeTarget as modelResumeTarget, type ListeningStretch } from "@/lib/listeningStretch";
+import {
+  describeStretchOutcome,
+  groupSessionsIntoStretches,
+  stretchResumeTarget as modelResumeTarget,
+  type ListeningStretch,
+  type StretchOutcome,
+} from "@/lib/listeningStretch";
+import type { StatusSpec } from "@/lib/rowStatus";
 import { formatClock } from "@/lib/time";
 
 export type HistoryItem = {
@@ -273,6 +280,43 @@ export function describeStretchTitle(entry: HistoryStretch): string {
     return entry.start.track.title;
   }
   return `${entry.start.track.title} → ${entry.end.track.title}`;
+}
+
+/**
+ * How each stretch outcome reads as one status.
+ *
+ * The words are the domain's; `StatusLine` owns the glyph and the tone. A
+ * listener reading the History list sees one status per row, whether it is a
+ * stretch or a single session, because both go through this vocabulary.
+ */
+const STRETCH_STATUS: Record<StretchOutcome, StatusSpec | null> = {
+  complete: { kind: "complete", label: "Complete" },
+  finished: { kind: "finished", label: "Finished" },
+  interrupted: { kind: "interrupted", label: "Interrupted" },
+  open: null,
+};
+
+export function describeStretchStatus(stretch: ListeningStretch): StatusSpec | null {
+  return STRETCH_STATUS[describeStretchOutcome(stretch)];
+}
+
+/**
+ * The status a single recorded session carries.
+ *
+ * A session still being written has no outcome yet: saying "Interrupted" while
+ * the tracker is still finalising it would be a verdict the row has not
+ * reached. Everything else is one of the two ways a listen ends.
+ */
+export function describeSessionStatus(
+  session: Pick<LocalSession, "completed" | "interrupted">,
+): StatusSpec | null {
+  if (session.completed) {
+    return { kind: "finished", label: "Finished" };
+  }
+  if (session.interrupted) {
+    return { kind: "interrupted", label: "Interrupted" };
+  }
+  return null;
 }
 
 /** Compact listened-time label: "45s", "1m 30s", "2h 2m". */

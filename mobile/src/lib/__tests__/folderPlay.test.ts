@@ -2,6 +2,7 @@ import {
   UNPLAYED_PROGRESS,
   buildFolderPlan,
   describeFolderProgress,
+  describeFolderTrackStatus,
   describeMissing,
   folderProgressRatio,
   shuffleTracks,
@@ -282,6 +283,34 @@ describe("describeMissing", () => {
   it("singularises one file", () => {
     expect(describeMissing(1)).toBe("1 file missing");
     expect(describeMissing(3)).toBe("3 files missing");
+  });
+});
+
+describe("describeFolderTrackStatus", () => {
+  const present = { availability: "present" as const };
+
+  it("puts a missing file first, whatever the history says", () => {
+    expect(
+      describeFolderTrackStatus({ finished: true, resumeSec: 120 }, { availability: "missing" }),
+    ).toEqual({ kind: "missing", label: "File missing" });
+  });
+
+  it("names the two facts that decide where folder play starts", () => {
+    expect(describeFolderTrackStatus({ finished: true, resumeSec: 0 }, present)).toEqual({
+      kind: "finished",
+      label: "Finished",
+    });
+    expect(describeFolderTrackStatus({ finished: false, resumeSec: 511 }, present)).toEqual({
+      kind: "continued",
+      label: "Resume at 8:31",
+    });
+  });
+
+  it("says a track has not started rather than leaving the line blank", () => {
+    expect(describeFolderTrackStatus(undefined, present)).toEqual({
+      kind: "info",
+      label: "Not started",
+    });
   });
 });
 

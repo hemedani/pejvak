@@ -1,7 +1,9 @@
 import {
   buildStretchSections,
   dayKey,
+  describeSessionStatus,
   describeSpeed,
+  describeStretchStatus,
   describeStretchTitle,
   formatDuration,
   formatPositionRange,
@@ -418,5 +420,83 @@ describe("resumeTargetSec", () => {
         itemWith({ completed: false, endedAt: null, startPositionSec: 75, endPositionSec: null }),
       ),
     ).toBe(75);
+  });
+});
+
+describe("describeSessionStatus", () => {
+  it("marks a session that reached the end of its track", () => {
+    expect(describeSessionStatus(session({ completed: true }))).toEqual({
+      kind: "finished",
+      label: "Finished",
+    });
+  });
+
+  it("marks an interrupted session", () => {
+    expect(
+      describeSessionStatus(session({ completed: false, interrupted: true })),
+    ).toEqual({ kind: "interrupted", label: "Interrupted" });
+  });
+
+  it("says nothing when the session has no outcome to report", () => {
+    // A session still being written is neither finished nor interrupted, and a
+    // second badge would be a second thing to decode.
+    expect(
+      describeSessionStatus(session({ completed: false, interrupted: false })),
+    ).toBeNull();
+  });
+});
+
+describe("describeStretchStatus", () => {
+  it("marks a listen heard through from the first second", () => {
+    const entry = oneStretch(
+      rowOn("t1", { id: "a", startPositionSec: 0, endedAt: 60, completed: true }),
+    );
+
+    expect(describeStretchStatus(entry.stretch)).toEqual({
+      kind: "complete",
+      label: "Complete",
+    });
+  });
+
+  it("marks a listen that finished its last track without covering the first", () => {
+    const entry = oneStretch(
+      rowOn("t1", { id: "a", startPositionSec: 92, endedAt: 60, completed: true }),
+    );
+
+    expect(describeStretchStatus(entry.stretch)).toEqual({
+      kind: "finished",
+      label: "Finished",
+    });
+  });
+
+  it("marks a listen that stopped partway", () => {
+    const entry = oneStretch(
+      rowOn("t1", {
+        id: "a",
+        startPositionSec: 0,
+        endedAt: 60,
+        completed: false,
+        interrupted: true,
+      }),
+    );
+
+    expect(describeStretchStatus(entry.stretch)).toEqual({
+      kind: "interrupted",
+      label: "Interrupted",
+    });
+  });
+
+  it("says nothing while the listen is still open", () => {
+    const entry = oneStretch(
+      rowOn("t1", {
+        id: "a",
+        startPositionSec: 0,
+        endedAt: null,
+        completed: false,
+        interrupted: false,
+      }),
+    );
+
+    expect(describeStretchStatus(entry.stretch)).toBeNull();
   });
 });

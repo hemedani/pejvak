@@ -12,6 +12,8 @@
  */
 
 import type { TrackAvailability } from "@/lib/db/types";
+import type { StatusSpec } from "@/lib/rowStatus";
+import { formatClock } from "@/lib/time";
 import { orderFolderTracks, pickFolderStartIndex } from "@/lib/mediaFolders";
 
 /**
@@ -192,4 +194,28 @@ export function describeMissing(missingCount: number): string | null {
     return null;
   }
   return `${missingCount} file${missingCount === 1 ? "" : "s"} missing`;
+}
+
+/**
+ * A track's place in the folder as the one status line its row carries.
+ *
+ * "Finished" and "Resume at 8:31" are the two facts that decide whether folder
+ * play will skip a track or drop into the middle of it, so they are stated
+ * rather than left to be inferred from a progress bar. A missing file wins over
+ * both: no amount of history can play bytes that are not there.
+ */
+export function describeFolderTrackStatus(
+  progress: FolderTrackProgress | undefined,
+  track: Pick<FolderPlayableTrack, "availability">,
+): StatusSpec {
+  if (track.availability === "missing") {
+    return { kind: "missing", label: "File missing" };
+  }
+  if (progress?.finished) {
+    return { kind: "finished", label: "Finished" };
+  }
+  if (progress && progress.resumeSec > 0) {
+    return { kind: "continued", label: `Resume at ${formatClock(progress.resumeSec)}` };
+  }
+  return { kind: "info", label: "Not started" };
 }

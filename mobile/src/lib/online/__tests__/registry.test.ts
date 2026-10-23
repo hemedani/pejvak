@@ -14,6 +14,7 @@
 import {
   collectionKey,
   describeDownloadState,
+  describeDownloadStatus,
   describeKnownTrackCount,
   describeTrackCount,
   findLanguage,
@@ -161,6 +162,32 @@ describe("describeDownloadState", () => {
     // A card in a list holds no job rows, so "Downloading" is the whole of the
     // truth available to it. A count here would have to be invented.
     expect(describeDownloadState("downloading")).not.toMatch(/\d/);
+  });
+});
+
+describe("describeDownloadStatus", () => {
+  it("keeps the words and adds the one glyph kind a row draws", () => {
+    expect(describeDownloadStatus("complete")).toEqual({
+      kind: "downloaded",
+      label: "Downloaded",
+    });
+    expect(describeDownloadStatus("downloading")).toEqual({
+      kind: "downloading",
+      label: "Downloading",
+    });
+    expect(describeDownloadStatus("failed")).toEqual({
+      kind: "failed",
+      label: "Download failed",
+    });
+    expect(describeDownloadStatus("cancelled")).toEqual({
+      kind: "paused",
+      label: "Download paused",
+    });
+  });
+
+  it("says nothing for a collection that only streams", () => {
+    expect(describeDownloadStatus("none")).toBeNull();
+    expect(describeDownloadStatus(null)).toBeNull();
   });
 });
 

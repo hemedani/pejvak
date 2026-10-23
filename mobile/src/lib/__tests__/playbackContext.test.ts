@@ -5,6 +5,7 @@ import {
   describeContextType,
   describeRunOutcome,
   describeRunScope,
+  describeRunStatus,
   formatContextPosition,
   formatPlayCount,
   isPartialRun,
@@ -290,5 +291,29 @@ describe("latestPartialRun", () => {
 
   it("is null with no runs at all", () => {
     expect(latestPartialRun([])).toBeNull();
+  });
+});
+
+describe("describeRunStatus", () => {
+  it("marks a run that reached the end of its queue", () => {
+    expect(describeRunStatus(run({ completed: true }))).toEqual({
+      kind: "finished",
+      label: "Finished",
+    });
+  });
+
+  it("marks a collection heard through but left before the queue ended", () => {
+    expect(describeRunStatus(run({ finishedCount: 24, interrupted: true }))).toEqual({
+      kind: "finished",
+      label: "All tracks heard",
+    });
+  });
+
+  it("keeps the partial wording, coloured as the run's own outcome", () => {
+    expect(describeRunStatus(run({ finishedCount: 9, trackCount: 24 }))).toEqual({
+      kind: "stopped",
+      label: "Stopped at 9 of 24",
+      tone: "accent",
+    });
   });
 });

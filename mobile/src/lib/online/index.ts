@@ -7,10 +7,11 @@
  */
 
 import type { DownloadState } from "@/lib/db/types";
+import type { StatusSpec } from "@/lib/rowStatus";
 
-import { archiveSources, createArchiveAdapter } from "@/lib/online/archive";
+import { archiveLanguageFacets, archiveSources, createArchiveAdapter } from "@/lib/online/archive";
 import { manahejAdapter } from "@/lib/online/manahej";
-import type { OnlineAdapter, OnlineSource, OnlineSourceKind } from "@/lib/online/types";
+import type { OnlineAdapter, OnlineLanguage, OnlineSource, OnlineSourceKind } from "@/lib/online/types";
 
 export * from "@/lib/online/languages";
 export * from "@/lib/online/naming";
@@ -54,6 +55,30 @@ export function getAdapter(sourceId: string): OnlineAdapter | null {
 
 export function sourcesForLanguage(languageCode: string): readonly OnlineSource[] {
   return SOURCES.filter((source) => source.languageCode === languageCode);
+}
+
+export type LanguageSearchField = "title" | "name" | "code" | "alias";
+
+/**
+ * What the Browse search can find a language by.
+ *
+ * The listener's own name is the title — it is the field they are reading —
+ * the English name is how the catalogue is ordered, and the ISO codes are what
+ * someone who knows the archive will type. A field with no value is `null`,
+ * never `""`, because an empty string is a field every query matches.
+ */
+export function languageSearchFields(
+  language: OnlineLanguage,
+): readonly { field: LanguageSearchField; value: string | null }[] {
+  const aliases = archiveLanguageFacets(language.code)
+    .filter((facet) => facet !== language.name && facet !== language.code)
+    .join(" ");
+  return [
+    { field: "title", value: language.nativeName || null },
+    { field: "name", value: language.name || null },
+    { field: "code", value: language.code || null },
+    { field: "alias", value: aliases || null },
+  ];
 }
 
 /** `${sourceId}:${externalId}` — a collection's identity everywhere in the app. */
@@ -129,6 +154,35 @@ export function describeDownloadState(state: DownloadState | null | undefined): 
       return "Download failed";
     case "cancelled":
       return "Download paused";
+    default:
+      return null;
+  }
+}
+
+/**
+ * The same state as a row's one status line.
+ *
+ * The label still comes from `describeDownloadState`, so the two can never drift
+ * apart; only the glyph kind is new. `cancelled` maps to `paused` because the
+ * listener stopped it, and `failed` keeps its own kind so the line can be drawn
+ * in the danger tone.
+ */
+export function describeDownloadStatus(
+  state: DownloadState | null | undefined,
+): StatusSpec | null {
+  const label = describeDownloadState(state);
+  if (!label) {
+    return null;
+  }
+  switch (state) {
+    case "complete":
+      return { kind: "downloaded", label };
+    case "downloading":
+      return { kind: "downloading", label };
+    case "failed":
+      return { kind: "failed", label };
+    case "cancelled":
+      return { kind: "paused", label };
     default:
       return null;
   }

@@ -85,27 +85,7 @@ export const LANGUAGES: readonly OnlineLanguage[] = SEED.map((language) => ({
   available: AVAILABLE_CODES.has(language.code),
 }));
 
-/** Hebrew, Arabic, Syriac, Thaana, and the Arabic presentation forms. */
-const RTL_CHARS = /[\u0590-\u05FF\u0600-\u06FF\u0700-\u074F\u0750-\u077F\u0780-\u07BF\uFB1D-\uFDFF\uFE70-\uFEFF]/g;
-const LTR_CHARS = /[A-Za-z\u00C0-\u024F]/g;
-
-/**
- * Whether a string reads right to left.
- *
- * Every title this feature shows is likely to be Persian or Arabic, and a
- * right-to-left line left-aligned inside a left-to-right layout reads as broken
- * rather than as foreign. Counted rather than "contains a Persian character", so
- * an English title that happens to carry one loanword is not flipped — and so a
- * Latin track name inside a Persian course stays left-aligned.
- */
-export function isRtlText(value: string): boolean {
-  const rtl = value.match(RTL_CHARS)?.length ?? 0;
-  if (rtl === 0) {
-    return false;
-  }
-  const ltr = value.match(LTR_CHARS)?.length ?? 0;
-  return rtl > ltr;
-}
+export { isRtlText } from "@/lib/textDirection";
 
 export function findLanguage(code: string): OnlineLanguage | null {
   return LANGUAGES.find((language) => language.code === code) ?? null;
