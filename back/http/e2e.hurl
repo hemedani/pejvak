@@ -334,7 +334,7 @@ token: {{token}}
       "totalListenTimeSec": 1,
       "sessionCount": 1,
       "trackCount": 1,
-      "tracks": []
+      "tracks": {}
     }
   }
 }
@@ -449,7 +449,7 @@ token: {{token}}
   "act": "deleteAnnotation",
   "details": {
     "set": { "annotationId": "{{annotationServerId}}" },
-    "get": { "success": true }
+    "get": {}
   }
 }
 
@@ -544,7 +544,7 @@ token: {{token}}
   "act": "deletePlaylist",
   "details": {
     "set": { "playlistId": "{{playlistId}}" },
-    "get": { "success": true }
+    "get": {}
   }
 }
 
@@ -817,3 +817,235 @@ HTTP 200
 [Asserts]
 jsonpath "$.success" == true
 jsonpath "$.body" count == 0
+
+
+# ── Playback runs and online collections ────────────────────────
+
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "track",
+  "act": "syncLocalData",
+  "details": {
+    "set": {
+      "contextPlays": [
+        {
+          "clientId": "local-run-{{unique}}",
+          "contextType": "playlist",
+          "contextKey": "focus-{{unique}}",
+          "contextTitle": "Focus",
+          "trackCount": 1,
+          "startedAt": 1757000000000,
+          "endedAt": 1757000300000,
+          "lastIndex": 0,
+          "lastTrackId": "{{trackId}}",
+          "lastPositionSec": 300,
+          "listenedSec": 300,
+          "finishedCount": 1,
+          "completed": true,
+          "interrupted": false,
+          "updatedAt": 1000
+        }
+      ],
+      "onlineCollections": [
+        {
+          "clientId": "manahej:course-{{unique}}",
+          "sourceId": "manahej",
+          "externalId": "course-{{unique}}",
+          "title": "Course",
+          "languageCode": "fa",
+          "isFavorite": true,
+          "updatedAt": 1000
+        }
+      ]
+    },
+    "get": {
+      "syncedContextPlays": 1,
+      "syncedOnlineCollections": 1,
+      "contextPlays": [],
+      "onlineCollections": []
+    }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.syncedContextPlays" == 1
+jsonpath "$.body.syncedOnlineCollections" == 1
+
+
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "playbackContext",
+  "act": "getMyPlaybackContexts",
+  "details": {
+    "set": {
+      "page": 1,
+      "limit": 10,
+      "contextType": "playlist",
+      "contextKey": "focus-{{unique}}"
+    },
+    "get": { "_id": 1, "contextKey": 1, "contextTitle": 1, "completed": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body" count == 1
+jsonpath "$.body[0].contextTitle" == "Focus"
+jsonpath "$.body[0].completed" == true
+
+
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "onlineCollection",
+  "act": "saveOnlineCollection",
+  "details": {
+    "set": {
+      "sourceId": "manahej",
+      "externalId": "course-{{unique}}",
+      "title": "Course",
+      "languageCode": "fa",
+      "isFavorite": true,
+      "updatedAt": 1000
+    },
+    "get": { "_id": 1, "clientId": 1, "title": 1, "trackCount": 1, "isFavorite": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.clientId" == "manahej:course-{{unique}}"
+jsonpath "$.body.trackCount" == 0
+jsonpath "$.body.isFavorite" == true
+
+
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "onlineCollection",
+  "act": "getMyOnlineCollections",
+  "details": {
+    "set": { "page": 1, "limit": 10, "isFavorite": true },
+    "get": { "_id": 1, "clientId": 1, "title": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body" count == 1
+jsonpath "$.body[0].clientId" == "manahej:course-{{unique}}"
+
+
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "onlineCollection",
+  "act": "removeOnlineCollection",
+  "details": {
+    "set": { "sourceId": "manahej", "externalId": "course-{{unique}}" },
+    "get": {}
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.success" == true
+
+
+# Removing an absent collection is still a success.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "onlineCollection",
+  "act": "removeOnlineCollection",
+  "details": {
+    "set": { "sourceId": "manahej", "externalId": "course-{{unique}}" },
+    "get": {}
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.success" == true
+
+
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "onlineCollection",
+  "act": "getMyOnlineCollections",
+  "details": {
+    "set": { "page": 1, "limit": 10 },
+    "get": { "_id": 1, "clientId": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body" count == 0
+
+
+# ── Ownership and validation guards ─────────────────────────────
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "playlist",
+  "act": "createPlaylist",
+  "details": {
+    "set": { "title": "Intruder list" },
+    "get": { "_id": 1 }
+  }
+}
+
+HTTP 200
+[Captures]
+intruderPlaylistId: jsonpath "$.body._id"
+
+
+# An intruder cannot put another user's track into their playlist.
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "playlist",
+  "act": "updatePlaylist",
+  "details": {
+    "set": {
+      "playlistId": "{{intruderPlaylistId}}",
+      "items": [{ "trackId": "{{trackId}}", "order": 0 }]
+    },
+    "get": { "_id": 1, "items": 1 }
+  }
+}
+
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
+jsonpath "$.body.message" contains "do not own"
+
+
+# A malformed id is a validation error, not a server crash.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "track",
+  "act": "getTrackDetail",
+  "details": {
+    "set": { "trackId": "not-an-id" },
+    "get": { "_id": 1 }
+  }
+}
+
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
