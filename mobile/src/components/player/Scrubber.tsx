@@ -1,16 +1,16 @@
 /**
  * The scrubbable timeline.
  *
- * The bar is deliberately minimal at rest and comes alive under the finger:
+ * The played segment is an ocean wave: a sine stroke that travels toward the
+ * thumb while audio plays, with a gap on each side of the thumb so the thumb
+ * reads as cut out of the track rather than laid on top of it. The unplayed
+ * segment stays flat and lower-contrast.
  *
- *   · the track thickens (6 → ~10 px) on a spring
- *   · a thumb grows out of the playhead, ringed and glowing in the track colour
- *   · a time bubble rises above the thumb showing where you are about to land
- *   · the played portion follows the finger 1:1 while scrubbing
- *
- * The 1:1 follow matters. A spring under the finger feels laggy and lets the
- * playhead disagree with the thumb; the spring is for *unattended* updates
- * (playback ticking along), not for the drag itself.
+ * Under the finger the wave flattens, the thumb grows out of the playhead, a
+ * time bubble rises above it showing where you are about to land, and the
+ * played portion follows the finger 1:1. The 1:1 follow matters: a spring under
+ * the finger feels laggy and lets the playhead disagree with the thumb. The
+ * wave's phase and the between-tick progress both run on the UI thread.
  *
  * Layout is three stacked bands, all inside the component's own bounds:
  *
@@ -27,7 +27,7 @@
  * (`activeOffsetX`), so a vertical flick still scrolls the player's ScrollView.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   StyleSheet,
   View,
@@ -36,15 +36,21 @@ import {
   type ViewStyle,
 } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, {
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 import { scheduleOnRN } from "react-native-worklets";
 
 import { ThemedText } from "@/components/themed-text";
+import { WavyProgress } from "@/components/player/WavyProgress";
 import { triggerHaptic } from "@/components/ui/haptics";
+import { useSmoothProgress } from "@/hooks/use-smooth-progress";
 import { useTheme } from "@/hooks/use-theme";
 import { formatClock } from "@/lib/time";
 import { spring } from "@/theme/motion";
-import { radius as radii } from "@/theme/tokens";
 
 /** Height of the invisible touch band. Meets the 44 pt minimum. */
 const TOUCH_HEIGHT = 44;
@@ -54,8 +60,12 @@ const BUBBLE_HEADROOM = 22;
 const THUMB_RATIO = 2.4;
 /** Thumb scale at rest, so the playhead stays discoverable before you grab it. */
 const THUMB_IDLE_SCALE = 0.58;
-/** How much the track thickens while scrubbing. */
-const ACTIVE_THICKNESS_RATIO = 1.7;
+/** Full wave height, in points. */
+const WAVE_AMPLITUDE = 3;
+/** Crest spacing, in points. */
+const WAVE_WAVELENGTH = 36;
+/** Visible space between the thumb's edge and either segment. */
+const THUMB_GAP = 4;
 /** Bubble box, sized for a three-part time code. */
 const BUBBLE_WIDTH = 74;
 const BUBBLE_HEIGHT = 26;
@@ -63,12 +73,19 @@ const BUBBLE_HEIGHT = 26;
 const BUBBLE_GAP = 8;
 /** Seconds nudged by the accessibility increment/decrement actions. */
 const A11Y_STEP_SEC = 15;
+/** Scrub-tick haptics: every 2% of the track, at most once per 50 ms. */
+const HAPTIC_STEPS = 50;
+const HAPTIC_INTERVAL_MS = 50;
 
 export type ScrubberProps = {
   /** 0–1. */
   progress: number;
   /** Total length in seconds; converts a fraction into a position. */
   durationSec: number;
+  /** Drives the wave and the 60 fps extrapolation between position ticks. */
+  isPlaying: boolean;
+  /** Position advances faster or slower than wall-clock time. */
+  playbackSpeed?: number;
   /** Colour of the played portion and the thumb ring. */
   tint: string;
   /** Resting track thickness. */
@@ -87,6 +104,8 @@ function clamp01(value: number): number {
 export function Scrubber({
   progress,
   durationSec,
+  isPlaying,
+  playbackSpeed = 1,
   tint,
   thickness = 6,
   onSeek,
@@ -96,23 +115,32 @@ export function Scrubber({
   const theme = useTheme();
   const clamped = clamp01(progress);
 
+  const { progress: smoothProgress, setPosition } = useSmoothProgress({
+    positionSec: clamped * durationSec,
+    durationSec,
+    isPlaying,
+    playbackSpeed,
+  });
+
   const width = useSharedValue(0);
-  const value = useSharedValue(clamped);
+  const drag = useSharedValue(clamped);
+  const isScrubbing = useSharedValue(0);
   const active = useSharedValue(0);
   /** Last whole second pushed to the bubble, so we only re-render on change. */
   const lastSec = useSharedValue(-1);
+  const lastHapticStep = useSharedValue(-1);
+  /** JS-side throttle, so a fast drag cannot buzz continuously. */
+  const haptic = useRef({ step: -1, at: 0 });
+
+  /**
+   * While the finger is down the drag value wins; otherwise the extrapolated
+   * progress does. Both are shared values, so this is a UI-thread read.
+   */
+  const displayed = useDerivedValue(() =>
+    isScrubbing.value > 0.5 ? drag.value : smoothProgress.value,
+  );
 
   const [scrubSec, setScrubSec] = useState(0);
-  // Read by the progress-sync effect: a store update arriving mid-drag must not
-  // yank the fill out from under the finger.
-  const scrubbing = useRef(false);
-
-  useEffect(() => {
-    if (scrubbing.current) {
-      return;
-    }
-    value.value = withSpring(clamped, spring.snappy);
-  }, [clamped, value]);
 
   const onLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -125,25 +153,38 @@ export function Scrubber({
     setScrubSec(sec);
   }, []);
 
+  const maybeScrubHaptic = useCallback((step: number) => {
+    const now = Date.now();
+    if (step === haptic.current.step || now - haptic.current.at < HAPTIC_INTERVAL_MS) {
+      return;
+    }
+    haptic.current = { step, at: now };
+    triggerHaptic("selection");
+  }, []);
+
   const commitSeek = useCallback(
     (fraction: number) => {
       if (durationSec <= 0) {
         return;
       }
+      const target = fraction * durationSec;
+      // Optimistic: the bar should stay where the finger left it while the
+      // native seek and the store update are in flight.
+      setPosition(target);
       triggerHaptic("light");
-      onSeek(fraction * durationSec);
+      onSeek(target);
     },
-    [durationSec, onSeek],
+    [durationSec, onSeek, setPosition],
   );
 
   const beginScrub = useCallback(() => {
-    scrubbing.current = true;
+    haptic.current = { step: -1, at: Date.now() };
     triggerHaptic("selection");
   }, []);
 
   const endScrub = useCallback(() => {
-    scrubbing.current = false;
-  }, []);
+    isScrubbing.set(0);
+  }, [isScrubbing]);
 
   const gesture = useMemo(
     () =>
@@ -155,6 +196,9 @@ export function Scrubber({
           .onStart(() => {
             active.value = withSpring(1, spring.snappy);
             lastSec.value = -1;
+            lastHapticStep.value = -1;
+            isScrubbing.value = 1;
+            drag.value = displayed.value;
             scheduleOnRN(beginScrub);
           })
           .onUpdate((event) => {
@@ -163,12 +207,18 @@ export function Scrubber({
               return;
             }
             const fraction = clamp01(event.x / w);
-            value.value = fraction;
+            drag.value = fraction;
 
             const sec = Math.floor(fraction * durationSec);
             if (sec !== lastSec.value) {
               lastSec.value = sec;
               scheduleOnRN(emitLabel, sec);
+            }
+
+            const step = Math.round(fraction * HAPTIC_STEPS);
+            if (step !== lastHapticStep.value) {
+              lastHapticStep.value = step;
+              scheduleOnRN(maybeScrubHaptic, step);
             }
           })
           .onEnd((event) => {
@@ -185,25 +235,33 @@ export function Scrubber({
         Gesture.Tap().onEnd((event, success) => {
           const w = width.value;
           // The `durationSec` guard matters: without a loaded track `commitSeek`
-          // bails out, so moving the fill here would strand it at the tap point
-          // — the sync effect only runs when `clamped` actually changes.
+          // bails out, so moving the fill here would strand it at the tap point.
           if (!success || w <= 0 || durationSec <= 0) {
             return;
           }
           const fraction = clamp01(event.x / w);
-          value.value = fraction;
+          drag.value = fraction;
+          isScrubbing.value = 1;
           scheduleOnRN(commitSeek, fraction);
+          scheduleOnRN(endScrub);
         }),
       ),
-    [active, beginScrub, commitSeek, durationSec, emitLabel, endScrub, lastSec, value, width],
+    [
+      active,
+      beginScrub,
+      commitSeek,
+      displayed,
+      drag,
+      durationSec,
+      emitLabel,
+      endScrub,
+      isScrubbing,
+      lastHapticStep,
+      lastSec,
+      maybeScrubHaptic,
+      width,
+    ],
   );
-
-  const trackStyle = useAnimatedStyle(() => {
-    const height = thickness * (1 + (ACTIVE_THICKNESS_RATIO - 1) * active.value);
-    return { height, borderRadius: height / 2 };
-  });
-
-  const fillStyle = useAnimatedStyle(() => ({ width: `${value.value * 100}%` }));
 
   const thumbDiameter = thickness * THUMB_RATIO;
   const thumbRadius = thumbDiameter / 2;
@@ -218,8 +276,7 @@ export function Scrubber({
   const bubbleTop = BUBBLE_HEADROOM + thumbTop - BUBBLE_HEIGHT - BUBBLE_GAP;
   /**
    * Where the marker layer starts. The track is centred in the band, so its
-   * *centre* is the invariant — the bar thickens from the middle, and the
-   * markers must track that centre rather than the (thicker) thumb.
+   * *centre* is the invariant — the markers must track that centre.
    */
   const markerLayerTop = BUBBLE_HEADROOM + (TOUCH_HEIGHT - thickness) / 2;
 
@@ -227,7 +284,9 @@ export function Scrubber({
     const w = width.value;
     // Kept fully inside the track, so the thumb never hangs off either end.
     const centre =
-      w > thumbDiameter ? Math.min(Math.max(value.value * w, thumbRadius), w - thumbRadius) : w / 2;
+      w > thumbDiameter
+        ? Math.min(Math.max(displayed.value * w, thumbRadius), w - thumbRadius)
+        : w / 2;
     return {
       opacity: 0.78 + 0.22 * active.value,
       transform: [
@@ -241,7 +300,7 @@ export function Scrubber({
     const w = width.value;
     const half = BUBBLE_WIDTH / 2;
     // Clamped so the bubble never hangs off the first or last second.
-    const x = w > BUBBLE_WIDTH ? Math.min(Math.max(value.value * w, half), w - half) : w / 2;
+    const x = w > BUBBLE_WIDTH ? Math.min(Math.max(displayed.value * w, half), w - half) : w / 2;
     return {
       opacity: active.value,
       transform: [
@@ -274,11 +333,20 @@ export function Scrubber({
       }}>
       <GestureDetector gesture={gesture}>
         <View onLayout={onLayout} style={styles.hitArea}>
-          <Animated.View style={[styles.track, { backgroundColor: theme.track }, trackStyle]}>
-            <Animated.View
-              style={[styles.fill, { backgroundColor: tint, shadowColor: tint }, fillStyle]}
-            />
-          </Animated.View>
+          <WavyProgress
+            progress={displayed}
+            isPlaying={isPlaying}
+            scrubbing={isScrubbing}
+            tint={tint}
+            trackColor={theme.track}
+            thickness={thickness}
+            amplitude={WAVE_AMPLITUDE}
+            wavelength={WAVE_WAVELENGTH}
+            bandHeight={TOUCH_HEIGHT}
+            inset={thumbRadius}
+            gap={thumbRadius + THUMB_GAP}
+            style={styles.wave}
+          />
 
           <Animated.View
             pointerEvents="none"
@@ -331,21 +399,11 @@ const styles = StyleSheet.create({
     height: TOUCH_HEIGHT,
     justifyContent: "center",
   },
-  track: {
-    // The unfilled part is `theme.track`, set inline: a literal grey here is a
-    // surface colour no palette edit can reach.
-    justifyContent: "center",
-  },
-  fill: {
+  wave: {
     position: "absolute",
     left: 0,
+    right: 0,
     top: 0,
-    bottom: 0,
-    borderRadius: radii.pill,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
-    elevation: 3,
   },
   thumb: {
     position: "absolute",

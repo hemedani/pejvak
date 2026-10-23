@@ -17,8 +17,10 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { CrossfadeArtwork } from "@/components/motion/CrossfadeArtwork";
+import { WavyProgress } from "@/components/player/WavyProgress";
 import { ThemedText } from "@/components/themed-text";
-import { GlassProgress } from "@/components/ui/glass/GlassProgress";
+import { useSmoothProgress } from "@/hooks/use-smooth-progress";
+import { useTheme } from "@/hooks/use-theme";
 import {
   describeContextType,
   type PlaybackContext,
@@ -65,6 +67,7 @@ export type MiniPlayerRowProps = {
   positionSec: number;
   durationSec: number;
   isPlaying: boolean;
+  playbackSpeed?: number;
   /** The folder or playlist the queue came from, if it came from one. */
   context?: PlaybackContext | null;
   /** Opens that collection's own screen. */
@@ -92,6 +95,7 @@ export function MiniPlayerRow({
   positionSec,
   durationSec,
   isPlaying,
+  playbackSpeed = 1,
   context,
   onOpenContext,
   onToggle,
@@ -101,7 +105,13 @@ export function MiniPlayerRow({
   renderMain,
   style,
 }: MiniPlayerRowProps) {
-  const progress = durationSec > 0 ? Math.min(1, positionSec / durationSec) : 0;
+  const theme = useTheme();
+  const { progress } = useSmoothProgress({
+    positionSec,
+    durationSec,
+    isPlaying,
+    playbackSpeed,
+  });
 
   const main = (
     <>
@@ -180,10 +190,16 @@ export function MiniPlayerRow({
         />
       ) : null}
 
-      <GlassProgress
+      <WavyProgress
         progress={progress}
+        isPlaying={isPlaying}
         tint={ramp[1]}
+        trackColor={theme.track}
         thickness={2}
+        amplitude={1.4}
+        wavelength={22}
+        bandHeight={8}
+        gap={0}
         style={styles.progress}
       />
     </View>

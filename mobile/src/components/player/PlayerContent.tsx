@@ -225,6 +225,8 @@ export function PlayerContent({
             <Scrubber
               progress={progress}
               durationSec={durationSec}
+              isPlaying={isPlaying}
+              playbackSpeed={playbackSpeed}
               tint={ramp[1]}
               thickness={6}
               onSeek={onSeek}>

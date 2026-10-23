@@ -56,6 +56,7 @@ export function DockPlayer() {
   const contentHash = usePlayerStore((state) => state.contentHash);
   const positionSec = usePlayerStore((state) => state.positionSec);
   const durationSec = usePlayerStore((state) => state.durationSec);
+  const playbackSpeed = usePlayerStore((state) => state.playbackSpeed);
   const skip = usePlayerStore((state) => state.skip);
   const expanded = usePlayerStore((state) => state.expanded);
 
@@ -148,6 +149,7 @@ export function DockPlayer() {
         positionSec={positionSec}
         durationSec={durationSec}
         isPlaying={isPlaying}
+        playbackSpeed={playbackSpeed}
         context={context}
         onOpenContext={openContext}
         skipNonce={skip?.nonce}
