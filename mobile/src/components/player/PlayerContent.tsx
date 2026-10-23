@@ -85,11 +85,14 @@ export type PlayerContentProps = {
   onSeek: (positionSec: number) => void;
   onCycleSpeed: () => void;
   onOpenSleepTimer: () => void;
+  onOpenJumpToTime: () => void;
   onAddNote: () => void;
   /** Attached to the header so the sheet can be dragged down to dismiss. */
   headerGesture?: PanGesture;
   /** Annotation composer, owned by the route. */
   composer?: ReactNode;
+  /** Sleep-timer and jump-to-time sheets, owned by the route. */
+  panels?: ReactNode;
 };
 
 export function PlayerContent({
@@ -124,9 +127,11 @@ export function PlayerContent({
   onSeek,
   onCycleSpeed,
   onOpenSleepTimer,
+  onOpenJumpToTime,
   onAddNote,
   headerGesture,
   composer,
+  panels,
 }: PlayerContentProps) {
   const insets = useSafeAreaInsets();
   const scheme = useScheme();
@@ -222,24 +227,29 @@ export function PlayerContent({
           </View>
 
           <View style={styles.timeline}>
-            <Scrubber
-              progress={progress}
-              durationSec={durationSec}
-              isPlaying={isPlaying}
-              playbackSpeed={playbackSpeed}
-              tint={ramp[1]}
-              thickness={6}
-              onSeek={onSeek}>
-              {annotations.map((annotation) => (
-                <AnnotationMarker
-                  key={annotation.id}
-                  annotation={annotation}
-                  durationSec={durationSec}
-                  selected={annotation.id === selectedId}
-                  onPress={onSelectAnnotation}
-                />
-              ))}
-            </Scrubber>
+            {/* The timeline runs edge to edge. It sits inside the content's
+                horizontal padding like every other block, so it cancels that
+                padding back out rather than the content losing its gutter. */}
+            <View style={styles.timelineBleed}>
+              <Scrubber
+                progress={progress}
+                durationSec={durationSec}
+                isPlaying={isPlaying}
+                playbackSpeed={playbackSpeed}
+                tint={ramp[1]}
+                thickness={6}
+                onSeek={onSeek}>
+                {annotations.map((annotation) => (
+                  <AnnotationMarker
+                    key={annotation.id}
+                    annotation={annotation}
+                    durationSec={durationSec}
+                    selected={annotation.id === selectedId}
+                    onPress={onSelectAnnotation}
+                  />
+                ))}
+              </Scrubber>
+            </View>
             <View style={styles.times}>
               <ThemedText type="numeric" themeColor="textSecondary">
                 {formatClock(positionSec)}
@@ -283,6 +293,12 @@ export function PlayerContent({
               onPress={onOpenSleepTimer}
             />
             <GlassChip label="Note" icon="add" onPress={onAddNote} />
+            <GlassChip
+              label="Go to"
+              icon="clock"
+              accessibilityLabel="Go to time"
+              onPress={onOpenJumpToTime}
+            />
             {/* Only once a library row has resolved — before that there is no id
                 to hand to the picker. */}
             {trackId ? (
@@ -302,6 +318,7 @@ export function PlayerContent({
           ) : null}
 
           {composer}
+          {panels}
 
           <View style={styles.notes}>
             <View style={styles.notesHeader}>
@@ -370,6 +387,9 @@ const styles = StyleSheet.create({
   },
   timeline: {
     gap: spacing.sm,
+  },
+  timelineBleed: {
+    marginHorizontal: -spacing.xxl,
   },
   times: {
     flexDirection: "row",

@@ -97,9 +97,12 @@ export default function PlaylistsScreen() {
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Name"
+                autoComplete="off"
+                importantForAutofill="no"
                 returnKeyType="done"
+                submitBehavior="submit"
                 onSubmitEditing={() => void onCreate()}
-                style={styles.createInput}
+                containerStyle={styles.createInput}
               />
               <PrimaryButton
                 label="Create"

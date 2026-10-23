@@ -155,6 +155,25 @@ describe("AnnotationService.createAnnotation", () => {
 
     expect(mockedSyncPending).toHaveBeenCalledTimes(1);
   });
+
+  it("passes tags and an explicit colour through to the local row", async () => {
+    insertAnnotation.mockResolvedValue(annotation("a1", 5));
+
+    await AnnotationService.createAnnotation({
+      track,
+      positionSec: 5,
+      text: "note",
+      tags: ["chapter", "important"],
+      color: "#208AEF",
+    });
+
+    expect(insertAnnotation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tags: ["chapter", "important"],
+        color: "#208AEF",
+      }),
+    );
+  });
 });
 
 describe("AnnotationService.updateAnnotation", () => {
@@ -172,6 +191,23 @@ describe("AnnotationService.updateAnnotation", () => {
       AnnotationService.updateAnnotation({ annotation: annotation("a1", 30), text: " " }),
     ).rejects.toThrow(/text is required/i);
     expect(updateAnnotation).not.toHaveBeenCalled();
+  });
+
+  it("passes tags and colour through, including a cleared colour", async () => {
+    const target = annotation("a1", 30);
+
+    await AnnotationService.updateAnnotation({
+      annotation: target,
+      text: "revised",
+      tags: ["chapter"],
+      color: null,
+    });
+
+    expect(updateAnnotation).toHaveBeenCalledWith("a1", {
+      text: "revised",
+      tags: ["chapter"],
+      color: null,
+    });
   });
 });
 

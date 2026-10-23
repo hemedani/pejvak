@@ -62,3 +62,29 @@ export function formatRelativeTime(timestamp: number | null, now: number = Date.
 
   return new Date(timestamp).toLocaleDateString();
 }
+
+/**
+ * Reads a run of digits from the right: the last two are seconds, the next two
+ * minutes, and the rest hours. `"1234"` is 12:34, not 1,234 seconds.
+ *
+ * A timecode is typed the way it is read — right to left, smallest unit first —
+ * so a jump-to-time field can accept `"90"`, `"1234"` and `"123456"` without a
+ * separator being typed at all. Anything that is not a digit is ignored, which
+ * lets someone paste `"12:34"` and get the time they meant.
+ */
+export function digitsToSeconds(digits: string): number {
+  const clean = digits.replace(/\D/g, "").slice(-6);
+  if (clean.length === 0) {
+    return 0;
+  }
+  const seconds = Number(clean.slice(-2));
+  const minutes = Number(clean.slice(-4, -2) || 0);
+  const hours = Number(clean.slice(0, -4) || 0);
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+/** Clamps a time to `[0, maxSec]` and to a whole second. `undefined` means no upper bound. */
+export function clampSeconds(value: number, maxSec?: number): number {
+  const safe = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  return maxSec === undefined ? safe : Math.min(safe, Math.max(0, Math.floor(maxSec)));
+}

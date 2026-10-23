@@ -31,7 +31,7 @@ import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip } from "@/components/ui/glass";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
-import { TextField } from "@/components/ui/text-field";
+import { SearchField } from "@/components/ui/search-field";
 import {
   useContinueListening,
   useFavoriteCollections,
@@ -301,15 +301,11 @@ export default function DiscoverScreen() {
               ))}
             </View>
             {view === "browse" ? (
-              <TextField
-                label="Find a language"
+              <SearchField
                 value={search}
                 onChangeText={setSearch}
                 placeholder="Persian, فارسی…"
-                autoCorrect={false}
-                autoCapitalize="none"
-                returnKeyType="search"
-                clearButtonMode="while-editing"
+                accessibilityLabel="Find a language"
               />
             ) : null}
           </View>

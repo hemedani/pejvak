@@ -1,4 +1,9 @@
-import { formatClock, formatRelativeTime } from "@/lib/time";
+import {
+  clampSeconds,
+  digitsToSeconds,
+  formatClock,
+  formatRelativeTime,
+} from "@/lib/time";
 
 describe("formatClock", () => {
   it("formats under an hour as m:ss", () => {
@@ -76,5 +81,36 @@ describe("formatRelativeTime", () => {
   it("treats a clock that moved backwards as 'Just now', not negative time", () => {
     // Device clocks do jump. "in 3 minutes" is never the right answer.
     expect(formatRelativeTime(NOW + 3 * MINUTE, NOW)).toBe("Just now");
+  });
+});
+
+describe("digitsToSeconds", () => {
+  it("reads the digits from the right: ss, then mm, then hh", () => {
+    expect(digitsToSeconds("")).toBe(0);
+    expect(digitsToSeconds("5")).toBe(5);
+    expect(digitsToSeconds("90")).toBe(90);
+    expect(digitsToSeconds("1234")).toBe(754);
+    expect(digitsToSeconds("123456")).toBe(45296);
+    expect(digitsToSeconds("000090")).toBe(90);
+  });
+
+  it("ignores anything that is not a digit", () => {
+    expect(digitsToSeconds("12:34")).toBe(754);
+    expect(digitsToSeconds("1a2b3c4")).toBe(754);
+    expect(digitsToSeconds(" 12 34 ")).toBe(754);
+  });
+});
+
+describe("clampSeconds", () => {
+  it("keeps a time inside the collection", () => {
+    expect(clampSeconds(500, 300)).toBe(300);
+    expect(clampSeconds(0, 300)).toBe(0);
+    expect(clampSeconds(120, 300)).toBe(120);
+  });
+
+  it("never returns a float or a negative", () => {
+    expect(clampSeconds(12.9)).toBe(12);
+    expect(clampSeconds(-4)).toBe(0);
+    expect(clampSeconds(Number.NaN)).toBe(0);
   });
 });

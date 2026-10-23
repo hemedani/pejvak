@@ -8,23 +8,19 @@
  * rather than to the list. Screens that spell that out themselves get one of
  * the three wrong.
  *
- * It is an **inset** card, not glass and not a content card. Glass is for things
- * that float, and this floats over nothing — it scrolls with the list. Inset is
- * the one step *below* the surface, which is what a field inside a page wants:
- * a track you can see you are typing into, without competing with the results
- * underneath it for attention.
+ * It is an **inset** track, not glass. Glass is for things that float, and this
+ * scrolls with the list. Inset is the one step below the surface, which is what
+ * a field inside a page wants: a track you can see you are typing into, without
+ * competing with the results underneath it for attention.
  */
 
-import { useCallback, useRef } from "react";
-import { StyleSheet, TextInput, View } from "react-native";
+import type { Ref } from "react";
+import type { TextInput } from "react-native";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
-import { ThemedText } from "@/components/themed-text";
-import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
-import { useFieldRegistrar } from "@/components/ui/keyboard-scroll-view";
+import { TextField } from "@/components/ui/text-field";
 import { useTheme } from "@/hooks/use-theme";
-import { radius as radii, spacing } from "@/theme/tokens";
 
 export type SearchFieldProps = {
   value: string;
@@ -36,8 +32,9 @@ export type SearchFieldProps = {
    */
   hint?: string | null;
   autoFocus?: boolean;
-  /** Rendered inside the field, before the input. */
   accessibilityLabel?: string;
+  onSubmit?: (value: string) => void;
+  inputRef?: Ref<TextInput>;
 };
 
 export function SearchField({
@@ -47,40 +44,45 @@ export function SearchField({
   hint,
   autoFocus = false,
   accessibilityLabel = "Search",
+  onSubmit,
+  inputRef,
 }: SearchFieldProps) {
   const theme = useTheme();
-  const registrar = useFieldRegistrar();
-  const containerRef = useRef<View>(null);
-  const hasValue = value.trim().length > 0;
-
-  const handleFocus = useCallback(() => {
-    registrar?.reveal(containerRef.current);
-  }, [registrar]);
+  const hasValue = value.length > 0;
 
   return (
-    <View ref={containerRef} collapsable={false} style={styles.wrap}>
-      <Card variant="inset" padded={false} style={styles.field}>
-        <Icon name="search" size={18} color={hasValue ? theme.text : theme.textTertiary} />
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={theme.textTertiary}
-          // Search is not prose: autocorrect would fight the query, and
-          // autocapitalisation would capitalise a Persian word's first letter
-          // into a different code point than the title uses.
-          autoCorrect={false}
-          autoCapitalize="none"
-          returnKeyType="search"
-          // The field draws its own clear button, so the platform's would be a
-          // second one in the same corner.
-          clearButtonMode="never"
-          accessibilityLabel={accessibilityLabel}
-          autoFocus={autoFocus}
-          onFocus={handleFocus}
-          style={[styles.input, { color: theme.text }]}
+    <TextField
+      inputRef={inputRef}
+      pill
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      hint={hint}
+      hintLiveRegion
+      autoFocus={autoFocus}
+      accessibilityLabel={accessibilityLabel}
+      // Search is not prose: autocorrect would fight the query, and
+      // autocapitalisation would capitalise a Persian word's first letter
+      // into a different code point than the title uses.
+      autoCorrect={false}
+      autoCapitalize="none"
+      spellCheck={false}
+      returnKeyType="search"
+      inputMode="search"
+      submitBehavior="blurAndSubmit"
+      // The field draws its own clear button, so the platform's would be a
+      // second one in the same corner.
+      clearButtonMode="never"
+      onSubmitEditing={() => onSubmit?.(value)}
+      leading={
+        <Icon
+          name="search"
+          size={18}
+          color={hasValue ? theme.text : theme.textTertiary}
         />
-        {hasValue ? (
+      }
+      trailing={
+        hasValue ? (
           <BouncyIconButton
             name="close"
             accessibilityLabel="Clear search"
@@ -89,40 +91,8 @@ export function SearchField({
             tone="ghost"
             onPress={() => onChangeText("")}
           />
-        ) : null}
-      </Card>
-
-      {hint ? (
-        <ThemedText type="caption" themeColor="textTertiary" numberOfLines={2} style={styles.hint}>
-          {hint}
-        </ThemedText>
-      ) : null}
-    </View>
+        ) : null
+      }
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: {
-    gap: spacing.sm,
-  },
-  field: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingLeft: spacing.lg,
-    paddingRight: spacing.xs,
-    minHeight: 48,
-    borderRadius: radii.pill,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    // No vertical padding: the field's own minHeight owns the height, and a
-    // TextInput with padding of its own drifts off-centre against the glyphs.
-    paddingVertical: 0,
-    minWidth: 0,
-  },
-  hint: {
-    paddingHorizontal: spacing.xs,
-  },
-});

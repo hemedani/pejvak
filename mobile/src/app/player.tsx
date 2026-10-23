@@ -1,20 +1,22 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
 
+import { AnnotationComposer } from "@/components/player/AnnotationComposer";
+import { JumpToTimeSheet } from "@/components/player/JumpToTimeSheet";
 import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
 import { PlayerContent } from "@/components/player/PlayerContent";
+import { SleepTimerSheet } from "@/components/player/SleepTimerSheet";
 import { ThemedText } from "@/components/themed-text";
 import { GlassSheet } from "@/components/ui/glass";
-import { PrimaryButton } from "@/components/ui/primary-button";
-import { TextField } from "@/components/ui/text-field";
 import { useTrackAnnotations } from "@/hooks/use-annotations";
 import { usePlaybackContext } from "@/hooks/use-playback-context";
 import { useSleepTimer } from "@/hooks/use-sleep-timer";
 import type { LocalAnnotation, LocalTrack } from "@/lib/db/types";
+import { pickAnnotationColor } from "@/lib/annotations";
 import { paletteFor } from "@/lib/palette";
 import { contextRouteTarget } from "@/lib/playbackContext";
-import { formatRemaining, SLEEP_TIMER_CHOICES } from "@/lib/sleepTimer";
+import { formatRemaining } from "@/lib/sleepTimer";
 import { formatClock } from "@/lib/time";
 import { LocalDBService } from "@/services/LocalDBService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
@@ -67,10 +69,10 @@ export default function PlayerScreen() {
   const [track, setTrack] = useState<LocalTrack | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [sleepSheetOpen, setSleepSheetOpen] = useState(false);
+  const [jumpSheetOpen, setJumpSheetOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
   const [draftPositionSec, setDraftPositionSec] = useState(0);
-  const composerGroupRef = useRef<View>(null);
 
   const sleep = useSleepTimer();
 
@@ -149,35 +151,31 @@ export default function PlayerScreen() {
   };
 
   const openSleepTimer = () => {
-    if (sleep.active) {
-      sleep.cancel();
-      return;
-    }
-    Alert.alert("Sleep timer", "Pause playback after…", [
-      ...SLEEP_TIMER_CHOICES.map((minutes) => ({
-        text: `${minutes} min`,
-        onPress: () => sleep.start(minutes),
-      })),
-      { text: "Cancel", style: "cancel" as const },
-    ]);
+    setSleepSheetOpen(true);
+  };
+
+  const openJumpToTime = () => {
+    setJumpSheetOpen(true);
   };
 
   const openComposer = () => {
     setEditingId(null);
     setDraftPositionSec(positionSec);
-    setDraft("");
     setComposerOpen(true);
   };
 
   const closeComposer = () => {
     setComposerOpen(false);
     setEditingId(null);
-    setDraft("");
   };
 
-  const saveNote = async () => {
+  const saveNote = async (input: {
+    text: string;
+    tags: string[];
+    color: string;
+  }): Promise<boolean> => {
     if (!track) {
-      return;
+      return false;
     }
     if (editingId) {
       const target = annotations.find(
@@ -185,16 +183,23 @@ export default function PlayerScreen() {
       );
       if (!target) {
         closeComposer();
-        return;
+        return false;
       }
-      if (await update({ annotation: target, text: draft })) {
+      const saved = await update({ annotation: target, ...input });
+      if (saved) {
         closeComposer();
       }
-      return;
+      return saved;
     }
-    if (await create({ track, positionSec: draftPositionSec, text: draft })) {
+    const saved = await create({
+      track,
+      positionSec: draftPositionSec,
+      ...input,
+    });
+    if (saved) {
       closeComposer();
     }
+    return saved;
   };
 
   const deleteNote = async (annotation: LocalAnnotation) => {
@@ -221,45 +226,48 @@ export default function PlayerScreen() {
     );
   };
 
+  const panels = (
+    <>
+      {sleepSheetOpen ? (
+        <SleepTimerSheet
+          active={sleep.active}
+          remainingMs={sleep.remainingMs}
+          onStart={sleep.start}
+          onCancel={sleep.cancel}
+          onClose={() => setSleepSheetOpen(false)}
+        />
+      ) : null}
+      {jumpSheetOpen ? (
+        <JumpToTimeSheet
+          positionSec={positionSec}
+          durationSec={durationSec}
+          onSeek={(seconds) => void TrackPlayerService.seekTo(seconds)}
+          onClose={() => setJumpSheetOpen(false)}
+        />
+      ) : null}
+    </>
+  );
+
   const selected = useMemo(
     () =>
       annotations.find((annotation) => annotation.id === selectedId) ?? null,
     [annotations, selectedId],
   );
 
+  const editingAnnotation = editingId
+    ? annotations.find((annotation) => annotation.id === editingId) ?? null
+    : null;
+
   const composer = composerOpen ? (
-    // Keyboard-aware: the composer sits below the transport controls, so the
-    // keyboard opens straight over it. Reveal the whole group — field and
-    // Cancel/Save — or the listener can type but not finish.
-    <GlassSheet open tone="surfaceStrong" style={styles.composer}>
-      <View
-        ref={composerGroupRef}
-        collapsable={false}
-        style={styles.composerGroup}>
-        <TextField
-          label={`${editingId ? "Edit" : "Note"} at ${formatClock(draftPositionSec)}`}
-          value={draft}
-          onChangeText={setDraft}
-          placeholder="What stood out here?"
-          multiline
-          autoFocus
-          revealTargetRef={composerGroupRef}
-          style={styles.composerInput}
-        />
-        <View style={styles.composerActions}>
-          <Pressable accessibilityRole="button" onPress={closeComposer}>
-            <ThemedText type="linkPrimary">Cancel</ThemedText>
-          </Pressable>
-          <PrimaryButton
-            label={editingId ? "Save changes" : "Save note"}
-            loading={creating}
-            disabled={draft.trim().length === 0}
-            onPress={() => void saveNote()}
-            style={styles.saveButton}
-          />
-        </View>
-      </View>
-    </GlassSheet>
+    <AnnotationComposer
+      key={editingId ?? `new-${draftPositionSec}`}
+      positionSec={draftPositionSec}
+      annotation={editingAnnotation}
+      creating={creating}
+      initialColor={pickAnnotationColor(annotations.length)}
+      onCancel={closeComposer}
+      onSave={saveNote}
+    />
   ) : selected ? (
     <GlassSheet open tone="surfaceStrong" style={styles.composer}>
       <View style={styles.selectedHeader}>
@@ -272,7 +280,6 @@ export default function PlayerScreen() {
             onPress={() => {
               setEditingId(selected.id);
               setDraftPositionSec(selected.positionSec);
-              setDraft(selected.text);
               setComposerOpen(true);
             }}
           >
@@ -331,6 +338,8 @@ export default function PlayerScreen() {
             // it morphs the frame back down to the mini-player and pops the
             // route once that finishes. Popping directly would skip the morph.
             setComposerOpen(false);
+            setSleepSheetOpen(false);
+            setJumpSheetOpen(false);
             setSelectedId(null);
             close();
           }}
@@ -344,8 +353,10 @@ export default function PlayerScreen() {
           onSeek={(target) => void TrackPlayerService.seekTo(target)}
           onCycleSpeed={cycleSpeed}
           onOpenSleepTimer={openSleepTimer}
+          onOpenJumpToTime={openJumpToTime}
           onAddNote={openComposer}
           composer={composer}
+          panels={panels}
         />
       )}
     </NowPlayingSheet>
@@ -355,23 +366,6 @@ export default function PlayerScreen() {
 const styles = StyleSheet.create({
   composer: {
     padding: spacing.lg,
-  },
-  composerGroup: {
-    gap: spacing.lg,
-  },
-  composerInput: {
-    // A long note scrolls inside the field instead of stretching the sheet down
-    // past the action row.
-    maxHeight: 220,
-  },
-  composerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.lg,
-  },
-  saveButton: {
-    flex: 1,
   },
   selectedHeader: {
     flexDirection: "row",

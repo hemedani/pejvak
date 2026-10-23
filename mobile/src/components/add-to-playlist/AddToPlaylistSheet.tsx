@@ -185,7 +185,7 @@ function AddToPlaylistSheetContent({
       } else {
         await PlaylistService.addTracks(playlist.id, trackIds);
       }
-      triggerHaptic(membership.state === "none" ? "success" : "light");
+      triggerHaptic(membership.state === "none" ? "success" : "tap");
       await refresh();
     },
     [refresh, trackIds],
@@ -344,8 +344,11 @@ function AddToPlaylistSheetContent({
                     onChangeText={setDraftTitle}
                     placeholder="Name"
                     autoFocus
+                    autoComplete="off"
+                    importantForAutofill="no"
                     revealTargetRef={composerRef}
                     returnKeyType="done"
+                    submitBehavior="blurAndSubmit"
                     onSubmitEditing={() => void submitNewPlaylist()}
                   />
                   <View style={styles.composerActions}>
@@ -372,7 +375,7 @@ function AddToPlaylistSheetContent({
                   <ElasticPressable
                     accessibilityRole="button"
                     accessibilityLabel="Create a new playlist"
-                    haptic="light"
+                    haptic="tap"
                     onPress={() => setComposing(true)}
                     style={styles.row}
                   >

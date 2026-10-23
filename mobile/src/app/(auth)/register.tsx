@@ -1,6 +1,6 @@
 import { Link } from "expo-router";
-import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useRef, useState } from "react";
+import { StyleSheet, View, type TextInput } from "react-native";
 
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen } from "@/components/motion/Screen";
@@ -10,6 +10,7 @@ import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
 
 import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { PasswordField } from "@/components/ui/field";
 import { TextField } from "@/components/ui/text-field";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuthStore } from "@/store/authStore";
@@ -25,6 +26,10 @@ export default function RegisterScreen() {
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const usernameRef = useRef<TextInput>(null);
+  const displayNameRef = useRef<TextInput>(null);
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
   const canSubmit =
     username.trim().length > 0 &&
@@ -69,41 +74,66 @@ export default function RegisterScreen() {
 
             <View style={styles.form}>
               <TextField
+                inputRef={usernameRef}
                 label="Username"
                 value={username}
                 onChangeText={setUsername}
+                editable={!isSubmitting}
                 autoCapitalize="none"
                 autoComplete="username"
+                autoCorrect={false}
+                spellCheck={false}
                 placeholder="listener"
                 returnKeyType="next"
+                submitBehavior="submit"
+                importantForAutofill="yes"
+                onSubmitEditing={() => displayNameRef.current?.focus()}
               />
               <TextField
-                label="Display name (optional)"
+                inputRef={displayNameRef}
+                label="Display name"
+                optional
                 value={displayName}
                 onChangeText={setDisplayName}
+                editable={!isSubmitting}
+                autoComplete="name"
+                autoCapitalize="words"
                 placeholder="Your name"
                 returnKeyType="next"
+                submitBehavior="submit"
+                textContentType="name"
+                importantForAutofill="yes"
+                onSubmitEditing={() => emailRef.current?.focus()}
               />
               <TextField
+                inputRef={emailRef}
                 label="Email"
                 value={email}
                 onChangeText={setEmail}
+                editable={!isSubmitting}
                 autoCapitalize="none"
                 autoComplete="email"
+                autoCorrect={false}
+                spellCheck={false}
+                inputMode="email"
                 keyboardType="email-address"
                 placeholder="you@example.com"
                 returnKeyType="next"
+                submitBehavior="submit"
                 textContentType="emailAddress"
+                importantForAutofill="yes"
+                onSubmitEditing={() => passwordRef.current?.focus()}
               />
-              <TextField
+              <PasswordField
+                inputRef={passwordRef}
                 label="Password"
                 value={password}
                 onChangeText={setPassword}
-                autoCapitalize="none"
+                editable={!isSubmitting}
                 autoComplete="new-password"
                 placeholder="••••••••"
-                secureTextEntry
                 returnKeyType="go"
+                submitBehavior="blurAndSubmit"
                 onSubmitEditing={onSubmit}
               />
 

@@ -1,6 +1,6 @@
 import { Link } from "expo-router";
-import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useRef, useState } from "react";
+import { StyleSheet, View, type TextInput } from "react-native";
 
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen } from "@/components/motion/Screen";
@@ -10,6 +10,7 @@ import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
 
 import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
+import { PasswordField } from "@/components/ui/field";
 import { TextField } from "@/components/ui/text-field";
 import { useTheme } from "@/hooks/use-theme";
 import { useAuthStore } from "@/store/authStore";
@@ -23,6 +24,8 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
 
   const canSubmit =
     email.trim().length > 0 && password.length > 0 && !isSubmitting;
@@ -59,25 +62,34 @@ export default function LoginScreen() {
 
             <View style={styles.form}>
               <TextField
+                inputRef={emailRef}
                 label="Email"
                 value={email}
                 onChangeText={setEmail}
+                editable={!isSubmitting}
                 autoCapitalize="none"
                 autoComplete="email"
+                autoCorrect={false}
+                spellCheck={false}
+                inputMode="email"
                 keyboardType="email-address"
                 placeholder="you@example.com"
                 returnKeyType="next"
+                submitBehavior="submit"
                 textContentType="emailAddress"
+                importantForAutofill="yes"
+                onSubmitEditing={() => passwordRef.current?.focus()}
               />
-              <TextField
+              <PasswordField
+                inputRef={passwordRef}
                 label="Password"
                 value={password}
                 onChangeText={setPassword}
-                autoCapitalize="none"
+                editable={!isSubmitting}
                 autoComplete="current-password"
                 placeholder="••••••••"
-                secureTextEntry
                 returnKeyType="go"
+                submitBehavior="blurAndSubmit"
                 onSubmitEditing={onSubmit}
               />
 

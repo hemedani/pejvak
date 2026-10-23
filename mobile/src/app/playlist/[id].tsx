@@ -1,5 +1,5 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 
 import { AddToPlaylistButton } from "@/components/add-to-playlist";
@@ -30,6 +30,7 @@ export default function PlaylistDetailScreen() {
   const { data, loading, refresh } = usePlaylistDetail(playlistId);
 
   const [renaming, setRenaming] = useState(false);
+  const renameGroupRef = useRef<View>(null);
   const [titleDraft, setTitleDraft] = useState("");
   const [adding, setAdding] = useState(false);
 
@@ -61,7 +62,7 @@ export default function PlaylistDetailScreen() {
   };
 
   const saveRename = async () => {
-    if (!playlistId) {
+    if (!playlistId || titleDraft.trim().length === 0) {
       return;
     }
     await run(() => PlaylistService.rename(playlistId, titleDraft));
@@ -95,27 +96,35 @@ export default function PlaylistDetailScreen() {
           <>
             {renaming ? (
               <Reveal index={0} style={styles.renameBlock}>
-                <TextField
-                  label="Playlist name"
-                  value={titleDraft}
-                  onChangeText={setTitleDraft}
-                  autoFocus
-                />
-                <View style={styles.renameActions}>
-                  <ElasticPressable
-                    accessibilityRole="button"
-                    onPress={() => setRenaming(false)}
-                    style={styles.textButton}>
-                    <ThemedText type="label" themeColor="textSecondary">
-                      Cancel
-                    </ThemedText>
-                  </ElasticPressable>
-                  <PrimaryButton
-                    label="Save"
-                    disabled={titleDraft.trim().length === 0}
-                    onPress={() => void saveRename()}
-                    style={styles.renameButton}
+                <View ref={renameGroupRef} collapsable={false} style={styles.renameGroup}>
+                  <TextField
+                    label="Playlist name"
+                    value={titleDraft}
+                    onChangeText={setTitleDraft}
+                    autoFocus
+                    autoComplete="off"
+                    importantForAutofill="no"
+                    revealTargetRef={renameGroupRef}
+                    returnKeyType="done"
+                    submitBehavior="blurAndSubmit"
+                    onSubmitEditing={() => void saveRename()}
                   />
+                  <View style={styles.renameActions}>
+                    <ElasticPressable
+                      accessibilityRole="button"
+                      onPress={() => setRenaming(false)}
+                      style={styles.textButton}>
+                      <ThemedText type="label" themeColor="textSecondary">
+                        Cancel
+                      </ThemedText>
+                    </ElasticPressable>
+                    <PrimaryButton
+                      label="Save"
+                      disabled={titleDraft.trim().length === 0}
+                      onPress={() => void saveRename()}
+                      style={styles.renameButton}
+                    />
+                  </View>
                 </View>
               </Reveal>
             ) : (
@@ -357,6 +366,9 @@ const styles = StyleSheet.create({
   renameBlock: {
     gap: spacing.lg,
     paddingTop: spacing.lg,
+  },
+  renameGroup: {
+    gap: spacing.lg,
   },
   renameActions: {
     flexDirection: "row",

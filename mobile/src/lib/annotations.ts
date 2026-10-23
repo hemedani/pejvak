@@ -12,6 +12,16 @@ export const ANNOTATION_COLORS = [
   "#12A594",
 ] as const;
 
+/** Human names for the annotation swatches, in the same order. */
+export const ANNOTATION_COLOR_NAMES: Record<string, string> = {
+  "#208AEF": "Blue",
+  "#E5484D": "Red",
+  "#30A46C": "Green",
+  "#F5A623": "Amber",
+  "#8E4EC6": "Purple",
+  "#12A594": "Teal",
+};
+
 /** Fraction (0–1) of the track at which an annotation marker sits. */
 export function markerOffsetRatio(positionSec: number, durationSec: number): number {
   if (!Number.isFinite(durationSec) || durationSec <= 0) {

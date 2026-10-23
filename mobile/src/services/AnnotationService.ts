@@ -7,11 +7,15 @@ export type CreateAnnotationArgs = {
   track: Pick<LocalTrack, "id" | "contentHash">;
   positionSec: number;
   text: string;
+  tags?: string[];
+  color?: string | null;
 };
 
 export type UpdateAnnotationArgs = {
   annotation: LocalAnnotation;
   text: string;
+  tags?: string[];
+  color?: string | null;
 };
 
 /**
@@ -28,6 +32,8 @@ export const AnnotationService = {
     track,
     positionSec,
     text,
+    tags,
+    color,
   }: CreateAnnotationArgs): Promise<LocalAnnotation> {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -44,7 +50,8 @@ export const AnnotationService = {
       contentHash: track.contentHash,
       positionSec: Math.round(positionSec),
       text: trimmed,
-      color: pickAnnotationColor(existing.length),
+      color: color ?? pickAnnotationColor(existing.length),
+      ...(tags !== undefined ? { tags } : {}),
       timesPlayedBefore: sessions.filter((session) => session.endedAt !== null).length,
     });
 
@@ -52,13 +59,22 @@ export const AnnotationService = {
     return annotation;
   },
 
-  async updateAnnotation({ annotation, text }: UpdateAnnotationArgs): Promise<void> {
+  async updateAnnotation({
+    annotation,
+    text,
+    tags,
+    color,
+  }: UpdateAnnotationArgs): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed) {
       throw new Error("Annotation text is required");
     }
 
-    await LocalDBService.updateAnnotation(annotation.id, { text: trimmed });
+    await LocalDBService.updateAnnotation(annotation.id, {
+      text: trimmed,
+      ...(tags !== undefined ? { tags } : {}),
+      ...(color !== undefined ? { color } : {}),
+    });
     void syncPending().catch(() => undefined);
   },
 
