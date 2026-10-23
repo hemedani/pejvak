@@ -73,8 +73,12 @@ export default function PlayerScreen() {
   const [jumpSheetOpen, setJumpSheetOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftPositionSec, setDraftPositionSec] = useState(0);
+  const [resume, setResume] = useState<{ trackId: string; sec: number } | null>(null);
 
   const sleep = useSleepTimer();
+  // Keyed by track: a resume pin belongs to the entry it came from, so moving to
+  // the next track drops it without a state-clearing effect.
+  const resumeFromSec = resume?.trackId === activeTrackId ? resume.sec : null;
 
   const {
     annotations,
@@ -96,6 +100,13 @@ export default function PlayerScreen() {
         return;
       }
       setTrack(loaded);
+
+      // The route names the track and the second the entry resumed from; both
+      // have to agree before the pin is drawn, or a stale param would appear on
+      // whatever track the player advanced to.
+      if (paramPositionSec !== undefined && paramTrackId === loaded.id) {
+        setResume({ trackId: loaded.id, sec: paramPositionSec });
+      }
 
       // Only take over playback when this is a different track from the one
       // already loaded — opening the sheet from the mini-player must not restart.
@@ -127,7 +138,7 @@ export default function PlayerScreen() {
     return () => {
       mounted = false;
     };
-  }, [activeTrackId, paramPositionSec]);
+  }, [activeTrackId, paramPositionSec, paramTrackId]);
 
   const ramp = useMemo(
     () =>
@@ -332,6 +343,7 @@ export default function PlayerScreen() {
           selectedId={selectedId}
           skipNonce={skip?.nonce}
           skipDirection={skip?.direction}
+          resumeFromSec={resumeFromSec}
           onSelectAnnotation={onSelect}
           onClose={() => {
             // Clear the transient panels first, then run the sheet's own exit:

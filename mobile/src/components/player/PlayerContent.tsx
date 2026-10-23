@@ -81,6 +81,8 @@ export type PlayerContentProps = {
   onPrevious: () => void;
   onRewind: () => void;
   onForward: () => void;
+  /** Where a history entry dropped the playhead, if this playback resumed one. */
+  resumeFromSec?: number | null;
   /** Commit a scrub or a tap on the timeline, in seconds. */
   onSeek: (positionSec: number) => void;
   onCycleSpeed: () => void;
@@ -117,6 +119,7 @@ export function PlayerContent({
   selectedId,
   skipNonce,
   skipDirection,
+  resumeFromSec,
   onSelectAnnotation,
   onClose,
   onToggle,
@@ -227,29 +230,28 @@ export function PlayerContent({
           </View>
 
           <View style={styles.timeline}>
-            {/* The timeline runs edge to edge. It sits inside the content's
-                horizontal padding like every other block, so it cancels that
-                padding back out rather than the content losing its gutter. */}
-            <View style={styles.timelineBleed}>
-              <Scrubber
-                progress={progress}
-                durationSec={durationSec}
-                isPlaying={isPlaying}
-                playbackSpeed={playbackSpeed}
-                tint={ramp[1]}
-                thickness={6}
-                onSeek={onSeek}>
-                {annotations.map((annotation) => (
-                  <AnnotationMarker
-                    key={annotation.id}
-                    annotation={annotation}
-                    durationSec={durationSec}
-                    selected={annotation.id === selectedId}
-                    onPress={onSelectAnnotation}
-                  />
-                ))}
-              </Scrubber>
-            </View>
+            {/* The timeline sits inside the content's gutter like every other
+                block. It used to cancel that padding out and run edge to edge,
+                which left the thumb and the end caps with no room to breathe. */}
+            <Scrubber
+              progress={progress}
+              durationSec={durationSec}
+              isPlaying={isPlaying}
+              playbackSpeed={playbackSpeed}
+              tint={ramp[1]}
+              thickness={6}
+              resumeFromSec={resumeFromSec}
+              onSeek={onSeek}>
+              {annotations.map((annotation) => (
+                <AnnotationMarker
+                  key={annotation.id}
+                  annotation={annotation}
+                  durationSec={durationSec}
+                  selected={annotation.id === selectedId}
+                  onPress={onSelectAnnotation}
+                />
+              ))}
+            </Scrubber>
             <View style={styles.times}>
               <ThemedText type="numeric" themeColor="textSecondary">
                 {formatClock(positionSec)}
@@ -387,9 +389,6 @@ const styles = StyleSheet.create({
   },
   timeline: {
     gap: spacing.sm,
-  },
-  timelineBleed: {
-    marginHorizontal: -spacing.xxl,
   },
   times: {
     flexDirection: "row",

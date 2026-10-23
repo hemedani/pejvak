@@ -31,6 +31,7 @@ import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   StyleSheet,
   View,
+  type DimensionValue,
   type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
@@ -46,6 +47,7 @@ import { scheduleOnRN } from "react-native-worklets";
 
 import { ThemedText } from "@/components/themed-text";
 import { WavyProgress } from "@/components/player/WavyProgress";
+import { markerOffsetRatio } from "@/lib/annotations";
 import { triggerHaptic } from "@/components/ui/haptics";
 import { useSmoothProgress } from "@/hooks/use-smooth-progress";
 import { useTheme } from "@/hooks/use-theme";
@@ -66,6 +68,9 @@ const WAVE_AMPLITUDE = 3;
 const WAVE_WAVELENGTH = 36;
 /** Visible space between the thumb's edge and either segment. */
 const THUMB_GAP = 4;
+/** Diameter of the start/finish anchors, and how far they sit from the ends. */
+const END_CAP_SIZE = 7;
+const END_CAP_INSET = 4;
 /** Bubble box, sized for a three-part time code. */
 const BUBBLE_WIDTH = 74;
 const BUBBLE_HEIGHT = 26;
@@ -92,6 +97,12 @@ export type ScrubberProps = {
   thickness?: number;
   /** Called once per gesture, with the position the user landed on. */
   onSeek: (positionSec: number) => void;
+  /**
+   * Where a history entry dropped the playhead, if this playback was resumed
+   * from one. Drawn as a neutral pin so it cannot be mistaken for an annotation
+   * tick, which carries the note's own colour.
+   */
+  resumeFromSec?: number | null;
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
 };
@@ -109,6 +120,7 @@ export function Scrubber({
   tint,
   thickness = 6,
   onSeek,
+  resumeFromSec,
   children,
   style,
 }: ScrubberProps) {
@@ -270,6 +282,16 @@ export function Scrubber({
   const thumbRadius = thumbDiameter / 2;
   const thumbTop = (TOUCH_HEIGHT - thumbDiameter) / 2;
 
+  const resumeVisible =
+    resumeFromSec !== null &&
+    resumeFromSec !== undefined &&
+    Number.isFinite(resumeFromSec) &&
+    resumeFromSec > 0 &&
+    durationSec > 0;
+  const resumeLeft = (resumeVisible
+    ? `${markerOffsetRatio(resumeFromSec, durationSec) * 100}%`
+    : "0%") as DimensionValue;
+
   /**
    * The bubble lives in the headroom above the band, and is positioned against
    * `root` rather than `hitArea` so it never renders outside its parent. The
@@ -322,6 +344,9 @@ export function Scrubber({
       accessibilityRole="adjustable"
       accessibilityLabel="Playback position"
       accessibilityValue={{ min: 0, max: Math.round(durationSec), now: currentSec }}
+      accessibilityHint={
+        resumeVisible ? `Resumed from ${formatClock(resumeFromSec)}` : undefined
+      }
       accessibilityActions={[
         { name: "increment", label: "Forward 15 seconds" },
         { name: "decrement", label: "Back 15 seconds" },
@@ -349,6 +374,32 @@ export function Scrubber({
             inset={thumbRadius}
             gap={thumbRadius + THUMB_GAP}
             style={styles.wave}
+          />
+
+          {/* Start and finish anchors. They sit above the wave so the played
+              segment cannot swallow them, and stay neutral so the accent keeps
+              meaning "heard". */}
+          <View
+            pointerEvents="none"
+            style={[
+              styles.endCap,
+              {
+                left: END_CAP_INSET - END_CAP_SIZE / 2,
+                borderColor: theme.track,
+                backgroundColor: "transparent",
+              },
+            ]}
+          />
+          <View
+            pointerEvents="none"
+            style={[
+              styles.endCap,
+              {
+                right: END_CAP_INSET - END_CAP_SIZE / 2,
+                borderColor: theme.track,
+                backgroundColor: theme.track,
+              },
+            ]}
           />
 
           <Animated.View
@@ -383,6 +434,14 @@ export function Scrubber({
       <View
         pointerEvents="box-none"
         style={[styles.markerLayer, { top: markerLayerTop, height: thickness }]}>
+        {resumeVisible ? (
+          <View
+            testID="resume-marker"
+            pointerEvents="none"
+            style={[styles.resumeMarker, { left: resumeLeft, backgroundColor: theme.textSecondary }]}>
+            <View style={[styles.resumeCap, { backgroundColor: theme.textSecondary }]} />
+          </View>
+        ) : null}
         {children}
       </View>
     </View>
@@ -436,5 +495,30 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 0,
     right: 0,
+  },
+  endCap: {
+    position: "absolute",
+    top: (TOUCH_HEIGHT - END_CAP_SIZE) / 2,
+    width: END_CAP_SIZE,
+    height: END_CAP_SIZE,
+    borderRadius: END_CAP_SIZE / 2,
+    borderWidth: 1.5,
+  },
+  resumeMarker: {
+    position: "absolute",
+    top: -5,
+    width: 2,
+    height: 16,
+    marginLeft: -1,
+    borderRadius: 1,
+    alignItems: "center",
+  },
+  resumeCap: {
+    position: "absolute",
+    top: -2,
+    left: -2,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 });
