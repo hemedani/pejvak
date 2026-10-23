@@ -1,5 +1,5 @@
 /**
- * A `ScrollView` that gets a focused field out from under the keyboard.
+ * Keyboard avoidance for scrollable screens.
  *
  * ## Why this exists at all
  *
@@ -11,25 +11,30 @@
  *
  * `KeyboardAvoidingView` does not cover for it either: the auth screens passed
  * `behavior={undefined}` on Android, which reduces the component to a plain
- * `View`. And it is not the right tool anyway — this component *is* the
+ * `View`. And it is not the right tool anyway — these components *are* the
  * avoidance, so the two must not both be in the tree or the keyboard gets
  * counted twice.
  *
  * ## How the overlap is found
  *
- * Two candidate numbers, and the answer depends on which one the platform
- * actually gave us:
+ * The keyboard covers the bottom of the window. The viewport may already have
+ * lost some of that height when the window resized (`adjustResize` on Android),
+ * so the overlap is whatever the keyboard takes *beyond* the shrink:
  *
- *   · `restingHeight − viewportHeight` — how much the viewport itself shrank.
- *     This is Android, where the window resizes (`adjustResize`), so the scroll
- *     view is *already* shorter and adding the keyboard height again would leave
- *     a keyboard-tall gap under the form.
- *   · `keyboardHeight` — what the keyboard reports. This is iOS, where nothing
- *     resizes and the space has to be supplied.
+ *   `overlap = max(0, keyboardHeight − (restingHeight − viewportHeight))`
  *
- * `keyboardOverlap` picks between them by asking which one the viewport
- * actually lost, so the result is right on either platform's soft-input mode
- * without a branch on `Platform.OS` deciding the answer.
+ * On Android the viewport shrinks by the keyboard's full height and the overlap
+ * is zero — adding the keyboard height again would leave a keyboard-tall gap
+ * under the form. Without a resize (`adjustResize` off, or iOS) the overlap is
+ * the keyboard's own height and the space has to be supplied by us.
+ *
+ * `revealTargetY` then scrolls inside `viewportHeight − overlap`, the band the
+ * user can actually see.
+ *
+ * The focused field is remembered and re-revealed when the keyboard finishes
+ * appearing and when the viewport finishes shrinking. Focus fires *before* the
+ * keyboard reports its height, so measuring only once would use a band that is
+ * still the full viewport and leave the field behind the keyboard.
  *
  * ## No native dependency, deliberately
  *
@@ -52,11 +57,14 @@ import {
   type ReactNode,
 } from "react";
 import {
+  FlatList,
   Keyboard,
   Platform,
   ScrollView,
   StyleSheet,
   View,
+  type FlatListProps,
+  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   type StyleProp,
@@ -70,13 +78,9 @@ const KEYBOARD_GAP = 24;
  * How much of the viewport the keyboard is covering.
  *
  * `restingHeight` is the viewport before the keyboard appeared; `viewportHeight`
- * is it now. When the window resized, the difference *is* the overlap. When it
- * did not, nothing has been taken from us and the keyboard's own reported height
- * is what still needs reserving.
- *
- * Clamped to `keyboardHeight` in the resized case as a guard: a rotation or a
- * font-scale change between the two measurements would otherwise be mistaken for
- * a giant keyboard and open a gap under the form.
+ * is it now. The window shrinking and the keyboard rising can describe the same
+ * pixels, so only the part the keyboard takes beyond the shrink still needs
+ * reserving.
  */
 export function keyboardOverlapFor(input: {
   restingHeight: number;
@@ -91,12 +95,8 @@ export function keyboardOverlapFor(input: {
     // Never measured — the keyboard is the only number we have.
     return keyboard;
   }
-  const shrunk = resting - viewport;
-  if (shrunk <= 0) {
-    // The viewport kept its height, so the space has to be supplied by us.
-    return keyboard;
-  }
-  return Math.min(shrunk, keyboard);
+  const shrunk = Math.max(0, resting - viewport);
+  return Math.max(0, Math.min(viewport, keyboard - shrunk));
 }
 
 /**
@@ -132,9 +132,116 @@ type FieldRegistrar = {
 
 const FieldContext = createContext<FieldRegistrar | null>(null);
 
-/** What a `TextField` needs from the scroll view above it. Null when standalone. */
+/** What a `TextField` needs from the scrollable above it. Null when standalone. */
 export function useFieldRegistrar(): FieldRegistrar | null {
   return useContext(FieldContext);
+}
+
+type RevealBand = { viewportHeight: number; overlap: number };
+
+type RevealHandler = (node: View, band: RevealBand) => void;
+
+function useKeyboardReveal(onReveal: RevealHandler) {
+  const restingHeight = useRef(0);
+  const viewportHeight = useRef(0);
+  const keyboardHeight = useRef(0);
+  const keyboardUp = useRef(false);
+  const focused = useRef<View | null>(null);
+  const [overlap, setOverlap] = useState(0);
+
+  const onRevealRef = useRef(onReveal);
+  useEffect(() => {
+    onRevealRef.current = onReveal;
+  }, [onReveal]);
+
+  const revealFocused = useCallback(() => {
+    const node = focused.current;
+    if (!node) {
+      return;
+    }
+    onRevealRef.current(node, {
+      viewportHeight: viewportHeight.current,
+      overlap: keyboardOverlapFor({
+        restingHeight: restingHeight.current,
+        viewportHeight: viewportHeight.current,
+        keyboardHeight: keyboardHeight.current,
+      }),
+    });
+  }, []);
+
+  const registrar = useMemo<FieldRegistrar>(
+    () => ({
+      reveal: (node) => {
+        focused.current = node;
+        if (node) {
+          revealFocused();
+        }
+      },
+    }),
+    [revealFocused],
+  );
+
+  useEffect(() => {
+    // `did*` on Android, `will*` on iOS: on Android the resize and the event are
+    // the same frame, so a `will` handler would read a viewport that has not
+    // changed yet. On iOS the resize never happens, so the event is all there is.
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const show = Keyboard.addListener(showEvent, (event) => {
+      keyboardHeight.current = event.endCoordinates.height;
+      keyboardUp.current = true;
+      // Let the layout that shrinks the viewport land before measuring again.
+      requestAnimationFrame(() => {
+        setOverlap(
+          keyboardOverlapFor({
+            restingHeight: restingHeight.current,
+            viewportHeight: viewportHeight.current,
+            keyboardHeight: keyboardHeight.current,
+          }),
+        );
+        revealFocused();
+      });
+    });
+
+    const hide = Keyboard.addListener(hideEvent, () => {
+      keyboardHeight.current = 0;
+      keyboardUp.current = false;
+      focused.current = null;
+      setOverlap(0);
+    });
+
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [revealFocused]);
+
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const height = event.nativeEvent.layout.height;
+      viewportHeight.current = height;
+      // The keyboard only ever takes height away, so the tallest layout seen is
+      // the resting viewport. Keeping a maximum also survives the Android race
+      // where the resize can land before `keyboardDidShow`.
+      restingHeight.current = Math.max(restingHeight.current, height);
+      setOverlap(
+        keyboardOverlapFor({
+          restingHeight: restingHeight.current,
+          viewportHeight: viewportHeight.current,
+          keyboardHeight: keyboardHeight.current,
+        }),
+      );
+      if (keyboardUp.current) {
+        requestAnimationFrame(revealFocused);
+      }
+    },
+    [revealFocused],
+  );
+
+  return { registrar, overlap, handleLayout };
 }
 
 export type KeyboardScrollViewProps = {
@@ -162,82 +269,36 @@ export function KeyboardScrollView({
   testID,
 }: KeyboardScrollViewProps) {
   const scrollRef = useRef<ScrollView>(null);
-  const contentRef = useRef<View>(null);
 
-  const restingHeight = useRef(0);
-  const viewportHeight = useRef(0);
-  const keyboardHeight = useRef(0);
-  const [keyboardUp, setKeyboardUp] = useState(false);
-  const [overlap, setOverlap] = useState(0);
-
-  /** Recompute from whatever the three measurements currently say. */
-  const recompute = useCallback(() => {
-    setOverlap(
-      keyboardOverlapFor({
-        restingHeight: restingHeight.current,
-        viewportHeight: viewportHeight.current,
-        keyboardHeight: keyboardHeight.current,
-      }),
-    );
+  const reveal = useCallback<RevealHandler>((node, band) => {
+    const scroller = scrollRef.current;
+    const viewport = scroller?.getNativeScrollRef();
+    if (!scroller || !viewport) {
+      return;
+    }
+    // Measured, never assumed: where the field sits inside the scroll content
+    // is the only thing that survives a long form, a wrapped label, or a
+    // keyboard of an unexpected height. `measureLayout` reports content
+    // coordinates, so the current scroll offset does not move the answer.
+    node.measureLayout(viewport, (_x, y, _width, height) => {
+      const target = revealTargetY({
+        fieldY: y,
+        fieldHeight: height,
+        viewportHeight: band.viewportHeight,
+        overlap: band.overlap,
+      });
+      // A field already in view yields a target of zero; scrolling anyway
+      // would yank the form out from under a thumb that is still on it.
+      if (target > 0) {
+        scroller.scrollTo({ y: target, animated: true });
+      }
+    });
   }, []);
 
-  useEffect(() => {
-    // `did*` on Android, `will*` on iOS: on Android the resize and the event are
-    // the same frame, so a `will` handler would read a viewport that has not
-    // changed yet. On iOS the resize never happens, so the event is all there is.
-    const showEvent =
-      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent =
-      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+  const { registrar, overlap, handleLayout } =
+    useKeyboardReveal(reveal);
 
-    const show = Keyboard.addListener(showEvent, (event) => {
-      keyboardHeight.current = event.endCoordinates.height;
-      setKeyboardUp(true);
-      // On Android the layout pass that shrinks the view lands in this same
-      // frame, so re-read the viewport after it rather than during the event.
-      requestAnimationFrame(recompute);
-    });
-
-    const hide = Keyboard.addListener(hideEvent, () => {
-      keyboardHeight.current = 0;
-      setKeyboardUp(false);
-      setOverlap(0);
-    });
-
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, [recompute]);
-
-  const registrar = useMemo<FieldRegistrar>(
-    () => ({
-      reveal: (node) => {
-        const scroller = scrollRef.current;
-        const content = contentRef.current;
-        if (!node || !scroller || !content) {
-          return;
-        }
-        // Measured, never assumed: where the field sits inside the scroll content
-        // is the only thing that survives a long form, a wrapped label, or a
-        // keyboard of an unexpected height.
-        node.measureLayout(content, (_x, y, _width, height) => {
-          const target = revealTargetY({
-            fieldY: y,
-            fieldHeight: height,
-            viewportHeight: viewportHeight.current,
-            overlap,
-          });
-          // A field already in view yields a target of zero; scrolling anyway
-          // would yank the form out from under a thumb that is still on it.
-          if (target > 0) {
-            scroller.scrollTo({ y: target, animated: true });
-          }
-        });
-      },
-    }),
-    [overlap],
-  );
+  const contentStyle = withKeyboardPadding(contentContainerStyle, overlap);
 
   return (
     <FieldContext.Provider value={registrar}>
@@ -245,33 +306,101 @@ export function KeyboardScrollView({
         ref={scrollRef}
         testID={testID}
         style={[styles.root, style]}
-        contentContainerStyle={contentContainerStyle}
+        contentContainerStyle={contentStyle}
         keyboardDismissMode={keyboardDismissMode}
         keyboardShouldPersistTaps={keyboardShouldPersistTaps}
         showsVerticalScrollIndicator={showsVerticalScrollIndicator}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
-        onLayout={(event) => {
-          const height = event.nativeEvent.layout.height;
-          viewportHeight.current = height;
-          if (!keyboardUp) {
-            // Only a keyboard-free layout is the baseline; measuring the resting
-            // height while the keyboard is up would make the delta meaningless.
-            restingHeight.current = height;
-          }
-          recompute();
-        }}
+        onLayout={handleLayout}
       >
-        <View
-          ref={contentRef}
-          // Reserves whatever is still covered, so the last field in a form can
-          // always be scrolled clear of the keyboard.
-          style={overlap > 0 ? { paddingBottom: overlap } : undefined}
-        >
-          {children}
-        </View>
+        {children}
       </ScrollView>
     </FieldContext.Provider>
+  );
+}
+
+/**
+ * Reserves whatever the keyboard still covers, so the last field (and the
+ * controls under it) can always be scrolled clear.
+ *
+ * Merged into the caller's own content style rather than wrapped in a child
+ * `View`: a wrapper would swallow `gap` and `justifyContent`, which is what the
+ * auth screens and the player rely on.
+ */
+function withKeyboardPadding(
+  style: StyleProp<ViewStyle>,
+  overlap: number,
+): StyleProp<ViewStyle> {
+  if (overlap <= 0) {
+    return style;
+  }
+  const padding = StyleSheet.flatten(style)?.paddingBottom;
+  return [
+    style,
+    {
+      paddingBottom:
+        (typeof padding === "number" ? padding : 0) + overlap,
+    },
+  ];
+}
+
+export type KeyboardAwareFlatListProps<ItemT> = FlatListProps<ItemT>;
+
+/**
+ * A `FlatList` that gets a focused field out from under the keyboard.
+ *
+ * `KeyboardScrollView` cannot wrap a `FlatList` without nesting two scrollables,
+ * so this carries the same registrar and measures the field against the list's
+ * own viewport. `measureLayout` reports content coordinates, which is also what
+ * `scrollToOffset` expects.
+ */
+export function KeyboardAwareFlatList<ItemT>({
+  contentContainerStyle,
+  ...rest
+}: KeyboardAwareFlatListProps<ItemT>) {
+  const listRef = useRef<FlatList<ItemT>>(null);
+  const containerRef = useRef<View>(null);
+
+  const reveal = useCallback<RevealHandler>((node, band) => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    node.measureLayout(container, (_x, y, _width, height) => {
+      const target = revealTargetY({
+        fieldY: y,
+        fieldHeight: height,
+        viewportHeight: band.viewportHeight,
+        overlap: band.overlap,
+      });
+      if (target > 0) {
+        listRef.current?.scrollToOffset({ offset: target, animated: true });
+      }
+    });
+  }, []);
+
+  const { registrar, overlap, handleLayout } =
+    useKeyboardReveal(reveal);
+
+  const contentStyle = withKeyboardPadding(contentContainerStyle, overlap);
+
+  return (
+    <View
+      ref={containerRef}
+      collapsable={false}
+      style={styles.fill}
+      onLayout={handleLayout}
+    >
+      <FieldContext.Provider value={registrar}>
+        <FlatList
+          ref={listRef}
+          style={styles.fill}
+          contentContainerStyle={contentStyle}
+          {...rest}
+        />
+      </FieldContext.Provider>
+    </View>
   );
 }
 
@@ -280,6 +409,9 @@ const styles = StyleSheet.create({
     // The scroll view is a direct child of `Screen`'s content view, which is
     // `flex: 1`. Without this it would size to its content and push the form past
     // the bottom of the window — the very thing it exists to prevent.
+    flex: 1,
+  },
+  fill: {
     flex: 1,
   },
 });

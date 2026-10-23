@@ -4,16 +4,27 @@ import {
 } from "@/components/ui/keyboard-scroll-view";
 
 describe("keyboardOverlapFor", () => {
-  it("uses the viewport's own loss when the window resized", () => {
-    // Android with `adjustResize`: the scroll view is already 300 shorter, so
-    // adding the keyboard height again would open a 300pt gap under the form.
+  it("does not reserve space the window resize already took", () => {
+    // Android with `adjustResize`: the viewport is already 300 shorter, so the
+    // keyboard is fully accounted for and reserving it again would open a gap.
     expect(
       keyboardOverlapFor({
         restingHeight: 800,
         viewportHeight: 500,
         keyboardHeight: 300,
       }),
-    ).toBe(300);
+    ).toBe(0);
+  });
+
+  it("reserves only the part the resize did not cover", () => {
+    // The viewport lost 200 of the keyboard's 300, so 100 is still covered.
+    expect(
+      keyboardOverlapFor({
+        restingHeight: 800,
+        viewportHeight: 600,
+        keyboardHeight: 300,
+      }),
+    ).toBe(100);
   });
 
   it("uses the keyboard's own height when nothing resized", () => {
@@ -27,16 +38,16 @@ describe("keyboardOverlapFor", () => {
     ).toBe(300);
   });
 
-  it("never claims more than the keyboard is actually taking", () => {
-    // A rotation or a font-scale change between the two measurements would
-    // otherwise read as an enormous keyboard and leave a hole in the page.
+  it("does not double-count a shrink larger than the keyboard", () => {
+    // A rotation or a font-scale change between the two measurements must not
+    // be read as an enormous keyboard.
     expect(
       keyboardOverlapFor({
         restingHeight: 900,
         viewportHeight: 200,
         keyboardHeight: 300,
       }),
-    ).toBe(300);
+    ).toBe(0);
   });
 
   it("falls back to the keyboard height before anything has been measured", () => {
