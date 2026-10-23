@@ -11,13 +11,11 @@ export const setUser = async () => {
     throwError("Invalid or missing token data");
   }
 
-  const userPureProjection = coreApp.schemas.createProjection("user", "Pure");
-
+  // Every act only needs the authenticated id. Projecting the whole user would
+  // also pull the password hash into the request context for no reason.
   const foundedUser = await user.findOne({
     filters: { _id: new ObjectId(tokenUser._id) },
-    projection: {
-      ...userPureProjection,
-    },
+    projection: { _id: 1 },
   });
 
   !foundedUser && throwError("user not exist");

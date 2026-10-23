@@ -9,13 +9,23 @@ export const loginFn: ActFn = async (body) => {
     get,
   } = body.details;
 
-  get.user.email = 1;
-  get.user.password = 1;
-  get.user.username = 1;
+  // Authentication needs its own projection. Reusing the client's `get` here
+  // lets an exclusion projection (`{ _id: 0 }`) drop the `_id` the token needs,
+  // and an empty projection would return the password hash.
+  const requested = (get?.user ?? {}) as Record<string, unknown>;
+  const authProjection: Record<string, 0 | 1> = {
+    _id: 1,
+    username: 1,
+    email: 1,
+    password: 1,
+  };
+  for (const key in requested) {
+    if (requested[key] === 1) authProjection[key] = 1;
+  }
 
   const foundedUser = await user.findOne({
     filters: { email },
-    projection: get.user,
+    projection: authProjection,
   });
 
   if (!foundedUser) {

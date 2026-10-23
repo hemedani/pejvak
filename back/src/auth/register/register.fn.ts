@@ -1,6 +1,6 @@
 import type { ActFn } from "lesan";
 import { hash } from "@da/bcrypt";
-import { user } from "../../../mod.ts";
+import { coreApp, user } from "../../../mod.ts";
 import { createToken, throwError } from "@lib";
 
 export const registerFn: ActFn = async (body) => {
@@ -15,12 +15,15 @@ export const registerFn: ActFn = async (body) => {
     throwError("A user with this email already exists");
   }
 
+  const now = new Date();
   const createdUser = await user.insertOne({
     doc: {
       username,
       email,
       password: await hash(password),
-      displayName,
+      ...(displayName !== undefined ? { displayName } : {}),
+      createdAt: now,
+      updatedAt: now,
     },
     projection: { _id: 1, username: 1, email: 1 },
   });
@@ -35,10 +38,23 @@ export const registerFn: ActFn = async (body) => {
     email,
   });
 
+  // An empty projection would make Mongo return the whole document, which
+  // includes the password hash. Fall back to every safe pure field instead.
+  const requestedUser = get?.user ?? {};
+  const userProjection = Object.keys(requestedUser).length > 0
+    ? requestedUser
+    : coreApp.schemas.createProjection("user", "Pure");
+
   const registeredUser = await user.findOne({
     filters: { _id: createdUser!._id },
-    projection: get.user,
+    projection: userProjection,
   });
+
+  // Defence in depth: even an exclusion projection (`{ _id: 0 }`) makes Mongo
+  // return every other field, so never hand a user document back with the hash.
+  if (registeredUser) {
+    delete registeredUser.password;
+  }
 
   return { token, user: registeredUser };
 };

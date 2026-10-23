@@ -1,4 +1,4 @@
-import { enums, object, optional, string } from "lesan";
+import { enums, object, optional, size, string } from "lesan";
 import { selectStruct } from "../../../mod.ts";
 import { emailPattern } from "@model";
 
@@ -7,11 +7,13 @@ export const registerValidator = () =>
     set: object({
       username: string(),
       email: emailPattern,
-      password: string(),
+      password: size(string(), 8, 100),
       displayName: optional(string()),
     }),
-    get: object({
-      token: enums([0, 1]),
-      user: selectStruct("user", 1),
-    }),
+    get: optional(
+      object({
+        token: optional(enums([0, 1])),
+        user: optional(selectStruct("user", 1)),
+      }),
+    ),
   });
