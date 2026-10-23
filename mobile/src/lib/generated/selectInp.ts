@@ -445,9 +445,9 @@ email: string;
 password: string;
 displayName?: string;
 };
-get: {
-token: (0 | 1 );
-user: {
+get?: {
+token?: (0 | 1 );
+user?: {
 _id?: (0 | 1 );
 username?: (0 | 1 );
 email?: (0 | 1 );
@@ -955,7 +955,7 @@ isAudiobook: boolean;
 author?: string;
 narrator?: string;
 artworkUrl?: string;
-origin?: ("local" | "online" );
+origin: ("local" | "online" );
 sourceId?: string;
 externalId?: string;
 collectionKey?: string;
@@ -1605,27 +1605,27 @@ updatedAt?: number;
 deleted: boolean;
 }[];
 };
-get: {
-syncedSessions?: number;
-syncedAnnotations?: number;
-syncedPlaylists?: number;
-syncedContextPlays?: number;
-syncedOnlineCollections?: number;
+get?: {
+syncedSessions?: (0 | 1 );
+syncedAnnotations?: (0 | 1 );
+syncedPlaylists?: (0 | 1 );
+syncedContextPlays?: (0 | 1 );
+syncedOnlineCollections?: (0 | 1 );
 annotations?: {
-clientId: string;
-serverId?: string;
+clientId?: (0 | 1 );
+serverId?: (0 | 1 );
 }[];
 playlists?: {
-clientId: string;
-serverId?: string;
+clientId?: (0 | 1 );
+serverId?: (0 | 1 );
 }[];
 contextPlays?: {
-clientId: string;
-serverId?: string;
+clientId?: (0 | 1 );
+serverId?: (0 | 1 );
 }[];
 onlineCollections?: {
-clientId: string;
-serverId?: string;
+clientId?: (0 | 1 );
+serverId?: (0 | 1 );
 }[];
 };
 };
@@ -1710,8 +1710,8 @@ seeked?: (0 | 1 );
 set: {
 annotationId: string;
 };
-get: {
-success: boolean;
+get?: {
+success?: (0 | 1 );
 };
 };
 
@@ -2365,18 +2365,18 @@ updatedAt?: (0 | 1 );
             getMyStats: {
 set: {
 };
-get: {
-totalListenTimeSec: number;
-sessionCount: number;
-trackCount: number;
-firstListenedAt?: number;
-lastListenedAt?: number;
-tracks: {
-contentHash: string;
-listenTimeSec: number;
-playCount: number;
-lastPlayedAt?: number;
-}[];
+get?: {
+totalListenTimeSec?: (0 | 1 );
+sessionCount?: (0 | 1 );
+trackCount?: (0 | 1 );
+firstListenedAt?: (0 | 1 );
+lastListenedAt?: (0 | 1 );
+tracks?: {
+contentHash?: (0 | 1 );
+listenTimeSec?: (0 | 1 );
+playCount?: (0 | 1 );
+lastPlayedAt?: (0 | 1 );
+};
 };
 };
 
@@ -2448,8 +2448,8 @@ avatarUrl?: (0 | 1 );
 set: {
 playlistId: string;
 };
-get: {
-success: boolean;
+get?: {
+success?: (0 | 1 );
 };
 };
 
@@ -2818,29 +2818,8 @@ set: {
 sourceId: string;
 externalId: string;
 };
-get: {
-_id?: (0 | 1 );
-clientId?: (0 | 1 );
-sourceId?: (0 | 1 );
-externalId?: (0 | 1 );
-title?: (0 | 1 );
-subtitle?: (0 | 1 );
-artworkUrl?: (0 | 1 );
-languageCode?: (0 | 1 );
-trackCount?: (0 | 1 );
-pageUrl?: (0 | 1 );
-isFavorite?: (0 | 1 );
-lastOpenedAt?: (0 | 1 );
-deletedAt?: (0 | 1 );
-createdAt?: (0 | 1 );
-updatedAt?: (0 | 1 );
-user?: {
-_id?: (0 | 1 );
-username?: (0 | 1 );
-email?: (0 | 1 );
-displayName?: (0 | 1 );
-avatarUrl?: (0 | 1 );
-};
+get?: {
+success?: (0 | 1 );
 };
 };
 

@@ -20,7 +20,7 @@ type LoginDetails = BackendActRequest<"main", "user", "login">["details"];
 type RegisterDetails = BackendActRequest<"main", "user", "register">["details"];
 type GetMeDetails = BackendActRequest<"main", "user", "getMe">["details"];
 
-const userProjection: NonNullable<RegisterDetails["get"]>["user"] = {
+const userProjection: NonNullable<NonNullable<RegisterDetails["get"]>["user"]> = {
   _id: 1,
   username: 1,
   email: 1,
