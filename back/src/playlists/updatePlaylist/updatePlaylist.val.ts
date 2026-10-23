@@ -12,7 +12,7 @@ import { selectStruct } from "../../../mod.ts";
 export const updatePlaylistValidator = () =>
   object({
     set: object({
-      playlistId: string(),
+      playlistId: objectIdValidation,
       title: optional(string()),
       description: optional(string()),
       isPublic: optional(boolean()),

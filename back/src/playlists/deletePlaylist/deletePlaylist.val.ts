@@ -1,11 +1,13 @@
-import { boolean, object, string } from "lesan";
+import { enums, object, objectIdValidation, optional } from "lesan";
 
 export const deletePlaylistValidator = () =>
   object({
     set: object({
-      playlistId: string(),
+      playlistId: objectIdValidation,
     }),
-    get: object({
-      success: boolean(),
-    }),
+    get: optional(
+      object({
+        success: optional(enums([0, 1])),
+      }),
+    ),
   });

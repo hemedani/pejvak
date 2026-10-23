@@ -1,11 +1,13 @@
-import { boolean, object, string } from "lesan";
+import { enums, object, objectIdValidation, optional } from "lesan";
 
 export const deleteAnnotationValidator = () =>
   object({
     set: object({
-      annotationId: string(),
+      annotationId: objectIdValidation,
     }),
-    get: object({
-      success: boolean(),
-    }),
+    get: optional(
+      object({
+        success: optional(enums([0, 1])),
+      }),
+    ),
   });

@@ -1,10 +1,17 @@
-import { array, number, object, optional, string } from "lesan";
+import {
+  array,
+  number,
+  object,
+  objectIdValidation,
+  optional,
+  string,
+} from "lesan";
 import { selectStruct } from "../../../mod.ts";
 
 export const updateAnnotationValidator = () =>
   object({
     set: object({
-      annotationId: string(),
+      annotationId: objectIdValidation,
       text: optional(string()),
       tags: optional(array(string())),
       color: optional(string()),
