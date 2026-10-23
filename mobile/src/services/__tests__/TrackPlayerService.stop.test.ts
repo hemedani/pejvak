@@ -323,3 +323,44 @@ describe("stopping from the mini-player", () => {
     expect(usePlayerStore.getState().status).toBe("idle");
   });
 });
+
+describe("a checkpoint racing the end of a session", () => {
+  it("does not touch the run with a session that ended while its checkpoint was saving", async () => {
+    await playFolder();
+    db.touchContextPlay.mockClear();
+    db.deleteCheckpoint.mockClear();
+
+    // A checkpoint is due ten seconds after the last one; move the clock on so
+    // the next status tick asks for one.
+    const base = Date.now();
+    jest.spyOn(Date, "now").mockReturnValue(base + 11_000);
+
+    let release: (() => void) | undefined;
+    db.saveCheckpoint.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+
+    listener()(tick({ playing: true, currentTime: 6 }));
+    // Let `writeCheckpoint` reach the deferred insert.
+    await Promise.resolve();
+
+    // The sleep timer stops playback while that insert is still open.
+    await TrackPlayerService.stop();
+    expect(activeIsClear()).toBe(true);
+
+    release?.();
+    await settle();
+
+    expect(db.touchContextPlay).not.toHaveBeenCalled();
+    // Once by `finishSession`, once by the checkpoint noticing it lost the race.
+    expect(db.deleteCheckpoint).toHaveBeenCalledTimes(2);
+    jest.restoreAllMocks();
+  });
+
+  function activeIsClear(): boolean {
+    return usePlayerStore.getState().status === "idle";
+  }
+});

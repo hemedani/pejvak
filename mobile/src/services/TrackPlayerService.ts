@@ -269,24 +269,37 @@ async function beginSession(
 }
 
 async function writeCheckpoint(): Promise<void> {
-  if (!active) {
+  // Snapshot the session: the insert below is awaited, and the sleep timer,
+  // a stop or a track change can finalize it while the write is in flight.
+  // Reading the module field afterwards would either dereference a session
+  // that has just been cleared or touch a run the checkpoint no longer belongs
+  // to.
+  const session = active;
+  if (!session) {
     return;
   }
   await LocalDBService.saveCheckpoint({
-    sessionId: active.sessionId,
-    trackId: active.track.id,
-    contentHash: active.track.contentHash,
-    positionSec: active.tracker.lastPositionSec,
-    lastPositionSec: active.tracker.lastPositionSec,
-    durationListenedSec: active.tracker.durationListenedSec,
-    playbackSpeed: active.tracker.playbackSpeed,
-    startedAt: active.tracker.startedAtMs,
+    sessionId: session.sessionId,
+    trackId: session.track.id,
+    contentHash: session.track.contentHash,
+    positionSec: session.tracker.lastPositionSec,
+    lastPositionSec: session.tracker.lastPositionSec,
+    durationListenedSec: session.tracker.durationListenedSec,
+    playbackSpeed: session.tracker.playbackSpeed,
+    startedAt: session.tracker.startedAtMs,
     timestamp: Date.now(),
-    deviceInfo: active.deviceInfo,
+    deviceInfo: session.deviceInfo,
     contextPlayId: activeRun?.id ?? null,
     stretchId: activeStretchId,
   });
-  touchRun(active.track.id, active.tracker.lastPositionSec);
+  if (active !== session) {
+    // The session ended while the row was being written. Its finalize already
+    // deleted the checkpoint it knew about, so this row would survive as a
+    // stale one until recovery; remove it now, and never touch the run.
+    await LocalDBService.deleteCheckpoint(session.sessionId).catch(() => undefined);
+    return;
+  }
+  touchRun(session.track.id, session.tracker.lastPositionSec);
 }
 
 /**
