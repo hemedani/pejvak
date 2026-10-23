@@ -15,12 +15,14 @@
  * underneath it for attention.
  */
 
+import { useCallback, useRef } from "react";
 import { StyleSheet, TextInput, View } from "react-native";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
+import { useFieldRegistrar } from "@/components/ui/keyboard-scroll-view";
 import { useTheme } from "@/hooks/use-theme";
 import { radius as radii, spacing } from "@/theme/tokens";
 
@@ -47,10 +49,16 @@ export function SearchField({
   accessibilityLabel = "Search",
 }: SearchFieldProps) {
   const theme = useTheme();
+  const registrar = useFieldRegistrar();
+  const containerRef = useRef<View>(null);
   const hasValue = value.trim().length > 0;
 
+  const handleFocus = useCallback(() => {
+    registrar?.reveal(containerRef.current);
+  }, [registrar]);
+
   return (
-    <View style={styles.wrap}>
+    <View ref={containerRef} collapsable={false} style={styles.wrap}>
       <Card variant="inset" padded={false} style={styles.field}>
         <Icon name="search" size={18} color={hasValue ? theme.text : theme.textTertiary} />
         <TextInput
@@ -69,6 +77,7 @@ export function SearchField({
           clearButtonMode="never"
           accessibilityLabel={accessibilityLabel}
           autoFocus={autoFocus}
+          onFocus={handleFocus}
           style={[styles.input, { color: theme.text }]}
         />
         {hasValue ? (

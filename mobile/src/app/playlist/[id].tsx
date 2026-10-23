@@ -1,6 +1,6 @@
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, ScrollView, StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 
 import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { ContextHistoryButton } from "@/components/context-history";
@@ -11,7 +11,7 @@ import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
-
+import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
 import { useTheme } from "@/hooks/use-theme";
@@ -90,7 +90,7 @@ export default function PlaylistDetailScreen() {
 
   return (
     <Screen wash={ramp[1]}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <KeyboardScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {data ? (
           <>
             {renaming ? (
@@ -343,7 +343,7 @@ export default function PlaylistDetailScreen() {
             {loading ? "Loading…" : "Playlist not found."}
           </ThemedText>
         )}
-      </ScrollView>
+      </KeyboardScrollView>
     </Screen>
   );
 }

@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, FlatList, StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 
 import { ContextHistoryButton } from "@/components/context-history";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
@@ -11,7 +11,7 @@ import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { SmartPlaylistRow } from "@/components/smart-playlist-row";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
-
+import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { TextField } from "@/components/ui/text-field";
 import { usePlaylists } from "@/hooks/use-playlists";
@@ -79,7 +79,7 @@ export default function PlaylistsScreen() {
 
   return (
     <Screen wash={theme.accent}>
-      <FlatList
+      <KeyboardAwareFlatList
         data={playlists}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}

@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { FlatList, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
 import { AddToPlaylistButton, useAddToPlaylist } from "@/components/add-to-playlist";
 import { ContextHistoryButton } from "@/components/context-history";
@@ -13,6 +13,7 @@ import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip } from "@/components/ui/glass";
 import { Icon } from "@/components/ui/icon";
+import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { SearchField } from "@/components/ui/search-field";
@@ -910,7 +911,7 @@ export default function LibraryScreen() {
   return (
     <Screen wash={wash}>
       {view === "tracks" ? (
-        <FlatList
+        <KeyboardAwareFlatList
           {...listProps}
           data={trackRows}
           keyExtractor={(item) => item.track.id}
@@ -950,7 +951,7 @@ export default function LibraryScreen() {
           }}
         />
       ) : view === "folders" ? (
-        <FlatList
+        <KeyboardAwareFlatList
           {...listProps}
           data={folderRows}
           keyExtractor={(item) => item.folder.key || "root"}
@@ -966,7 +967,7 @@ export default function LibraryScreen() {
           }
         />
       ) : (
-        <FlatList
+        <KeyboardAwareFlatList
           {...listProps}
           data={recentRows}
           keyExtractor={(item) => recentPlayKey(item.play)}

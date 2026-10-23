@@ -21,7 +21,7 @@
 
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
+import { RefreshControl, StyleSheet, View } from "react-native";
 
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
@@ -30,6 +30,7 @@ import { LanguageRow } from "@/components/online/language-row";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip } from "@/components/ui/glass";
+import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
 import { TextField } from "@/components/ui/text-field";
 import {
   useContinueListening,
@@ -267,7 +268,7 @@ export default function DiscoverScreen() {
 
   return (
     <Screen wash={theme.accent}>
-      <FlatList
+      <KeyboardAwareFlatList
         data={rows}
         keyExtractor={(row) =>
           row.kind === "continue"

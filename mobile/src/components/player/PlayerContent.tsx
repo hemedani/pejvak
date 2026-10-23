@@ -13,7 +13,7 @@
  */
 
 import type { ReactNode } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { GestureDetector, type PanGesture } from "react-native-gesture-handler";
@@ -27,6 +27,7 @@ import { Scrubber } from "@/components/player/Scrubber";
 import { TransportControls } from "@/components/player/TransportControls";
 import { ThemedText } from "@/components/themed-text";
 import { GlassChip } from "@/components/ui/glass/GlassChip";
+import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
 import { useScheme } from "@/hooks/use-theme";
 import type { LocalAnnotation } from "@/lib/db/types";
 import { describeContextType, type PlaybackContext } from "@/lib/playbackContext";
@@ -187,7 +188,7 @@ export function PlayerContent({
         header
       )}
 
-      <ScrollView
+      <KeyboardScrollView
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + spacing.giant },
@@ -316,7 +317,7 @@ export function PlayerContent({
             />
           </View>
         </Animated.View>
-      </ScrollView>
+      </KeyboardScrollView>
     </View>
   );
 }
