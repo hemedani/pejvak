@@ -293,7 +293,7 @@ function ContextHistorySheetContent({ request }: { request: ContextHistoryReques
                   <ElasticPressable
                     accessibilityRole="button"
                     accessibilityLabel={`Open ${typeLabel.toLowerCase()} ${title}`}
-                    haptic="light"
+                    haptic="tap"
                     onPress={openCollection}
                     style={styles.openRow}>
                     <View

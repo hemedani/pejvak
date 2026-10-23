@@ -1,6 +1,6 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, Switch, View } from "react-native";
 
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { Reveal } from "@/components/motion/Reveal";
@@ -11,7 +11,14 @@ import { Icon } from "@/components/ui/icon";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useTheme } from "@/hooks/use-theme";
 import { useSyncStatus } from "@/hooks/use-sync-status";
-import { SPEED_OPTIONS, THEME_PREFERENCES, formatBytes, type ThemePreference } from "@/lib/settings";
+import {
+  MOTION_PREFERENCES,
+  SPEED_OPTIONS,
+  THEME_PREFERENCES,
+  formatBytes,
+  type MotionPreference,
+  type ThemePreference,
+} from "@/lib/settings";
 import { formatRelativeTime } from "@/lib/time";
 import { LocalDBService } from "@/services/LocalDBService";
 import { useAuthStore } from "@/store/authStore";
@@ -40,6 +47,17 @@ const SPEED_SEGMENTS = SPEED_OPTIONS.map((speed) => ({
   label: `${speed}×`,
 }));
 
+const MOTION_LABELS: Record<MotionPreference, string> = {
+  system: "System",
+  full: "Full",
+  reduced: "Reduced",
+};
+
+const MOTION_OPTIONS = MOTION_PREFERENCES.map((preference) => ({
+  value: preference,
+  label: MOTION_LABELS[preference],
+}));
+
 export default function SettingsScreen() {
   const router = useRouter();
   const theme = useTheme();
@@ -47,8 +65,16 @@ export default function SettingsScreen() {
   const logout = useAuthStore((state) => state.logout);
   const themePreference = useSettingsStore((state) => state.themePreference);
   const defaultSpeed = useSettingsStore((state) => state.defaultSpeed);
+  const motionPreference = useSettingsStore((state) => state.motionPreference);
+  const hapticsEnabled = useSettingsStore((state) => state.hapticsEnabled);
   const setTheme = useSettingsStore((state) => state.setTheme);
   const setDefaultSpeed = useSettingsStore((state) => state.setDefaultSpeed);
+  const setMotionPreference = useSettingsStore(
+    (state) => state.setMotionPreference,
+  );
+  const setHapticsEnabled = useSettingsStore(
+    (state) => state.setHapticsEnabled,
+  );
 
   const { pending, pendingTotal, lastSyncAt, syncing, syncNow } = useSyncStatus();
   // `null` until the figure is measured, so the row says "…" rather than
@@ -123,11 +149,39 @@ export default function SettingsScreen() {
           </View>
         </CardSection>
 
+        <CardSection
+          title="MOTION"
+          index={10}
+          footer="System follows your device's animation setting.">
+          <View style={styles.control}>
+            <SegmentedControl
+              accessibilityLabel="Motion"
+              options={MOTION_OPTIONS}
+              value={motionPreference}
+              onChange={(value) => void setMotionPreference(value)}
+            />
+          </View>
+          <CardRow
+            position="last"
+            icon="sparkle"
+            label="Haptics"
+            detail="A light tap on controls and selections."
+            trailing={
+              <Switch
+                accessibilityLabel="Haptics"
+                value={hapticsEnabled}
+                trackColor={{ true: theme.accent }}
+                onValueChange={(value) => void setHapticsEnabled(value)}
+              />
+            }
+          />
+        </CardSection>
+
         {/* 3 — Storage and sync, merged. A whole card to say "1.2 GB" was
             spending a panel on one number; these are the same question. */}
         <CardSection
           title="STORAGE & SYNC"
-          index={10}
+          index={13}
           footer="Pejvak writes everything here first and sends it when it can, so a lost connection never costs you a session.">
           <CardRow
             position="first"
@@ -157,15 +211,26 @@ export default function SettingsScreen() {
           </View>
         </CardSection>
 
+        {__DEV__ ? (
+          <CardSection title="DEVELOPER" index={18}>
+            <CardRow
+              icon="settings"
+              label="Field gallery"
+              detail="Every input, in every state."
+              onPress={() => router.push("/dev/fields")}
+            />
+          </CardSection>
+        ) : null}
+
         {/* 4 — Sign out, alone, in danger. The one control on the screen that
             ends a session, so it does not share a card with anything. */}
-        <Reveal index={13}>
+        <Reveal index={16}>
           <ElasticPressable
             accessibilityRole="button"
             accessibilityLabel="Sign out"
             accessibilityHint="Signs you out of this device"
             scaleTo={0.97}
-            haptic="light"
+            haptic="tap"
             onPress={() => void logout()}
             style={styles.signOut}>
             <Icon name="logout" size={18} color={theme.danger} />

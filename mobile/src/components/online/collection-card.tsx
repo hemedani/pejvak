@@ -79,7 +79,7 @@ export function CollectionCard({
             accessibilityLabel={isFavorite ? "Remove from favorites" : "Add to favorites"}
             scaleTo={0.86}
             overshootTo={1.08}
-            haptic="selection"
+            haptic="select"
             onPress={onToggleFavorite}
             style={{
               width: CONTROL_WIDTH,

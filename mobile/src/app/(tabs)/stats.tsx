@@ -291,7 +291,7 @@ export default function StatsScreen() {
                         accessibilityLabel={`${formatDay(day.key)}, ${formatDuration(day.listenTimeSec)}`}
                         accessibilityHint={open ? "Hides the sessions" : "Shows the sessions"}
                         accessibilityState={{ expanded: open }}
-                        haptic="selection"
+                                haptic="select"
                         onPress={() => setExpandedDay((current) => (current === day.key ? null : day.key))}
                         style={styles.dayRow}>
                         <ThemedText type="caption" style={styles.dayLabel} numberOfLines={1}>
@@ -327,7 +327,7 @@ export default function StatsScreen() {
                                 key={session.session.id}
                                 accessibilityRole="button"
                                 accessibilityLabel={`Replay ${session.track.title}`}
-                                haptic="selection"
+                        haptic="select"
                                 onPress={() => replay(session)}
                                 style={styles.daySession}>
                                 <Icon name="play" size={12} color={theme.accent} />

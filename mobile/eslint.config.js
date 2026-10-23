@@ -8,6 +8,40 @@ module.exports = defineConfig([
     ignores: ["dist/*"],
   },
   {
+    // One icon family, one import site. Screens ask <Icon> for a semantic name;
+    // a direct family import is how the vocabulary drifted across two families.
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "@expo/vector-icons/Ionicons",
+              message: "Use <Icon> from @/components/ui/icon.",
+            },
+            {
+              name: "@expo/vector-icons/MaterialIcons",
+              message: "Use <Icon> from @/components/ui/icon.",
+            },
+          ],
+          patterns: [
+            {
+              group: ["@expo/vector-icons/*"],
+              message: "Use <Icon> from @/components/ui/icon.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      "src/components/ui/icon.tsx",
+      "src/components/ui/__tests__/iconCatalog.test.ts",
+    ],
+    rules: { "no-restricted-imports": "off" },
+  },
+  {
     // Reanimated's API is *built around* mutating `sharedValue.value` from
     // gesture and animation callbacks. The React Compiler's `immutability` rule
     // models React state and props, not animation handles, so it reports every

@@ -254,7 +254,7 @@ export function MediaCard({
             accessibilityHint={accessibilityHint}
             scaleTo={0.985}
             overshootTo={1.004}
-            haptic="light"
+            haptic="tap"
             onPress={onPress}
             style={[styles.body, plan.reflow ? null : styles.bodyInline]}>
             {body}
@@ -278,7 +278,7 @@ export function MediaCard({
                 accessibilityLabel={`More actions for ${title}`}
                 scaleTo={0.86}
                 overshootTo={1.08}
-                haptic="selection"
+                haptic="select"
                 onPress={() => setMenuOpen(true)}
                 style={styles.overflowButton}>
                 <Icon name="more" size={18} color={theme.icon} />
@@ -345,7 +345,7 @@ function ActionMenu({
               key={action.key}
               accessibilityRole="button"
               accessibilityLabel={action.label}
-              haptic="light"
+              haptic="tap"
               onPress={() => {
                 // Closed before the action runs: the action is usually a
                 // navigation, and a menu that outlives the screen under it would

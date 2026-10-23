@@ -69,7 +69,7 @@ export function GlassChip({
         accessibilityLabel ?? (counting ? `${label}, ${count} result${count === 1 ? "" : "s"}` : label)
       }
       accessibilityState={{ selected }}
-      haptic="selection"
+      haptic="select"
       onPress={onPress}
       style={[
         styles.chip,

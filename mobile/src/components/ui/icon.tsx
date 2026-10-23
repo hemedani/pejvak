@@ -2,8 +2,8 @@
  * The app's icon vocabulary.
  *
  * Screens ask for a semantic name (`"play"`, `"history"`, `"trash"`) rather than
- * a glyph, so the underlying family can change in one place. Ionicons covers
- * almost everything; the two 30-second skip glyphs only exist in MaterialIcons.
+ * a glyph, so the family can change in one place. This is the only file allowed
+ * to import an icon family.
  *
  * A `*Filled` name means the *same* glyph filled in. Material's rule for a
  * navigation item is a filled icon when the destination is selected and an
@@ -12,101 +12,100 @@
  * row of five.
  */
 
-import Ionicons from "@expo/vector-icons/Ionicons";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import type { ComponentProps } from "react";
 import type { StyleProp, TextStyle } from "react-native";
 
-type IoniconName = ComponentProps<typeof Ionicons>["name"];
-type MaterialName = ComponentProps<typeof MaterialIcons>["name"];
+type MciName = ComponentProps<typeof MaterialCommunityIcons>["name"];
 
-type Glyph =
-  | { family: "ionicons"; name: IoniconName }
-  | { family: "material"; name: MaterialName };
+/** The family's font map, for `useFonts` in the root layout. */
+export const ICON_FONT = MaterialCommunityIcons.font;
 
-const glyphs = {
-  play: { family: "ionicons", name: "play" },
-  pause: { family: "ionicons", name: "pause" },
-  previous: { family: "ionicons", name: "play-skip-back" },
-  next: { family: "ionicons", name: "play-skip-forward" },
-  rewind: { family: "material", name: "replay-30" },
-  forward: { family: "material", name: "forward-30" },
+/** Exported for `iconCatalog.test.ts`; screens never read it directly. */
+export const ICON_GLYPHS = {
+  play: "play",
+  pause: "pause",
+  previous: "skip-previous",
+  next: "skip-next",
+  rewind: "rewind-30",
+  forward: "fast-forward-30",
 
-  chevronDown: { family: "ionicons", name: "chevron-down" },
-  chevronLeft: { family: "ionicons", name: "chevron-back" },
-  chevronRight: { family: "ionicons", name: "chevron-forward" },
-  chevronUp: { family: "ionicons", name: "chevron-up" },
-  arrowUp: { family: "ionicons", name: "arrow-up" },
-  arrowDown: { family: "ionicons", name: "arrow-down" },
+  chevronDown: "chevron-down",
+  chevronLeft: "chevron-left",
+  chevronRight: "chevron-right",
+  chevronUp: "chevron-up",
+  arrowUp: "arrow-up",
+  arrowDown: "arrow-down",
 
-  add: { family: "ionicons", name: "add" },
-  edit: { family: "ionicons", name: "create-outline" },
-  trash: { family: "ionicons", name: "trash-outline" },
-  close: { family: "ionicons", name: "close" },
-  check: { family: "ionicons", name: "checkmark" },
-  minus: { family: "ionicons", name: "remove" },
+  add: "plus",
+  edit: "pencil-outline",
+  trash: "delete-outline",
+  close: "close",
+  check: "check",
+  eye: "eye-outline",
+  clock: "clock-time-four-outline",
+  eyeOff: "eye-off-outline",
+  minus: "minus",
   /** A file that is no longer where the library last saw it. */
-  alert: { family: "ionicons", name: "alert-circle-outline" },
-  search: { family: "ionicons", name: "search-outline" },
-  more: { family: "ionicons", name: "ellipsis-horizontal" },
-  /** The two "add to playlist" glyphs only exist in MaterialIcons. */
-  playlistAdd: { family: "material", name: "playlist-add" },
-  playlistAddCheck: { family: "material", name: "playlist-add-check" },
+  alert: "alert-circle-outline",
+  search: "magnify",
+  more: "dots-horizontal",
+  refresh: "refresh",
+  playlistAdd: "playlist-plus",
+  playlistAddCheck: "playlist-check",
 
-  library: { family: "ionicons", name: "library-outline" },
-  /** Filled variants, for a selected destination whose slot carries no label. */
-  libraryFilled: { family: "ionicons", name: "library" },
-  folder: { family: "ionicons", name: "folder-outline" },
-  folderOpen: { family: "ionicons", name: "folder-open-outline" },
-  history: { family: "ionicons", name: "time-outline" },
-  historyFilled: { family: "ionicons", name: "time" },
-  stats: { family: "ionicons", name: "stats-chart-outline" },
-  statsFilled: { family: "ionicons", name: "stats-chart" },
-  playlists: { family: "ionicons", name: "list-outline" },
-  playlistsFilled: { family: "ionicons", name: "list" },
-  settings: { family: "ionicons", name: "settings-outline" },
-  notes: { family: "ionicons", name: "document-text-outline" },
+  library: "library-outline",
+  libraryFilled: "library",
+  folder: "folder-outline",
+  folderOpen: "folder-open-outline",
+  /** MCI's `history` has no filled partner; the clock carries the pair. */
+  history: "clock-outline",
+  historyFilled: "clock",
+  stats: "chart-box-outline",
+  statsFilled: "chart-box",
+  playlists: "playlist-music-outline",
+  playlistsFilled: "playlist-music",
+  settings: "cog-outline",
+  notes: "note-text-outline",
 
-  /** Discover. Filled, because it is the destination. */
-  compass: { family: "ionicons", name: "compass" },
-  compassOutline: { family: "ionicons", name: "compass-outline" },
+  compass: "compass",
+  compassOutline: "compass-outline",
   /** A language, in the Browse list. */
-  globe: { family: "ionicons", name: "globe-outline" },
+  globe: "web",
   /** A source: a station broadcasting. */
-  radio: { family: "ionicons", name: "radio-outline" },
+  radio: "radio",
   /** Saved, in the Favorites tab. */
-  bookmark: { family: "ionicons", name: "bookmark-outline" },
-  bookmarkFilled: { family: "ionicons", name: "bookmark" },
-  heartFilled: { family: "ionicons", name: "heart" },
+  bookmark: "bookmark-outline",
+  bookmarkFilled: "bookmark",
+  heart: "heart-outline",
+  heartFilled: "heart",
   /** Streaming vs. on the device. */
-  stream: { family: "ionicons", name: "cloud-outline" },
-  cloudDownload: { family: "ionicons", name: "cloud-download-outline" },
-  playCircle: { family: "ionicons", name: "play-circle" },
-  stopCircle: { family: "ionicons", name: "stop-circle-outline" },
-  checkCircle: { family: "ionicons", name: "checkmark-circle" },
+  stream: "cloud-outline",
+  cloudDownload: "cloud-download-outline",
+  cloudOffline: "cloud-off-outline",
+  cloudDone: "cloud-check-outline",
+  playCircle: "play-circle",
+  stopCircle: "stop-circle-outline",
+  checkCircle: "check-circle",
   /** A link out to the source's own page. */
-  external: { family: "ionicons", name: "open-outline" },
-  layers: { family: "ionicons", name: "albums-outline" },
+  external: "open-in-new",
+  layers: "layers-outline",
 
-  speed: { family: "ionicons", name: "speedometer-outline" },
-  moon: { family: "ionicons", name: "moon-outline" },
+  speed: "speedometer",
+  moon: "moon-waning-crescent",
   /** The other half of `moon` — a theme control needs two, not one. */
-  sunny: { family: "ionicons", name: "sunny-outline" },
+  sunny: "white-balance-sunny",
   /** "Follow the device" — not a gear, which says nothing about what it does. */
-  autoTheme: { family: "ionicons", name: "contrast-outline" },
-  share: { family: "ionicons", name: "share-outline" },
-  music: { family: "ionicons", name: "musical-notes-outline" },
-  heart: { family: "ionicons", name: "heart-outline" },
-  download: { family: "ionicons", name: "download-outline" },
-  cloudOffline: { family: "ionicons", name: "cloud-offline-outline" },
-  cloudDone: { family: "ionicons", name: "cloud-done-outline" },
-  person: { family: "ionicons", name: "person-outline" },
-  logout: { family: "ionicons", name: "log-out-outline" },
-  refresh: { family: "ionicons", name: "refresh" },
-  sparkle: { family: "ionicons", name: "sparkles-outline" },
-} as const satisfies Record<string, Glyph>;
+  autoTheme: "theme-light-dark",
+  share: "share-variant-outline",
+  music: "music-note-outline",
+  download: "download-outline",
+  person: "account-outline",
+  logout: "logout",
+  sparkle: "auto-fix",
+} as const satisfies Record<string, MciName>;
 
-export type IconName = keyof typeof glyphs;
+export type IconName = keyof typeof ICON_GLYPHS;
 
 export type IconProps = {
   name: IconName;
@@ -116,16 +115,12 @@ export type IconProps = {
 };
 
 export function Icon({ name, size = 20, color, style }: IconProps) {
-  const glyph: Glyph = glyphs[name];
-  if (glyph.family === "material") {
-    return (
-      <MaterialIcons
-        name={glyph.name}
-        size={size}
-        color={color}
-        style={style}
-      />
-    );
-  }
-  return <Ionicons name={glyph.name} size={size} color={color} style={style} />;
+  return (
+    <MaterialCommunityIcons
+      name={ICON_GLYPHS[name]}
+      size={size}
+      color={color}
+      style={style}
+    />
+  );
 }

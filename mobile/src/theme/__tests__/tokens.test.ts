@@ -19,7 +19,13 @@
  *      card-to-canvas step that makes a panel read as a panel.
  */
 
-import { colors, radius, typeScale, type ColorScheme } from "@/theme/tokens";
+import {
+  colors,
+  field,
+  radius,
+  typeScale,
+  type ColorScheme,
+} from "@/theme/tokens";
 
 /** WCAG 2.1 minimum for body text. */
 const AA_TEXT = 4.5;
@@ -191,6 +197,32 @@ describe.each(SCHEMES)("palette — %s", (scheme) => {
     });
   });
 
+  describe("a field's resting border is a boundary, not a hint", () => {
+    it("draws an edge you can see against the field's own fill", () => {
+      // WCAG 1.4.11: the border is the only thing saying "this is an input".
+      // `outline` is tuned for a card on the canvas and measures under 3:1 on
+      // the sunken field fill, so fields get their own step up the ramp.
+      expect(contrast(c.outlineStrong, c.surfaceSunken)).toBeGreaterThanOrEqual(
+        AA_NON_TEXT,
+      );
+    });
+
+    it("draws an edge on a field sitting directly on the card", () => {
+      expect(contrast(c.outlineStrong, c.surface)).toBeGreaterThanOrEqual(
+        AA_NON_TEXT,
+      );
+    });
+
+    it("keeps the focus and error rings visible on the field fill", () => {
+      expect(contrast(c.accent, c.surfaceSunken)).toBeGreaterThanOrEqual(
+        AA_NON_TEXT,
+      );
+      expect(contrast(c.danger, c.surfaceSunken)).toBeGreaterThanOrEqual(
+        AA_NON_TEXT,
+      );
+    });
+  });
+
   describe("a floating panel keeps an edge over an opaque card", () => {
     // The tab bar and the mini-player float over cards now, not over a frosted
     // wash, so their own outline is the only thing drawing their boundary. The
@@ -245,6 +277,29 @@ describe("shape lock", () => {
 
   it("ends the ramp at the pill", () => {
     expect(radius.pill).toBeGreaterThan(radius.xxl);
+  });
+});
+
+describe("field geometry", () => {
+  it("meets the 48pt touch-target floor", () => {
+    expect(field.minHeight).toBeGreaterThanOrEqual(48);
+    expect(field.searchMinHeight).toBeGreaterThanOrEqual(48);
+  });
+
+  it("draws a ring thicker than the resting border", () => {
+    // A 2px ring on a 1px border is what makes focus readable at a glance;
+    // equal widths turn the field into a slightly different shade of itself.
+    expect(field.ringWidth).toBeGreaterThan(field.borderWidth);
+  });
+
+  it("bounds a growing textarea so it cannot swallow the screen", () => {
+    expect(field.textareaMinHeight).toBeGreaterThanOrEqual(field.minHeight);
+    expect(field.textareaMaxHeight).toBeGreaterThan(field.textareaMinHeight);
+  });
+
+  it("resolves its corners through the shape ramp", () => {
+    expect(field.radius).toBe(radius.md);
+    expect(field.searchRadius).toBe(radius.pill);
   });
 });
 

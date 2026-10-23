@@ -106,7 +106,7 @@ export function StatCell({
               : "Opens the matching list"
           }
           accessibilityState={affordance === "expand" ? { expanded } : undefined}
-          haptic="selection"
+          haptic="select"
           onPress={onPress}>
           {cell}
         </ElasticPressable>

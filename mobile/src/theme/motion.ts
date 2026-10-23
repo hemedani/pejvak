@@ -15,6 +15,9 @@
 
 import { Easing, ReduceMotion, useReducedMotion, type WithSpringConfig, type WithTimingConfig } from "react-native-reanimated";
 
+import { resolveMotionEnabled } from "@/lib/motionPreference";
+import { useSettingsStore } from "@/store/settingsStore";
+
 /**
  * Build a spring from its *physics* rather than its coefficients.
  *
@@ -33,7 +36,11 @@ export function springSpec(ratio: number, stiffness: number, mass = 1): WithSpri
     mass,
     stiffness,
     damping: 2 * ratio * Math.sqrt(stiffness * mass),
-    reduceMotion: ReduceMotion.System,
+    // `useMotionEnabled()` is the authority: it already folds in the OS setting
+    // and the in-app preference. Letting Reanimated re-apply
+    // `ReduceMotion.System` here would silently defeat the explicit **Full**
+    // override on a device whose OS asks for reduced motion.
+    reduceMotion: ReduceMotion.Never,
   };
 }
 
@@ -64,6 +71,10 @@ export const spring = {
   snap: springSpec(0.9, 320),
   /** Small positional nudges (progress fill, marker travel). */
   snappy: springSpec(0.8, 640, 0.8),
+  /** Marker selection: small travel, no visible wobble. */
+  marker: springSpec(0.78, 520, 0.8),
+  /** Dock surface resize: firm, no overshoot on a panel edge. */
+  dock: springSpec(0.9, 300, 0.9),
 } as const satisfies Record<string, WithSpringConfig>;
 
 /** Bezier curves. Names describe the shape, not the numbers. */
@@ -85,8 +96,12 @@ export const easing = {
 export const duration = {
   /** Icon/colour swaps that must not be noticed. */
   instant: 120,
+  /** Exits: ~70% of the matching entrance. */
+  exit: 130,
   quick: 180,
   base: 260,
+  /** A glyph swap — play/pause, download state. */
+  toggle: 120,
   /** The 400 ms alpha cross-fade required when audio metadata changes. */
   crossfade: 400,
   /** Screen push/pop. */
@@ -107,7 +122,7 @@ export function curve(
   bezier: (typeof easing)[keyof typeof easing] = easing.outQuint,
   ms: number = duration.base,
 ): WithTimingConfig {
-  return { duration: ms, easing: bezier, reduceMotion: ReduceMotion.System };
+  return { duration: ms, easing: bezier, reduceMotion: ReduceMotion.Never };
 }
 
 /** Stagger delay for a list revealing itself top-to-bottom. */
@@ -116,10 +131,12 @@ export function stagger(index: number, step = 45, max = 320): number {
 }
 
 /**
- * Whether the OS asks for reduced motion. Components should drop to a plain
- * cross-fade (or no motion) when this is true.
+ * Whether motion should play, combining the OS setting with the in-app
+ * preference. Components should drop to a plain cross-fade (or no motion) when
+ * this is false.
  */
 export function useMotionEnabled(): boolean {
-  const reduced = useReducedMotion();
-  return !reduced;
+  const osReduced = useReducedMotion();
+  const preference = useSettingsStore((state) => state.motionPreference);
+  return resolveMotionEnabled(preference, osReduced);
 }

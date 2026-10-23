@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import Animated, {
+  ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
   withSequence,
@@ -26,7 +27,7 @@ import Animated, {
 import { useCrossfade } from "@/components/motion/use-crossfade";
 import { ThemedText } from "@/components/themed-text";
 import { Icon } from "@/components/ui/icon";
-import { duration, easing, spring } from "@/theme/motion";
+import { duration, easing, spring, useMotionEnabled } from "@/theme/motion";
 import { artworkScrim, type AuroraRamp } from "@/theme/tokens";
 
 export type CrossfadeArtworkProps = {
@@ -71,6 +72,7 @@ export function CrossfadeArtwork({
   const rotate = useSharedValue(0);
   const kick = useSharedValue(1);
   const lastNonce = useRef(skipNonce);
+  const motionEnabled = useMotionEnabled();
 
   useEffect(() => {
     if (skipNonce === undefined || skipNonce === lastNonce.current) {
@@ -78,18 +80,27 @@ export function CrossfadeArtwork({
     }
     lastNonce.current = skipNonce;
 
+    if (!motionEnabled) {
+      return;
+    }
+
     rotate.value = withSequence(
       withTiming(KICK_ROTATION * skipDirection, {
         duration: duration.quick,
         easing: easing.outQuint,
+        reduceMotion: ReduceMotion.Never,
       }),
       withSpring(0, spring.gentle),
     );
     kick.value = withSequence(
-      withTiming(1.035, { duration: duration.quick, easing: easing.outQuint }),
+      withTiming(1.035, {
+        duration: duration.quick,
+        easing: easing.outQuint,
+        reduceMotion: ReduceMotion.Never,
+      }),
       withSpring(1, spring.gentle),
     );
-  }, [kick, rotate, skipDirection, skipNonce]);
+  }, [kick, motionEnabled, rotate, skipDirection, skipNonce]);
 
   const containerStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotate.value}deg` }, { scale: kick.value }],

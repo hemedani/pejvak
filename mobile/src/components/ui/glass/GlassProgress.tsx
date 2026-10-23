@@ -8,11 +8,11 @@
 
 import type { ReactNode } from "react";
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useEffect } from "react";
 
 import { useTheme } from "@/hooks/use-theme";
-import { spring } from "@/theme/motion";
+import { curve, easing, useMotionEnabled } from "@/theme/motion";
 import { radius as radii } from "@/theme/tokens";
 
 export type GlassProgressProps = {
@@ -35,10 +35,17 @@ export function GlassProgress({
   const theme = useTheme();
   const clamped = Math.max(0, Math.min(1, progress));
   const value = useSharedValue(clamped);
+  const motionEnabled = useMotionEnabled();
 
   useEffect(() => {
-    value.value = withSpring(clamped, spring.snappy);
-  }, [clamped, value]);
+    // Download progress arrives many times a second; a spring per event is a
+    // lot of work for a fill that is already moving. Seeks still glide.
+    if (!motionEnabled || Math.abs(clamped - value.value) < 0.005) {
+      value.value = clamped;
+      return;
+    }
+    value.value = withTiming(clamped, curve(easing.outQuint, 200));
+  }, [clamped, motionEnabled, value]);
 
   const fillStyle = useAnimatedStyle(() => ({
     width: `${value.value * 100}%`,

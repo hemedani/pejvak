@@ -9,7 +9,7 @@
 import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
-import { spacing } from "@/theme/tokens";
+import { iconSize, spacing } from "@/theme/tokens";
 
 export type TransportControlsProps = {
   isPlaying: boolean;
@@ -38,9 +38,9 @@ export function TransportControls({
         name="previous"
         accessibilityLabel="Previous track"
         size={48}
-        iconSize={22}
+        iconSize={iconSize.lg}
         tone="ghost"
-        haptic="light"
+        haptic="tap"
         disabled={disabled}
         onPress={onPrevious}
       />
@@ -76,9 +76,9 @@ export function TransportControls({
         name="next"
         accessibilityLabel="Next track"
         size={48}
-        iconSize={22}
+        iconSize={iconSize.lg}
         tone="ghost"
-        haptic="light"
+        haptic="tap"
         disabled={disabled}
         onPress={onNext}
       />

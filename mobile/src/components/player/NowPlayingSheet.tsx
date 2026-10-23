@@ -47,7 +47,7 @@ export type SheetGesture = ReturnType<typeof Gesture.Pan>;
 
 export type NowPlayingSheetRenderArgs = {
   /** Attach to the header so the sheet can be dragged down to dismiss. */
-  gesture: SheetGesture;
+  gesture?: SheetGesture;
   /** 0 = collapsed over the mini-player, 1 = full screen. */
   reveal: SharedValue<number>;
   /** Collapse the sheet and pop the route, with the exit animation. */
@@ -119,22 +119,28 @@ export function NowPlayingSheet({ ramp, children }: NowPlayingSheetProps) {
 
   const pan = useMemo(
     () =>
-      Gesture.Pan()
-        // Only react to a deliberate downward drag, so a tap on the close button
-        // or a small wobble never starts a dismiss.
-        .activeOffsetY([-9999, 14])
-        .onUpdate((event) => {
-          progress.value = Math.max(0, Math.min(1, 1 - event.translationY / (height * 0.55)));
-        })
-        .onEnd((event) => {
-          const shouldDismiss = event.translationY > height * 0.18 || event.velocityY > 900;
-          if (shouldDismiss) {
-            close();
-          } else {
-            progress.value = withSpring(1, spring.sheet);
-          }
-        }),
-    [close, height, progress],
+      motionEnabled
+        ? Gesture.Pan()
+            // Only react to a deliberate downward drag, so a tap on the close
+            // button or a small wobble never starts a dismiss.
+            .activeOffsetY([-9999, 14])
+            .onUpdate((event) => {
+              progress.value = Math.max(
+                0,
+                Math.min(1, 1 - event.translationY / (height * 0.55)),
+              );
+            })
+            .onEnd((event) => {
+              const shouldDismiss =
+                event.translationY > height * 0.18 || event.velocityY > 900;
+              if (shouldDismiss) {
+                close();
+              } else {
+                progress.value = withSpring(1, spring.sheet);
+              }
+            })
+        : undefined,
+    [close, height, motionEnabled, progress],
   );
 
   const containerStyle = useAnimatedStyle(() => {

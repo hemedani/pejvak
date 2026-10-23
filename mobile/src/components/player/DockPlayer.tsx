@@ -38,7 +38,7 @@ import { contextRouteTarget } from "@/lib/playbackContext";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useNowPlayingStore } from "@/store/nowPlayingStore";
 import { usePlayerStore } from "@/store/playerStore";
-import { spring } from "@/theme/motion";
+import { spring, useMotionEnabled } from "@/theme/motion";
 import { layout, spacing } from "@/theme/tokens";
 
 /** Pixels of upward drag that map to a full "peek". */
@@ -61,6 +61,7 @@ export function DockPlayer() {
   const expanded = usePlayerStore((state) => state.expanded);
 
   const setAnchor = useNowPlayingStore((state) => state.setAnchor);
+  const motionEnabled = useMotionEnabled();
   const drag = useSharedValue(0);
 
   const { context } = usePlaybackContext();
@@ -114,10 +115,10 @@ export function DockPlayer() {
     .onEnd((event) => {
       const commit = drag.value > 0.35 || event.velocityY < -700;
       if (commit) {
-        drag.value = withSpring(1, spring.snappy);
+        drag.value = motionEnabled ? withSpring(1, spring.snappy) : 1;
         scheduleOnRN(open);
       } else {
-        drag.value = withSpring(0, spring.snappy);
+        drag.value = motionEnabled ? withSpring(0, spring.snappy) : 0;
       }
     });
 

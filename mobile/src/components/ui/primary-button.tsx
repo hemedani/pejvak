@@ -41,7 +41,7 @@ export function PrimaryButton({
       {...rest}
       accessibilityRole="button"
       disabled={isDisabled}
-      haptic="medium"
+      haptic="press"
       style={[
         styles.button,
         solid

@@ -13,8 +13,9 @@
 import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
-import { Icon, type IconName } from "@/components/ui/icon";
-import type { HapticStyle } from "@/components/ui/haptics";
+import { SwapIcon } from "@/components/motion/SwapIcon";
+import type { IconName } from "@/components/ui/icon";
+import type { HapticIntent } from "@/components/ui/haptics";
 import { useTheme } from "@/hooks/use-theme";
 import { radius as radii } from "@/theme/tokens";
 
@@ -38,7 +39,7 @@ export type BouncyIconButtonProps = {
   iconSize?: number;
   tone?: BouncyIconButtonTone;
   disabled?: boolean;
-  haptic?: HapticStyle;
+  haptic?: HapticIntent;
   /** Overrides the tone's default glyph colour. */
   color?: string;
   style?: StyleProp<ViewStyle>;
@@ -52,7 +53,7 @@ export function BouncyIconButton({
   iconSize,
   tone = "glass",
   disabled = false,
-  haptic = "light",
+  haptic = "tap",
   color,
   style,
 }: BouncyIconButtonProps) {
@@ -87,7 +88,7 @@ export function BouncyIconButton({
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ disabled }}
       disabled={disabled}
-      haptic={tone === "accent" ? "medium" : haptic}
+      haptic={tone === "accent" ? "press" : haptic}
       hitSlop={hitSlop > 0 ? hitSlop : undefined}
       onPress={onPress}
       style={[
@@ -97,7 +98,7 @@ export function BouncyIconButton({
         disabled && styles.disabled,
         style,
       ]}>
-      <Icon name={name} size={resolvedIconSize} color={glyphColor} />
+      <SwapIcon name={name} size={resolvedIconSize} color={glyphColor} />
     </ElasticPressable>
   );
 }

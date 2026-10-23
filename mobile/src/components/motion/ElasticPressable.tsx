@@ -23,14 +23,14 @@ import Animated, {
   withSpring,
 } from "react-native-reanimated";
 
-import { triggerHaptic, type HapticStyle } from "@/components/ui/haptics";
-import { press, spring } from "@/theme/motion";
+import { triggerHaptic, type HapticIntent } from "@/components/ui/haptics";
+import { press, spring, useMotionEnabled } from "@/theme/motion";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export type ElasticPressableProps = Omit<
   PressableProps,
-  "style" | "onPressIn" | "onPressOut" | "children"
+  "style" | "onPressIn" | "onPressOut" | "onPress" | "children"
 > & {
   children?: ReactNode;
   style?: StyleProp<ViewStyle>;
@@ -38,7 +38,8 @@ export type ElasticPressableProps = Omit<
   scaleTo?: number;
   /** Peak scale on release, before settling back to 1. */
   overshootTo?: number;
-  haptic?: HapticStyle;
+  haptic?: HapticIntent;
+  onPress?: PressableProps["onPress"];
   onPressIn?: PressableProps["onPressIn"];
   onPressOut?: PressableProps["onPressOut"];
 };
@@ -48,13 +49,15 @@ export function ElasticPressable({
   style,
   scaleTo = press.down,
   overshootTo = press.overshoot,
-  haptic = "light",
+  haptic = "tap",
   disabled,
+  onPress,
   onPressIn,
   onPressOut,
   ...rest
 }: ElasticPressableProps) {
   const scale = useSharedValue<number>(press.rest);
+  const motionEnabled = useMotionEnabled();
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -62,28 +65,40 @@ export function ElasticPressable({
 
   const handlePressIn: NonNullable<PressableProps["onPressIn"]> = useCallback(
     (event) => {
-      scale.value = withSpring(scaleTo, spring.press);
-      triggerHaptic(haptic);
+      scale.value = motionEnabled ? withSpring(scaleTo, spring.press) : scaleTo;
       onPressIn?.(event);
     },
-    [haptic, onPressIn, scale, scaleTo],
+    [motionEnabled, onPressIn, scale, scaleTo],
+  );
+
+  const handlePress: NonNullable<PressableProps["onPress"]> = useCallback(
+    (event) => {
+      if (!disabled) {
+        triggerHaptic(haptic);
+      }
+      onPress?.(event);
+    },
+    [disabled, haptic, onPress],
   );
 
   const handlePressOut: NonNullable<PressableProps["onPressOut"]> = useCallback(
     (event) => {
-      scale.value = withSequence(
-        withSpring(overshootTo, spring.release),
-        withSpring(press.rest, spring.bouncy),
-      );
+      scale.value = motionEnabled
+        ? withSequence(
+            withSpring(overshootTo, spring.release),
+            withSpring(press.rest, spring.bouncy),
+          )
+        : press.rest;
       onPressOut?.(event);
     },
-    [onPressOut, overshootTo, scale],
+    [motionEnabled, onPressOut, overshootTo, scale],
   );
 
   return (
     <AnimatedPressable
       {...rest}
       disabled={disabled}
+      onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={[style, animatedStyle]}>

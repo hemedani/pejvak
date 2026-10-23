@@ -52,7 +52,6 @@ import Animated, {
 
 import { ThemedText } from "@/components/themed-text";
 import { Icon, type IconName } from "@/components/ui/icon";
-import { triggerHaptic } from "@/components/ui/haptics";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { useTheme } from "@/hooks/use-theme";
 import { thumbTargetPercent } from "@/lib/segmentedLayout";
@@ -156,9 +155,8 @@ export function SegmentedControl<T extends string | number>({
             accessibilityLabel={option.label}
             scaleTo={0.94}
             overshootTo={1.02}
-            haptic="selection"
+            haptic="select"
             onPress={() => {
-              triggerHaptic("selection");
               onChange(option.value);
             }}
             style={styles.segment}

@@ -40,7 +40,7 @@ function SourceCard({ source, onPress }: { source: OnlineSource; onPress: () => 
         accessibilityHint="Opens this source's collections"
         scaleTo={0.985}
         overshootTo={1.004}
-        haptic="light"
+        haptic="tap"
         onPress={onPress}
         style={styles.cardPressable}>
         {/* The mark is a gradient square rather than the provider's logo: we do

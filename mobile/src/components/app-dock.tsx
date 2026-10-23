@@ -48,8 +48,16 @@
 
 import { LinearGradient } from "expo-linear-gradient";
 import type { BottomTabBarProps } from "expo-router/tabs";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
+import Animated, {
+  FadeIn,
+  FadeOut,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { DockPlayer } from "@/components/player/DockPlayer";
@@ -57,6 +65,7 @@ import { GlassSurface } from "@/components/ui/glass";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import { usePlayerStore } from "@/store/playerStore";
+import { curve, duration, easing, useMotionEnabled } from "@/theme/motion";
 import {
   elevation,
   hairline,
@@ -113,12 +122,27 @@ export const TABS: readonly TabDefinition[] = [
 
 export function AppDock({ state, navigation, insets }: BottomTabBarProps) {
   const theme = useTheme();
+  const motionEnabled = useMotionEnabled();
 
   // One source of truth for "is the player half showing", so the panel's height
   // and its content can never disagree about it.
   const trackId = usePlayerStore((s) => s.trackId);
   const status = usePlayerStore((s) => s.status);
   const playing = Boolean(trackId) && status !== "idle";
+
+  const expandedHeight =
+    layout.dock.playerHeight + layout.dock.navHeight + hairline;
+  const collapsedHeight = layout.dock.navHeight;
+  const height = useSharedValue(playing ? expandedHeight : collapsedHeight);
+
+  useEffect(() => {
+    const target = playing ? expandedHeight : collapsedHeight;
+    height.value = motionEnabled
+      ? withTiming(target, curve(easing.emphasized, 220))
+      : target;
+  }, [collapsedHeight, expandedHeight, height, motionEnabled, playing]);
+
+  const contentStyle = useAnimatedStyle(() => ({ height: height.value }));
 
   const routeFor = useCallback(
     (name: string) => state.routes.find((route) => route.name === name),
@@ -156,33 +180,54 @@ export function AppDock({ state, navigation, insets }: BottomTabBarProps) {
         elevated={false}
         style={[styles.panel, { shadowColor: theme.shadow, ...elevation.dock }]}
       >
-        {playing ? <DockPlayer key={trackId ?? "player"} /> : null}
-
-        {/* The seam between the two halves, inset so it reads as a division
-            inside the panel rather than a line drawn across the screen. */}
-        {playing ? (
-          <View
-            style={[styles.seam, { backgroundColor: theme.outlineVariant }]}
-          />
-        ) : null}
-
-        <View style={styles.nav}>
-          {TABS.map((tab) => {
-            const route = routeFor(tab.name);
-            if (!route) {
-              return null;
-            }
-            const isFocused = state.index === state.routes.indexOf(route);
-            return (
-              <Destination
-                key={tab.name}
-                tab={tab}
-                isFocused={isFocused}
-                onPress={() => onPress(route.name, route.key, isFocused)}
+        <Animated.View style={[styles.content, contentStyle]}>
+          {/* The player half is a single fading group, so the seam cannot outlive
+              the row it divides. `DockPlayer`'s key stays: a track change must
+              still re-measure the anchor. */}
+          {playing ? (
+            <Animated.View
+              entering={
+                motionEnabled
+                  ? FadeIn.duration(duration.quick).reduceMotion(
+                      ReduceMotion.Never,
+                    )
+                  : undefined
+              }
+              exiting={
+                motionEnabled
+                  ? FadeOut.duration(duration.exit).reduceMotion(
+                      ReduceMotion.Never,
+                    )
+                  : undefined
+              }>
+              <DockPlayer key={trackId ?? "player"} />
+              {/* The seam between the two halves, inset so it reads as a
+                  division inside the panel rather than a line drawn across the
+                  screen. */}
+              <View
+                style={[styles.seam, { backgroundColor: theme.outlineVariant }]}
               />
-            );
-          })}
-        </View>
+            </Animated.View>
+          ) : null}
+
+          <View style={styles.nav}>
+            {TABS.map((tab) => {
+              const route = routeFor(tab.name);
+              if (!route) {
+                return null;
+              }
+              const isFocused = state.index === state.routes.indexOf(route);
+              return (
+                <Destination
+                  key={tab.name}
+                  tab={tab}
+                  isFocused={isFocused}
+                  onPress={() => onPress(route.name, route.key, isFocused)}
+                />
+              );
+            })}
+          </View>
+        </Animated.View>
       </GlassSurface>
     </View>
   );
@@ -226,7 +271,7 @@ function Destination({ tab, isFocused, onPress }: DestinationProps) {
       accessibilityLabel={tab.label}
       scaleTo={0.88}
       overshootTo={1.04}
-      haptic="selection"
+      haptic="select"
       onPress={onPress}
       style={styles.slot}
     >
@@ -272,6 +317,10 @@ const styles = StyleSheet.create({
   panel: {
     flexDirection: "column",
     justifyContent: "center",
+  },
+  content: {
+    justifyContent: "flex-end",
+    overflow: "hidden",
   },
   seam: {
     height: hairline,

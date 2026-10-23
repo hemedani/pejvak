@@ -51,7 +51,7 @@ export function LanguageRow({ language, sourceCount, onPress }: LanguageRowProps
       disabled={!enabled}
       scaleTo={0.985}
       overshootTo={1.004}
-      haptic="light"
+      haptic="tap"
       onPress={onPress}
       style={styles.row}>
       <View style={styles.copy}>

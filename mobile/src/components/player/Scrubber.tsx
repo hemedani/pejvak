@@ -50,16 +50,16 @@ import { triggerHaptic } from "@/components/ui/haptics";
 import { useSmoothProgress } from "@/hooks/use-smooth-progress";
 import { useTheme } from "@/hooks/use-theme";
 import { formatClock } from "@/lib/time";
-import { spring } from "@/theme/motion";
+import { spring, useMotionEnabled } from "@/theme/motion";
 
 /** Height of the invisible touch band. Meets the 44 pt minimum. */
 const TOUCH_HEIGHT = 44;
 /** Space above the band for the time bubble to rise into. */
 const BUBBLE_HEADROOM = 22;
 /** Thumb diameter as a multiple of the track thickness. */
-const THUMB_RATIO = 2.4;
+const THUMB_RATIO = 3;
 /** Thumb scale at rest, so the playhead stays discoverable before you grab it. */
-const THUMB_IDLE_SCALE = 0.58;
+const THUMB_IDLE_SCALE = 0.82;
 /** Full wave height, in points. */
 const WAVE_AMPLITUDE = 3;
 /** Crest spacing, in points. */
@@ -159,7 +159,7 @@ export function Scrubber({
       return;
     }
     haptic.current = { step, at: now };
-    triggerHaptic("selection");
+    triggerHaptic("scrub");
   }, []);
 
   const commitSeek = useCallback(
@@ -171,15 +171,17 @@ export function Scrubber({
       // Optimistic: the bar should stay where the finger left it while the
       // native seek and the store update are in flight.
       setPosition(target);
-      triggerHaptic("light");
+      triggerHaptic("tap");
       onSeek(target);
     },
     [durationSec, onSeek, setPosition],
   );
 
+  const motionEnabled = useMotionEnabled();
+
   const beginScrub = useCallback(() => {
     haptic.current = { step: -1, at: Date.now() };
-    triggerHaptic("selection");
+    triggerHaptic("select");
   }, []);
 
   const endScrub = useCallback(() => {
@@ -194,7 +196,7 @@ export function Scrubber({
           // the gesture once the finger has travelled horizontally.
           .activeOffsetX([-10, 10])
           .onStart(() => {
-            active.value = withSpring(1, spring.snappy);
+            active.value = motionEnabled ? withSpring(1, spring.snappy) : 1;
             lastSec.value = -1;
             lastHapticStep.value = -1;
             isScrubbing.value = 1;
@@ -229,7 +231,7 @@ export function Scrubber({
             scheduleOnRN(commitSeek, clamp01(event.x / w));
           })
           .onFinalize(() => {
-            active.value = withSpring(0, spring.snappy);
+            active.value = motionEnabled ? withSpring(0, spring.snappy) : 0;
             scheduleOnRN(endScrub);
           }),
         Gesture.Tap().onEnd((event, success) => {
@@ -259,6 +261,7 @@ export function Scrubber({
       lastHapticStep,
       lastSec,
       maybeScrubHaptic,
+      motionEnabled,
       width,
     ],
   );

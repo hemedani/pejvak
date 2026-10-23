@@ -12,9 +12,14 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSharedValue, withTiming, type SharedValue } from "react-native-reanimated";
+import {
+  ReduceMotion,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from "react-native-reanimated";
 
-import { duration as durations, easing } from "@/theme/motion";
+import { duration as durations, easing, useMotionEnabled } from "@/theme/motion";
 
 export type CrossfadeState<T> = {
   /** The value to show on top. */
@@ -32,6 +37,7 @@ export function useCrossfade<T>(value: T, ms: number = durations.crossfade): Cro
   });
   const progress = useSharedValue(1);
   const latest = useRef(value);
+  const motionEnabled = useMotionEnabled();
 
   useEffect(() => {
     if (Object.is(latest.current, value)) {
@@ -41,9 +47,17 @@ export function useCrossfade<T>(value: T, ms: number = durations.crossfade): Cro
     latest.current = value;
 
     setLayers({ current: value, previous: outgoing });
-    progress.value = 0;
-    progress.value = withTiming(1, { duration: ms, easing: easing.outQuint });
-  }, [value, ms, progress]);
+    progress.value = motionEnabled
+      ? 0
+      : 1;
+    if (motionEnabled) {
+      progress.value = withTiming(1, {
+        duration: ms,
+        easing: easing.outQuint,
+        reduceMotion: ReduceMotion.Never,
+      });
+    }
+  }, [value, ms, motionEnabled, progress]);
 
   const clearPrevious = useCallback(() => {
     setLayers((state) => (state.previous === null ? state : { ...state, previous: null }));

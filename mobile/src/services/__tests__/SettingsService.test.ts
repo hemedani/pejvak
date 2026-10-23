@@ -20,18 +20,33 @@ describe("SettingsService.load", () => {
       themePreference: "system",
       defaultSpeed: 1,
       historySort: "newest",
+      motionPreference: "system",
+      hapticsEnabled: true,
     });
   });
 
   it("returns stored values", async () => {
-    getSetting.mockImplementation(async (key) =>
-      key === "themePreference" ? "dark" : "1.5",
-    );
+    getSetting.mockImplementation(async (key) => {
+      switch (key) {
+        case "themePreference":
+          return "dark";
+        case "defaultSpeed":
+          return "1.5";
+        case "motionPreference":
+          return "reduced";
+        case "hapticsEnabled":
+          return "false";
+        default:
+          // "1.5" is not a valid sort, so it falls back rather than propagating.
+          return null;
+      }
+    });
     expect(await SettingsService.load()).toEqual({
       themePreference: "dark",
       defaultSpeed: 1.5,
-      // "1.5" is not a valid sort, so it falls back rather than propagating.
       historySort: "newest",
+      motionPreference: "reduced",
+      hapticsEnabled: false,
     });
   });
 
@@ -53,6 +68,14 @@ describe("SettingsService setters", () => {
   it("persists the history sort", async () => {
     await SettingsService.setHistorySort("oldest");
     expect(setSetting).toHaveBeenCalledWith("historySort", "oldest");
+  });
+
+  it("persists motion and haptics preferences", async () => {
+    await SettingsService.setMotionPreference("full");
+    await SettingsService.setHapticsEnabled(false);
+
+    expect(setSetting).toHaveBeenCalledWith("motionPreference", "full");
+    expect(setSetting).toHaveBeenCalledWith("hapticsEnabled", "false");
   });
 });
 

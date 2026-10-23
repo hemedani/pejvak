@@ -12,7 +12,13 @@
 
 import type { ReactNode } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
-import Animated, { FadeIn, FadeInDown, FadeInRight, FadeInUp } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInRight,
+  FadeInUp,
+  ReduceMotion,
+} from "react-native-reanimated";
 
 import { duration, easing, stagger, useMotionEnabled } from "@/theme/motion";
 
@@ -69,7 +75,8 @@ export function Reveal({
             .delay(stagger(index))
             .duration(duration.screen)
             .easing(easing.outQuint)
-        : FadeIn.duration(duration.instant)
+            .reduceMotion(ReduceMotion.Never)
+        : FadeIn.duration(duration.instant).reduceMotion(ReduceMotion.Never)
       : undefined;
 
   return (

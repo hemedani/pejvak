@@ -27,7 +27,7 @@ import {
 } from "@/lib/playbackContext";
 import { formatClock } from "@/lib/time";
 import type { AuroraRamp } from "@/theme/tokens";
-import { spacing } from "@/theme/tokens";
+import { iconSize, spacing } from "@/theme/tokens";
 
 /**
  * The artwork, sized to leave the title room for four trailing controls.
@@ -148,7 +148,7 @@ export function MiniPlayerRow({
           name={context.type === "folder" ? "folder" : "playlists"}
           accessibilityLabel={`Open ${describeContextType(context.type).toLowerCase()} ${context.title}`}
           size={CONTROL.context}
-          iconSize={15}
+          iconSize={iconSize.sm}
           tone="ghost"
           onPress={onOpenContext}
         />
@@ -161,7 +161,7 @@ export function MiniPlayerRow({
           ramp={ramp}
           artwork={artworkUrl}
           size={CONTROL.addToPlaylist}
-          iconSize={15}
+          iconSize={iconSize.sm}
           tone="ghost"
         />
       ) : null}

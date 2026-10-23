@@ -25,10 +25,10 @@
 
 import { StyleSheet, View } from "react-native";
 
+import { SwapIcon } from "@/components/motion/SwapIcon";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip, GlassProgress } from "@/components/ui/glass";
-import { Icon } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import { formatBytes } from "@/lib/settings";
 import type { DownloadSummary } from "@/services/DownloadService";
@@ -94,7 +94,7 @@ export function DownloadControl({
   return (
     <Card style={styles.card}>
       <View style={styles.row}>
-        <Icon
+        <SwapIcon
           name={complete ? "checkCircle" : running ? "cloudDownload" : "alert"}
           size={18}
           color={complete ? theme.accent : failed > 0 ? theme.danger : theme.textSecondary}

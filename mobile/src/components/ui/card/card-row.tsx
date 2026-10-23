@@ -134,7 +134,7 @@ export function CardRow({
           accessibilityLabel={accessibilityLabel ?? (value ? `${label}, ${value}` : label)}
           accessibilityHint={accessibilityHint}
           scaleTo={0.985}
-          haptic="light"
+          haptic="tap"
           onPress={onPress}
           style={styles.content}>
           {body}

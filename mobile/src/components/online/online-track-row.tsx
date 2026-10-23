@@ -88,7 +88,7 @@ export function OnlineTrackRow({
         accessibilityHint={downloaded ? "Plays from this device" : "Streams from the source"}
         scaleTo={0.985}
         overshootTo={1.004}
-        haptic="light"
+        haptic="tap"
         onPress={onPress}
         style={styles.row}>
         {/* The marker is a small glass chip rather than bare digits, so the row

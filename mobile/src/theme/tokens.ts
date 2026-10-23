@@ -104,6 +104,19 @@ export const radius = {
 export const hairline = StyleSheet.hairlineWidth;
 
 /**
+ * Optical sizes for the single icon family. The dock keeps its own
+ * `layout.dock.icon` / `iconActive` values because `dockGeometry` pins them.
+ */
+export const iconSize = {
+  xs: 13,
+  sm: 15,
+  md: 18,
+  lg: 22,
+  xl: 26,
+  hero: 44,
+} as const;
+
+/**
  * Type scale. Display sizes carry negative tracking so large text stays tight
  * and premium rather than airy; small sizes get slight positive tracking.
  *
@@ -197,6 +210,15 @@ export type SemanticColors = {
   surfaceSunken: string;
   /** The hairline around a card. Carries meaning, so it is held to 3:1. */
   outline: string;
+  /**
+   * The resting border of a text field.
+   *
+   * One step darker than `outline` because a field's fill is `surfaceSunken`,
+   * not `surface`: the card hairline that measures 3:1 on white lands under it
+   * on the sunken track. A field is a control, not a card, so its edge is held
+   * to WCAG 1.4.11 against the fill it actually borders.
+   */
+  outlineStrong: string;
   /** A row divider inside a card. Structure, not a boundary — held below 3:1. */
   outlineVariant: string;
   /** Translucent fill for a *floating* frosted panel. */
@@ -232,6 +254,7 @@ const light: SemanticColors = {
   surface: "#FFFFFF",
   surfaceSunken: "#EDF1F6",
   outline: "#B4C0CC",
+  outlineStrong: "#7C8996",
   outlineVariant: "#DCE3EA",
   /** Translucent fill for a *floating* frosted panel. */
   glass: "rgba(255, 255, 255, 0.78)",
@@ -268,6 +291,7 @@ const dark: SemanticColors = {
   surface: "#1A2330",
   surfaceSunken: "#222D3A",
   outline: "#4C5B68",
+  outlineStrong: "#6B7A87",
   outlineVariant: "#2E3A46",
   glass: "rgba(28, 37, 50, 0.72)",
   glassStrong: "rgba(30, 40, 54, 0.9)",
@@ -394,6 +418,48 @@ export const card = {
   segmentHeight: 44,
   /** Hairline between rows in a group. */
   dividerInset: spacing.lg + 36 + spacing.md,
+} as const;
+
+/**
+ * The text-field system.
+ *
+ * A field is an **inset track**, not a floating panel: it sits one step below
+ * the card it belongs to, stays opaque, and carries its label above the track
+ * rather than inside it. That is why every number here is a step in an existing
+ * ramp instead of a new value — two fields on one screen must agree on their
+ * height, their corners, and where their text starts.
+ *
+ * `ringWidth` is deliberately larger than `borderWidth`: focus and error are
+ * drawn as a ring *over* the resting border, so the edge thickens rather than
+ * changing shade, which is the only signal that survives a low-contrast day.
+ */
+export const field = {
+  /** Every single-line field, search included. The 48pt target floor is a minimum. */
+  minHeight: 52,
+  /** Search stays shorter because it lives in a list header, not a form. */
+  searchMinHeight: 48,
+  radius: radius.md,
+  /** Search is a pill because it is a query, not a value being entered. */
+  searchRadius: radius.pill,
+  paddingHorizontal: spacing.lg,
+  paddingVertical: spacing.md,
+  borderWidth: 1,
+  ringWidth: 2,
+  /** Between the label and the track. */
+  labelGap: spacing.sm,
+  /** Between the track and its helper/error line. */
+  messageGap: spacing.xs,
+  /** Between stacked fields in one group. */
+  gap: spacing.md,
+  /** A textarea starts at two lines and grows to a bounded height. */
+  textareaMinHeight: 96,
+  textareaMaxHeight: 220,
+  /** A tag chip inside a composer. */
+  chipHeight: 28,
+  /** A colour swatch. */
+  swatch: 36,
+  /** The selected swatch's ring. */
+  swatchRing: 2,
 } as const;
 
 /** Blur strength for frosted panels. */

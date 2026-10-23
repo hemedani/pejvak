@@ -1,13 +1,14 @@
+import { useFonts } from "expo-font";
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { StyleSheet, useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { AnimatedSplashOverlay } from "@/components/animated-icon";
 import { AddToPlaylistSheet } from "@/components/add-to-playlist";
 import { ContextHistorySheet } from "@/components/context-history";
 import { SessionDetailSheet } from "@/components/session-detail";
+import { ICON_FONT } from "@/components/ui/icon";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -27,6 +28,10 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const status = useAuthStore((state) => state.status);
   const restore = useAuthStore((state) => state.restore);
+  const [fontsLoaded, fontError] = useFonts(ICON_FONT);
+  // A missing font must not strand the app on the splash screen; the icons may
+  // render as blanks, but every other surface still works.
+  const canRender = fontsLoaded || fontError !== null;
 
   useEffect(() => {
     void restore();
@@ -40,10 +45,19 @@ export default function RootLayout() {
     void useSettingsStore.getState().load();
   }, []);
 
+  useEffect(() => {
+    if (canRender && status !== "loading") {
+      void SplashScreen.hideAsync();
+    }
+  }, [canRender, status]);
+
+  if (!canRender) {
+    return null;
+  }
+
   return (
     <GestureHandlerRootView style={styles.root}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <AnimatedSplashOverlay />
         {status === "loading" ? null : (
           <Stack
             screenOptions={{
