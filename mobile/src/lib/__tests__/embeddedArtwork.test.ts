@@ -38,7 +38,8 @@ const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x0
 // --- ID3 ------------------------------------------------------------------
 
 function id3Frame(id: string, body: Uint8Array): Uint8Array {
-  return concat([ascii(id), be32(body.length), body]);
+  // 4-byte id, 4-byte size, then the 2 flag bytes every v2.3 frame carries.
+  return concat([ascii(id), be32(body.length), zeros(2), body]);
 }
 
 function apic(mime: string, data: Uint8Array, description = ""): Uint8Array {

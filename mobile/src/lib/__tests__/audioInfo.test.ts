@@ -24,6 +24,10 @@ function be32(value: number): Uint8Array {
   ]);
 }
 
+function be16(value: number): Uint8Array {
+  return Uint8Array.from([(value >>> 8) & 0xff, value & 0xff]);
+}
+
 function le16(value: number): Uint8Array {
   return Uint8Array.from([value & 0xff, (value >>> 8) & 0xff]);
 }
@@ -224,12 +228,12 @@ function mp4File(options: {
     options.format,
     concat([
       zeros(6), // reserved
-      le16(1), // data reference index
+      be16(1), // data reference index
       zeros(8), // reserved
-      le16(options.channels),
-      le16(options.sampleSize),
-      le16(0), // pre-defined
-      le16(0), // reserved
+      be16(options.channels),
+      be16(options.sampleSize),
+      be16(0), // pre-defined
+      be16(0), // reserved
       be32(options.sampleRate * 0x10000),
     ]),
   );
@@ -240,7 +244,9 @@ function mp4File(options: {
   const mdia = box("mdia", concat([hdlr, minf]));
   const trak = box("trak", mdia);
   const moov = box("moov", concat([mvhd, trak]));
-  const ftyp = box("ftyp", concat([ascii(options.brand), be32(0), ascii(options.brand)]));
+  // ISO base media brands are always four bytes, space-padded when shorter.
+  const brand = options.brand.padEnd(4, " ");
+  const ftyp = box("ftyp", concat([ascii(brand), be32(0), ascii(brand)]));
 
   return concat([ftyp, moov]);
 }

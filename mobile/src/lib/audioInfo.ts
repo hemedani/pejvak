@@ -124,7 +124,10 @@ function parseMpegFrame(bytes: Uint8Array, offset: number): MpegFrame | null {
     return null;
   }
   const header = readUint32BE(bytes, offset);
-  if ((header & 0xffe00000) !== 0xffe00000) {
+  // Compare the eleven sync bits, not a 32-bit mask: `header & 0xffe00000`
+  // yields a signed integer while the literal is positive, so the comparison
+  // is false for every real frame.
+  if ((header >>> 21) !== 0x7ff) {
     return null;
   }
 

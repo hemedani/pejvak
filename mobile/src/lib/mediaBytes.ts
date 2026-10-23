@@ -136,7 +136,9 @@ export function findDescendant(
       return null;
     }
     current =
-      type === "meta" ? { ...found, start: found.start + 4, headerBytes: 0 } : found;
+      type === "meta"
+        ? { ...found, start: found.start + found.headerBytes + 4, headerBytes: 0 }
+        : found;
   }
   return current;
 }

@@ -98,7 +98,13 @@ function pictureFrame(
 }
 
 /** `COMM`/`USLT`: encoding | language(3) | description | text. */
-function describedFrame(id: string, language: string, description: string, text: string): Uint8Array {
+function describedFrame(
+  id: string,
+  language: string,
+  description: string,
+  text: string,
+  major = 3,
+): Uint8Array {
   return frameWith(
     id,
     concat([
@@ -108,6 +114,7 @@ function describedFrame(id: string, language: string, description: string, text:
       Uint8Array.from([0]),
       new TextEncoder().encode(text),
     ]),
+    major,
   );
 }
 
@@ -422,7 +429,10 @@ describe("readAudioTagBundle", () => {
 
   it("reads v2.2 comment and lyrics frames", () => {
     const tag = id3Tag(
-      [describedFrame("COM", "eng", "", "Legacy comment"), describedFrame("ULT", "eng", "", "Legacy")],
+      [
+        describedFrame("COM", "eng", "", "Legacy comment", 2),
+        describedFrame("ULT", "eng", "", "Legacy", 2),
+      ],
       2,
     );
     const { details } = readAudioTagBundle(tag);
