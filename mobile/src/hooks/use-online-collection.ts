@@ -59,6 +59,16 @@ type Loaded = {
   fromCache: boolean;
   /** Set when there is nothing at all to show — never for a partial fallback. */
   error: string | null;
+  /**
+   * Whether the source has answered for this key.
+   *
+   * The local read is immediate and knows nothing about the network, so it
+   * settles at `false`. A collection with no rows on the device would otherwise
+   * stop being "loading" the moment that read returns, and the screen would
+   * paint "No playable audio" over a request that is still in flight. The empty
+   * state is only honest once the source has actually declined to answer.
+   */
+  settled: boolean;
 };
 
 /** The numbers that move while a download runs. */
@@ -123,7 +133,16 @@ async function readLocal(key: string): Promise<Loaded> {
     LocalDBService.getCollectionTrackProgress(key),
     LocalDBService.getContextStats("online", key),
   ]);
-  return { key, meta, tracks, progress, stats, fromCache: false, error: null };
+  return {
+    key,
+    meta,
+    tracks,
+    progress,
+    stats,
+    fromCache: false,
+    error: null,
+    settled: false,
+  };
 }
 
 /**
@@ -142,12 +161,14 @@ async function readRemote(key: string, local: Loaded): Promise<Loaded> {
       tracks: result.tracks,
       fromCache: result.fromCache,
       error: null,
+      settled: true,
     };
   } catch (caught) {
     return {
       ...local,
       fromCache: true,
       error: local.tracks.length > 0 ? null : messageOf(caught),
+      settled: true,
     };
   }
 }
@@ -196,6 +217,7 @@ export function useOnlineCollection(key: string | null): UseOnlineCollectionResu
             stats: EMPTY_STATS,
             fromCache: false,
             error: messageOf(caught),
+            settled: true,
           });
         }
       });
@@ -299,8 +321,12 @@ export function useOnlineCollection(key: string | null): UseOnlineCollectionResu
     fromCache: current?.fromCache ?? false,
     // "Nothing for this key yet" *is* the loading condition — derived from the
     // load itself rather than tracked alongside it, so the two can never
-    // disagree about whether the screen has something to draw.
-    loading: key !== null && current === null,
+    // disagree about whether the screen has something to draw. An empty local
+    // read is not yet an answer: it stays loading until the source settles,
+    // because "this device has no rows" is not "this collection has no audio".
+    loading:
+      key !== null &&
+      (current === null || (current.tracks.length === 0 && !current.settled)),
     error: actionError ?? current?.error ?? null,
     download: live?.download ?? null,
     refresh,
