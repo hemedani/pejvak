@@ -1,6 +1,6 @@
 import { type ActFn, type Document, ObjectId } from "lesan";
 import { coreApp, playbackSession } from "../../../mod.ts";
-import { type MyContext } from "@lib";
+import { type MyContext, projectionOrPure } from "@lib";
 
 export const getMyListeningHistoryFn: ActFn = async (body) => {
   const { user }: MyContext = coreApp.contextFns.getContextModel() as MyContext;
@@ -27,6 +27,9 @@ export const getMyListeningHistoryFn: ActFn = async (body) => {
   pipeline.push({ $limit: limit || 50 });
 
   return await playbackSession
-    .aggregation({ pipeline, projection: get })
+    .aggregation({
+      pipeline,
+      projection: projectionOrPure(get, "playbackSession"),
+    })
     .toArray();
 };

@@ -1,6 +1,6 @@
 import { type ActFn, type Document, ObjectId } from "lesan";
 import { coreApp, playbackContext } from "../../../mod.ts";
-import { type MyContext } from "@lib";
+import { type MyContext, projectionOrPure } from "@lib";
 
 export const getMyPlaybackContextsFn: ActFn = async (body) => {
   const { user }: MyContext = coreApp.contextFns.getContextModel() as MyContext;
@@ -26,6 +26,9 @@ export const getMyPlaybackContextsFn: ActFn = async (body) => {
   pipeline.push({ $skip: calculatedSkip });
   pipeline.push({ $limit: limit || 50 });
 
-  return await playbackContext.aggregation({ pipeline, projection: get })
+  return await playbackContext.aggregation({
+    pipeline,
+    projection: projectionOrPure(get, "playbackContext"),
+  })
     .toArray();
 };

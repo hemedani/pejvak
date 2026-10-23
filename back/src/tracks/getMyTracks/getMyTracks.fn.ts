@@ -1,6 +1,6 @@
 import { type ActFn, type Document, ObjectId } from "lesan";
 import { coreApp, track } from "../../../mod.ts";
-import { type MyContext } from "@lib";
+import { type MyContext, projectionOrPure } from "@lib";
 
 export const getMyTracksFn: ActFn = async (body) => {
   const { user }: MyContext = coreApp.contextFns.getContextModel() as MyContext;
@@ -41,7 +41,7 @@ export const getMyTracksFn: ActFn = async (body) => {
   return await track
     .aggregation({
       pipeline,
-      projection: get,
+      projection: projectionOrPure(get, "track"),
     })
     .toArray();
 };

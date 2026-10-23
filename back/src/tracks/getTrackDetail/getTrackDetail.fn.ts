@@ -1,6 +1,6 @@
 import { type ActFn, ObjectId } from "lesan";
 import { coreApp, track } from "../../../mod.ts";
-import { type MyContext } from "@lib";
+import { type MyContext, projectionOrPure } from "@lib";
 
 export const getTrackDetailFn: ActFn = async (body) => {
   const { set, get } = body.details;
@@ -11,6 +11,6 @@ export const getTrackDetailFn: ActFn = async (body) => {
       _id: new ObjectId(set.trackId),
       "user._id": new ObjectId(user._id),
     },
-    projection: get,
+    projection: projectionOrPure(get, "track"),
   });
 };

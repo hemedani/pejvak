@@ -1,6 +1,6 @@
 import { type ActFn, type Document, ObjectId } from "lesan";
 import { coreApp, onlineCollection } from "../../../mod.ts";
-import { type MyContext } from "@lib";
+import { type MyContext, projectionOrPure } from "@lib";
 
 export const getMyOnlineCollectionsFn: ActFn = async (body) => {
   const { user }: MyContext = coreApp.contextFns.getContextModel() as MyContext;
@@ -45,6 +45,9 @@ export const getMyOnlineCollectionsFn: ActFn = async (body) => {
   pipeline.push({ $limit: limit || 50 });
 
   return await onlineCollection
-    .aggregation({ pipeline, projection: get })
+    .aggregation({
+      pipeline,
+      projection: projectionOrPure(get, "onlineCollection"),
+    })
     .toArray();
 };
