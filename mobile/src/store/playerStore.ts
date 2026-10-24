@@ -1,8 +1,9 @@
 import { create } from "zustand";
 
+import type { PlaybackStatus, PlaybackWait } from "@/lib/playbackPhase";
 import type { PlaybackContext } from "@/lib/playbackContext";
 
-export type PlaybackStatus = "idle" | "loading" | "playing" | "paused" | "ended" | "error";
+export type { PlaybackStatus } from "@/lib/playbackPhase";
 
 /**
  * A skip event. `nonce` increments on every next/previous so consumers (the
@@ -16,6 +17,15 @@ export type SkipSignal = {
 
 type PlayerState = {
   status: PlaybackStatus;
+  /**
+   * Set while the player has been asked to play and cannot yet.
+   *
+   * Separate from `status` because a wait is not a transport state: on Android
+   * the player reports `playing` throughout a stream's first buffer, so
+   * `status` alone cannot tell a paused track from one that is still arriving.
+   * See `lib/playbackPhase` for why the screen needs both.
+   */
+  waiting: PlaybackWait | null;
   trackId: string | null;
   title: string | null;
   artist: string | null;
@@ -62,6 +72,7 @@ export type PlayerPatch = Partial<
 
 const initialState = {
   status: "idle" as PlaybackStatus,
+  waiting: null as PlaybackWait | null,
   trackId: null,
   title: null,
   artist: null,

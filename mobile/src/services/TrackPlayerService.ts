@@ -6,8 +6,10 @@ import {
 } from "expo-audio";
 import Constants, { ExecutionEnvironment } from "expo-constants";
 
+import { isStreamUri } from "@/lib/audioLocation";
 import type { LocalTrack } from "@/lib/db/types";
 import { getAdapter, isLiveSource } from "@/lib/online";
+import type { PlaybackWait } from "@/lib/playbackPhase";
 import { sameContext, type PlaybackContext } from "@/lib/playbackContext";
 import { resumePositionSec } from "@/lib/resume";
 import {
@@ -97,6 +99,51 @@ const reportedUnreachable = new Set<string>();
 
 function patch(partial: PlayerPatch) {
   usePlayerStore.getState().patch(partial);
+}
+
+/** Whether the loaded track's bytes come over the network. */
+function isStreaming(track: LocalTrack | null): boolean {
+  return track !== null && track.fileUri !== null && isStreamUri(track.fileUri);
+}
+
+/**
+ * Whether the listener has asked for audio and not got it yet.
+ *
+ * The same fact the store's `waiting` holds, kept here as well because the
+ * status listener has to read it *synchronously* on every tick, and because the
+ * platform's own answer to "does it want to play?" is not usable: ExoPlayer
+ * reports `playing: false` for the whole of a stream's first buffer, so a
+ * paused player and a connecting one look identical from the outside, and a
+ * paused player that keeps buffering would re-arm a loader the listener had
+ * already dismissed.
+ *
+ * `armWait` and `clearWait` are the only writers, so the two can never disagree.
+ */
+let awaitingAudio = false;
+
+function waitFor(kind: PlaybackWait["kind"]): PlaybackWait {
+  return { kind, since: Date.now(), stream: isStreaming(currentTrack) };
+}
+
+/**
+ * Announces that the player has been asked to play and cannot yet.
+ *
+ * Called *before* the native `play()`, because the first status tick can be a
+ * second away and a resume that says nothing for a second is the bug this
+ * exists to fix. The tick is what ends the wait, so an over-eager arm costs a
+ * brief loader at worst, and `WAIT_REVEAL_MS` hides even that.
+ */
+function armWait(kind: PlaybackWait["kind"]): void {
+  awaitingAudio = true;
+  patch({ waiting: waitFor(kind) });
+}
+
+/** Ends the wait, without claiming anything about playback. */
+function clearWait(): void {
+  awaitingAudio = false;
+  if (usePlayerStore.getState().waiting) {
+    patch({ waiting: null });
+  }
 }
 
 function getPlayer(): AudioPlayer {
@@ -445,9 +492,30 @@ function handleStatus(status: AudioStatus): void {
   }
 
   if (status.error) {
-    patch({ status: "error", error: status.error });
+    awaitingAudio = false;
+    patch({ status: "error", error: status.error, waiting: null });
     reportUnreachableTrack();
     return;
+  }
+
+  // A wait is the player's own report, never the screen's guess. `isBuffering`
+  // is the only field that separates "the bytes have not arrived" from "this is
+  // audible", but it cannot say whether the listener still *wants* them: a
+  // paused player keeps buffering in the background. `awaitingAudio` answers
+  // that for a first connect, where the platform reports `playing: false` for
+  // the whole buffer, and `status.playing` answers it for a stall mid-track,
+  // where the player still intends to play.
+  if (status.isBuffering && (awaitingAudio || status.playing)) {
+    if (!current.waiting) {
+      // A session exists only once audio has started, which is exactly what
+      // separates the two waits: a first connect has no session yet, a
+      // mid-track stall does.
+      armWait(active ? "buffering" : "connecting");
+    }
+  } else if (current.waiting) {
+    // No longer buffering: either the audio arrived, or the listener stopped
+    // waiting for it. Both mean there is nothing left to report.
+    clearWait();
   }
 
   if (pendingSeekSec !== null && status.isLoaded) {
@@ -504,6 +572,12 @@ function handleStatus(status: AudioStatus): void {
       }
     }
   } else if (wasPlaying) {
+    // `finishSession` bails out when no session ever began — a stream cancelled
+    // during its first buffer is the case that matters — and without this the
+    // store would go on claiming it is playing a track that was never heard.
+    if (!active) {
+      patch({ status: "paused" });
+    }
     void finishSession({ completed: false, interrupted: false });
   }
 
@@ -520,6 +594,7 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
   await finishSession({ completed: false, interrupted: true });
 
   currentTrack = track;
+  awaitingAudio = true;
   durationReported = false;
   nextSessionStartSec = Math.round(startPositionSec);
   pendingSeekSec = startPositionSec > 0 ? startPositionSec : null;
@@ -528,6 +603,10 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
 
   patch({
     status: "loading",
+    // Armed here rather than left to the first status tick: a stream's first
+    // tick can be a second away, and that second is exactly the one the
+    // listener spends wondering whether the tap registered.
+    waiting: waitFor("connecting"),
     trackId: track.id,
     title: track.title,
     artist: track.author,
@@ -573,10 +652,19 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
 
 export function pause(): void {
   player?.pause();
+  // Ending the wait is the listener's decision. Without this the next buffering
+  // tick would put a loader back over a player they have just silenced.
+  clearWait();
 }
 
 export function resume(): void {
   void configureAudio();
+  // Resuming a stream is a fresh connection — the source is asked for the bytes
+  // again — so it waits exactly like a first load does. A player that is
+  // already playing has nothing to wait for.
+  if (!player?.playing) {
+    armWait("connecting");
+  }
   player?.play();
 }
 
@@ -586,8 +674,9 @@ export function togglePlayPause(): void {
     return;
   }
   if (instance.playing) {
-    instance.pause();
+    pause();
   } else {
+    armWait("connecting");
     void configureAudio().then(() => instance.play());
   }
 }
@@ -618,6 +707,7 @@ export async function stop(): Promise<void> {
   instance?.release();
 
   currentTrack = null;
+  awaitingAudio = false;
   activeStretchId = null;
   pendingStretchId = null;
   durationReported = false;
@@ -842,6 +932,7 @@ export async function recoverOrphanedSessions(): Promise<number> {
 export function __resetForTests(): void {
   player = null;
   currentTrack = null;
+  awaitingAudio = false;
   active = null;
   activeRun = null;
   sessionStarting = false;
