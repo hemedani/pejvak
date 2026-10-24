@@ -32,6 +32,7 @@ const EMPTY_SAVED: Record<string, LocalOnlineCollection> = {};
 /** Everything a catalogue read produces, tagged with the source it is about. */
 type Loaded = {
   sourceId: string;
+  languageCode: string | null;
   collections: OnlineCollection[];
   saved: Record<string, LocalOnlineCollection>;
   error: string | null;
@@ -66,16 +67,24 @@ async function readSaved(): Promise<Record<string, LocalOnlineCollection>> {
   return byKey;
 }
 
-async function loadFor(sourceId: string, force: boolean): Promise<Loaded> {
+async function loadFor(
+  sourceId: string,
+  languageCode: string | null,
+  force: boolean,
+): Promise<Loaded> {
   try {
     const [collections, saved] = await Promise.all([
-      OnlineCatalogService.listCollections(sourceId, { refresh: force }),
+      OnlineCatalogService.listCollections(sourceId, {
+        refresh: force,
+        languageCode: languageCode ?? undefined,
+      }),
       readSaved(),
     ]);
-    return { sourceId, collections, saved, error: null };
+    return { sourceId, languageCode, collections, saved, error: null };
   } catch (caught) {
     return {
       sourceId,
+      languageCode,
       collections: EMPTY_COLLECTIONS,
       saved: await readSaved(),
       error: messageOf(caught),
@@ -83,7 +92,10 @@ async function loadFor(sourceId: string, force: boolean): Promise<Loaded> {
   }
 }
 
-export function useOnlineCatalog(sourceId: string | null): UseOnlineCatalogResult {
+export function useOnlineCatalog(
+  sourceId: string | null,
+  languageCode: string | null = null,
+): UseOnlineCatalogResult {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   /** A failed action — a download that would not start — as opposed to a read. */
@@ -94,7 +106,7 @@ export function useOnlineCatalog(sourceId: string | null): UseOnlineCatalogResul
       return;
     }
     let cancelled = false;
-    void loadFor(sourceId, false).then((next) => {
+    void loadFor(sourceId, languageCode, false).then((next) => {
       if (!cancelled) {
         setLoaded(next);
       }
@@ -102,7 +114,7 @@ export function useOnlineCatalog(sourceId: string | null): UseOnlineCatalogResul
     return () => {
       cancelled = true;
     };
-  }, [sourceId]);
+  }, [sourceId, languageCode]);
 
   // A download started from this list keeps running after the screen closes, so
   // the rows are re-read from the notifications rather than from a local guess.
@@ -133,12 +145,12 @@ export function useOnlineCatalog(sourceId: string | null): UseOnlineCatalogResul
         setRefreshing(true);
       }
       try {
-        setLoaded(await loadFor(sourceId, options.refresh ?? false));
+        setLoaded(await loadFor(sourceId, languageCode, options.refresh ?? false));
       } finally {
         setRefreshing(false);
       }
     },
-    [sourceId],
+    [languageCode, sourceId],
   );
 
   const toggleFavorite = useCallback(
@@ -167,7 +179,10 @@ export function useOnlineCatalog(sourceId: string | null): UseOnlineCatalogResul
     }
   }, []);
 
-  const current = loaded && loaded.sourceId === sourceId ? loaded : null;
+  const current =
+    loaded && loaded.sourceId === sourceId && loaded.languageCode === languageCode
+      ? loaded
+      : null;
 
   return {
     collections: current?.collections ?? EMPTY_COLLECTIONS,

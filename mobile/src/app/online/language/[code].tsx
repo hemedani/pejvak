@@ -95,7 +95,7 @@ export default function LanguageSourcesScreen() {
                     onPress={() =>
                       router.push({
                         pathname: "/online/source/[id]",
-                        params: { id: source.id },
+                        params: { id: source.id, language: code },
                       })
                     }
                   />

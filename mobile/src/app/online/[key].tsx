@@ -110,6 +110,10 @@ export default function OnlineCollectionScreen() {
   );
 
   const source = meta ? findSource(meta.sourceId) : null;
+  const isLive = source?.live === true;
+  // Read as a primitive so the memo below depends on the value rather than on
+  // the whole (re-created) collection row.
+  const metaSubtitle = meta?.subtitle ?? null;
   // Seeded on the collection key, so the artwork fallback matches the card the
   // listener tapped to get here.
   const ramp = paletteFor(key ?? "");
@@ -117,7 +121,14 @@ export default function OnlineCollectionScreen() {
   const unfinishedCount = tracks.length - finishedCount;
 
   const subtitle = useMemo(() => {
-    const parts = [describeTrackCount(tracks.length)];
+    if (isLive) {
+      return metaSubtitle ? `Live · ${metaSubtitle}` : "Live stream";
+    }
+    const parts: string[] = [];
+    if (metaSubtitle) {
+      parts.push(metaSubtitle);
+    }
+    parts.push(describeTrackCount(tracks.length));
     if (totalDurationSec > 0) {
       parts.push(formatDuration(totalDurationSec));
     }
@@ -126,9 +137,12 @@ export default function OnlineCollectionScreen() {
       parts.push(played);
     }
     return parts.join(" · ");
-  }, [tracks.length, totalDurationSec, stats]);
+  }, [isLive, metaSubtitle, tracks.length, totalDurationSec, stats]);
 
   const completion = useMemo(() => {
+    if (isLive) {
+      return "Live stream";
+    }
     if (tracks.length === 0) {
       return null;
     }
@@ -139,7 +153,7 @@ export default function OnlineCollectionScreen() {
       return "Finished";
     }
     return `${finishedCount} of ${tracks.length} finished`;
-  }, [finishedCount, tracks.length]);
+  }, [finishedCount, isLive, tracks.length]);
 
   /**
    * The collection's tracks, grouped into the series they actually are.
@@ -407,25 +421,27 @@ export default function OnlineCollectionScreen() {
                   <PrimaryButton label={primaryLabel} onPress={() => void start("resume")} />
                 </Reveal>
 
-                <Reveal index={2}>
-                  <View style={styles.actions}>
-                    <GlassChip label="Shuffle" onPress={() => void start("shuffle")} />
-                    {unfinishedCount > 0 && unfinishedCount < tracks.length ? (
-                      <GlassChip
-                        label={`Unfinished only (${unfinishedCount})`}
-                        onPress={() => void start("unfinished")}
+                {!isLive ? (
+                  <Reveal index={2}>
+                    <View style={styles.actions}>
+                      <GlassChip label="Shuffle" onPress={() => void start("shuffle")} />
+                      {unfinishedCount > 0 && unfinishedCount < tracks.length ? (
+                        <GlassChip
+                          label={`Unfinished only (${unfinishedCount})`}
+                          onPress={() => void start("unfinished")}
+                        />
+                      ) : null}
+                      <GlassChip label="Add to queue" onPress={() => void onAddToQueue()} />
+                      <DownloadControl
+                        summary={download}
+                        onStart={() => void startDownload()}
+                        onCancel={() => void cancelDownload()}
+                        onRetry={() => void retryDownload()}
+                        onDelete={confirmDeleteDownload}
                       />
-                    ) : null}
-                    <GlassChip label="Add to queue" onPress={() => void onAddToQueue()} />
-                    <DownloadControl
-                      summary={download}
-                      onStart={() => void startDownload()}
-                      onCancel={() => void cancelDownload()}
-                      onRetry={() => void retryDownload()}
-                      onDelete={confirmDeleteDownload}
-                    />
-                  </View>
-                </Reveal>
+                    </View>
+                  </Reveal>
+                ) : null}
 
                 {notice ? (
                   <InlineNotice tone="accent" title={notice} announce />

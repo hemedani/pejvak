@@ -6,6 +6,7 @@ import { AnnotationComposer } from "@/components/player/AnnotationComposer";
 import { JumpToTimeSheet } from "@/components/player/JumpToTimeSheet";
 import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
 import { PlayerContent } from "@/components/player/PlayerContent";
+import { QueueSheet } from "@/components/player/QueueSheet";
 import { SleepTimerSheet } from "@/components/player/SleepTimerSheet";
 import { ThemedText } from "@/components/themed-text";
 import { GlassSheet } from "@/components/ui/glass";
@@ -64,6 +65,8 @@ export default function PlayerScreen() {
   const playbackSpeed = usePlayerStore((state) => state.playbackSpeed);
   const error = usePlayerStore((state) => state.error);
   const skip = usePlayerStore((state) => state.skip);
+  const queue = usePlayerStore((state) => state.queue);
+  const queueIndex = usePlayerStore((state) => state.queueIndex);
 
   const activeTrackId = paramTrackId ?? storeTrackId;
   const [track, setTrack] = useState<LocalTrack | null>(null);
@@ -71,6 +74,7 @@ export default function PlayerScreen() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [sleepSheetOpen, setSleepSheetOpen] = useState(false);
   const [jumpSheetOpen, setJumpSheetOpen] = useState(false);
+  const [queueOpen, setQueueOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftPositionSec, setDraftPositionSec] = useState(0);
   const [resume, setResume] = useState<{ trackId: string; sec: number } | null>(null);
@@ -239,6 +243,20 @@ export default function PlayerScreen() {
 
   const panels = (
     <>
+      {queueOpen ? (
+        <QueueSheet
+          queue={queue}
+          currentIndex={queueIndex}
+          context={context}
+          onSelect={(index) => {
+            setQueueOpen(false);
+            // The same queue and the same context: a jump inside a collection is
+            // a new session, not a new collection run.
+            void TrackPlayerService.playQueueAt([...queue], index, undefined, context);
+          }}
+          onClose={() => setQueueOpen(false)}
+        />
+      ) : null}
       {sleepSheetOpen ? (
         <SleepTimerSheet
           active={sleep.active}
@@ -352,6 +370,7 @@ export default function PlayerScreen() {
             setComposerOpen(false);
             setSleepSheetOpen(false);
             setJumpSheetOpen(false);
+            setQueueOpen(false);
             setSelectedId(null);
             close();
           }}
@@ -364,6 +383,8 @@ export default function PlayerScreen() {
           onForward={() => void TrackPlayerService.seekTo(positionSec + 30)}
           onSeek={(target) => void TrackPlayerService.seekTo(target)}
           onCycleSpeed={cycleSpeed}
+          onOpenQueue={() => setQueueOpen(true)}
+          queueLength={queue.length}
           onOpenSleepTimer={openSleepTimer}
           onOpenJumpToTime={openJumpToTime}
           onAddNote={openComposer}
