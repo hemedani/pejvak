@@ -1,5 +1,13 @@
 import type { BackendActRequest } from "@/lib/backend-types";
 import { callTypedAct, type RequestOptions } from "@/lib/client";
+import { LocalDBService } from "@/services/LocalDBService";
+
+/**
+ * The last profile the server confirmed, kept beside the token so an offline
+ * launch can still say who is listening. A username and email are not secrets;
+ * the credential itself stays in SecureStore.
+ */
+const CACHED_USER_KEY = "auth.cachedUser";
 
 export type AuthUser = {
   _id?: string;
@@ -59,4 +67,33 @@ export function getMe(options?: RequestOptions): Promise<AuthUser> {
     { service: "main", model: "user", act: "getMe", details },
     options,
   );
+}
+
+function isAuthUser(value: unknown): value is AuthUser {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return typeof record.username === "string" && typeof record.email === "string";
+}
+
+export async function getCachedUser(): Promise<AuthUser | null> {
+  const raw = await LocalDBService.getSetting(CACHED_USER_KEY);
+  if (!raw) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isAuthUser(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function cacheUser(user: AuthUser): Promise<void> {
+  await LocalDBService.setSetting(CACHED_USER_KEY, JSON.stringify(user));
+}
+
+export async function clearCachedUser(): Promise<void> {
+  await LocalDBService.setSetting(CACHED_USER_KEY, "");
 }

@@ -60,22 +60,22 @@ export const useAuthStore = create<AuthState>((set) => ({
   isSubmitting: false,
 
   restore: async () => {
-    try {
-      const token = await getToken();
-      if (!token) {
-        setAuthToken(null);
-        set({ status: "unauthenticated", user: null, token: null });
-        return;
-      }
-      setAuthToken(token);
-      const user = await AuthService.getMe();
-      set({ status: "authenticated", user, token });
-      void syncAll().catch(() => undefined);
-    } catch {
-      await clearToken();
+    const token = await getToken().catch(() => null);
+    if (!token) {
       setAuthToken(null);
       set({ status: "unauthenticated", user: null, token: null });
+      return;
     }
+
+    // A saved token is proof of a previous sign-in. Open the app on it and on
+    // the last known profile without asking the server, so a tunnel or a
+    // flight does not turn into a logout. `getMe` then refreshes the identity
+    // in the background and is the only thing allowed to end the session.
+    setAuthToken(token);
+    const user = await AuthService.getCachedUser().catch(() => null);
+    set({ status: "authenticated", user, token });
+    void refreshIdentity(token);
+    void syncAll().catch(() => undefined);
   },
 
   login: async (input) => {
@@ -83,6 +83,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { token, user } = await AuthService.login(input);
       await setToken(token);
+      await AuthService.cacheUser(user).catch(() => undefined);
       setAuthToken(token);
       set({ status: "authenticated", user, token, isSubmitting: false, error: null });
       void syncAll().catch(() => undefined);
@@ -97,6 +98,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { token, user } = await AuthService.register(input);
       await setToken(token);
+      await AuthService.cacheUser(user).catch(() => undefined);
       setAuthToken(token);
       set({ status: "authenticated", user, token, isSubmitting: false, error: null });
       void syncAll().catch(() => undefined);
@@ -108,7 +110,45 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await clearToken();
+    await AuthService.clearCachedUser().catch(() => undefined);
     setAuthToken(null);
     set({ status: "unauthenticated", user: null, token: null, error: null });
   },
 }));
+
+/**
+ * Only the server may end a restored session, and only by rejecting the token
+ * (`validation` is the envelope failure the backend returns for a missing or
+ * expired one). Offline, timeouts, cancelled requests and malformed responses
+ * say nothing about whether the listener is still signed in.
+ */
+function isAuthRejection(error: unknown): boolean {
+  return (
+    error instanceof LesanError &&
+    (error.code === "unauthorized" ||
+      error.code === "forbidden" ||
+      error.code === "validation")
+  );
+}
+
+async function refreshIdentity(token: string): Promise<void> {
+  try {
+    const user = await AuthService.getMe();
+    if (useAuthStore.getState().token !== token) {
+      return;
+    }
+    await AuthService.cacheUser(user).catch(() => undefined);
+    useAuthStore.setState({ user });
+  } catch (error) {
+    if (!isAuthRejection(error)) {
+      return;
+    }
+    if (useAuthStore.getState().token !== token) {
+      return;
+    }
+    await clearToken().catch(() => undefined);
+    await AuthService.clearCachedUser().catch(() => undefined);
+    setAuthToken(null);
+    useAuthStore.setState({ status: "unauthenticated", user: null, token: null });
+  }
+}
