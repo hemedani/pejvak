@@ -52,6 +52,8 @@ Confirm that every package supports the versions in `package.json` before instal
 - JS status events are not guaranteed while the app is backgrounded, so persist a checkpoint every 10 s and reconcile on resume/launch via `recoverOrphanedSessions()` (finalizes any checkpoint whose session never ended).
 - On `play`, end any open session and start a new one with the current position and speed. On `pause`/`stop`/track end, finalize the session with `endPositionSec`, `durationListenedSec`, and `completed`.
 - A speed change splits the session; within-session seeks are ignored by the delta rule.
+- **A wait is its own state, and `playing` cannot answer for it.** ExoPlayer reports the *intended* state, so a stream's first buffer arrives with `playing: false` (nothing is playing yet) and a stall mid-track arrives with `playing: true` (it still wants to). The store therefore carries `waiting: { kind, since, stream } | null`, written only by `TrackPlayerService`, and `lib/playbackPhase` is the one place that turns `status` + `waiting` + `error` into the phase a screen draws. `armWait` sets the service's own intent flag as well, because a paused player keeps buffering in the background and would otherwise re-arm a loader the listener had already dismissed.
+- **The wait is shown on the control that caused it.** The play button keeps its press and swaps its glyph for `SpinnerRing` ("Stop waiting"), the timeline sweeps an indeterminate band (`WavyProgress sweeping`) instead of drawing a playhead nobody has reached, and one status line says whether it is connecting to a source, preparing a file, or stalled. Nothing is drawn for the first `WAIT_REVEAL_MS`: a local file opens faster than the eye registers a loader.
 
 ## Local database (`LocalDBService`)
 
