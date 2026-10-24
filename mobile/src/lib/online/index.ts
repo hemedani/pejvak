@@ -9,8 +9,13 @@
 import type { DownloadState } from "@/lib/db/types";
 import type { StatusSpec } from "@/lib/rowStatus";
 
+import { aminikhaahAdapter } from "@/lib/online/aminikhaah";
+import { aminikhaahPodcastsAdapter } from "@/lib/online/aminikhaahPodcasts";
 import { archiveLanguageFacets, archiveSources, createArchiveAdapter } from "@/lib/online/archive";
+import { librivoxAdapter } from "@/lib/online/librivox";
 import { manahejAdapter } from "@/lib/online/manahej";
+import { parseDownloadedFolderKey } from "@/lib/online/naming";
+import { radioBrowserAdapter } from "@/lib/online/radiobrowser";
 import type { OnlineAdapter, OnlineLanguage, OnlineSource, OnlineSourceKind } from "@/lib/online/types";
 
 export * from "@/lib/online/languages";
@@ -25,7 +30,34 @@ export * from "@/lib/online/types";
  * this list is built rather than written: adding a language to the archive's own
  * table is the whole of what it takes for the Browse tab to offer it.
  */
-export const SOURCES: readonly OnlineSource[] = [manahejAdapter.source, ...archiveSources()];
+export const SOURCES: readonly OnlineSource[] = [
+  manahejAdapter.source,
+  aminikhaahAdapter.source,
+  aminikhaahPodcastsAdapter.source,
+  librivoxAdapter.source,
+  radioBrowserAdapter.source,
+  ...archiveSources(),
+];
+
+/**
+ * Every language a source serves.
+ *
+ * A source is usually one language and `languageCode` is that language. A
+ * provider that serves several says so with `languageCodes`, and this is the
+ * one place that answers the question — so a saved German book and a saved
+ * Dutch book can come from the same provider without either losing its
+ * language.
+ */
+export function sourceLanguages(source: OnlineSource): readonly string[] {
+  return source.languageCodes && source.languageCodes.length > 0
+    ? source.languageCodes
+    : [source.languageCode];
+}
+
+/** Whether a source's audio is a live stream rather than a finite recording. */
+export function isLiveSource(sourceId: string | null | undefined): boolean {
+  return sourceId ? findSource(sourceId)?.live === true : false;
+}
 
 /**
  * How a source kind becomes an adapter.
@@ -37,6 +69,10 @@ export const SOURCES: readonly OnlineSource[] = [manahejAdapter.source, ...archi
  */
 const ADAPTER_BUILDERS: Record<OnlineSourceKind, (source: OnlineSource) => OnlineAdapter> = {
   manahej: () => manahejAdapter,
+  aminikhaah: () => aminikhaahAdapter,
+  aminikhaahpodcasts: () => aminikhaahPodcastsAdapter,
+  librivox: () => librivoxAdapter,
+  radiobrowser: () => radioBrowserAdapter,
   archive: (source) => createArchiveAdapter(source),
 };
 
@@ -54,7 +90,7 @@ export function getAdapter(sourceId: string): OnlineAdapter | null {
 }
 
 export function sourcesForLanguage(languageCode: string): readonly OnlineSource[] {
-  return SOURCES.filter((source) => source.languageCode === languageCode);
+  return SOURCES.filter((source) => sourceLanguages(source).includes(languageCode));
 }
 
 export type LanguageSearchField = "title" | "name" | "code" | "alias";
@@ -109,6 +145,48 @@ export function onlineIdentity(sourceId: string, externalId: string): string {
   return `online:${sourceId}:${externalId}`;
 }
 
+/**
+ * What one of a source's collections is called, in the listener's words.
+ *
+ * A "collection" is our word; the listener browsing Manahej is looking at
+ * categories, and an archive item is a shelf of files rather than a category.
+ * The label is a property of the source, not of the download, so a future
+ * provider with playlists names them here once.
+ */
+const COLLECTION_KIND_LABELS: Record<OnlineSourceKind, string> = {
+  manahej: "Category",
+  aminikhaah: "Series",
+  aminikhaahpodcasts: "Episode",
+  librivox: "Audiobook",
+  radiobrowser: "Station",
+  archive: "Collection",
+};
+
+/**
+ * A downloaded folder's human label: `Manahej · Category · تاریخ شیعه`.
+ *
+ * The stored folder name is the title alone, which is what the on-disk folder
+ * needs; the source and the kind are read back from the folder key so a rename
+ * on the source, or a change to a source's display name, updates every folder
+ * without rewriting rows or moving bytes. Keys that are not online folders are
+ * returned untouched, so a device folder keeps exactly the name it had.
+ */
+export function describeDownloadedFolder(folderKey: string, title: string): string {
+  const parsed = parseDownloadedFolderKey(folderKey);
+  if (!parsed) {
+    return title;
+  }
+  const source = findSource(parsed.sourceId);
+  const sourceName = source?.name ?? parsed.sourceId;
+  const kindLabel =
+    parsed.kind === "series"
+      ? "Series"
+      : source
+        ? COLLECTION_KIND_LABELS[source.kind]
+        : "Collection";
+  return `${sourceName} · ${kindLabel} · ${title}`;
+}
+
 /** "12 tracks" / "1 track". */
 export function describeTrackCount(count: number): string {
   return `${count} track${count === 1 ? "" : "s"}`;
@@ -127,6 +205,25 @@ export function describeTrackCount(count: number): string {
  */
 export function describeKnownTrackCount(count: number): string | null {
   return count > 0 ? describeTrackCount(count) : null;
+}
+
+/**
+ * The line under a collection's title: its grouping, then its known size.
+ *
+ * Either half can be absent — a source may not group its collections, and a
+ * source may not state a size before the collection is opened — so the line is
+ * built from whatever is true and is null when neither is. The grouping comes
+ * first because it is what tells the listener *what* they are looking at; a
+ * bare "0 tracks" would be worse than saying nothing.
+ */
+export function describeCollectionLine(collection: {
+  subtitle: string | null;
+  trackCount: number;
+}): string | null {
+  const parts = [collection.subtitle, describeKnownTrackCount(collection.trackCount)].filter(
+    (part): part is string => typeof part === "string" && part.length > 0,
+  );
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 /**

@@ -76,7 +76,7 @@ const SEED: LanguageSeed[] = [
  * `registry.test.ts` fails if a source is registered whose language is not
  * marked available here.
  */
-const NON_ARCHIVE_CODES = ["fa"]; // manahej.ir
+const NON_ARCHIVE_CODES = ["fa"]; // manahej.ir, aminikhaah.ir (lectures + podcasts)
 
 const AVAILABLE_CODES = new Set([...ARCHIVE_LANGUAGE_CODES, ...NON_ARCHIVE_CODES]);
 

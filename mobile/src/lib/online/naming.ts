@@ -80,6 +80,34 @@ export function collectionFolderKey(sourceId: string, externalId: string): strin
   return `${ONLINE_ROOT}/${sourceId}/${externalId}`;
 }
 
+export type DownloadedFolderKind = "collection" | "series";
+
+/**
+ * Read a downloaded folder key back into the two things a human label needs.
+ *
+ * Deliberately tolerant: a key from an earlier version, or one that is not an
+ * online folder at all, returns null rather than guessing, and the caller falls
+ * back to the name the row already carries. The source id is the second path
+ * segment because `collectionFolderKey` is what minted it, and the series
+ * marker is the same one `seriesScopeKey` appends.
+ */
+export function parseDownloadedFolderKey(
+  key: string,
+): { sourceId: string; kind: DownloadedFolderKind } | null {
+  if (!key.startsWith(`${ONLINE_ROOT}/`)) {
+    return null;
+  }
+  const rest = key.slice(ONLINE_ROOT.length + 1);
+  const sourceId = rest.split("/")[0];
+  if (!sourceId) {
+    return null;
+  }
+  return {
+    sourceId,
+    kind: rest.includes("::series::") ? "series" : "collection",
+  };
+}
+
 /**
  * The relative on-disk folder for a collection, under app storage.
  *

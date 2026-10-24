@@ -22,14 +22,25 @@ export function isAbortError(error: unknown): boolean {
 }
 
 /**
- * Fetch and parse JSON, turning every failure into an `OnlineSourceError`.
+ * Fetch one URL and hand the response to a reader, turning every failure into
+ * an `OnlineSourceError`.
  *
  * The caller's `signal` and our own timeout are merged so a screen that
  * unmounts mid-request stops the work, while a server that accepts the
  * connection and then says nothing still fails in bounded time. Distinguishing
  * timeout from a user cancel matters: only one of them is worth retrying.
+ *
+ * The reader sits inside the same `try` as the fetch, so a body that cannot be
+ * decoded (malformed JSON, a truncated page) is reported as the source sending
+ * something unreadable rather than escaping as a raw parse error.
  */
-export async function requestJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+async function request<T>(
+  url: string,
+  read: (response: Response) => Promise<T>,
+  signal: AbortSignal | undefined,
+  headers: Record<string, string> | undefined,
+  accept: string,
+): Promise<T> {
   const controller = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {
@@ -48,7 +59,7 @@ export async function requestJson<T>(url: string, signal?: AbortSignal): Promise
   try {
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { Accept: "application/json" },
+      headers: { Accept: accept, ...headers },
     });
     if (!response.ok) {
       throw new OnlineSourceError(
@@ -58,7 +69,7 @@ export async function requestJson<T>(url: string, signal?: AbortSignal): Promise
         response.status === 404 ? "not_found" : "invalid_response",
       );
     }
-    return (await response.json()) as T;
+    return await read(response);
   } catch (error) {
     if (error instanceof OnlineSourceError) {
       throw error;
@@ -76,4 +87,24 @@ export async function requestJson<T>(url: string, signal?: AbortSignal): Promise
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** Fetch and parse a JSON body. */
+export function requestJson<T>(
+  url: string,
+  signal?: AbortSignal,
+  headers?: Record<string, string>,
+): Promise<T> {
+  return request(url, (response) => response.json() as Promise<T>, signal, headers, "application/json");
+}
+
+/**
+ * Fetch a server-rendered page.
+ *
+ * A source without a JSON API still has a catalogue; this is how its HTML is
+ * read, with the same timeout, cancellation and typed errors as every other
+ * request.
+ */
+export function requestText(url: string, signal?: AbortSignal): Promise<string> {
+  return request(url, (response) => response.text(), signal, undefined, "text/html");
 }
