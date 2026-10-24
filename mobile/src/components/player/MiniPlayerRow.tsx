@@ -17,6 +17,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { CrossfadeArtwork } from "@/components/motion/CrossfadeArtwork";
+import { SpinnerRing } from "@/components/player/SpinnerRing";
 import { WavyProgress } from "@/components/player/WavyProgress";
 import { ThemedText } from "@/components/themed-text";
 import { useSmoothProgress } from "@/hooks/use-smooth-progress";
@@ -66,6 +67,12 @@ export type MiniPlayerRowProps = {
   artworkUrl: string | null;
   ramp: AuroraRamp;
   isPlaying: boolean;
+  /**
+   * The player is fetching and has nothing to report yet. The play button shows
+   * a spinner and keeps its press — the same control, the same job, and the
+   * same words the full player uses.
+   */
+  waiting?: boolean;
   playbackSpeed?: number;
   /** The folder or playlist the queue came from, if it came from one. */
   context?: PlaybackContext | null;
@@ -92,6 +99,7 @@ export function MiniPlayerRow({
   artworkUrl,
   ramp,
   isPlaying,
+  waiting = false,
   playbackSpeed = 1,
   context,
   onOpenContext,
@@ -158,10 +166,14 @@ export function MiniPlayerRow({
 
       <BouncyIconButton
         name={isPlaying ? "pause" : "play"}
-        accessibilityLabel={isPlaying ? "Pause" : "Play"}
+        accessibilityLabel={waiting ? "Stop waiting" : isPlaying ? "Pause" : "Play"}
         size={CONTROL.play}
         iconSize={19}
         tone="accent"
+        busy={waiting}
+        glyph={
+          waiting ? <SpinnerRing size={17} thickness={2} color={theme.onAccent} /> : undefined
+        }
         onPress={onToggle}
       />
 

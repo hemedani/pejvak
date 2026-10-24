@@ -91,6 +91,12 @@ export type ScrubberProps = {
   isPlaying: boolean;
   /** Position advances faster or slower than wall-clock time. */
   playbackSpeed?: number;
+  /**
+   * The player is fetching and cannot say where the playhead is yet. The bar
+   * sweeps and the thumb steps aside — a thumb sitting at 0:00 on a stream that
+   * has not arrived claims a position nobody has reached.
+   */
+  waiting?: boolean;
   /** Colour of the played portion and the thumb ring. */
   tint: string;
   /** Resting track thickness. */
@@ -117,6 +123,7 @@ export function Scrubber({
   durationSec,
   isPlaying,
   playbackSpeed = 1,
+  waiting = false,
   tint,
   thickness = 6,
   onSeek,
@@ -313,7 +320,10 @@ export function Scrubber({
         ? Math.min(Math.max(displayed.value * w, thumbRadius), w - thumbRadius)
         : w / 2;
     return {
-      opacity: 0.78 + 0.22 * active.value,
+      // Hidden rather than parked: while the player is waiting there is no
+      // position to point at, and a thumb at the left end reads as "paused at
+      // the start" instead of "not known yet".
+      opacity: waiting ? 0 : 0.78 + 0.22 * active.value,
       transform: [
         { translateX: centre },
         { scale: THUMB_IDLE_SCALE + (1 - THUMB_IDLE_SCALE) * active.value },
@@ -364,6 +374,7 @@ export function Scrubber({
           <WavyProgress
             progress={displayed}
             isPlaying={isPlaying}
+            sweeping={waiting}
             scrubbing={isScrubbing}
             tint={tint}
             trackColor={theme.track}

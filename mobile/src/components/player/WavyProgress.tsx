@@ -6,6 +6,12 @@
  * side of the thumb separates the two, so the thumb reads as cut out of the
  * track rather than sitting on top of it.
  *
+ * `sweeping` turns the same stroke into an indeterminate one: a lit band
+ * travels across the bar with nothing behind it, for a player that has been
+ * asked to play and has nothing to report yet. The wave was already the app's
+ * word for "audio is moving", so a wait says it with the same alphabet instead
+ * of introducing a second, unrelated kind of motion.
+ *
  * The wave is drawn from a shared progress value in the draw phase — no React
  * render per frame. When playback pauses the amplitude flattens over ~380 ms,
  * then the phase animation stops and the bar is completely idle; a flattening
@@ -46,11 +52,24 @@ const GAP_GROWTH = 2;
  * 30 Hz still reads as continuous motion and halves the draw-phase work.
  */
 const PHASE_INTERVAL_MS = 1000 / 30;
+/** How much of the bar the travelling band occupies, as a share of its width. */
+const SWEEP_BAND_RATIO = 0.34;
+/**
+ * One pass of the band. Slow on purpose: a fast sweep reads as a progress bar
+ * that is nearly finished, and there is nothing to be nearly finished with.
+ */
+const SWEEP_PERIOD_MS = 2400;
 
 export type WavyProgressProps = {
   /** 0–1. Read on the UI thread, so it must be a shared value. */
   progress: SharedValue<number>;
   isPlaying: boolean;
+  /**
+   * Draw an indeterminate travelling band instead of a played segment — for a
+   * player that is fetching and cannot yet say how far through it is. The
+   * `progress` value is ignored while this is set.
+   */
+  sweeping?: boolean;
   /** 0 = at rest, 1 = under the finger. Omit for a read-only bar. */
   scrubbing?: SharedValue<number>;
   /** Played segment colour. */
@@ -75,6 +94,7 @@ export type WavyProgressProps = {
 export function WavyProgress({
   progress,
   isPlaying,
+  sweeping = false,
   scrubbing,
   tint,
   trackColor,
@@ -96,6 +116,10 @@ export function WavyProgress({
   const motion = useSharedValue(motionEnabled ? 1 : 0);
   const idleScrub = useSharedValue(0);
   const isScrubbing = scrubbing ?? idleScrub;
+  /** 1 while the band is travelling, 0 while a played segment is drawn. */
+  const sweepingNow = useSharedValue(sweeping ? 1 : 0);
+  /** Where the band is in its pass, 0–1. */
+  const sweep = useSharedValue(0);
 
   const accumulator = useSharedValue(0);
   const frame = useFrameCallback((frameInfo) => {
@@ -109,18 +133,30 @@ export function WavyProgress({
     const step = accumulator.value;
     accumulator.value = 0;
     phase.value += wavePhaseDelta(step);
+    // The band rides the same loop as the phase, so a waiting bar has one
+    // motion on it rather than two that disagree about speed.
+    if (sweepingNow.value > 0.5) {
+      sweep.value = (sweep.value + step / SWEEP_PERIOD_MS) % 1;
+    }
   }, false);
 
   useEffect(() => {
     playing.value = isPlaying ? 1 : 0;
     motion.value = motionEnabled ? 1 : 0;
-    frame.setActive(isPlaying && motionEnabled);
-  }, [frame, isPlaying, motion, motionEnabled, playing]);
+    sweepingNow.value = sweeping ? 1 : 0;
+    // A waiting bar is *not* idle: the frame loop has to run for the band to
+    // travel even though nothing is playing.
+    frame.setActive((isPlaying || sweeping) && motionEnabled);
+  }, [frame, isPlaying, motion, motionEnabled, playing, sweeping, sweepingNow]);
 
   // The target is only ever 0 or 1: the animated value is our own amplitude,
   // which drives the gap, while the stroke's amplitude is read from it here.
   const target = useDerivedValue(() =>
-    motion.value > 0.5 && playing.value > 0.5 && isScrubbing.value < 0.5 ? 1 : 0,
+    motion.value > 0.5 &&
+    (playing.value > 0.5 || sweepingNow.value > 0.5) &&
+    isScrubbing.value < 0.5
+      ? 1
+      : 0,
   );
 
   useAnimatedReaction(
@@ -146,6 +182,31 @@ export function WavyProgress({
 
   const waveProps = useAnimatedProps(() => {
     const w = band.value;
+    const currentAmplitude = amp.value * amplitude;
+
+    // A travelling band that slides in from the left edge and out through the
+    // right. The window's own start is left negative on purpose: clamping it to
+    // 0 would make the band appear at full width instead of growing into the
+    // bar, which reads as a glitch rather than as something arriving.
+    //
+    // Reduced motion gets no band at all — see `remainingProps`, which then
+    // leaves the plain track line in place so the bar still reads as a bar.
+    if (sweepingNow.value > 0.5 && motion.value > 0.5 && w > 0) {
+      const windowWidth = Math.max(1, w * SWEEP_BAND_RATIO);
+      const rawStart = sweep.value * (w + windowWidth) - windowWidth;
+      return {
+        d: buildWavePath({
+          width: w,
+          centerY: bandHeight / 2,
+          amplitude: currentAmplitude,
+          wavelength,
+          phase: phase.value,
+          startX: Math.max(0, rawStart),
+          endX: Math.min(w, rawStart + windowWidth),
+        }),
+      };
+    }
+
     const half = Math.min(inset, w / 2);
     const clamped = Math.max(0, Math.min(1, progress.value));
     const thumbX = w > 0 ? Math.min(Math.max(clamped * w, half), w - half) : 0;
@@ -154,7 +215,7 @@ export function WavyProgress({
       d: buildWavePath({
         width: w,
         centerY: bandHeight / 2,
-        amplitude: amp.value * amplitude,
+        amplitude: currentAmplitude,
         wavelength,
         phase: phase.value,
         endX: Math.max(0, thumbX - currentGap),
@@ -166,9 +227,17 @@ export function WavyProgress({
    * The unplayed segment is drawn in the same SVG rather than as a positioned
    * View. Moving a View's `left` each frame re-runs layout; an SVG path is a
    * draw-phase update, like the wave itself.
+   *
+   * While the band is sweeping there is no unplayed segment to draw: nothing
+   * has been heard, so a line claiming "the rest of it" would be a guess. Under
+   * reduced motion the band never appears, so the line stays — an empty bar
+   * with nothing in it would read as broken rather than as waiting.
    */
   const remainingProps = useAnimatedProps(() => {
     const w = band.value;
+    if (sweepingNow.value > 0.5 && motion.value > 0.5) {
+      return { d: `M 0 ${bandHeight / 2} L 0 ${bandHeight / 2}`, opacity: 0 };
+    }
     const half = Math.min(inset, w / 2);
     const clamped = Math.max(0, Math.min(1, progress.value));
     const thumbX = w > 0 ? Math.min(Math.max(clamped * w, half), w - half) : 0;

@@ -23,13 +23,16 @@ import { AnnotationMarker } from "@/components/annotation-marker";
 import { AddToPlaylistChip } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { CrossfadeArtwork } from "@/components/motion/CrossfadeArtwork";
+import { PlaybackStatusLine } from "@/components/player/PlaybackStatusLine";
 import { Scrubber } from "@/components/player/Scrubber";
 import { TransportControls } from "@/components/player/TransportControls";
 import { ThemedText } from "@/components/themed-text";
 import { GlassChip } from "@/components/ui/glass/GlassChip";
 import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
 import { useScheme } from "@/hooks/use-theme";
+import { useWaitProgress } from "@/hooks/use-wait-progress";
 import type { LocalAnnotation } from "@/lib/db/types";
+import { describeWait, type PlaybackWait } from "@/lib/playbackPhase";
 import { describeContextType, type PlaybackContext } from "@/lib/playbackContext";
 import { formatClock } from "@/lib/time";
 import { colors, spacing, type AuroraRamp } from "@/theme/tokens";
@@ -64,6 +67,12 @@ export type PlayerContentProps = {
   /** Opens the collection's own screen. */
   onOpenContext: () => void;
   isPlaying: boolean;
+  /**
+   * The player has been asked to play and cannot yet — a stream that is still
+   * connecting, or one that has stalled. Drives the spinner, the sweeping
+   * timeline and the status line together, so the three cannot disagree.
+   */
+  waiting: PlaybackWait | null;
   positionSec: number;
   durationSec: number;
   playbackSpeed: number;
@@ -113,6 +122,7 @@ export function PlayerContent({
   contextPosition,
   onOpenContext,
   isPlaying,
+  waiting,
   positionSec,
   durationSec,
   playbackSpeed,
@@ -146,6 +156,14 @@ export function PlayerContent({
   const scheme = useScheme();
   const progress = durationSec > 0 ? Math.min(1, positionSec / durationSec) : 0;
   const remainingSec = Math.max(0, durationSec - positionSec);
+
+  // Nothing is drawn for the first fraction of a second: a local file opens
+  // faster than the eye can register a loader, and showing one anyway is a
+  // flicker that makes the app look slower than it is.
+  const waitStage = useWaitProgress(waiting);
+  const waitCopy =
+    waiting && waitStage !== "hidden" ? describeWait(waiting, waitStage) : null;
+  const waitingVisible = waitCopy !== null;
 
   // A collection replaces the audiobook/now-playing overline rather than sitting
   // beside it: "FOLDER · 4 OF 12" already says what the thing is, and a second
@@ -243,6 +261,7 @@ export function PlayerContent({
               progress={progress}
               durationSec={durationSec}
               isPlaying={isPlaying}
+              waiting={waitingVisible}
               playbackSpeed={playbackSpeed}
               tint={ramp[1]}
               thickness={6}
@@ -266,10 +285,25 @@ export function PlayerContent({
                 −{formatClock(remainingSec)}
               </ThemedText>
             </View>
+
+            {/* The wait sits where the timeline leaves off, so the explanation
+                is beside the thing it explains rather than in a corner. It
+                shares the slot with a playback failure: both are the player
+                telling the listener something they did not ask to read. */}
+            {waitCopy ? (
+              <PlaybackStatusLine
+                label={waitCopy.label}
+                detail={waitCopy.detail}
+                spinning
+              />
+            ) : error ? (
+              <PlaybackStatusLine label={error} tone="danger" />
+            ) : null}
           </View>
 
           <TransportControls
             isPlaying={isPlaying}
+            waiting={waitingVisible}
             onToggle={onToggle}
             onNext={onNext}
             onPrevious={onPrevious}
@@ -329,12 +363,6 @@ export function PlayerContent({
               />
             ) : null}
           </View>
-
-          {error ? (
-            <ThemedText type="caption" themeColor="textSecondary" style={styles.error}>
-              {error}
-            </ThemedText>
-          ) : null}
 
           {composer}
           {panels}
@@ -415,9 +443,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm,
-  },
-  error: {
-    textAlign: "center",
   },
   notes: {
     gap: spacing.sm,

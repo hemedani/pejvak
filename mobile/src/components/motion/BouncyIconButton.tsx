@@ -10,6 +10,7 @@
  *   ghost  — no surface at all, just the glyph.
  */
 
+import type { ReactNode } from "react";
 import { StyleSheet, type StyleProp, type ViewStyle } from "react-native";
 
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
@@ -39,6 +40,18 @@ export type BouncyIconButtonProps = {
   iconSize?: number;
   tone?: BouncyIconButtonTone;
   disabled?: boolean;
+  /**
+   * The control is working rather than ready — a play button waiting for a
+   * stream. Announced to screen readers, which is the only place "busy" is a
+   * word rather than a picture.
+   */
+  busy?: boolean;
+  /**
+   * Replaces the glyph. For a control whose state is a *shape* rather than an
+   * icon — a spinner on the play button — while keeping the tone, the surface
+   * and the press physics it already has.
+   */
+  glyph?: ReactNode;
   haptic?: HapticIntent;
   /** Overrides the tone's default glyph colour. */
   color?: string;
@@ -53,6 +66,8 @@ export function BouncyIconButton({
   iconSize,
   tone = "glass",
   disabled = false,
+  busy = false,
+  glyph,
   haptic = "tap",
   color,
   style,
@@ -86,7 +101,10 @@ export function BouncyIconButton({
     <ElasticPressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled }}
+      // `busy` is only spelled out when it is true: React Native fills in the
+      // rest of the state shape as soon as the key is present, and every other
+      // control in the app would then carry three `undefined` fields.
+      accessibilityState={busy ? { disabled, busy: true } : { disabled }}
       disabled={disabled}
       haptic={tone === "accent" ? "press" : haptic}
       hitSlop={hitSlop > 0 ? hitSlop : undefined}
@@ -98,7 +116,7 @@ export function BouncyIconButton({
         disabled && styles.disabled,
         style,
       ]}>
-      <SwapIcon name={name} size={resolvedIconSize} color={glyphColor} />
+      {glyph ?? <SwapIcon name={name} size={resolvedIconSize} color={glyphColor} />}
     </ElasticPressable>
   );
 }

@@ -33,6 +33,7 @@ import { scheduleOnRN } from "react-native-worklets";
 
 import { MiniPlayerRow } from "@/components/player/MiniPlayerRow";
 import { usePlaybackContext } from "@/hooks/use-playback-context";
+import { useWaitProgress } from "@/hooks/use-wait-progress";
 import { paletteFor } from "@/lib/palette";
 import { contextRouteTarget } from "@/lib/playbackContext";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
@@ -49,6 +50,7 @@ export function DockPlayer() {
   const hostRef = useRef<View>(null);
 
   const status = usePlayerStore((state) => state.status);
+  const waiting = usePlayerStore((state) => state.waiting);
   const trackId = usePlayerStore((state) => state.trackId);
   const title = usePlayerStore((state) => state.title);
   const artist = usePlayerStore((state) => state.artist);
@@ -66,6 +68,9 @@ export function DockPlayer() {
 
   const ramp = paletteFor(contentHash ?? title ?? trackId);
   const isPlaying = status === "playing";
+  // The bar is where most resumes start, so it says "waiting" for exactly as
+  // long as the sheet does — same gate, same hold-back.
+  const waitingVisible = useWaitProgress(waiting) !== "hidden";
 
   const openContext = useCallback(() => {
     if (context) {
@@ -146,6 +151,7 @@ export function DockPlayer() {
         artworkUrl={artworkUrl}
         ramp={ramp}
         isPlaying={isPlaying}
+        waiting={waitingVisible}
         playbackSpeed={playbackSpeed}
         context={context}
         onOpenContext={openContext}

@@ -16,6 +16,7 @@ import { useSleepTimer } from "@/hooks/use-sleep-timer";
 import type { LocalAnnotation, LocalTrack } from "@/lib/db/types";
 import { pickAnnotationColor } from "@/lib/annotations";
 import { paletteFor } from "@/lib/palette";
+import { resolvePlaybackPhase } from "@/lib/playbackPhase";
 import { contextRouteTarget } from "@/lib/playbackContext";
 import { formatRemaining } from "@/lib/sleepTimer";
 import { formatClock } from "@/lib/time";
@@ -60,6 +61,7 @@ export default function PlayerScreen() {
   const contentHash = usePlayerStore((state) => state.contentHash);
   const isAudiobook = usePlayerStore((state) => state.isAudiobook);
   const status = usePlayerStore((state) => state.status);
+  const waiting = usePlayerStore((state) => state.waiting);
   const positionSec = usePlayerStore((state) => state.positionSec);
   const durationSec = usePlayerStore((state) => state.durationSec);
   const playbackSpeed = usePlayerStore((state) => state.playbackSpeed);
@@ -150,7 +152,12 @@ export default function PlayerScreen() {
     [activeTrackId, contentHash, title, track?.contentHash],
   );
 
-  const isPlaying = status === "playing";
+  // `status` alone is not enough to call this playing: on Android the player
+  // reports `playing` throughout a stream's first buffer, so a screen that read
+  // only that would draw a pause button over silence. The phase is the one
+  // answer, and the transport, the timeline and the status line all take it.
+  const phase = resolvePlaybackPhase({ status, waiting, error });
+  const isPlaying = phase === "playing";
   const resolvedTitle = title ?? track?.title ?? "Now Playing";
   const statusMessage = error ?? noteError;
 
@@ -349,6 +356,7 @@ export default function PlayerScreen() {
             }
           }}
           isPlaying={isPlaying}
+          waiting={waiting}
           positionSec={positionSec}
           durationSec={durationSec}
           playbackSpeed={playbackSpeed}
