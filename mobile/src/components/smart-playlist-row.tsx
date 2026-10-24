@@ -44,6 +44,8 @@ export function SmartPlaylistRow({ playlist, onPress, position }: SmartPlaylistR
           label={rule.title}
           size={tile.md}
           radius={tileRadius(tile.md)}
+          recyclingKey={rule.id}
+          dense
         />
       }
       leadingWidth={tile.md}

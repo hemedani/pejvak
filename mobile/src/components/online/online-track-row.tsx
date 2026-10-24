@@ -17,6 +17,7 @@
  * course and a Latin episode inside it both look deliberate.
  */
 
+import { memo } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
@@ -25,6 +26,7 @@ import { ListRow, type ListRowPosition } from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
 import type { LocalDownloadJob, LocalTrack } from "@/lib/db/types";
 import { formatDuration } from "@/lib/history";
+import { onlineTrackRowPropsEqual } from "@/lib/rowMemo";
 import type { StatusSpec } from "@/lib/rowStatus";
 import { withAlpha } from "@/lib/palette";
 import { radius as radii } from "@/theme/tokens";
@@ -36,9 +38,12 @@ export type OnlineTrackRowProps = {
   isCurrent: boolean;
   /** This track's own download row, when the collection is being downloaded. */
   job?: LocalDownloadJob | null;
-  onPress: () => void;
-  /** Supplied by `ListGroup`; not part of the row's own API. */
+  /** Stable handler; the row supplies its own id so the prop can stay stable. */
+  onPress: (trackId: string) => void;
+  /** Supplied by the list; it is the card edge this row draws. */
   position?: ListRowPosition;
+  /** Measured once by the screen, so the row does not read the window. */
+  cardWidth?: number;
 };
 
 /**
@@ -66,13 +71,14 @@ function statusOf(downloaded: boolean, job: LocalDownloadJob | null | undefined)
   }
 }
 
-export function OnlineTrackRow({
+export const OnlineTrackRow = memo(function OnlineTrackRow({
   track,
   ordinal,
   isCurrent,
   job,
   onPress,
   position,
+  cardWidth,
 }: OnlineTrackRowProps) {
   const theme = useTheme();
   const tint = theme.accent;
@@ -106,12 +112,13 @@ export function OnlineTrackRow({
       titleLines={2}
       meta={track.durationSec > 0 ? formatDuration(track.durationSec) : null}
       status={statusOf(downloaded, job)}
-      onPress={onPress}
+      cardWidth={cardWidth}
+      onPress={() => onPress(track.id)}
       accessibilityLabel={track.title}
       accessibilityHint={downloaded ? "Plays from this device" : "Streams from the source"}
     />
   );
-}
+}, onlineTrackRowPropsEqual);
 
 const styles = StyleSheet.create({
   leading: {

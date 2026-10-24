@@ -21,6 +21,7 @@ import { WavyProgress } from "@/components/player/WavyProgress";
 import { ThemedText } from "@/components/themed-text";
 import { useSmoothProgress } from "@/hooks/use-smooth-progress";
 import { useTheme } from "@/hooks/use-theme";
+import { usePlayerStore } from "@/store/playerStore";
 import {
   describeContextType,
   type PlaybackContext,
@@ -64,8 +65,6 @@ export type MiniPlayerRowProps = {
   artist: string | null;
   artworkUrl: string | null;
   ramp: AuroraRamp;
-  positionSec: number;
-  durationSec: number;
   isPlaying: boolean;
   playbackSpeed?: number;
   /** The folder or playlist the queue came from, if it came from one. */
@@ -92,8 +91,6 @@ export function MiniPlayerRow({
   artist,
   artworkUrl,
   ramp,
-  positionSec,
-  durationSec,
   isPlaying,
   playbackSpeed = 1,
   context,
@@ -106,12 +103,6 @@ export function MiniPlayerRow({
   style,
 }: MiniPlayerRowProps) {
   const theme = useTheme();
-  const { progress } = useSmoothProgress({
-    positionSec,
-    durationSec,
-    isPlaying,
-    playbackSpeed,
-  });
 
   const main = (
     <>
@@ -129,8 +120,7 @@ export function MiniPlayerRow({
           {title ?? "Now Playing"}
         </ThemedText>
         <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-          {artist ??
-            `${formatClock(positionSec)} / ${formatClock(durationSec)}`}
+          {artist ?? <ElapsedClock />}
         </ThemedText>
       </View>
     </>
@@ -190,19 +180,67 @@ export function MiniPlayerRow({
         />
       ) : null}
 
-      <WavyProgress
-        progress={progress}
+      <NowPlayingProgress
         isPlaying={isPlaying}
+        playbackSpeed={playbackSpeed}
         tint={ramp[1]}
         trackColor={theme.track}
-        thickness={2}
-        amplitude={1.4}
-        wavelength={22}
-        bandHeight={8}
-        gap={0}
-        style={styles.progress}
       />
     </View>
+  );
+}
+
+/**
+ * The elapsed clock as its own subscriber.
+ *
+ * The player reports a new position every second. Reading it in `MiniPlayerRow`
+ * re-rendered the artwork, the title and the whole control row once a second for
+ * a caption that is the only thing changing. A leaf that selects the two clock
+ * values keeps that tick to one `Text`.
+ */
+function ElapsedClock() {
+  const positionSec = usePlayerStore((state) => state.positionSec);
+  const durationSec = usePlayerStore((state) => state.durationSec);
+  return <>{`${formatClock(positionSec)} / ${formatClock(durationSec)}`}</>;
+}
+
+/**
+ * The wave's own subscriber, for the same reason: `useSmoothProgress` needs the
+ * reported position, but only this component and its shared values do.
+ */
+function NowPlayingProgress({
+  isPlaying,
+  playbackSpeed,
+  tint,
+  trackColor,
+}: {
+  isPlaying: boolean;
+  playbackSpeed: number;
+  tint: string;
+  trackColor: string;
+}) {
+  const positionSec = usePlayerStore((state) => state.positionSec);
+  const durationSec = usePlayerStore((state) => state.durationSec);
+  const { progress } = useSmoothProgress({
+    positionSec,
+    durationSec,
+    isPlaying,
+    playbackSpeed,
+  });
+
+  return (
+    <WavyProgress
+      progress={progress}
+      isPlaying={isPlaying}
+      tint={tint}
+      trackColor={trackColor}
+      thickness={2}
+      amplitude={1.4}
+      wavelength={22}
+      bandHeight={8}
+      gap={0}
+      style={styles.progress}
+    />
   );
 }
 

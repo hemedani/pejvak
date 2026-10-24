@@ -20,8 +20,15 @@
  */
 
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { Alert, FlatList, Linking, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Alert,
+  FlatList,
+  Linking,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { PaletteTile } from "@/components/motion/PaletteTile";
@@ -37,13 +44,16 @@ import { PrimaryButton } from "@/components/ui/primary-button";
 import {
   EmptyState,
   InlineNotice,
-  ListGroup,
+  ListSurface,
   SkeletonRows,
   UserText,
 } from "@/components/ui/row";
 import { useOnlineCollection } from "@/hooks/use-online-collection";
 import { useTheme } from "@/hooks/use-theme";
+import { cardWidthFor } from "@/lib/cardLayout";
+import type { LocalTrack } from "@/lib/db/types";
 import type { FolderPlayMode } from "@/lib/folderPlay";
+import { rowPositionFor, type ListRowPosition } from "@/lib/listSurface";
 import { formatDuration } from "@/lib/history";
 import {
   buildSeriesSections,
@@ -57,16 +67,59 @@ import { describeContextStats } from "@/lib/playbackContext";
 import { OnlineCatalogService } from "@/services/OnlineCatalogService";
 import { OnlineCollectionService } from "@/services/OnlineCollectionService";
 import { usePlayerStore } from "@/store/playerStore";
-import { bar, control, iconSize, spacing, tile, tileRadius } from "@/theme/tokens";
+import {
+  bar,
+  control,
+  iconSize,
+  layout,
+  spacing,
+  tile,
+  tileRadius,
+} from "@/theme/tokens";
+import { listPerformance } from "@/lib/listPerformance";
 
-/** Only the opening screenful staggers in; recycled blocks render at once. */
+/** Only the opening screenful staggers in; recycled rows render at once. */
 const ROW_REVEAL_LIMIT = 10;
+
+/**
+ * One `FlatList` cell.
+ *
+ * A header and its tracks share a section, but they are separate cells so the
+ * list can window them independently. `revealIndex` is the *section's* index on
+ * both, so every cell of a section animates in lockstep rather than the rows
+ * cascading one by one.
+ */
+type CollectionListItem =
+  | {
+      kind: "header";
+      key: string;
+      title: string;
+      target: SeriesDownloadTarget | null;
+      trackCount: number;
+      firstTrackId: string;
+      revealIndex: number;
+      spaced: boolean;
+    }
+  | {
+      kind: "track";
+      key: string;
+      track: LocalTrack;
+      ordinal: number;
+      position: ListRowPosition;
+      revealIndex: number;
+    };
 
 export default function OnlineCollectionScreen() {
   const params = useLocalSearchParams<{ key?: string }>();
   const key = params.key ?? null;
   const router = useRouter();
   const theme = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const cardWidth = cardWidthFor({
+    windowWidth,
+    inset: spacing.xl,
+    maxContentWidth: layout.maxContentWidth,
+  });
   const collection = useOnlineCollection(key);
   const [notice, setNotice] = useState<string | null>(null);
   /** So the row that is actually playing says so, rather than every row lying. */
@@ -108,6 +161,19 @@ export default function OnlineCollectionScreen() {
     () => (meta ? { meta, tracks, progress } : null),
     [meta, tracks, progress],
   );
+
+  /**
+   * The planner's input, readable from a stable handler.
+   *
+   * `start` must keep its identity across progress updates or every mounted
+   * row's `onPress` changes and the memoised rows re-render during a download.
+   * The ref is written in an effect, never during render, and a tap always
+   * happens after that effect has run.
+   */
+  const dataRef = useRef(data);
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   const source = meta ? findSource(meta.sourceId) : null;
   const isLive = source?.live === true;
@@ -170,12 +236,12 @@ export default function OnlineCollectionScreen() {
   }, [tracks]);
 
   /**
-   * The list's blocks: one per series, or one block holding the whole shelf.
+   * The list's items: one per row, not one per block.
    *
-   * A block is a `FlatList` item, not a row. That is what lets each series own
-   * one `ListGroup` — a single card around its episodes — while the list still
-   * virtualises at the section level, where a course has a handful of entries
-   * and a series has its own bounded set of parts.
+   * A block used to hold every episode of a series, which meant a 150-episode
+   * course mounted 150 rows on first paint — the exact thing a virtualised list
+   * is for. Rows are now the cells, and each one knows its own card edge
+   * (`position`) so `ListSurface` can draw one card across many cells.
    *
    * Positions are counted *inside* a series, not by collection order: a
    * collection's own order is a publish date across all its series, so
@@ -183,30 +249,35 @@ export default function OnlineCollectionScreen() {
    * series, 01, 02, 03 is both true and readable, and the header carries the
    * name and how many parts there are.
    */
-  const blocks = useMemo(() => {
-    if (!sections) {
-      return tracks.length > 0
-        ? [
-            {
-              key: "all",
-              title: null as string | null,
-              standalone: false,
-              target: null as SeriesDownloadTarget | null,
-              rows: tracks.map((track, index) => ({ track, ordinal: index + 1 })),
-            },
-          ]
-        : [];
+  const items = useMemo<CollectionListItem[]>(() => {
+    if (tracks.length === 0) {
+      return [];
     }
-    return sections.map((section) => {
+    if (!sections) {
+      return tracks.map((track, index) => ({
+        kind: "track",
+        key: `track:${track.id}`,
+        track,
+        ordinal: index + 1,
+        position: rowPositionFor(index, tracks.length),
+        revealIndex: 4,
+      }));
+    }
+
+    const flattened: CollectionListItem[] = [];
+    sections.forEach((section, sectionIndex) => {
       const first = section.tracks[0];
-      return {
-        key: section.key,
-        title: section.title as string | null,
-        standalone: section.standalone,
+      if (!first) {
+        return;
+      }
+      flattened.push({
+        kind: "header",
+        key: `header:${section.key}`,
+        title: section.title,
         // The seed is the first episode's own id, so the scope survives a title
         // edit upstream. The standalone bucket is not a unit, so it gets none.
         target:
-          !section.standalone && key && first
+          !section.standalone && key
             ? {
                 scopeKey: seriesScopeKey(key, first.externalId ?? first.id),
                 collectionKey: key,
@@ -215,12 +286,23 @@ export default function OnlineCollectionScreen() {
                 trackIds: section.tracks.map((track) => track.id),
               }
             : null,
-        rows: section.tracks.map((track, index) => ({
+        trackCount: section.tracks.length,
+        firstTrackId: first.id,
+        revealIndex: sectionIndex + 4,
+        spaced: sectionIndex > 0,
+      });
+      section.tracks.forEach((track, index) => {
+        flattened.push({
+          kind: "track",
+          key: `track:${track.id}`,
           track,
           ordinal: index + 1,
-        })),
-      };
+          position: rowPositionFor(index, section.tracks.length),
+          revealIndex: sectionIndex + 4,
+        });
+      });
     });
+    return flattened;
   }, [key, sections, tracks]);
 
   /**
@@ -231,23 +313,31 @@ export default function OnlineCollectionScreen() {
    */
   const start = useCallback(
     async (mode: FolderPlayMode | { trackId: string }) => {
-      if (!key || !data) {
+      const current = dataRef.current;
+      if (!key || !current) {
         return;
       }
       setNotice(null);
       const next =
         typeof mode === "string"
-          ? OnlineCollectionService.plan(data, mode)
-          : OnlineCollectionService.planFromTrack(data, mode.trackId);
+          ? OnlineCollectionService.plan(current, mode)
+          : OnlineCollectionService.planFromTrack(current, mode.trackId);
       if (!next) {
         return;
       }
-      const entryId = await OnlineCollectionService.startPlan(data, next);
+      const entryId = await OnlineCollectionService.startPlan(current, next);
       if (entryId) {
         router.push({ pathname: "/player", params: { trackId: entryId } });
       }
     },
-    [data, key, router],
+    [key, router],
+  );
+
+  const playTrack = useCallback(
+    (trackId: string) => {
+      void start({ trackId });
+    },
+    [start],
   );
 
   const primaryLabel =
@@ -316,8 +406,9 @@ export default function OnlineCollectionScreen() {
   return (
     <Screen wash={ramp[1]}>
       <FlatList
-        data={blocks}
-        keyExtractor={(block) => block.key}
+        {...listPerformance}
+        data={items}
+        keyExtractor={(item) => item.key}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
@@ -456,43 +547,52 @@ export default function OnlineCollectionScreen() {
             ) : null}
           </View>
         }
-        renderItem={({ item: block, index }) => (
-          <Reveal index={index + 4} limit={ROW_REVEAL_LIMIT}>
-            <View style={styles.series}>
-              {block.title ? (
-                /* The trailing bucket is not a series, so it gets no play
-                   control: "play the standalone episodes from the beginning"
-                   names no unit at all. A real series does — and its control
-                   starts at the series' first episode while the queue stays
-                   the whole collection, because a series is a reading of one
-                   list rather than a second one. Playback therefore carries
-                   on into whatever the collection plays next. */
-                <SeriesHeader
-                  title={block.title}
-                  trackCount={block.rows.length}
-                  target={block.target}
-                  subtitle={meta?.title}
-                  artwork={meta?.artworkUrl}
-                  ramp={ramp}
-                  onPlay={() => void start({ trackId: block.rows[0].track.id })}
-                />
-              ) : null}
-
-              <ListGroup>
-                {block.rows.map((row) => (
-                  <OnlineTrackRow
-                    key={row.track.id}
-                    track={row.track}
-                    ordinal={row.ordinal}
-                    isCurrent={currentTrackId === row.track.id}
-                    job={jobsByTrack[row.track.id] ?? null}
-                    onPress={() => void start({ trackId: row.track.id })}
+        renderItem={({ item }) => {
+          if (item.kind === "header") {
+            return (
+              <Reveal index={item.revealIndex} limit={ROW_REVEAL_LIMIT}>
+                <View
+                  style={[
+                    styles.sectionHeader,
+                    item.spaced ? styles.sectionHeaderSpaced : null,
+                  ]}>
+                  {/* The trailing bucket is not a series, so it gets no play
+                      control: "play the standalone episodes from the beginning"
+                      names no unit at all. A real series does — and its control
+                      starts at the series' first episode while the queue stays
+                      the whole collection, because a series is a reading of one
+                      list rather than a second one. Playback therefore carries
+                      on into whatever the collection plays next. */}
+                  <SeriesHeader
+                    title={item.title}
+                    trackCount={item.trackCount}
+                    target={item.target}
+                    subtitle={meta?.title}
+                    artwork={meta?.artworkUrl}
+                    ramp={ramp}
+                    onPlay={() => playTrack(item.firstTrackId)}
                   />
-                ))}
-              </ListGroup>
-            </View>
-          </Reveal>
-        )}
+                </View>
+              </Reveal>
+            );
+          }
+
+          return (
+            <Reveal index={item.revealIndex} limit={ROW_REVEAL_LIMIT}>
+              <ListSurface position={item.position}>
+                <OnlineTrackRow
+                  track={item.track}
+                  ordinal={item.ordinal}
+                  position={item.position}
+                  isCurrent={currentTrackId === item.track.id}
+                  job={jobsByTrack[item.track.id] ?? null}
+                  cardWidth={cardWidth}
+                  onPress={playTrack}
+                />
+              </ListSurface>
+            </Reveal>
+          );
+        }}
         ListEmptyComponent={
           loading ? (
             <View style={styles.emptyBlock}>
@@ -515,10 +615,12 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.giant,
-    gap: spacing.xl,
   },
   content: {
     gap: spacing.xl,
+    // The header is a cell of its own now, so the breathing room the old
+    // `contentContainerStyle` gap gave the first block lives here instead.
+    paddingBottom: spacing.xl + spacing.md,
   },
   headerActions: {
     flexDirection: "row",
@@ -542,14 +644,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  section: {
-    gap: spacing.sm,
+  sectionHeader: {
+    paddingBottom: spacing.sm,
   },
-  series: {
-    gap: spacing.sm,
+  sectionHeaderSpaced: {
     // Sections sit a level above rows, so they are spaced further apart than the
     // rows inside them — otherwise a header reads as one more row.
-    marginTop: spacing.md,
+    paddingTop: spacing.xl + spacing.md,
   },
   emptyBlock: {
     paddingTop: spacing.lg,

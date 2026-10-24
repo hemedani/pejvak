@@ -8,7 +8,11 @@ import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { StretchCard } from "@/components/stretch-card";
 import { ThemedText } from "@/components/themed-text";
 import { SegmentedControl } from "@/components/ui/card/segmented-control";
-import { EmptyState, ListGroup } from "@/components/ui/row";
+import {
+  EmptyState,
+  ListGroup,
+  type ListRowPosition,
+} from "@/components/ui/row";
 import { useContextHistory } from "@/hooks/use-context-history";
 import { useHistory } from "@/hooks/use-history";
 import { useResumeHistory } from "@/hooks/use-resume-history";
@@ -28,6 +32,7 @@ import { LocalDBService } from "@/services/LocalDBService";
 import { openSessionDetail } from "@/store/sessionDetailStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { control, dockInset, iconSize, spacing } from "@/theme/tokens";
+import { listPerformance } from "@/lib/listPerformance";
 
 /**
  * Which half of the history is showing.
@@ -59,7 +64,7 @@ type HistoryGroup = {
 export default function HistoryScreen() {
   const router = useRouter();
   const theme = useTheme();
-  const { items, loading, refresh } = useHistory();
+  const { items, loading, loadingMore, hasMore, refresh, loadMore } = useHistory();
   const { runs, loading: runsLoading, refresh: refreshRuns } = useContextHistory();
   const resumeHistory = useResumeHistory();
   const sort = useSettingsStore((state) => state.historySort);
@@ -132,11 +137,19 @@ export default function HistoryScreen() {
    * rebuilt from the folder or playlist as it stands now, so a lecture added
    * since the last listen is included and a removed one is not.
    */
-  const resumeRun = (run: LocalContextPlay) => void resumeHistory({ kind: "run", run });
+  const resumeRun = useCallback(
+    (run: LocalContextPlay) => {
+      void resumeHistory({ kind: "run", run });
+    },
+    [resumeHistory],
+  );
 
-  const openRun = (run: LocalContextPlay) => {
-    router.push(contextRouteTarget({ type: run.contextType, key: run.contextKey }));
-  };
+  const openRun = useCallback(
+    (run: LocalContextPlay) => {
+      router.push(contextRouteTarget({ type: run.contextType, key: run.contextKey }));
+    },
+    [router],
+  );
 
   /**
    * Removing a row removes the whole listen it stands for.
@@ -145,23 +158,55 @@ export default function HistoryScreen() {
    * track and a fresh completeness verdict, so the row would appear not to have
    * gone anywhere.
    */
-  const remove = async (entry: HistoryStretch) => {
-    await LocalDBService.softDeleteSessions(entry.items.map((item) => item.session.id));
-    await refreshAll();
-  };
+  const remove = useCallback(
+    async (entry: HistoryStretch) => {
+      await LocalDBService.softDeleteSessions(entry.items.map((item) => item.session.id));
+      await refreshAll();
+    },
+    [refreshAll],
+  );
 
-  const removeRun = async (run: LocalContextPlay) => {
-    await LocalDBService.softDeleteContextPlay(run.id);
-    await refreshAll();
-  };
+  const removeRun = useCallback(
+    async (run: LocalContextPlay) => {
+      await LocalDBService.softDeleteContextPlay(run.id);
+      await refreshAll();
+    },
+    [refreshAll],
+  );
+
+  /**
+   * Stable per-row delete handlers. `StretchCard` and `ContextPlayCard` are
+   * memoised, and an inline arrow here would be a new prop on every render and
+   * re-render every mounted row.
+   */
+  const deleteStretch = useCallback(
+    (entry: HistoryStretch) => {
+      if (entry.stretch.endedAt === null) {
+        return;
+      }
+      confirmRemoveStretch(entry, () => void remove(entry));
+    },
+    [remove],
+  );
+
+  const deleteRun = useCallback(
+    (run: LocalContextPlay) => {
+      confirmRemoveRun(run, () => void removeRun(run));
+    },
+    [removeRun],
+  );
 
   const exportHistory = async () => {
     try {
+      // A page is what the screen draws; an export is the whole archive. Reading
+      // it separately is the difference between "my history" and "the part of my
+      // history I happened to scroll to".
+      const all = await LocalDBService.getSessionsForHistory(Number.MAX_SAFE_INTEGER);
       await Share.share({
         title: "Listening history",
         // The same list the screen shows: one entry per listen, not per
         // track, so the document and the screen cannot describe it differently.
-        message: historyToMarkdown(stretches),
+        message: historyToMarkdown(groupHistoryIntoStretches(all)),
       });
     } catch {
       // The share sheet was dismissed or sharing is unavailable.
@@ -171,48 +216,73 @@ export default function HistoryScreen() {
   return (
     <Screen wash={theme.accent}>
       <FlatList
+        {...listPerformance}
         data={groups}
         keyExtractor={(group) => group.key}
-        renderItem={({ item: group }) => (
-          <View style={styles.group}>
-            {group.title ? (
-              <View style={styles.sectionHeader}>
-                <ThemedText type="overline" themeColor="textTertiary">
-                  {group.title}
-                </ThemedText>
-              </View>
-            ) : null}
-            <ListGroup>
-              {group.rows.map((row) =>
-                row.kind === "stretch" ? (
-                  <StretchCard
-                    key={`s-${row.entry.stretch.id}`}
-                    entry={row.entry}
-                    onOpen={openStretch}
-                    // A stretch that has not been finalised is still being
-                    // written by the tracker, so there is nothing sensible to
-                    // tombstone yet.
-                    onDelete={
-                      row.entry.stretch.endedAt === null
-                        ? undefined
-                        : (entry) => confirmRemoveStretch(entry, () => void remove(entry))
-                    }
-                  />
-                ) : (
-                  <ContextPlayCard
-                    key={`r-${row.run.id}`}
-                    run={row.run}
-                    onPress={(run) => void resumeRun(run)}
-                    onOpen={openRun}
-                    onDelete={(run) => confirmRemoveRun(run, () => void removeRun(run))}
-                  />
-                ),
-              )}
-            </ListGroup>
-          </View>
-        )}
+        renderItem={({ item: group }) => {
+          const last = group.rows.length - 1;
+          return (
+            <View style={styles.group}>
+              {group.title ? (
+                <View style={styles.sectionHeader}>
+                  <ThemedText type="overline" themeColor="textTertiary">
+                    {group.title}
+                  </ThemedText>
+                </View>
+              ) : null}
+              <ListGroup>
+                {group.rows.map((row, index) => {
+                  const position: ListRowPosition =
+                    group.rows.length === 1
+                      ? "only"
+                      : index === 0
+                        ? "first"
+                        : index === last
+                          ? "last"
+                          : "middle";
+                  return row.kind === "stretch" ? (
+                    <StretchCard
+                      key={`s-${row.entry.stretch.id}`}
+                      entry={row.entry}
+                      position={position}
+                      onOpen={openStretch}
+                      // A stretch that has not been finalised is still being
+                      // written by the tracker, so there is nothing sensible to
+                      // tombstone yet.
+                      onDelete={
+                        row.entry.stretch.endedAt === null ? undefined : deleteStretch
+                      }
+                    />
+                  ) : (
+                    <ContextPlayCard
+                      key={`r-${row.run.id}`}
+                      run={row.run}
+                      position={position}
+                      onPress={resumeRun}
+                      onOpen={openRun}
+                      onDelete={deleteRun}
+                    />
+                  );
+                })}
+              </ListGroup>
+            </View>
+          );
+        }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
+        onEndReached={() => {
+          if (view === "sessions") {
+            void loadMore();
+          }
+        }}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={
+          view === "sessions" && loadingMore ? (
+            <ThemedText type="caption" themeColor="textTertiary" style={styles.footer}>
+              Loading older listens…
+            </ThemedText>
+          ) : null
+        }
         ListHeaderComponent={
           <View style={styles.headerBlock}>
             <ScreenHeader
@@ -221,7 +291,7 @@ export default function HistoryScreen() {
               subtitle={
                 showing > 0
                   ? view === "sessions"
-                    ? `${showing} sessions`
+                    ? `${showing}${hasMore ? "+" : ""} sessions`
                     : `${showing} collections`
                   : undefined
               }
@@ -297,5 +367,9 @@ const styles = StyleSheet.create({
   sectionHeader: {
     paddingTop: spacing.xs,
     paddingBottom: spacing.xxs,
+  },
+  footer: {
+    paddingVertical: spacing.md,
+    textAlign: "center",
   },
 });

@@ -48,6 +48,70 @@ export type HistoryStretch = {
   end: HistoryItem;
 };
 
+/**
+ * Where the next page of history starts.
+ *
+ * Pagination is by *stretch*, not by session row: a listen can cover several
+ * tracks, and a row-count boundary would cut one in half. The cursor carries the
+ * group's newest `started_at` and its id, which together are unique and stable —
+ * a session written since the first page cannot shift the boundary the way an
+ * `OFFSET` would.
+ */
+export type HistoryCursor = {
+  /** The newest `started_at` among the last stretch's members. */
+  startedAt: number;
+  stretchId: string;
+};
+
+/**
+ * The cursor for a page, taken from the oldest stretch it returned.
+ *
+ * Rows arrive newest-first, so the last row names the oldest stretch; its newest
+ * member is what the query groups by, and it is not necessarily the last row.
+ */
+export function historyCursorFor(items: readonly HistoryItem[]): HistoryCursor | null {
+  if (items.length === 0) {
+    return null;
+  }
+  const stretchId = items[items.length - 1].session.stretchId;
+  let startedAt = 0;
+  for (const item of items) {
+    if (item.session.stretchId === stretchId) {
+      startedAt = Math.max(startedAt, item.session.startedAt);
+    }
+  }
+  return { startedAt, stretchId };
+}
+
+/**
+ * Append a page, dropping any row the previous pages already hold.
+ *
+ * Keyset pagination should not overlap, but a stretch deleted or rewritten
+ * between two reads can make it, and a duplicate key in a `FlatList` is worse
+ * than a guard. The previous array is returned untouched when the next page
+ * adds nothing, so a no-op load does not invalidate every memoised row.
+ */
+export function mergeHistoryPages(
+  previous: HistoryItem[],
+  next: readonly HistoryItem[],
+): HistoryItem[] {
+  if (next.length === 0) {
+    return previous;
+  }
+  const seen = new Set(previous.map((item) => item.session.id));
+  const merged = previous.slice();
+  let changed = false;
+  for (const item of next) {
+    if (seen.has(item.session.id)) {
+      continue;
+    }
+    seen.add(item.session.id);
+    merged.push(item);
+    changed = true;
+  }
+  return changed ? merged : previous;
+}
+
 export type HistoryDay<T> = {
   /** Local calendar date key, `YYYY-MM-DD`. */
   key: string;

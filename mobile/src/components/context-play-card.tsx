@@ -12,6 +12,7 @@
  * button.
  */
 
+import { memo } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
@@ -44,7 +45,7 @@ export type ContextPlayCardProps = {
   position?: ListRowPosition;
 };
 
-export function ContextPlayCard({
+export const ContextPlayCard = memo(function ContextPlayCard({
   run,
   onPress,
   onOpen,
@@ -128,7 +129,7 @@ export function ContextPlayCard({
       actions={actions}
     />
   );
-}
+});
 
 const styles = StyleSheet.create({
   meta: {

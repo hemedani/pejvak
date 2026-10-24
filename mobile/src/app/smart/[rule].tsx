@@ -195,6 +195,8 @@ export default function SmartPlaylistScreen() {
                         source={pick.track.artworkUrl}
                         size={tile.md}
                         radius={tileRadius(tile.md)}
+                        recyclingKey={pick.track.contentHash}
+                        dense
                       />
                     }
                     leadingWidth={tile.md}

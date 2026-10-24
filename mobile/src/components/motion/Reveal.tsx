@@ -59,6 +59,15 @@ function builderFor(from: RevealFrom) {
   }
 }
 
+/**
+ * A row past the animated range does not need an `Animated.View` at all.
+ *
+ * `limit` already says "this row renders immediately"; wrapping it anyway cost a
+ * view and, worse, ran `useMotionEnabled` on every recycled row that never
+ * animates. Returning the children directly makes the non-animated path free.
+ * `index` is stable per row, so a row never crosses the boundary and changes
+ * element type underneath the list.
+ */
 export function Reveal({
   children,
   index = 0,
@@ -66,18 +75,31 @@ export function Reveal({
   limit = Infinity,
   style,
 }: RevealProps) {
+  if (index >= limit) {
+    return <>{children}</>;
+  }
+  return (
+    <AnimatedReveal index={index} from={from} style={style}>
+      {children}
+    </AnimatedReveal>
+  );
+}
+
+function AnimatedReveal({
+  children,
+  index = 0,
+  from = "below",
+  style,
+}: RevealProps) {
   const motionEnabled = useMotionEnabled();
 
-  const entering =
-    index < limit
-      ? motionEnabled
-        ? builderFor(from)
-            .delay(stagger(index))
-            .duration(duration.screen)
-            .easing(easing.outQuint)
-            .reduceMotion(ReduceMotion.Never)
-        : FadeIn.duration(duration.instant).reduceMotion(ReduceMotion.Never)
-      : undefined;
+  const entering = motionEnabled
+    ? builderFor(from)
+        .delay(stagger(index))
+        .duration(duration.screen)
+        .easing(easing.outQuint)
+        .reduceMotion(ReduceMotion.Never)
+    : FadeIn.duration(duration.instant).reduceMotion(ReduceMotion.Never);
 
   return (
     <Animated.View entering={entering} style={style}>

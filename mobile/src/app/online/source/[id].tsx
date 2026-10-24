@@ -35,6 +35,7 @@ import {
 } from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
 import { control, iconSize, spacing } from "@/theme/tokens";
+import { listPerformance } from "@/lib/listPerformance";
 
 export default function SourceCollectionsScreen() {
   const params = useLocalSearchParams<{ id?: string; language?: string }>();
@@ -116,6 +117,7 @@ export default function SourceCollectionsScreen() {
   return (
     <Screen wash={ramp[1]}>
       <FlatList
+        {...listPerformance}
         data={catalog.collections}
         keyExtractor={(item) => item.key}
         renderItem={renderItem}

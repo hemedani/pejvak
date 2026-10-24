@@ -29,6 +29,11 @@ import { Directory, File, Paths } from "expo-file-system";
 import { inspectAudioFile } from "@/services/AudioInspectionService";
 import { LocalDBService, type DownloadProgress } from "@/services/LocalDBService";
 import { resolveStreamUrls } from "@/services/OnlineCatalogService";
+import {
+  shouldWriteProgress,
+  type ProgressSample,
+  type ProgressWrite,
+} from "@/lib/downloadProgress";
 import type {
   CreateDownloadJobInput,
   DownloadScopeKind,
@@ -53,6 +58,11 @@ const MAX_ATTEMPTS = 3;
 const BACKOFF_MS = [2_000, 8_000];
 /** Progress updates are throttled to this, so the UI is not redrawn per chunk. */
 const PROGRESS_THROTTLE_MS = 250;
+
+/** The last sample accepted for the database, per job. */
+const lastProgressWrite = new Map<string, ProgressWrite>();
+/** The newest sample seen, whether or not it was written yet. */
+const latestProgress = new Map<string, ProgressSample>();
 
 type Listener = () => void;
 
@@ -88,6 +98,55 @@ function emitProgress(force = false): void {
   }
   lastEmitAt = now;
   emit();
+}
+
+/**
+ * Remember a byte sample, and write it only when it is worth a row update.
+ *
+ * The native downloader calls back per chunk. Writing each one would put a
+ * database write and a listener notification behind every few kilobytes, which
+ * is a continuous tax on the thread the list is drawing on. A file change is
+ * still reported at once — the state setter handles that separately.
+ */
+function noteProgress(id: string, sample: ProgressSample): void {
+  latestProgress.set(id, sample);
+  const now = Date.now();
+  if (!shouldWriteProgress(lastProgressWrite.get(id), sample, now)) {
+    return;
+  }
+  lastProgressWrite.set(id, { ...sample, at: now });
+  void LocalDBService.updateDownloadJobProgress(
+    id,
+    sample.bytesWritten,
+    sample.totalBytes,
+  );
+  emitProgress();
+}
+
+/**
+ * Write the newest sample before the job changes state.
+ *
+ * The last callback can be inside the throttle window, and a job marked `done`
+ * with its byte counters a few percent behind looks like a download that
+ * stopped short. State changes always flush.
+ */
+async function flushProgress(id: string): Promise<void> {
+  const sample = latestProgress.get(id);
+  if (!sample) {
+    return;
+  }
+  latestProgress.delete(id);
+  lastProgressWrite.delete(id);
+  try {
+    await LocalDBService.updateDownloadJobProgress(
+      id,
+      sample.bytesWritten,
+      sample.totalBytes,
+    );
+  } catch {
+    // The byte counter is cosmetic next to the file and the job state; a
+    // failed write here must not turn a finished download into a failed one.
+  }
 }
 
 let running = false;
@@ -654,7 +713,7 @@ async function pump(): Promise<void> {
       }
 
       await runJob(job, scope);
-      emitProgress(true);
+      emitProgress();
     }
   } finally {
     running = false;
@@ -714,14 +773,21 @@ async function runJob(job: LocalDownloadJob, scope: DownloadScope): Promise<void
         idempotent: true,
         signal: controller.signal,
         onProgress: ({ bytesWritten, totalBytes }) => {
-          void LocalDBService.updateDownloadJobProgress(
-            job.id,
+          noteProgress(job.id, {
             bytesWritten,
-            totalBytes > 0 ? totalBytes : 0,
-          );
-          emitProgress();
+            totalBytes: totalBytes > 0 ? totalBytes : 0,
+          });
         },
       });
+      const knownTotal = latestProgress.get(job.id)?.totalBytes ?? 0;
+      const finalBytes =
+        typeof downloaded.size === "number" ? downloaded.size : knownTotal;
+      if (finalBytes > 0) {
+        latestProgress.set(job.id, {
+          bytesWritten: finalBytes,
+          totalBytes: Math.max(knownTotal, finalBytes),
+        });
+      }
       await finishTrack(job, downloaded, scope);
       await LocalDBService.setDownloadJobState(job.id, "done");
       return;
@@ -738,6 +804,7 @@ async function runJob(job: LocalDownloadJob, scope: DownloadScope): Promise<void
       await delay(BACKOFF_MS[attempt - 1] ?? 8_000);
     } finally {
       inFlight = null;
+      await flushProgress(job.id);
     }
   }
 }

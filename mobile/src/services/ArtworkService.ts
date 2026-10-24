@@ -155,6 +155,11 @@ export type BackfillOutcome = {
    * nothing was attempted — there is no file here *yet*.
    */
   skipped: number;
+  /**
+   * The rows that gained a picture this pass, so a screen can merge them into
+   * the array it already drew instead of re-reading the whole library.
+   */
+  changed: { trackId: string; artworkUrl: string }[];
 };
 
 /**
@@ -184,7 +189,14 @@ export async function backfillArtwork(
 ): Promise<BackfillOutcome> {
   const limit = options.limit ?? 25;
   const tracks = await LocalDBService.getTracksMissingArtwork(limit);
-  const outcome: BackfillOutcome = { scanned: 0, found: 0, empty: 0, failed: 0, skipped: 0 };
+  const outcome: BackfillOutcome = {
+    scanned: 0,
+    found: 0,
+    empty: 0,
+    failed: 0,
+    skipped: 0,
+    changed: [],
+  };
 
   for (const track of tracks) {
     if (options.isCancelled?.()) {
@@ -222,6 +234,7 @@ export async function backfillArtwork(
       if (artwork) {
         await LocalDBService.setTrackArtwork(track.id, artwork);
         outcome.found += 1;
+        outcome.changed.push({ trackId: track.id, artworkUrl: artwork });
       } else {
         await LocalDBService.markTrackArtworkChecked(track.id);
         outcome.empty += 1;

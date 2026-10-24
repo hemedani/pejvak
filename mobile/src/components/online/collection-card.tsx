@@ -12,7 +12,7 @@
  * different app.
  */
 
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 
 import { favoriteAction } from "@/components/ui/row";
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
@@ -36,9 +36,11 @@ export type CollectionCardProps = {
   actions?: readonly MediaCardAction[];
   onPress: () => void;
   accessibilityHint?: string;
+  /** Measured once by the screen; omit only for a standalone card. */
+  cardWidth?: number;
 };
 
-export function CollectionCard({
+export const CollectionCard = memo(function CollectionCard({
   title,
   meta,
   artworkUrl,
@@ -50,6 +52,7 @@ export function CollectionCard({
   actions,
   onPress,
   accessibilityHint,
+  cardWidth,
 }: CollectionCardProps) {
   /**
    * The favourite toggle is declared as an action rather than drawn beside one.
@@ -84,6 +87,7 @@ export function CollectionCard({
       onPress={onPress}
       accessibilityLabel={title}
       accessibilityHint={accessibilityHint}
+      cardWidth={cardWidth}
     />
   );
-}
+});

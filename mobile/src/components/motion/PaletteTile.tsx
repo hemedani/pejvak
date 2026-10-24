@@ -26,6 +26,13 @@ export type PaletteTileProps = {
   source?: string | null;
   size: number;
   radius?: number;
+  /**
+   * Stable identity for the image inside a recycled row. Defaults to the URI;
+   * pass the content hash where the same cover can arrive from another path.
+   */
+  recyclingKey?: string;
+  /** List rows swap without a fade; a hero keeps it. */
+  dense?: boolean;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -35,6 +42,8 @@ export function PaletteTile({
   source,
   size,
   radius = 14,
+  recyclingKey,
+  dense = false,
   style,
 }: PaletteTileProps) {
   // One failed URI, not a set: a new track brings a new URI, so the flag clears
@@ -62,7 +71,10 @@ export function PaletteTile({
           source={{ uri }}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          transition={140}
+          recyclingKey={recyclingKey ?? uri ?? undefined}
+          cachePolicy="memory-disk"
+          allowDownscaling
+          transition={dense ? 0 : 140}
           // A file deleted behind the app's back must not leave a blank square.
           onError={() => setFailed(uri)}
         />

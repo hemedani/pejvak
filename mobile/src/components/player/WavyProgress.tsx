@@ -41,6 +41,11 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 const FLATTEN_MS = 380;
 /** The gap grows a little as the wave rises, so it never crowds the crest. */
 const GAP_GROWTH = 2;
+/**
+ * The wave is decorative; a 60 Hz redraw of a sine path is not worth a frame.
+ * 30 Hz still reads as continuous motion and halves the draw-phase work.
+ */
+const PHASE_INTERVAL_MS = 1000 / 30;
 
 export type WavyProgressProps = {
   /** 0–1. Read on the UI thread, so it must be a shared value. */
@@ -92,9 +97,18 @@ export function WavyProgress({
   const idleScrub = useSharedValue(0);
   const isScrubbing = scrubbing ?? idleScrub;
 
+  const accumulator = useSharedValue(0);
   const frame = useFrameCallback((frameInfo) => {
     const dt = Math.min(frameInfo.timeSincePreviousFrame ?? 16.67, 50);
-    phase.value += wavePhaseDelta(dt);
+    accumulator.value += dt;
+    if (accumulator.value < PHASE_INTERVAL_MS) {
+      return;
+    }
+    // Advance by the time actually elapsed, not by one nominal frame, so the
+    // wave keeps its speed when a frame is dropped.
+    const step = accumulator.value;
+    accumulator.value = 0;
+    phase.value += wavePhaseDelta(step);
   }, false);
 
   useEffect(() => {

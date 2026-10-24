@@ -20,6 +20,7 @@
  * pressable rather than children of it.
  */
 
+import { memo } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { useAddToPlaylist } from "@/components/add-to-playlist";
@@ -64,7 +65,12 @@ export type StretchCardProps = {
   position?: ListRowPosition;
 };
 
-export function StretchCard({ entry, onOpen, onDelete, position }: StretchCardProps) {
+export const StretchCard = memo(function StretchCard({
+  entry,
+  onOpen,
+  onDelete,
+  position,
+}: StretchCardProps) {
   const theme = useTheme();
   const addToPlaylist = useAddToPlaylist();
   const { stretch } = entry;
@@ -158,7 +164,7 @@ export function StretchCard({ entry, onOpen, onDelete, position }: StretchCardPr
       actions={actions}
     />
   );
-}
+});
 
 const styles = StyleSheet.create({
   meta: {

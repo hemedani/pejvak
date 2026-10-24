@@ -47,7 +47,8 @@
  */
 
 import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, View, useWindowDimensions } from "react-native";
+import { memo } from "react";
+import { Dimensions, StyleSheet, View } from "react-native";
 
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Card } from "@/components/ui/card";
@@ -106,7 +107,7 @@ export type MediaCardProps = {
   cardWidth?: number;
 };
 
-export function MediaCard({
+export const MediaCard = memo(function MediaCard({
   title,
   titleRanges,
   meta,
@@ -126,7 +127,6 @@ export function MediaCard({
 }: MediaCardProps) {
   const theme = useTheme();
   const scheme = useScheme();
-  const { width: windowWidth } = useWindowDimensions();
 
   const ramp = paletteFor(paletteKey);
   const tint = accent ?? ramp[1];
@@ -142,7 +142,9 @@ export function MediaCard({
   const width =
     cardWidth ??
     cardWidthFor({
-      windowWidth,
+      // `Dimensions.get` rather than the hook: a card is usually given a width
+      // by its screen, and a fallback must not subscribe every row to rotation.
+      windowWidth: Dimensions.get("window").width,
       inset: spacing.xl,
       maxContentWidth: layout.maxContentWidth,
     });
@@ -176,6 +178,8 @@ export function MediaCard({
         source={artworkUrl}
         size={tileSize}
         radius={tileRadius}
+        recyclingKey={paletteKey}
+        dense
       />
     </View>
   );
@@ -218,7 +222,7 @@ export function MediaCard({
       ) : null}
     </Card>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

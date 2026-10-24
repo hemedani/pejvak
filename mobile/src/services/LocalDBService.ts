@@ -66,7 +66,7 @@ import type {
 } from "@/lib/db/types";
 import { sortFoldersByDownload } from "@/lib/folderOrder";
 import type { FolderTrackProgress } from "@/lib/folderPlay";
-import type { HistoryItem } from "@/lib/history";
+import type { HistoryCursor, HistoryItem } from "@/lib/history";
 import { describeDownloadedFolder } from "@/lib/online";
 import { ONLINE_ROOT } from "@/lib/online/naming";
 import { clampResumePosition } from "@/lib/resume";
@@ -409,8 +409,21 @@ async function getSessionsByTrack(trackId: string): Promise<LocalSession[]> {
  * a prefix of the evidence. Picking the newest N groups first and then taking
  * every member of each costs one bounded subquery and keeps each stretch whole.
  */
-async function getSessionsForHistory(limit = 200): Promise<HistoryItem[]> {
+async function getSessionsForHistory(
+  limit = 200,
+  before?: HistoryCursor,
+): Promise<HistoryItem[]> {
   const db = await getDatabase();
+  // Keyset, not `OFFSET`: a session written between two reads would shift an
+  // offset boundary and repeat or skip a row. The boundary is the group's
+  // newest `started_at` plus its id, which cannot be moved by a newer row.
+  // Only the fixed clause below is interpolated; the values stay parameters.
+  const boundary = before
+    ? "HAVING MAX(started_at) < ? OR (MAX(started_at) = ? AND stretch_id < ?)"
+    : "";
+  const params = before
+    ? [before.startedAt, before.startedAt, before.stretchId, limit]
+    : [limit];
   const rows = await db.getAllAsync<HistoryRow>(
     `SELECT s.*, t.title AS track_title, t.author AS track_author,
             t.content_hash AS track_content_hash, t.is_audiobook AS track_is_audiobook,
@@ -424,11 +437,12 @@ async function getSessionsForHistory(limit = 200): Promise<HistoryItem[]> {
          SELECT stretch_id FROM sessions
          WHERE deleted_at IS NULL
          GROUP BY stretch_id
-         ORDER BY MAX(started_at) DESC
+         ${boundary}
+         ORDER BY MAX(started_at) DESC, stretch_id DESC
          LIMIT ?
        )
      ORDER BY s.started_at DESC`,
-    [limit],
+    params,
   );
   return rows.map((row) => ({
     session: mapSession(row),
@@ -1982,7 +1996,7 @@ async function getSourceSignatures(): Promise<
  * The duration is only ever filled in, never replaced: the source does not
  * report one, so the first real reading comes from the audio itself.
  */
-async function upsertOnlineTrack(input: {
+export type UpsertOnlineTrackInput = {
   contentHash: string;
   title: string;
   streamUrl: string;
@@ -1995,7 +2009,9 @@ async function upsertOnlineTrack(input: {
   author?: string | null;
   durationSec?: number;
   trackNumber?: number;
-}): Promise<LocalTrack> {
+};
+
+async function upsertOnlineTrack(input: UpsertOnlineTrackInput): Promise<LocalTrack> {
   const existing = await getTrackByContentHash(input.contentHash);
   const db = await getDatabase();
   const now = Date.now();
@@ -2054,6 +2070,37 @@ async function upsertOnlineTrack(input: {
     collectionKey: input.collectionKey,
     collectionTitle: input.collectionTitle,
   });
+}
+
+/**
+ * Upsert a whole collection in transactions of 100.
+ *
+ * Opening a course used to write its rows one commit at a time, so a 200-episode
+ * series meant 200 round trips before the screen could finish loading. The rows
+ * themselves are individual statements — an `ON CONFLICT` would have to duplicate
+ * `upsertOnlineTrack`'s update rules — but batching them into transactions means
+ * one commit per hundred files, and a failure leaves a whole chunk rather than a
+ * half-written collection.
+ *
+ * `upsertOnlineTrack` is idempotent, so a retried chunk overwrites its own work
+ * instead of duplicating it.
+ */
+async function upsertOnlineTracks(
+  inputs: readonly UpsertOnlineTrackInput[],
+): Promise<void> {
+  if (inputs.length === 0) {
+    return;
+  }
+  const db = await getDatabase();
+  const CHUNK_SIZE = 100;
+  for (let start = 0; start < inputs.length; start += CHUNK_SIZE) {
+    const chunk = inputs.slice(start, start + CHUNK_SIZE);
+    await db.withTransactionAsync(async () => {
+      for (const input of chunk) {
+        await upsertOnlineTrack(input);
+      }
+    });
+  }
 }
 
 /**
@@ -3034,6 +3081,7 @@ export const LocalDBService = {
   updateTrackLocation,
   getSourceSignatures,
   upsertOnlineTrack,
+  upsertOnlineTracks,
   getTracksByCollection,
   getCollectionTrackProgress,
   setTrackDuration,

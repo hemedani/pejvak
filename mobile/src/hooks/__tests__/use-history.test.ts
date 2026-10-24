@@ -66,6 +66,28 @@ describe("useHistory", () => {
     expect(getSessionsForHistory).toHaveBeenCalledTimes(1);
   });
 
+  it("loads older pages with a keyset cursor and stops when a page is short", async () => {
+    getSessionsForHistory
+      .mockResolvedValueOnce([item("a"), item("b")])
+      .mockResolvedValueOnce([item("c")]);
+
+    const { result } = await renderHook(() => useHistory(2));
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    expect(result.current.hasMore).toBe(true);
+
+    await act(async () => {
+      await result.current.loadMore();
+    });
+
+    expect(getSessionsForHistory).toHaveBeenLastCalledWith(2, {
+      startedAt: 100,
+      stretchId: "b",
+    });
+    expect(result.current.items.map((row) => row.session.id)).toEqual(["a", "b", "c"]);
+    expect(result.current.hasMore).toBe(false);
+    expect(result.current.loadingMore).toBe(false);
+  });
+
   it("refreshes on demand", async () => {
     getSessionsForHistory
       .mockResolvedValueOnce([])

@@ -26,6 +26,7 @@ import type {
   LocalOnlineCollection,
   LocalTrack,
 } from "@/lib/db/types";
+import { mergeJobs } from "@/lib/downloadProgress";
 import type { FolderTrackProgress } from "@/lib/folderPlay";
 import { OnlineSourceError } from "@/lib/online";
 import * as DownloadService from "@/services/DownloadService";
@@ -77,6 +78,15 @@ type Live = {
   jobsByTrack: Record<string, LocalDownloadJob>;
 };
 
+/** A read of those numbers, before the unchanged rows are merged back in. */
+type LiveRead = {
+  download: DownloadService.DownloadSummary | null;
+  jobs: LocalDownloadJob[];
+};
+
+/** How long a burst of notifications waits before one read answers all of them. */
+const LIVE_REFRESH_MS = 200;
+
 export type UseOnlineCollectionResult = {
   meta: LocalOnlineCollection | null;
   tracks: LocalTrack[];
@@ -108,12 +118,12 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : "Something went wrong.";
 }
 
-function indexJobs(jobs: LocalDownloadJob[]): Record<string, LocalDownloadJob> {
-  const byTrack: Record<string, LocalDownloadJob> = {};
-  for (const job of jobs) {
-    byTrack[job.trackId] = job;
-  }
-  return byTrack;
+/** Fold a fresh read into the state, keeping object identity where it can. */
+function applyLive(previous: Live | null, next: LiveRead): Live {
+  return {
+    download: next.download,
+    jobsByTrack: mergeJobs(previous?.jobsByTrack ?? EMPTY_JOBS, next.jobs),
+  };
 }
 
 /**
@@ -174,12 +184,12 @@ async function readRemote(key: string, local: Loaded): Promise<Loaded> {
 }
 
 /** The cheap re-read: what a download is doing, and where each file is. */
-async function readLiveFor(key: string): Promise<Live> {
+async function readLiveFor(key: string): Promise<LiveRead> {
   const [download, jobs] = await Promise.all([
     DownloadService.getSummary(key),
     LocalDBService.getDownloadJobs(key),
   ]);
-  return { download, jobsByTrack: indexJobs(jobs) };
+  return { download, jobs };
 }
 
 export function useOnlineCollection(key: string | null): UseOnlineCollectionResult {
@@ -227,21 +237,35 @@ export function useOnlineCollection(key: string | null): UseOnlineCollectionResu
   }, [key]);
 
   // Download progress lives in the database and changes from outside this
-  // screen, so it is re-read on every progress notification rather than polled.
+  // screen, so it is re-read on a progress notification rather than polled. A
+  // burst of notifications (the start of a file, a retry, a state change) is
+  // folded into one trailing read: the numbers come from the same rows either
+  // way, and reading them four times a second would cost more than the drawing.
   useEffect(() => {
     if (!key) {
       return;
     }
     let cancelled = false;
-    const unsubscribe = DownloadService.subscribe(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const read = () => {
+      timer = null;
       void readLiveFor(key).then((numbers) => {
         if (!cancelled) {
-          setLive(numbers);
+          setLive((previous) => applyLive(previous, numbers));
         }
       });
+    };
+    const unsubscribe = DownloadService.subscribe(() => {
+      if (timer !== null) {
+        return;
+      }
+      timer = setTimeout(read, LIVE_REFRESH_MS);
     });
     return () => {
       cancelled = true;
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
       unsubscribe();
     };
   }, [key]);
@@ -252,7 +276,8 @@ export function useOnlineCollection(key: string | null): UseOnlineCollectionResu
     }
     const local = await readLocal(key);
     setLoaded(local);
-    setLive(await readLiveFor(key));
+    const live = await readLiveFor(key);
+    setLive((previous) => applyLive(previous, live));
     setLoaded(await readRemote(key, local));
   }, [key]);
 
@@ -267,7 +292,8 @@ export function useOnlineCollection(key: string | null): UseOnlineCollectionResu
     } catch (caught) {
       setActionError(messageOf(caught));
     } finally {
-      setLive(await readLiveFor(key));
+      const live = await readLiveFor(key);
+      setLive((previous) => applyLive(previous, live));
     }
   }, [key]);
 
@@ -276,7 +302,8 @@ export function useOnlineCollection(key: string | null): UseOnlineCollectionResu
       return;
     }
     await DownloadService.cancelDownload(key);
-    setLive(await readLiveFor(key));
+    const live = await readLiveFor(key);
+    setLive((previous) => applyLive(previous, live));
   }, [key]);
 
   const retryDownload = useCallback(async () => {
@@ -285,7 +312,8 @@ export function useOnlineCollection(key: string | null): UseOnlineCollectionResu
     }
     setActionError(null);
     await DownloadService.retryDownload(key);
-    setLive(await readLiveFor(key));
+    const live = await readLiveFor(key);
+    setLive((previous) => applyLive(previous, live));
   }, [key]);
 
   const deleteDownload = useCallback(async () => {

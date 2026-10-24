@@ -54,8 +54,6 @@ export function DockPlayer() {
   const artist = usePlayerStore((state) => state.artist);
   const artworkUrl = usePlayerStore((state) => state.artworkUrl);
   const contentHash = usePlayerStore((state) => state.contentHash);
-  const positionSec = usePlayerStore((state) => state.positionSec);
-  const durationSec = usePlayerStore((state) => state.durationSec);
   const playbackSpeed = usePlayerStore((state) => state.playbackSpeed);
   const skip = usePlayerStore((state) => state.skip);
   const expanded = usePlayerStore((state) => state.expanded);
@@ -147,8 +145,6 @@ export function DockPlayer() {
         artist={artist}
         artworkUrl={artworkUrl}
         ramp={ramp}
-        positionSec={positionSec}
-        durationSec={durationSec}
         isPlaying={isPlaying}
         playbackSpeed={playbackSpeed}
         context={context}

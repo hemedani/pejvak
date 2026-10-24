@@ -115,6 +115,8 @@ export default function MissingFilesScreen() {
                             source={item.track.artworkUrl}
                             size={tile.md}
                             radius={tileRadius(tile.md)}
+                            recyclingKey={item.track.contentHash}
+                            dense
                           />
                         }
                         leadingWidth={tile.md}

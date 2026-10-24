@@ -250,6 +250,7 @@ describe("backfillArtwork", () => {
     expect(getTracksMissingArtwork).toHaveBeenCalledWith(2);
     expect(outcome).toMatchObject({ scanned: 2, found: 2, empty: 0, failed: 0 });
     expect(setTrackArtwork).toHaveBeenCalledTimes(2);
+    expect(outcome.changed.map((entry) => entry.trackId)).toEqual(["a", "b"]);
   });
 
   it("stamps a file with no picture so the next pass moves on to other rows", async () => {
@@ -338,7 +339,14 @@ describe("backfillArtwork", () => {
 
     const outcome = await backfillArtwork();
 
-    expect(outcome).toEqual({ scanned: 0, found: 0, empty: 0, failed: 0, skipped: 0 });
+    expect(outcome).toEqual({
+      scanned: 0,
+      found: 0,
+      empty: 0,
+      failed: 0,
+      skipped: 0,
+      changed: [],
+    });
     expect(inspectAudioFileMock).not.toHaveBeenCalled();
   });
 });

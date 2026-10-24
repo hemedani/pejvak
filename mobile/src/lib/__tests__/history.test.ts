@@ -10,6 +10,8 @@ import {
   formatTimeRange,
   groupByDay,
   groupHistoryIntoStretches,
+  historyCursorFor,
+  mergeHistoryPages,
   resumeTargetSec,
   stretchResumeTarget,
   type HistoryItem,
@@ -498,5 +500,56 @@ describe("describeStretchStatus", () => {
     );
 
     expect(describeStretchStatus(entry.stretch)).toBeNull();
+  });
+});
+
+
+describe("historyCursorFor", () => {
+  it("uses the newest member of the oldest stretch, not the last row", () => {
+    // Rows are newest-first, so the last row is the *earliest* member of the
+    // oldest stretch. The query groups by the newest one.
+    const rows = [
+      itemWith({ id: "a1", stretchId: "a", startedAt: 300 }),
+      itemWith({ id: "a2", stretchId: "a", startedAt: 250 }),
+      itemWith({ id: "b1", stretchId: "b", startedAt: 200 }),
+      itemWith({ id: "b2", stretchId: "b", startedAt: 100 }),
+    ];
+
+    expect(historyCursorFor(rows)).toEqual({ startedAt: 200, stretchId: "b" });
+  });
+
+  it("has no cursor for an empty page", () => {
+    expect(historyCursorFor([])).toBeNull();
+  });
+});
+
+describe("mergeHistoryPages", () => {
+  it("appends older rows after the current ones", () => {
+    const first = [item(300, "a"), item(200, "b")];
+    const second = [item(100, "c")];
+
+    expect(mergeHistoryPages(first, second).map((row) => row.session.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+
+  it("drops a row the previous pages already hold", () => {
+    const first = [item(300, "a"), item(200, "b")];
+    const second = [item(200, "b"), item(100, "c")];
+
+    expect(mergeHistoryPages(first, second).map((row) => row.session.id)).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+
+  it("returns the same array when the page adds nothing", () => {
+    const first = [item(300, "a")];
+
+    expect(mergeHistoryPages(first, [])).toBe(first);
+    expect(mergeHistoryPages(first, [item(300, "a")])).toBe(first);
   });
 });

@@ -218,6 +218,8 @@ export default function PlaylistDetailScreen() {
                           source={track.artworkUrl}
                           size={tile.md}
                           radius={tileRadius(tile.md)}
+                          recyclingKey={track.contentHash}
+                          dense
                         />
                       }
                       leadingWidth={tile.md}
@@ -339,6 +341,8 @@ export default function PlaylistDetailScreen() {
                             source={track.artworkUrl}
                             size={tile.md}
                             radius={tileRadius(tile.md)}
+                            recyclingKey={track.contentHash}
+                            dense
                           />
                         }
                         leadingWidth={tile.md}

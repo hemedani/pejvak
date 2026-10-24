@@ -47,9 +47,9 @@
  */
 
 import { LinearGradient } from "expo-linear-gradient";
-import type { BottomTabBarProps } from "expo-router/tabs";
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
+import type { EdgeInsets } from "react-native-safe-area-context";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -64,6 +64,7 @@ import { DockPlayer } from "@/components/player/DockPlayer";
 import { GlassSurface } from "@/components/ui/glass";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
+import type { TabName } from "@/lib/tabNavigation";
 import { usePlayerStore } from "@/store/playerStore";
 import { curve, duration, easing, useMotionEnabled } from "@/theme/motion";
 import {
@@ -77,7 +78,7 @@ import {
 /** One destination, as the dock draws it. */
 export type TabDefinition = {
   /** The route's file name inside `(tabs)`. */
-  name: string;
+  name: TabName;
   label: string;
   /** Outlined glyph — the resting state. */
   icon: IconName;
@@ -120,7 +121,18 @@ export const TABS: readonly TabDefinition[] = [
   },
 ];
 
-export function AppDock({ state, navigation, insets }: BottomTabBarProps) {
+export type AppDockProps = {
+  activeName: TabName;
+  insets: EdgeInsets;
+  onSelect: (name: TabName) => void;
+};
+
+/**
+ * Rendered as a sibling of `GlassBlurTarget`'s background, never inside it —
+ * a panel nested in the target blurs its own siblings. The layout owns the
+ * router and the safe-area read; this component only draws and reports taps.
+ */
+export function AppDock({ activeName, insets, onSelect }: AppDockProps) {
   const theme = useTheme();
   const motionEnabled = useMotionEnabled();
 
@@ -143,26 +155,6 @@ export function AppDock({ state, navigation, insets }: BottomTabBarProps) {
   }, [collapsedHeight, expandedHeight, height, motionEnabled, playing]);
 
   const contentStyle = useAnimatedStyle(() => ({ height: height.value }));
-
-  const routeFor = useCallback(
-    (name: string) => state.routes.find((route) => route.name === name),
-    [state.routes],
-  );
-
-  const onPress = useCallback(
-    (routeName: string, routeKey: string, isFocused: boolean) => {
-      const event = navigation.emit({
-        type: "tabPress",
-        target: routeKey,
-        canPreventDefault: true,
-      });
-      if (isFocused || event.defaultPrevented) {
-        return;
-      }
-      navigation.navigate(routeName);
-    },
-    [navigation],
-  );
 
   return (
     <View
@@ -212,17 +204,17 @@ export function AppDock({ state, navigation, insets }: BottomTabBarProps) {
 
           <View style={styles.nav}>
             {TABS.map((tab) => {
-              const route = routeFor(tab.name);
-              if (!route) {
-                return null;
-              }
-              const isFocused = state.index === state.routes.indexOf(route);
+              const isFocused = tab.name === activeName;
               return (
                 <Destination
                   key={tab.name}
                   tab={tab}
                   isFocused={isFocused}
-                  onPress={() => onPress(route.name, route.key, isFocused)}
+                  onPress={() => {
+                    if (!isFocused) {
+                      onSelect(tab.name);
+                    }
+                  }}
                 />
               );
             })}

@@ -37,6 +37,7 @@ import {
   type ScanPlan,
   type ScanStatus,
 } from "@/lib/scanPlan";
+import { listPerformance } from "@/lib/listPerformance";
 
 /**
  * Device import, in the order the user actually needs it: choose a source, watch
@@ -336,6 +337,7 @@ export default function ImportScreen() {
   return (
     <Screen wash={theme.accent}>
       <FlatList
+        {...listPerformance}
         data={phase === "preview" ? visible : []}
         keyExtractor={(item) => item.sourceId}
         contentContainerStyle={styles.list}

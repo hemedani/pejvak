@@ -1,10 +1,11 @@
 /**
  * The tab navigator.
  *
- * Registers the destinations from `TABS` and hands the drawing to `AppDock`, so
- * the route list and the dock's layout are the same array and cannot drift. The
- * dock also carries the now-playing row, which is why the now-playing surface
- * disappears from this layout entirely.
+ * Registers the destinations from `TABS`, which the dock lays out, so the route
+ * list and the dock's order are the same array and cannot drift. The dock itself
+ * is rendered by the layout as a *sibling* of the blur target — never as this
+ * navigator's `tabBar`, because a panel inside the target would blur its own
+ * siblings.
  *
  * The screens keep the full height of the window and the bar floats over them:
  * each screen reserves its own bottom space from `dockInset`. That is
@@ -16,12 +17,16 @@
 
 import { Tabs } from "expo-router/tabs";
 
-import { AppDock, TABS } from "@/components/app-dock";
+import { TABS } from "@/components/app-dock";
+
+function NoTabBar() {
+  return null;
+}
 
 export default function AppTabs() {
   return (
     <Tabs
-      tabBar={(props) => <AppDock {...props} />}
+      tabBar={NoTabBar}
       screenOptions={{
         headerShown: false,
         tabBarStyle: { height: 0 },

@@ -51,6 +51,7 @@ import { createSearchIndex, foldQuery, searchIndex } from "@/lib/search";
 import { formatClock } from "@/lib/time";
 import { ContextService } from "@/services/ContextService";
 import { dockInset, spacing } from "@/theme/tokens";
+import { listPerformance } from "@/lib/listPerformance";
 
 type DiscoverView = "continue" | "favorites" | "browse";
 
@@ -319,6 +320,7 @@ export default function DiscoverScreen() {
   return (
     <Screen wash={theme.accent}>
       <KeyboardAwareFlatList
+        {...listPerformance}
         data={rows}
         keyExtractor={(row) =>
           row.kind === "continue"

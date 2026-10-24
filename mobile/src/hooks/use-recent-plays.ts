@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
+import type { FolderSummary, LocalTrack } from "@/lib/db/types";
 import { buildRecentPlays, type RecentPlay } from "@/lib/recentPlays";
 import { LocalDBService } from "@/services/LocalDBService";
 import { PlaylistService } from "@/services/PlaylistService";
@@ -14,10 +15,16 @@ import { PlaylistService } from "@/services/PlaylistService";
  */
 const SCAN_LIMIT = 150;
 
+export type RecentPlaysSources = {
+  /** Rows the caller already read for the same refresh, shared rather than re-read. */
+  tracks?: readonly LocalTrack[];
+  folders?: readonly FolderSummary[];
+};
+
 export type UseRecentPlaysResult = {
   recent: RecentPlay[];
   loading: boolean;
-  refresh: () => Promise<void>;
+  refresh: (sources?: RecentPlaysSources) => Promise<void>;
 };
 
 /**
@@ -32,15 +39,25 @@ export function useRecentPlays(limit = 12): UseRecentPlaysResult {
   const [recent, setRecent] = useState<RecentPlay[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    const [items, folders, playlists, tracks] = await Promise.all([
-      LocalDBService.getSessionsForHistory(SCAN_LIMIT),
-      LocalDBService.getFolderSummaries(),
-      PlaylistService.list(),
-      LocalDBService.getAllTracks(),
-    ]);
-    return buildRecentPlays({ items, folders, playlists, tracks, limit });
-  }, [limit]);
+  const load = useCallback(
+    async (sources: RecentPlaysSources = {}) => {
+      // A caller that just read tracks and folders for the same refresh passes
+      // them in; without that, this read is what keeps Recent from disagreeing
+      // with the other tabs about the same instant.
+      const [items, playlists, tracks, folders] = await Promise.all([
+        LocalDBService.getSessionsForHistory(SCAN_LIMIT),
+        PlaylistService.list(),
+        sources.tracks
+          ? Promise.resolve(sources.tracks)
+          : LocalDBService.getAllTracks(),
+        sources.folders
+          ? Promise.resolve(sources.folders)
+          : LocalDBService.getFolderSummaries(),
+      ]);
+      return buildRecentPlays({ items, folders, playlists, tracks, limit });
+    },
+    [limit],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -55,10 +72,13 @@ export function useRecentPlays(limit = 12): UseRecentPlaysResult {
     };
   }, [load]);
 
-  const refresh = useCallback(async () => {
-    setRecent(await load());
-    setLoading(false);
-  }, [load]);
+  const refresh = useCallback(
+    async (sources?: RecentPlaysSources) => {
+      setRecent(await load(sources));
+      setLoading(false);
+    },
+    [load],
+  );
 
   return { recent, loading, refresh };
 }

@@ -265,6 +265,8 @@ export default function FolderDetailScreen() {
                           source={track.artworkUrl}
                           size={tile.md}
                           radius={tileRadius(tile.md)}
+                          recyclingKey={track.contentHash}
+                          dense
                         />
                       }
                       leadingWidth={tile.md}

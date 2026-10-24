@@ -1,6 +1,10 @@
 import { useCallback, useRef, useState } from "react";
 
-import { backfillArtwork, countTracksMissingArtwork } from "@/services/ArtworkService";
+import {
+  backfillArtwork,
+  countTracksMissingArtwork,
+  type BackfillOutcome,
+} from "@/services/ArtworkService";
 
 export type UseArtworkBackfillResult = {
   /** Tracks that have not been examined for cover art yet. */
@@ -9,8 +13,11 @@ export type UseArtworkBackfillResult = {
   running: boolean;
   /** Re-reads the remaining count without doing any work. */
   refreshCount: () => Promise<void>;
-  /** Runs one bounded pass. Resolves with how many covers were found. */
-  run: (limit?: number) => Promise<number>;
+  /**
+   * Runs one bounded pass. Resolves with what it found, including the rows that
+   * gained a cover — so the caller can merge those into a list it already drew.
+   */
+  run: (limit?: number, isCancelled?: () => boolean) => Promise<BackfillOutcome>;
 };
 
 /**
@@ -37,16 +44,22 @@ export function useArtworkBackfill(): UseArtworkBackfillResult {
   }, []);
 
   const run = useCallback(
-    async (limit = 20): Promise<number> => {
+    async (limit = 20, isCancelled?: () => boolean): Promise<BackfillOutcome> => {
       if (inFlight.current) {
-        return 0;
+        return { scanned: 0, found: 0, empty: 0, failed: 0, skipped: 0, changed: [] };
       }
       inFlight.current = true;
-      let found = 0;
+      let outcome: BackfillOutcome = {
+        scanned: 0,
+        found: 0,
+        empty: 0,
+        failed: 0,
+        skipped: 0,
+        changed: [],
+      };
       setRunning(true);
       try {
-        const outcome = await backfillArtwork({ limit });
-        found = outcome.found;
+        outcome = await backfillArtwork({ limit, isCancelled });
       } catch {
         // Cover art is never worth surfacing as an error: the tiles fall back to
         // their gradient, which is the intended look for a track without any.
@@ -55,7 +68,7 @@ export function useArtworkBackfill(): UseArtworkBackfillResult {
         setRunning(false);
         await refreshCount();
       }
-      return found;
+      return outcome;
     },
     [refreshCount],
   );

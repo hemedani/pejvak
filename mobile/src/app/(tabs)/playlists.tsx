@@ -24,6 +24,7 @@ import { useTheme } from "@/hooks/use-theme";
 import type { LocalPlaylist } from "@/lib/db/types";
 import { PlaylistService } from "@/services/PlaylistService";
 import { dockInset, spacing } from "@/theme/tokens";
+import { listPerformance } from "@/lib/listPerformance";
 
 /**
  * Only the opening screenful staggers in — recycled rows past this limit render
@@ -97,6 +98,7 @@ export default function PlaylistsScreen() {
   return (
     <Screen wash={theme.accent}>
       <KeyboardAwareFlatList
+        {...listPerformance}
         data={playlists}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}

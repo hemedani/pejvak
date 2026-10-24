@@ -1,5 +1,6 @@
 export * from "@/components/ui/row/list-group";
 export * from "@/components/ui/row/list-row";
+export * from "@/components/ui/row/list-surface";
 export * from "@/components/ui/row/record-row";
 export * from "@/components/ui/row/row-actions";
 export * from "@/components/ui/row/row-shell";

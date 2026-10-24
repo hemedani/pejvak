@@ -7,13 +7,15 @@
  * it adds no height and cannot shift the row when the text wraps.
  */
 
+import { memo } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { RowShell, type RowShellProps } from "@/components/ui/row/row-shell";
 import { useTheme } from "@/hooks/use-theme";
+import type { ListRowPosition } from "@/lib/listSurface";
 import { hairline, list as listTokens, listDividerInset } from "@/theme/tokens";
 
-export type ListRowPosition = "only" | "first" | "middle" | "last";
+export type { ListRowPosition };
 
 export type ListRowProps = Omit<RowShellProps, "density"> & {
   position?: ListRowPosition;
@@ -21,7 +23,11 @@ export type ListRowProps = Omit<RowShellProps, "density"> & {
   leadingWidth?: number;
 };
 
-export function ListRow({ position = "only", leadingWidth = 0, ...rest }: ListRowProps) {
+export const ListRow = memo(function ListRow({
+  position = "only",
+  leadingWidth = 0,
+  ...rest
+}: ListRowProps) {
   const theme = useTheme();
   const divided = position !== "only" && position !== "first";
 
@@ -43,7 +49,7 @@ export function ListRow({ position = "only", leadingWidth = 0, ...rest }: ListRo
       <RowShell density="dense" leadingWidth={leadingWidth} {...rest} />
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   row: {

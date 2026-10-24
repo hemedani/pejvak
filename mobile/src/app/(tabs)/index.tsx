@@ -1,7 +1,15 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  InteractionManager,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
+import { LibraryFolderCard } from "@/components/library/folder-card";
+import { LibraryPlaylistCard } from "@/components/library/playlist-card";
+import { LibraryTrackCard } from "@/components/library/track-card";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
@@ -11,36 +19,25 @@ import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip } from "@/components/ui/glass";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
-import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import {
-  addToPlaylistAction,
-  detailsAction,
-  EmptyState,
-  historyAction,
-  InlineNotice,
-  playFolderAction,
-  playPlaylistAction,
-} from "@/components/ui/row";
+import { EmptyState, InlineNotice } from "@/components/ui/row";
 import { SearchField } from "@/components/ui/search-field";
 import { useArtworkBackfill } from "@/hooks/use-artwork-backfill";
 import { useFolders } from "@/hooks/use-folders";
 import { useMissingTracks } from "@/hooks/use-missing-tracks";
 import { useRecentPlays } from "@/hooks/use-recent-plays";
 import { useTheme } from "@/hooks/use-theme";
+import { cardWidthFor } from "@/lib/cardLayout";
 import type { FolderSummary, LocalTrack } from "@/lib/db/types";
-import { describeFolderProgress, folderProgressRatio } from "@/lib/folderPlay";
-import { formatDuration } from "@/lib/history";
 import {
   folderSearchFields,
   recentSearchFields,
   TITLE_FIELD,
   trackSearchFields,
 } from "@/lib/librarySearch";
+import { listPerformance } from "@/lib/listPerformance";
 import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
 import { paletteFor } from "@/lib/palette";
-import { formatPlayCount } from "@/lib/playbackContext";
-import { describeTrackStatus } from "@/lib/trackStatus";
 import { describeRecentWhen, recentPlayKey, type RecentPlay } from "@/lib/recentPlays";
 import {
   createSearchIndex,
@@ -59,6 +56,7 @@ import {
   control,
   dockInset,
   iconSize,
+  layout,
   spacing,
   tile,
   tileRadius,
@@ -80,6 +78,8 @@ const FIRST_ROW_REVEAL_INDEX = 6;
  * self-stamping pass is that the next visit picks up where this one stopped.
  */
 const ARTWORK_BACKFILL_BATCH = 8;
+/** Let the list paint before reading files for covers on a first visit. */
+const ARTWORK_BACKFILL_DELAY_MS = 250;
 
 /**
  * How many distinct recent plays the Recent tab shows. Short on purpose — it is
@@ -134,10 +134,6 @@ function formatLastPlayed(value: number | null): string {
   return `Last played ${new Date(value).toLocaleDateString()}`;
 }
 
-function describeTrackCount(count: number): string {
-  return `${count} track${count === 1 ? "" : "s"}`;
-}
-
 /**
  * The line that explains a hit the listener cannot see.
  *
@@ -176,6 +172,12 @@ function describeElsewhere(counts: Record<LibraryView, number>, view: LibraryVie
 export default function LibraryScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
+  const cardWidth = cardWidthFor({
+    windowWidth,
+    inset: spacing.xl,
+    maxContentWidth: layout.maxContentWidth,
+  });
   const [view, setView] = useState<LibraryView>("tracks");
   const [tracks, setTracks] = useState<LocalTrack[]>([]);
   const [annotationCounts, setAnnotationCounts] = useState<Record<string, number>>({});
@@ -185,6 +187,11 @@ export default function LibraryScreen() {
   const { run: runArtworkBackfill } = useArtworkBackfill();
   const terms = useMemo(() => foldQuery(query), [query]);
   const searching = terms.length > 0;
+
+  /** True between a drag/momentum starting and the last one ending. */
+  const scrollingRef = useRef(false);
+  const backfillTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interactionTask = useRef<{ cancel: () => void } | null>(null);
 
   const { recent, refresh: refreshRecent } = useRecentPlays(RECENT_READ_LIMIT);
 
@@ -271,42 +278,102 @@ export default function LibraryScreen() {
   );
 
   /**
-   * Fills in cover art for tracks imported before it was extracted, then
-   * re-reads the rows only if something was found. Deliberately not awaited by
-   * `refresh`: the list has to paint from the rows already in hand, and a tile
-   * upgrading from a letter to a cover a moment later costs nothing.
+   * Fills in cover art for tracks imported before it was extracted, merging only
+   * the rows that changed. Deliberately not awaited by `refresh`: the list has
+   * to paint from the rows already in hand, and a tile upgrading from a letter
+   * to a cover a moment later costs nothing.
    *
    * Bounded and self-stamping, so the first visits do real work and every visit
-   * after that is one cheap query returning nothing.
+   * after that is one cheap query returning nothing. A pass that starts while a
+   * scroll is in flight stops between files, because extraction reads real bytes
+   * on the JS thread and a fling is the one moment it must not compete.
    */
-  const backfillCovers = useCallback(async () => {
-    const found = await runArtworkBackfill(ARTWORK_BACKFILL_BATCH);
-    if (found === 0) {
+  const backfillNow = useCallback(async () => {
+    const outcome = await runArtworkBackfill(
+      ARTWORK_BACKFILL_BATCH,
+      () => scrollingRef.current,
+    );
+    if (outcome.changed.length === 0) {
       return;
     }
-    setTracks(await LocalDBService.getAllTracks());
+    const artworkByTrack = new Map(
+      outcome.changed.map((entry) => [entry.trackId, entry.artworkUrl]),
+    );
+    setTracks((previous) => {
+      let changed = false;
+      const next = previous.map((track) => {
+        const artworkUrl = artworkByTrack.get(track.id);
+        if (!artworkUrl || track.artworkUrl === artworkUrl) {
+          return track;
+        }
+        changed = true;
+        return { ...track, artworkUrl };
+      });
+      return changed ? next : previous;
+    });
     // A folder card draws its cover from one of its members, so it moves too.
     await refreshFolders();
   }, [refreshFolders, runArtworkBackfill]);
 
-  const refresh = useCallback(async () => {
-    const [allTracks, annotationTotals] = await Promise.all([
-      LocalDBService.getAllTracks(),
+  /**
+   * Defers a cover-art pass until the screen has settled.
+   *
+   * `InteractionManager` waits out the transition and the first touches; the
+   * timer then gives the first painted frame room to land. Only one pass is ever
+   * queued — focusing twice in a row must not read the same files twice.
+   */
+  const backfillCovers = useCallback(() => {
+    interactionTask.current?.cancel();
+    interactionTask.current = InteractionManager.runAfterInteractions(() => {
+      interactionTask.current = null;
+      if (backfillTimer.current !== null) {
+        clearTimeout(backfillTimer.current);
+      }
+      backfillTimer.current = setTimeout(() => {
+        backfillTimer.current = null;
+        if (!scrollingRef.current) {
+          void backfillNow();
+        }
+      }, ARTWORK_BACKFILL_DELAY_MS);
+    });
+  }, [backfillNow]);
+
+  useEffect(
+    () => () => {
+      interactionTask.current?.cancel();
+      if (backfillTimer.current !== null) {
+        clearTimeout(backfillTimer.current);
+      }
+    },
+    [],
+  );
+
+  /** The reads that only enrich what is already on screen; never block paint. */
+  const refreshSecondary = useCallback(async () => {
+    const [annotationTotals] = await Promise.all([
       LocalDBService.getAnnotationCounts(),
+      // A relink writes to the tracks table too, so the alert has to re-read or
+      // it would keep offering to fix something already fixed.
+      refreshMissing(),
     ]);
-    setTracks(allTracks);
     setAnnotationCounts(annotationTotals);
+  }, [refreshMissing]);
+
+  const refresh = useCallback(async () => {
+    const allTracks = await LocalDBService.getAllTracks();
+    setTracks(allTracks);
     // Folders are derived from the tracks table, so a rescan or an import can
     // add one without any screen noticing; re-read on focus alongside them.
-    await refreshFolders();
-    // A relink writes to the tracks table too, so the alert has to re-read or
-    // it would keep offering to fix something already fixed.
-    await refreshMissing();
+    const folderRows = await refreshFolders();
     // Recent plays are read from the sessions table, which playback writes to
-    // without this screen knowing — so it goes stale for the same reason.
-    await refreshRecent();
-    void backfillCovers();
-  }, [backfillCovers, refreshFolders, refreshMissing, refreshRecent]);
+    // without this screen knowing — so it goes stale for the same reason. The
+    // rows just read are shared rather than fetched a second time.
+    await refreshRecent({ tracks: allTracks, folders: folderRows });
+    InteractionManager.runAfterInteractions(() => {
+      void refreshSecondary();
+    });
+    backfillCovers();
+  }, [backfillCovers, refreshFolders, refreshRecent, refreshSecondary]);
 
   useFocusEffect(
     useCallback(() => {
@@ -395,6 +462,25 @@ export default function LibraryScreen() {
       }
     },
     [router],
+  );
+
+  /**
+   * Card-shaped entry points for the two async plays. `MediaCard` is memoised,
+   * so its `onPress` has to keep its identity between data loads; a wrapper per
+   * card would rebuild the action cluster and defeat the memo comparison.
+   */
+  const playFolderCard = useCallback(
+    (folderKey: string) => {
+      void playFolder(folderKey);
+    },
+    [playFolder],
+  );
+
+  const playPlaylistCard = useCallback(
+    (playlistId: string) => {
+      void playPlaylist(playlistId);
+    },
+    [playPlaylist],
   );
 
   // Importing happens on its own screen; `useFocusEffect` above refreshes the
@@ -570,65 +656,16 @@ export default function LibraryScreen() {
     when: string | undefined,
     hit: RowHit | null,
   ) => {
-    const ramp = paletteFor(folder.key);
-    const matched = describeHit(hit);
-    /**
-     * Resolved on tap rather than per card: a folder holds counts, not its
-     * contents, and forty cards each running a query for a button nobody has
-     * pressed is the cost this avoids. Missing files are left out, matching the
-     * folder screen — a playlist is a promise to play something later, and a
-     * file whose bytes are gone cannot keep it.
-     */
-    const resolveTrackIds = async () =>
-      (await LocalDBService.getTracksByFolder(folder.key))
-        .filter((track) => track.availability !== "missing")
-        .map((track) => track.id);
-
     return (
       <Reveal index={FIRST_ROW_REVEAL_INDEX + index} from="below" limit={ROW_REVEAL_LIMIT}>
-        <MediaCard
-          title={folder.name}
-          titleRanges={hit?.ranges ?? []}
-          // Why it matched comes first while searching, then progress, so a card
-          // that runs out of width ellipsises the play count rather than either
-          // the reason or the thing being tracked.
-          meta={[
-            matched,
-            describeFolderProgress(folder.finishedCount, folder.trackCount),
-            folder.totalDurationSec > 0 ? formatDuration(folder.totalDurationSec) : null,
-            formatPlayCount(folder.playCount),
-            when ?? null,
-          ]
-            .filter((part): part is string => part !== null)
-            .join(" · ")}
-          artworkUrl={folder.artworkUrl}
-          paletteKey={folder.key}
-          progressRatio={folderProgressRatio(folder.finishedCount, folder.trackCount)}
-          onPress={() => openFolder(folder.key)}
-          accessibilityLabel={`Open folder ${folder.name}`}
-          accessibilityHint="Opens this folder"
-          actions={[
-            playFolderAction({
-              title: folder.name,
-              onPress: () => void playFolder(folder.key),
-              tone: "glass",
-            }),
-            addToPlaylistAction({
-              title: folder.name,
-              ramp,
-              artwork: folder.artworkUrl,
-              resolveTrackIds,
-              isBatch: true,
-              tone: "glass",
-            }),
-            historyAction({
-              type: "folder",
-              contextKey: folder.key,
-              title: folder.name,
-              artwork: folder.artworkUrl,
-              tone: "glass",
-            }),
-          ]}
+        <LibraryFolderCard
+          folder={folder}
+          when={when}
+          matched={describeHit(hit)}
+          titleRanges={hit?.ranges}
+          cardWidth={cardWidth}
+          onOpen={openFolder}
+          onPlay={playFolderCard}
         />
       </Reveal>
     );
@@ -639,83 +676,19 @@ export default function LibraryScreen() {
     index: number,
     hit: RowHit | null,
   ) => {
-    const { playlist } = play;
-    const ramp = paletteFor(playlist.title);
-    const matched = describeHit(hit);
-    /**
-     * Resolved through the service rather than from the playlist's stored items,
-     * so this hands over exactly the queue playback would use — and drops
-     * missing files for the same reason the folder card does.
-     */
-    const resolveTrackIds = async () => {
-      const detail = await PlaylistService.loadDetail(playlist.id);
-      return (detail?.tracks ?? [])
-        .filter((track) => track.availability !== "missing")
-        .map((track) => track.id);
-    };
-
     return (
       <Reveal index={FIRST_ROW_REVEAL_INDEX + index} from="below" limit={ROW_REVEAL_LIMIT}>
-        <MediaCard
-          title={playlist.title}
-          titleRanges={hit?.ranges ?? []}
-          meta={[
-            matched,
-            describeTrackCount(playlist.items.length),
-            describeRecentWhen(play.lastPlayedAt),
-          ]
-            .filter((part): part is string => part !== null && part.length > 0)
-            .join(" · ")}
-          paletteKey={playlist.title}
-          onPress={() => openPlaylist(playlist.id)}
-          accessibilityLabel={`Open playlist ${playlist.title}`}
-          accessibilityHint="Opens this playlist"
-          actions={[
-            playPlaylistAction({
-              title: playlist.title,
-              onPress: () => void playPlaylist(playlist.id),
-              tone: "glass",
-            }),
-            addToPlaylistAction({
-              title: playlist.title,
-              ramp,
-              resolveTrackIds,
-              isBatch: true,
-              tone: "glass",
-            }),
-            historyAction({
-              type: "playlist",
-              contextKey: playlist.id,
-              title: playlist.title,
-              tone: "glass",
-            }),
-          ]}
+        <LibraryPlaylistCard
+          playlist={play.playlist}
+          lastPlayedAt={play.lastPlayedAt}
+          matched={describeHit(hit)}
+          titleRanges={hit?.ranges}
+          cardWidth={cardWidth}
+          onOpen={openPlaylist}
+          onPlay={playPlaylistCard}
         />
       </Reveal>
     );
-  };
-
-  /**
-   * The two controls a bare track gets, in both the Tracks and the Recent tab.
-   *
-   * One function rather than two copies, because the pair is the same for the
-   * same reason: a bare track has no collection to show history for, so it gets
-   * "add to a playlist" and "open the track", where its own sessions are listed.
-   * Both tabs render the same card, so they must not offer different controls.
-   */
-  const trackActions = (track: LocalTrack): MediaCardAction[] => {
-    const ramp = paletteFor(track.contentHash);
-    const openDetails = () => router.push(`/track/${track.id}`);
-
-    return [
-      addToPlaylistAction({
-        title: track.title,
-        ramp,
-        artwork: track.artworkUrl,
-        trackIds: [track.id],
-      }),
-      detailsAction({ title: track.title, onPress: openDetails }),
-    ];
   };
 
   const renderRecentTrack = (
@@ -724,27 +697,22 @@ export default function LibraryScreen() {
     hit: RowHit | null,
   ) => {
     const { track } = play;
-    const matched = describeHit(hit);
 
     return (
       <Reveal index={FIRST_ROW_REVEAL_INDEX + index} from="below" limit={ROW_REVEAL_LIMIT}>
-        <MediaCard
-          title={track.title}
-          titleRanges={hit?.ranges ?? []}
+        <LibraryTrackCard
+          track={track}
+          titleRanges={hit?.ranges}
           meta={[
-            matched,
+            describeHit(hit),
             `${track.totalPlayCount} play${track.totalPlayCount === 1 ? "" : "s"}`,
             describeRecentWhen(play.lastPlayedAt),
           ]
             .filter((part): part is string => part !== null && part.length > 0)
             .join(" · ")}
-          artworkUrl={track.artworkUrl}
-          paletteKey={track.contentHash}
-          status={describeTrackStatus(track)}
-          onPress={() => playTrack(track.id)}
-          accessibilityLabel={`Play ${track.title}`}
+          cardWidth={cardWidth}
+          onPlay={playTrack}
           accessibilityHint="Plays this track on its own"
-          actions={trackActions(track)}
         />
       </Reveal>
     );
@@ -768,12 +736,24 @@ export default function LibraryScreen() {
    * per branch — `keyboardShouldPersistTaps` is what makes a result tappable on
    * the first tap while the keyboard is up.
    */
+  const onScrollBegin = useCallback(() => {
+    scrollingRef.current = true;
+  }, []);
+  const onScrollEnd = useCallback(() => {
+    scrollingRef.current = false;
+  }, []);
+
   const listProps = {
+    ...listPerformance,
     ListHeaderComponent: header,
     contentContainerStyle: styles.list,
     showsVerticalScrollIndicator: false,
     keyboardShouldPersistTaps: "handled" as const,
     keyboardDismissMode: "on-drag" as const,
+    onScrollBeginDrag: onScrollBegin,
+    onMomentumScrollBegin: onScrollBegin,
+    onScrollEndDrag: onScrollEnd,
+    onMomentumScrollEnd: onScrollEnd,
   };
 
   return (
@@ -807,21 +787,17 @@ export default function LibraryScreen() {
                 index={FIRST_ROW_REVEAL_INDEX + index}
                 from="below"
                 limit={ROW_REVEAL_LIMIT}>
-                <MediaCard
-                  title={track.title}
-                  titleRanges={hit?.ranges ?? []}
+                <LibraryTrackCard
+                  track={track}
+                  titleRanges={hit?.ranges}
                   meta={`${track.totalPlayCount} play${track.totalPlayCount === 1 ? "" : "s"} · ${notes} note${notes === 1 ? "" : "s"}`}
                   // While searching, the least important fact on the card gives
                   // way to the most useful one: why this card is a result. With
                   // no query it is the last-played stamp.
                   detail={matched ?? formatLastPlayed(track.lastPlayedAt)}
-                  status={describeTrackStatus(track)}
-                  artworkUrl={track.artworkUrl}
-                  paletteKey={track.contentHash}
-                  onPress={() => playAt(track.id)}
-                  accessibilityLabel={`Play ${track.title}`}
+                  cardWidth={cardWidth}
+                  onPlay={playAt}
                   accessibilityHint="Plays this track, and continues through the library"
-                  actions={trackActions(track)}
                 />
               </Reveal>
             );

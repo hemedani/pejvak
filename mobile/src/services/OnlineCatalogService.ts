@@ -212,9 +212,12 @@ async function syncCollectionTracks(
   }
   const remote = await adapter.getTracks(key, { signal: options.signal });
 
+  // Hash and shape first, then write in transactions: the write was the part
+  // that scaled with the number of episodes, and it is now one commit per 100.
+  const inputs = [];
   for (const track of remote) {
     const contentHash = await hashOnlineIdentity(meta.sourceId, track.externalId);
-    await LocalDBService.upsertOnlineTrack({
+    inputs.push({
       contentHash,
       title: track.title,
       streamUrl: track.streamUrl,
@@ -229,6 +232,7 @@ async function syncCollectionTracks(
       trackNumber: track.order,
     });
   }
+  await LocalDBService.upsertOnlineTracks(inputs);
 
   // The source's own cover for a show is often absent while every episode has
   // one, so the first episode's poster becomes the collection's — which is what

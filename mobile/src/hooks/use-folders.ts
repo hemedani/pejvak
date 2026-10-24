@@ -6,7 +6,8 @@ import { LocalDBService } from "@/services/LocalDBService";
 export type UseFoldersResult = {
   folders: FolderSummary[];
   loading: boolean;
-  refresh: () => Promise<void>;
+  /** Re-reads and resolves with the rows, for callers that share the read. */
+  refresh: () => Promise<FolderSummary[]>;
 };
 
 /**
@@ -34,8 +35,10 @@ export function useFolders(): UseFoldersResult {
   }, []);
 
   const refresh = useCallback(async () => {
-    setFolders(await LocalDBService.getFolderSummaries());
+    const rows = await LocalDBService.getFolderSummaries();
+    setFolders(rows);
     setLoading(false);
+    return rows;
   }, []);
 
   return { folders, loading, refresh };
