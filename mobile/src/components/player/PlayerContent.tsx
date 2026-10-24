@@ -86,6 +86,10 @@ export type PlayerContentProps = {
   /** Commit a scrub or a tap on the timeline, in seconds. */
   onSeek: (positionSec: number) => void;
   onCycleSpeed: () => void;
+  /** Opens the queue: the ordered tracks behind the current one. */
+  onOpenQueue: () => void;
+  /** The queue's size, so the chip is absent rather than opening an empty sheet. */
+  queueLength: number;
   onOpenSleepTimer: () => void;
   onOpenJumpToTime: () => void;
   onAddNote: () => void;
@@ -129,6 +133,8 @@ export function PlayerContent({
   onForward,
   onSeek,
   onCycleSpeed,
+  onOpenQueue,
+  queueLength,
   onOpenSleepTimer,
   onOpenJumpToTime,
   onAddNote,
@@ -280,6 +286,17 @@ export function PlayerContent({
                 icon={context.type === "folder" ? "folder" : "playlists"}
                 accessibilityLabel={`Open ${describeContextType(context.type).toLowerCase()} ${context.title}`}
                 onPress={onOpenContext}
+              />
+            ) : null}
+            {/* What is playing, and what comes after it. The chip sits beside
+                the context rather than inside it: a bare list has no collection
+                to open, but it still has a queue. */}
+            {queueLength > 0 ? (
+              <GlassChip
+                label="Queue"
+                icon="playlists"
+                accessibilityLabel="Show the queue"
+                onPress={onOpenQueue}
               />
             ) : null}
             <GlassChip
