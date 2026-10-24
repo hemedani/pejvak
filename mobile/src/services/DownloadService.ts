@@ -40,6 +40,7 @@ import type {
 import {
   collectionFolderKey,
   collectionRelativePath,
+  isLiveSource,
   seriesFolderKey,
   seriesRelativePath,
   seriesScopeKey,
@@ -292,6 +293,9 @@ export async function startDownload(collectionKey: string): Promise<void> {
   if (!meta) {
     throw new Error("Save this collection before downloading it.");
   }
+  if (isLiveSource(meta.sourceId)) {
+    throw new Error("Live radio cannot be downloaded.");
+  }
   if (meta.downloadState === "downloading") {
     return;
   }
@@ -322,6 +326,9 @@ export async function startSeriesDownload(input: SeriesDownloadInput): Promise<v
   const meta = await LocalDBService.getOnlineCollection(input.collectionKey);
   if (!meta) {
     throw new Error("Save this collection before downloading it.");
+  }
+  if (isLiveSource(meta.sourceId)) {
+    throw new Error("Live radio cannot be downloaded.");
   }
   const all = await LocalDBService.getTracksByCollection(input.collectionKey);
   const byId = new Map(all.map((track) => [track.id, track]));

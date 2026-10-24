@@ -7,6 +7,7 @@ import {
 import Constants, { ExecutionEnvironment } from "expo-constants";
 
 import type { LocalTrack } from "@/lib/db/types";
+import { getAdapter, isLiveSource } from "@/lib/online";
 import { sameContext, type PlaybackContext } from "@/lib/playbackContext";
 import { resumePositionSec } from "@/lib/resume";
 import {
@@ -420,18 +421,25 @@ function handleStatus(status: AudioStatus): void {
   }
   const currentTime = Number.isFinite(status.currentTime) ? status.currentTime : 0;
   const current = usePlayerStore.getState();
+  // A live stream reports `Infinity`, which is `> 0` and would be written
+  // straight into the store and the row as a duration. Finiteness is the guard
+  // that separates "the source has not told us yet" from "this never ends".
+  const reportedDuration =
+    Number.isFinite(status.duration) && status.duration > 0
+      ? Math.floor(status.duration)
+      : null;
   patch({
     positionSec: Math.floor(currentTime),
-    durationSec: status.duration > 0 ? Math.floor(status.duration) : current.durationSec,
+    durationSec: reportedDuration ?? current.durationSec,
   });
 
   // The source reports no duration for online audio, so the player is where the
   // real figure comes from — and it is written back to the row because every
   // resume position in the app is computed from it. Once per track: the update
   // is a no-op after the first, but the flag keeps it off the per-second path.
-  if (status.duration > 0 && currentTrack && !durationReported) {
+  if (reportedDuration !== null && currentTrack && !durationReported) {
     durationReported = true;
-    void LocalDBService.setTrackDuration(currentTrack.id, status.duration).catch(
+    void LocalDBService.setTrackDuration(currentTrack.id, reportedDuration).catch(
       () => undefined,
     );
   }
@@ -553,6 +561,14 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
     }
   }
   instance.play();
+
+  // A source that counts plays is told once, here rather than from a status
+  // tick: this is the moment the listener chose the track, and the adapter
+  // throttles the call itself. Deliberately not awaited — a play count is never
+  // worth delaying audio for.
+  if (track.sourceId && track.externalId) {
+    getAdapter(track.sourceId)?.notePlaybackStarted?.(track.externalId);
+  }
 }
 
 export function pause(): void {
@@ -700,8 +716,12 @@ async function playTrackById(trackId: string, startPositionSec?: number): Promis
     return;
   }
   const sessions = await LocalDBService.getSessionsByTrack(track.id);
-  const start =
-    startPositionSec !== undefined
+  // A live stream has no "where you left off": the position a previous listen
+  // happened to end on is a moment in a broadcast that is long gone. Every way
+  // into the queue — resume, skip, history — starts a station at zero.
+  const start = isLiveSource(track.sourceId)
+    ? 0
+    : startPositionSec !== undefined
       ? startPositionSec
       : resumePositionSec(sessions, track.durationSec);
   // One place covers every way the queue moves — a queue load, a manual skip,

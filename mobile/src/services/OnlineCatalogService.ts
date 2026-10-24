@@ -38,12 +38,21 @@ const CATALOG_TTL_MS = 5 * 60_000;
 
 const catalogCache = new Map<string, { at: number; value: OnlineCollection[] }>();
 
-/** A source's shows, memoised for `CATALOG_TTL_MS`. */
+/**
+ * A source's shows, memoised for `CATALOG_TTL_MS`.
+ *
+ * The cache is keyed by the language as well as the source, because a provider
+ * that serves several languages lists different collections under each. A
+ * single key would hand a Dutch browser the German list it fetched a minute
+ * earlier — and the collections would look like the wrong language rather than
+ * like a stale cache.
+ */
 export async function listCollections(
   sourceId: string,
-  options: { signal?: AbortSignal; refresh?: boolean } = {},
+  options: { signal?: AbortSignal; refresh?: boolean; languageCode?: string } = {},
 ): Promise<OnlineCollection[]> {
-  const cached = catalogCache.get(sourceId);
+  const cacheKey = `${sourceId}:${options.languageCode ?? ""}`;
+  const cached = catalogCache.get(cacheKey);
   if (!options.refresh && cached && Date.now() - cached.at < CATALOG_TTL_MS) {
     return cached.value;
   }
@@ -51,22 +60,55 @@ export async function listCollections(
   if (!adapter) {
     throw new OnlineSourceError("That source is not available.", "not_found");
   }
-  const value = await adapter.listCollections({ signal: options.signal });
-  catalogCache.set(sourceId, { at: Date.now(), value });
+  const value = await adapter.listCollections({
+    signal: options.signal,
+    languageCode: options.languageCode,
+  });
+  catalogCache.set(cacheKey, { at: Date.now(), value });
   return value;
 }
 
-/** One collection from the catalogue, or null when the source no longer lists it. */
+/**
+ * One collection by key, or null when the source no longer lists it.
+ *
+ * A direct lookup is tried first. A source that serves several languages cannot
+ * be found through a language-scoped browse list when only the key is known —
+ * opening a saved Dutch audiobook would otherwise search the German catalogue
+ * and declare the audiobook gone.
+ */
 export async function findCollection(
   key: string,
-  options: { signal?: AbortSignal; refresh?: boolean } = {},
+  options: { signal?: AbortSignal; refresh?: boolean; languageCode?: string } = {},
 ): Promise<OnlineCollection | null> {
   const parsed = parseCollectionKey(key);
   if (!parsed) {
     return null;
   }
+  const adapter = getAdapter(parsed.sourceId);
+  if (!adapter) {
+    throw new OnlineSourceError("That source is not available.", "not_found");
+  }
+  if (adapter.getCollection) {
+    return adapter.getCollection(parsed.externalId, { signal: options.signal });
+  }
   const collections = await listCollections(parsed.sourceId, options);
   return collections.find((collection) => collection.key === key) ?? null;
+}
+
+/** Collections matching a free-text query, for a source with a search API. */
+export async function searchCollections(
+  sourceId: string,
+  query: string,
+  options: { signal?: AbortSignal; languageCode?: string } = {},
+): Promise<OnlineCollection[]> {
+  const adapter = getAdapter(sourceId);
+  if (!adapter?.searchCollections) {
+    return [];
+  }
+  return adapter.searchCollections(query, {
+    signal: options.signal,
+    languageCode: options.languageCode,
+  });
 }
 
 function toUpsertInput(collection: {
@@ -286,6 +328,7 @@ export function describeLanguage(code: string): string {
 export const OnlineCatalogService = {
   listCollections,
   findCollection,
+  searchCollections,
   loadCollection,
   resolveStreamUrls,
   saveCollection,

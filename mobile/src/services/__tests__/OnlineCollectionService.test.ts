@@ -16,6 +16,7 @@ import * as TrackPlayerService from "@/services/TrackPlayerService";
 
 jest.mock("@/services/LocalDBService", () => ({
   LocalDBService: {
+    getTracksByIds: jest.fn(async () => []),
     getCollectionTrackProgress: jest.fn(),
     getContextStats: jest.fn(),
   },
