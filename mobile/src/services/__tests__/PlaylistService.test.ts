@@ -5,6 +5,7 @@ import * as TrackPlayerService from "@/services/TrackPlayerService";
 
 jest.mock("@/services/LocalDBService", () => ({
   LocalDBService: {
+    getTracksByIds: jest.fn(async () => []),
     getPlaylists: jest.fn(),
     getPlaylistById: jest.fn(),
     getAllTracks: jest.fn(),

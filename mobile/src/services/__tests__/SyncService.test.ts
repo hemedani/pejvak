@@ -16,6 +16,7 @@ jest.mock("@/lib/client", () => ({ callTypedAct: jest.fn() }));
 
 jest.mock("@/services/LocalDBService", () => ({
   LocalDBService: {
+    getTracksByIds: jest.fn(async () => []),
     getPendingTracks: jest.fn(),
     getAllTracks: jest.fn(),
     getPendingSessions: jest.fn(),

@@ -10,6 +10,7 @@ import {
 
 jest.mock("@/services/LocalDBService", () => ({
   LocalDBService: {
+    getTracksByIds: jest.fn(async () => []),
     getTracksByAvailability: jest.fn(),
     getTrackActivityCounts: jest.fn(),
   },

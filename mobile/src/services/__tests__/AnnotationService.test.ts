@@ -6,6 +6,7 @@ import { syncPending } from "@/services/SyncService";
 
 jest.mock("@/services/LocalDBService", () => ({
   LocalDBService: {
+    getTracksByIds: jest.fn(async () => []),
     getAnnotationsByTrack: jest.fn(),
     getSessionsByTrack: jest.fn(),
     insertAnnotation: jest.fn(),

@@ -29,6 +29,7 @@ import { resolveStreamUrls } from "@/services/OnlineCatalogService";
 
 jest.mock("@/services/LocalDBService", () => ({
   LocalDBService: {
+    getTracksByIds: jest.fn(async () => []),
     getOnlineCollection: jest.fn(),
     getTracksByCollection: jest.fn(),
     replaceDownloadJobs: jest.fn(),

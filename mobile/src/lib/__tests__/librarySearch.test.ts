@@ -74,6 +74,7 @@ function folder(key: string, name: string): FolderSummary {
     trackCount: 4,
     finishedCount: 1,
     totalDurationSec: 2400,
+    lastDownloadedAt: null,
     playCount: 2,
     completedPlayCount: 0,
     artworkUrl: null,

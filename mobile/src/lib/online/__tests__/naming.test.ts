@@ -13,6 +13,7 @@ import {
   collectionRelativePath,
   extensionFromUrl,
   ONLINE_ROOT,
+  parseDownloadedFolderKey,
   sanitizeSegment,
   seriesFolderKey,
   seriesRelativePath,
@@ -169,5 +170,29 @@ describe("seriesRelativePath", () => {
     expect(seriesRelativePath("manahej", "a/b", "7", "c:d", "9")).toBe(
       `${ONLINE_ROOT}/manahej/a-b - c-d (9)`,
     );
+  });
+});
+
+describe("parseDownloadedFolderKey", () => {
+  it("reads the source and the kind out of a collection folder", () => {
+    expect(parseDownloadedFolderKey(collectionFolderKey("manahej", "190"))).toEqual({
+      sourceId: "manahej",
+      kind: "collection",
+    });
+  });
+
+  it("recognises a series folder", () => {
+    expect(
+      parseDownloadedFolderKey(seriesFolderKey("manahej", "190", "7101")),
+    ).toEqual({
+      sourceId: "manahej",
+      kind: "series",
+    });
+  });
+
+  it("refuses a device folder and a key with no source", () => {
+    expect(parseDownloadedFolderKey("/storage/emulated/0/Audio")).toBeNull();
+    expect(parseDownloadedFolderKey("Online/")).toBeNull();
+    expect(parseDownloadedFolderKey("Online//190")).toBeNull();
   });
 });

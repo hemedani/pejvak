@@ -25,6 +25,7 @@ jest.mock("expo-constants", () => ({
 
 jest.mock("@/services/LocalDBService", () => ({
   LocalDBService: {
+    getTracksByIds: jest.fn(async () => []),
     getOrphanedCheckpoints: jest.fn(),
     getSessionById: jest.fn(),
     insertSession: jest.fn(),

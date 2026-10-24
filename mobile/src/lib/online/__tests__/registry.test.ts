@@ -12,17 +12,23 @@
  */
 
 import {
+  collectionFolderKey,
   collectionKey,
+  describeDownloadedFolder,
   describeDownloadState,
   describeDownloadStatus,
+  describeCollectionLine,
   describeKnownTrackCount,
   describeTrackCount,
   findLanguage,
   findSource,
   getAdapter,
+  isLiveSource,
   LANGUAGES,
   onlineIdentity,
   parseCollectionKey,
+  seriesFolderKey,
+  sourceLanguages,
   SOURCES,
   sourcesForLanguage,
 } from "@/lib/online";
@@ -65,14 +71,41 @@ describe("onlineIdentity", () => {
 
 describe("the registry", () => {
   it("offers more than one source for Persian, and one for a language with no bespoke adapter", () => {
-    // Persian has a hand-written adapter *and* the archive; every other
+    // Persian has hand-written adapters *and* the archive; every other
     // language in the catalogue is served by the archive alone.
-    expect(sourcesForLanguage("fa").length).toBeGreaterThan(1);
+    const persian = sourcesForLanguage("fa").map((source) => source.id);
+    expect(persian).toEqual(
+      expect.arrayContaining(["aminikhaah", "aminikhaah-podcasts", "manahej", "archive-fa"]),
+    );
     expect(sourcesForLanguage("sv").length).toBeGreaterThan(0);
   });
 
   it("still answers nothing for a language it does not know", () => {
     expect(sourcesForLanguage("xx")).toEqual([]);
+  });
+
+  it("offers German and Dutch books and radio beside the archive", () => {
+    const german = sourcesForLanguage("de").map((source) => source.id);
+    const dutch = sourcesForLanguage("nl").map((source) => source.id);
+
+    expect(german).toEqual(expect.arrayContaining(["archive-de", "librivox", "radiobrowser"]));
+    expect(dutch).toEqual(expect.arrayContaining(["archive-nl", "librivox", "radiobrowser"]));
+  });
+
+  it("knows which sources are live, and which are finite recordings", () => {
+    expect(isLiveSource("radiobrowser")).toBe(true);
+    expect(isLiveSource("librivox")).toBe(false);
+    expect(isLiveSource("archive-fa")).toBe(false);
+    expect(isLiveSource(null)).toBe(false);
+    expect(isLiveSource("nope")).toBe(false);
+  });
+
+  it("lists every language a multi-language source serves", () => {
+    const librivox = findSource("librivox");
+    if (!librivox) {
+      throw new Error("LibriVox is not registered");
+    }
+    expect(sourceLanguages(librivox)).toEqual(["de", "nl"]);
   });
 
   it("has a source for every language in the catalogue", () => {
@@ -124,6 +157,26 @@ describe("the registry", () => {
     expect(describeTrackCount(1)).toBe("1 track");
     expect(describeTrackCount(29)).toBe("29 tracks");
     expect(describeTrackCount(0)).toBe("0 tracks");
+  });
+});
+
+describe("describeCollectionLine", () => {
+  it("puts the topic beside the size when both are known", () => {
+    expect(describeCollectionLine({ subtitle: "اخلاق", trackCount: 41 })).toBe("اخلاق · 41 tracks");
+  });
+
+  it("speaks only the topic for an album whose size is not known yet", () => {
+    // aminikhaah lists its albums without a count; the topic is the only true
+    // thing the card can say until the album is opened.
+    expect(describeCollectionLine({ subtitle: "اخلاق", trackCount: 0 })).toBe("اخلاق");
+  });
+
+  it("speaks only the size for a source with no grouping line", () => {
+    expect(describeCollectionLine({ subtitle: null, trackCount: 29 })).toBe("29 tracks");
+  });
+
+  it("says nothing when there is nothing true to say", () => {
+    expect(describeCollectionLine({ subtitle: null, trackCount: 0 })).toBeNull();
   });
 });
 
@@ -210,5 +263,38 @@ describe("isRtlText", () => {
   it("treats text with no letters at all as left-to-right", () => {
     expect(isRtlText("12345")).toBe(false);
     expect(isRtlText("")).toBe(false);
+  });
+});
+
+describe("describeDownloadedFolder", () => {
+  it("names the source, the kind and the title", () => {
+    expect(
+      describeDownloadedFolder(collectionFolderKey("manahej", "190"), "تاریخ شیعه"),
+    ).toBe("Manahej Radio · Category · تاریخ شیعه");
+  });
+
+  it("calls a series a series", () => {
+    expect(
+      describeDownloadedFolder(
+        seriesFolderKey("manahej", "190", "7101"),
+        "نیزههای کاغذی",
+      ),
+    ).toBe("Manahej Radio · Series · نیزههای کاغذی");
+  });
+
+  it("labels an archive item as a collection", () => {
+    expect(
+      describeDownloadedFolder(collectionFolderKey("archive-fa", "some_item"), "Old Radio"),
+    ).toBe("Internet Archive · Collection · Old Radio");
+  });
+
+  it("leaves a device folder's name untouched", () => {
+    expect(describeDownloadedFolder("/storage/emulated/0/Audio", "Audio")).toBe("Audio");
+  });
+
+  it("falls back to the source id when the source is no longer registered", () => {
+    expect(describeDownloadedFolder(collectionFolderKey("gone", "1"), "Course")).toBe(
+      "gone · Collection · Course",
+    );
   });
 });

@@ -26,6 +26,7 @@ jest.mock("@/services/AudioInspectionService", () => ({
 
 jest.mock("@/services/LocalDBService", () => ({
   LocalDBService: {
+    getTracksByIds: jest.fn(async () => []),
     setTrackArtwork: jest.fn(),
     markTrackArtworkChecked: jest.fn(),
     getTracksMissingArtwork: jest.fn(),

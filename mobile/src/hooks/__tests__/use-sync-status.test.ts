@@ -6,7 +6,7 @@ import { SettingsService } from "@/services/SettingsService";
 import { syncAll } from "@/services/SyncService";
 
 jest.mock("@/services/LocalDBService", () => ({
-  LocalDBService: { getPendingCounts: jest.fn() },
+  LocalDBService: { getPendingCounts: jest.fn(), getTracksByIds: jest.fn(async () => []) },
 }));
 jest.mock("@/services/SettingsService", () => ({
   SettingsService: { getLastSyncAt: jest.fn() },

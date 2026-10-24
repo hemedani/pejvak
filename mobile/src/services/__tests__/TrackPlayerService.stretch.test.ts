@@ -54,6 +54,7 @@ jest.mock("expo-constants", () => ({
 
 jest.mock("@/services/LocalDBService", () => ({
   LocalDBService: {
+    getTracksByIds: jest.fn(async () => []),
     getOpenContextPlays: jest.fn(),
     insertContextPlay: jest.fn(),
     finalizeContextPlay: jest.fn(),
