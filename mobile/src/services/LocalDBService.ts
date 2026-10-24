@@ -64,8 +64,10 @@ import type {
   TrackDetailData,
   UpsertOnlineCollectionInput,
 } from "@/lib/db/types";
+import { sortFoldersByDownload } from "@/lib/folderOrder";
 import type { FolderTrackProgress } from "@/lib/folderPlay";
 import type { HistoryItem } from "@/lib/history";
+import { describeDownloadedFolder } from "@/lib/online";
 import { ONLINE_ROOT } from "@/lib/online/naming";
 import { clampResumePosition } from "@/lib/resume";
 import type {
@@ -206,6 +208,40 @@ async function getTrackById(id: string): Promise<LocalTrack | null> {
   const db = await getDatabase();
   const row = await db.getFirstAsync<TrackRow>("SELECT * FROM tracks WHERE id = ?", [id]);
   return row ? mapTrack(row) : null;
+}
+
+/**
+ * Several tracks by id, in the order they were asked for.
+ *
+ * The queue is a list of ids, so opening it used to mean one `getTrackById` per
+ * row — a hundred bridge crossings for a lecture folder. This reads them in
+ * chunks (SQLite's parameter limit is 999) and re-orders in JS, because SQL's
+ * `IN` has no order. An id that no longer resolves is skipped rather than
+ * rendered as a hole: the caller maps by id and can say "unavailable" itself.
+ */
+async function getTracksByIds(ids: readonly string[]): Promise<LocalTrack[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+  const db = await getDatabase();
+  const tracks: LocalTrack[] = [];
+  const chunkSize = 500;
+  for (let start = 0; start < ids.length; start += chunkSize) {
+    const chunk = ids.slice(start, start + chunkSize);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const rows = await db.getAllAsync<TrackRow>(
+      `SELECT * FROM tracks WHERE id IN (${placeholders})`,
+      [...chunk],
+    );
+    const byId = new Map(rows.map((row) => [row.id, mapTrack(row)]));
+    for (const id of chunk) {
+      const track = byId.get(id);
+      if (track) {
+        tracks.push(track);
+      }
+    }
+  }
+  return tracks;
 }
 
 async function getTrackByContentHash(contentHash: string): Promise<LocalTrack | null> {
@@ -1400,6 +1436,7 @@ type FolderSummaryRow = {
   tree_uri: string | null;
   added_at: number;
   last_played_at: number | null;
+  last_downloaded_at: number | null;
   track_count: number;
   finished_count: number;
   play_count: number;
@@ -1415,6 +1452,7 @@ function toFolderSummary(row: FolderSummaryRow): FolderSummary {
     treeUri: row.tree_uri,
     addedAt: row.added_at,
     lastPlayedAt: row.last_played_at,
+    lastDownloadedAt: row.last_downloaded_at,
     trackCount: row.track_count,
     finishedCount: row.finished_count,
     playCount: row.play_count,
@@ -1433,6 +1471,9 @@ function toFolderSummary(row: FolderSummaryRow): FolderSummary {
  * `download_files`, where each scope's copy lives. Reading online folders from
  * the download rows is what lets both the shelf and a series appear in the
  * Library at once, without duplicating either track.
+ *
+ * Downloaded folders come first, newest download at the top: that is the folder
+ * the listener just waited for. Device folders follow alphabetically.
  */
 async function getFolderSummaries(): Promise<FolderSummary[]> {
   const db = await getDatabase();
@@ -1443,6 +1484,7 @@ async function getFolderSummaries(): Promise<FolderSummary[]> {
        f.tree_uri AS tree_uri,
        COALESCE(f.added_at, MIN(t.created_at)) AS added_at,
        f.last_played_at AS last_played_at,
+       NULL AS last_downloaded_at,
        COUNT(*) AS track_count,
        SUM(CASE WHEN done.track_id IS NULL THEN 0 ELSE 1 END) AS finished_count,
        (SELECT COUNT(*) FROM context_plays cp
@@ -1474,6 +1516,7 @@ async function getFolderSummaries(): Promise<FolderSummary[]> {
        NULL AS tree_uri,
        MIN(df.created_at) AS added_at,
        NULL AS last_played_at,
+       MAX(df.created_at) AS last_downloaded_at,
        COUNT(DISTINCT df.track_id) AS track_count,
        SUM(CASE WHEN done.track_id IS NULL THEN 0 ELSE 1 END) AS finished_count,
        (SELECT COUNT(*) FROM context_plays cp
@@ -1503,14 +1546,42 @@ async function getFolderSummaries(): Promise<FolderSummary[]> {
     merged.set(row.key, toFolderSummary(row));
   }
   for (const row of onlineRows) {
-    merged.set(row.key, toFolderSummary(row));
+    merged.set(
+      row.key,
+      toFolderSummary({
+        ...row,
+        name: describeDownloadedFolder(row.key, row.name),
+      }),
+    );
   }
-  return [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
+  return sortFoldersByDownload([...merged.values()]);
 }
 
 /** Whether a folder key names a downloaded online scope rather than a device folder. */
 function isOnlineFolder(folderKey: string): boolean {
   return folderKey.startsWith(`${ONLINE_ROOT}/`);
+}
+
+/**
+ * A folder's display name, resolved the same way the Library's list resolves it.
+ *
+ * The folder screen used to fall back to the key's last segment, which turned a
+ * downloaded category into "190" and a series into "190::series::7101". Reading
+ * the name here instead means the list card and the screen it opens can never
+ * disagree, and an online folder still names its source without a row of its
+ * own in the `folders` table.
+ */
+async function getFolderDisplayName(folderKey: string): Promise<string | null> {
+  const db = await getDatabase();
+  if (isOnlineFolder(folderKey)) {
+    const row = await db.getFirstAsync<{ folder_name: string }>(
+      "SELECT folder_name FROM download_files WHERE folder_key = ? LIMIT 1",
+      [folderKey],
+    );
+    return row ? describeDownloadedFolder(folderKey, row.folder_name) : null;
+  }
+  const row = await db.getFirstAsync<FolderRow>("SELECT * FROM folders WHERE key = ?", [folderKey]);
+  return row?.name ?? null;
 }
 
 async function getTracksByFolder(folderKey: string): Promise<LocalTrack[]> {
@@ -2879,6 +2950,7 @@ async function getOnlineContextPlays(limit = 50): Promise<LocalContextPlay[]> {
 export const LocalDBService = {
   insertTrack,
   getTrackById,
+  getTracksByIds,
   getTrackByContentHash,
   getTrackBySourceUri,
   getTrackDetailData,
@@ -2948,6 +3020,7 @@ export const LocalDBService = {
   getOrphanedCheckpoints,
   deleteCheckpoint,
   getFolderSummaries,
+  getFolderDisplayName,
   getTracksByFolder,
   getFolderTrackProgress,
   getFolders,

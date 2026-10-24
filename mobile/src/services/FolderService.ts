@@ -36,16 +36,16 @@ export type FolderDetailData = {
  * played them the other way round.
  */
 async function loadFolder(folderKey: string): Promise<FolderDetailData> {
-  const [rawTracks, progress, folders, stats] = await Promise.all([
+  const [rawTracks, progress, name, stats] = await Promise.all([
     LocalDBService.getTracksByFolder(folderKey),
     LocalDBService.getFolderTrackProgress(folderKey),
-    LocalDBService.getFolders(),
+    LocalDBService.getFolderDisplayName(folderKey),
     LocalDBService.getContextStats("folder", folderKey),
   ]);
   const tracks = orderFolderTracks(rawTracks);
   return {
     folderKey,
-    name: folders.find((folder) => folder.key === folderKey)?.name ?? folderNameFromKey(folderKey),
+    name: name ?? folderNameFromKey(folderKey),
     tracks,
     progress,
     finishedCount: tracks.filter((track) => progress[track.id]?.finished ?? false).length,

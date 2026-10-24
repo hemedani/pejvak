@@ -118,6 +118,12 @@ export type FolderSummary = LocalFolder & {
   finishedCount: number;
   totalDurationSec: number;
   /**
+   * When the newest file in this folder was downloaded, or null for a folder
+   * that lives on the device. The Library lists downloaded folders newest
+   * first, and a device folder was never "downloaded" at all.
+   */
+  lastDownloadedAt: number | null;
+  /**
    * How many times the folder has been played as a collection, and how many of
    * those runs reached the end. Derived from `context_plays` rather than stored
    * on the row, because most folders have no `folders` row at all.
