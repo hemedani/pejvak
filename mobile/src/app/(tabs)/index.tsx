@@ -1,11 +1,6 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  InteractionManager,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from "react-native";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 
 import { LibraryFolderCard } from "@/components/library/folder-card";
 import { LibraryPlaylistCard } from "@/components/library/playlist-card";
@@ -29,6 +24,7 @@ import { useRecentPlays } from "@/hooks/use-recent-plays";
 import { useTheme } from "@/hooks/use-theme";
 import { cardWidthFor } from "@/lib/cardLayout";
 import type { FolderSummary, LocalTrack } from "@/lib/db/types";
+import { runWhenIdle } from "@/lib/idle";
 import {
   folderSearchFields,
   recentSearchFields,
@@ -80,6 +76,24 @@ const FIRST_ROW_REVEAL_INDEX = 6;
 const ARTWORK_BACKFILL_BATCH = 8;
 /** Let the list paint before reading files for covers on a first visit. */
 const ARTWORK_BACKFILL_DELAY_MS = 250;
+/**
+ * Longest the backfill waits for an idle frame before going ahead anyway.
+ *
+ * An idle callback only arrives when the runtime says the thread is free, and a
+ * list that is still settling — or the dock's wave, which never stops while
+ * something is playing — can withhold that indefinitely. The timeout is what
+ * turns "whenever" into "within about a second".
+ */
+const ARTWORK_BACKFILL_IDLE_TIMEOUT_MS = 1000;
+
+/**
+ * Longest the enrichment reads wait for an idle frame.
+ *
+ * They are annotation counts and the missing-files alert: they decorate what is
+ * already on screen, so a couple of seconds late is invisible. Never arriving
+ * would not be.
+ */
+const SECONDARY_READ_IDLE_TIMEOUT_MS = 2000;
 
 /**
  * How many distinct recent plays the Recent tab shows. Short on purpose — it is
@@ -191,7 +205,7 @@ export default function LibraryScreen() {
   /** True between a drag/momentum starting and the last one ending. */
   const scrollingRef = useRef(false);
   const backfillTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const interactionTask = useRef<{ cancel: () => void } | null>(null);
+  const idleTask = useRef<{ cancel: () => void } | null>(null);
 
   const { recent, refresh: refreshRecent } = useRecentPlays(RECENT_READ_LIMIT);
 
@@ -318,14 +332,14 @@ export default function LibraryScreen() {
   /**
    * Defers a cover-art pass until the screen has settled.
    *
-   * `InteractionManager` waits out the transition and the first touches; the
-   * timer then gives the first painted frame room to land. Only one pass is ever
+   * An idle frame waits out the transition and the first touches; the timer
+   * then gives the first painted frame room to land. Only one pass is ever
    * queued — focusing twice in a row must not read the same files twice.
    */
   const backfillCovers = useCallback(() => {
-    interactionTask.current?.cancel();
-    interactionTask.current = InteractionManager.runAfterInteractions(() => {
-      interactionTask.current = null;
+    idleTask.current?.cancel();
+    idleTask.current = runWhenIdle(() => {
+      idleTask.current = null;
       if (backfillTimer.current !== null) {
         clearTimeout(backfillTimer.current);
       }
@@ -335,12 +349,12 @@ export default function LibraryScreen() {
           void backfillNow();
         }
       }, ARTWORK_BACKFILL_DELAY_MS);
-    });
+    }, ARTWORK_BACKFILL_IDLE_TIMEOUT_MS);
   }, [backfillNow]);
 
   useEffect(
     () => () => {
-      interactionTask.current?.cancel();
+      idleTask.current?.cancel();
       if (backfillTimer.current !== null) {
         clearTimeout(backfillTimer.current);
       }
@@ -369,9 +383,11 @@ export default function LibraryScreen() {
     // without this screen knowing — so it goes stale for the same reason. The
     // rows just read are shared rather than fetched a second time.
     await refreshRecent({ tracks: allTracks, folders: folderRows });
-    InteractionManager.runAfterInteractions(() => {
+    // Off the critical path: the list is already painted, and these reads only
+    // add counts and alerts to it.
+    runWhenIdle(() => {
       void refreshSecondary();
-    });
+    }, SECONDARY_READ_IDLE_TIMEOUT_MS);
     backfillCovers();
   }, [backfillCovers, refreshFolders, refreshRecent, refreshSecondary]);
 
