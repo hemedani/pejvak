@@ -156,6 +156,19 @@ export default function DiscoverScreen() {
   );
   const searchingLanguages = search.trim().length > 0;
 
+  /**
+   * An empty query is not "no matches" — it is the whole catalogue.
+   *
+   * `searchIndex` deliberately returns nothing for zero terms, so Browse used to
+   * open onto an empty state and made the listener type before they could see
+   * what was available. The list is the point of the tab, so it shows every
+   * language until a query narrows it.
+   */
+  const visibleLanguages = useMemo(
+    () => (searchingLanguages ? languageHits.map((hit) => hit.item) : LANGUAGES),
+    [languageHits, searchingLanguages],
+  );
+
   const rows = useMemo<DiscoverRow[]>(() => {
     if (view === "continue") {
       return continuing.map((item) => ({ kind: "continue", item }));
@@ -278,7 +291,7 @@ export default function DiscoverScreen() {
         <SearchField
           value={search}
           onChangeText={setSearch}
-          placeholder="Persian, فارسی…"
+          placeholder="English | Dutch | فارسی"
           accessibilityLabel="Find a language"
         />
       ) : null}
@@ -293,17 +306,17 @@ export default function DiscoverScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
           {header}
-          {languageHits.length > 0 ? (
+          {visibleLanguages.length > 0 ? (
             <ListGroup>
-              {languageHits.map((hit) => (
+              {visibleLanguages.map((language) => (
                 <LanguageRow
-                  key={hit.item.code}
-                  language={hit.item}
-                  sourceCount={sourcesForLanguage(hit.item.code).length}
+                  key={language.code}
+                  language={language}
+                  sourceCount={sourcesForLanguage(language.code).length}
                   onPress={() =>
                     router.push({
                       pathname: "/online/language/[code]",
-                      params: { code: hit.item.code },
+                      params: { code: language.code },
                     })
                   }
                 />
