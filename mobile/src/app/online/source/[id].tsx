@@ -34,7 +34,7 @@ import {
   type OnlineCollection,
 } from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
-import { control, iconSize, spacing } from "@/theme/tokens";
+import { control, iconSize, miniPlayerInset, spacing } from "@/theme/tokens";
 import { listPerformance } from "@/lib/listPerformance";
 
 export default function SourceCollectionsScreen() {
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
   },
   headerBlock: {
     gap: spacing.md,

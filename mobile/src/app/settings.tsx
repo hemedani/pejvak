@@ -23,7 +23,7 @@ import { formatRelativeTime } from "@/lib/time";
 import { LocalDBService } from "@/services/LocalDBService";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
-import { card as cardTokens, radius as radii, spacing } from "@/theme/tokens";
+import { card as cardTokens, miniPlayerInset, radius as radii, spacing } from "@/theme/tokens";
 
 const THEME_LABELS: Record<ThemePreference, string> = {
   system: "System",
@@ -258,7 +258,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
     gap: spacing.xl,
   },
   /** A group whose only child is a control, not a row. */

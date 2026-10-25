@@ -23,7 +23,7 @@ import { Icon } from "@/components/ui/icon";
 import { useTheme } from "@/hooks/use-theme";
 import { findLanguage, sourcesForLanguage, type OnlineSource } from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
-import { spacing, tile, tileRadius } from "@/theme/tokens";
+import { miniPlayerInset, spacing, tile, tileRadius } from "@/theme/tokens";
 
 /** One provider, as a dense row. */
 function SourceRow({
@@ -118,7 +118,7 @@ export default function LanguageSourcesScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
     gap: spacing.xl,
   },
   section: {

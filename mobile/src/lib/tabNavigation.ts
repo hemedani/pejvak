@@ -16,6 +16,15 @@ const TAB_HREFS = {
   playlists: "/playlists",
 } as const satisfies Record<TabName, string>;
 
+function firstPathSegment(pathname: string): string | null {
+  const withoutQuery = pathname.split("?")[0]?.split("#")[0] ?? "";
+  return (
+    withoutQuery
+      .split("/")
+      .find((segment) => segment.length > 0 && !segment.startsWith("(")) ?? null
+  );
+}
+
 /**
  * The dock's active destination for a router pathname.
  *
@@ -25,15 +34,28 @@ const TAB_HREFS = {
  * pushed it, in which case the library is the honest fallback.
  */
 export function tabNameForPathname(pathname: string): TabName {
-  const withoutQuery = pathname.split("?")[0]?.split("#")[0] ?? "";
-  const first = withoutQuery
-    .split("/")
-    .find((segment) => segment.length > 0 && !segment.startsWith("("));
+  const first = firstPathSegment(pathname);
 
   if (!first || first === "index") {
     return "index";
   }
   return TAB_NAMES.find((name) => name === first) ?? "index";
+}
+
+/**
+ * Whether a pathname belongs to a tab screen.
+ *
+ * The tab layout draws the dock — including the now-playing half — so a second
+ * mini-player must not be layered over it. This is deliberately not
+ * `tabNameForPathname(...) !== ...`: that function falls back to the library for
+ * every non-tab path, which would make a detail screen look like a tab.
+ */
+export function isTabPathname(pathname: string): boolean {
+  const first = firstPathSegment(pathname);
+  if (!first || first === "index") {
+    return true;
+  }
+  return TAB_NAMES.some((name) => name === first);
 }
 
 export function tabHref(name: TabName) {

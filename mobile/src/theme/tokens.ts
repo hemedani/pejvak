@@ -605,6 +605,17 @@ export const dockInset =
   layout.dock.navHeight +
   layout.dock.clearance;
 
+/**
+ * How much bottom padding a pushed screen owes the standalone mini-player.
+ *
+ * A stack screen has no navigation half, so it only needs the player row's own
+ * height. Like `dockInset`, it reserves the space even when nothing is playing:
+ * a screen cannot know whether the listener will start audio while it is open,
+ * and reserving later would make its list jump.
+ */
+export const miniPlayerInset =
+  layout.dock.margin + layout.dock.playerHeight + layout.dock.clearance;
+
 /** Glass fill helper — keeps alpha decisions in one place. */
 export function glassFill(scheme: ColorScheme, strong = false): ColorValue {
   return strong ? colors[scheme].glassStrong : colors[scheme].glass;

@@ -49,7 +49,7 @@ import { buildTrackFactSections } from "@/lib/trackFacts";
 import { computeTrackStats, summariseSessions } from "@/lib/trackStats";
 import { LocalDBService } from "@/services/LocalDBService";
 import { openSessionDetail } from "@/store/sessionDetailStore";
-import { radius as radii, spacing } from "@/theme/tokens";
+import { miniPlayerInset, radius as radii, spacing } from "@/theme/tokens";
 
 /**
  * Reveal indices. The header, artwork and play button take 0–2, the stat grid
@@ -350,7 +350,7 @@ export default function TrackDetailScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
     gap: spacing.xl,
   },
   artWrap: {

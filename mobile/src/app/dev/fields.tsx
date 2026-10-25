@@ -22,7 +22,7 @@ import {
   type ThemePreference,
 } from "@/lib/settings";
 import { useSettingsStore } from "@/store/settingsStore";
-import { spacing } from "@/theme/tokens";
+import { miniPlayerInset, spacing } from "@/theme/tokens";
 
 const THEME_OPTIONS = THEME_PREFERENCES.map((preference) => ({
   value: preference,
@@ -205,7 +205,7 @@ export default function FieldGalleryScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
     gap: spacing.xl,
   },
   control: {

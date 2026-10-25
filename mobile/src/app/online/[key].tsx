@@ -72,6 +72,7 @@ import {
   control,
   iconSize,
   layout,
+  miniPlayerInset,
   spacing,
   tile,
   tileRadius,
@@ -614,7 +615,7 @@ export default function OnlineCollectionScreen() {
 const styles = StyleSheet.create({
   list: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
   },
   content: {
     gap: spacing.xl,

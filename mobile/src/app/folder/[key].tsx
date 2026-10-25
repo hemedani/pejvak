@@ -31,7 +31,7 @@ import { describeContextStats } from "@/lib/playbackContext";
 import { paletteFor } from "@/lib/palette";
 import { formatClock } from "@/lib/time";
 import { FolderService } from "@/services/FolderService";
-import { control, iconSize, spacing, tile, tileRadius } from "@/theme/tokens";
+import { control, iconSize, miniPlayerInset, spacing, tile, tileRadius } from "@/theme/tokens";
 
 export default function FolderDetailScreen() {
   const params = useLocalSearchParams<{ key?: string }>();
@@ -312,7 +312,7 @@ export default function FolderDetailScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
     gap: spacing.xl,
   },
   actions: {

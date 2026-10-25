@@ -1,5 +1,5 @@
 import { useFonts } from "expo-font";
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import { StyleSheet, useColorScheme } from "react-native";
@@ -7,8 +7,11 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AddToPlaylistSheet } from "@/components/add-to-playlist";
 import { ContextHistorySheet } from "@/components/context-history";
+import { StackMiniPlayer } from "@/components/player/StackMiniPlayer";
 import { SessionDetailSheet } from "@/components/session-detail";
+import { GlassBlurTarget } from "@/components/ui/glass/BlurTarget";
 import { ICON_FONT } from "@/components/ui/icon";
+import { isTabPathname } from "@/lib/tabNavigation";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -26,6 +29,7 @@ SplashScreen.preventAutoHideAsync();
  */
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const pathname = usePathname();
   const status = useAuthStore((state) => state.status);
   const restore = useAuthStore((state) => state.restore);
   const [fontsLoaded, fontError] = useFonts(ICON_FONT);
@@ -59,42 +63,55 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
         {status === "loading" ? null : (
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              animation: "slide_from_right",
-              animationDuration: duration.screen,
-              gestureEnabled: true,
-            }}>
-            <Stack.Protected guard={status === "authenticated"}>
-              <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
-              <Stack.Screen name="track/[id]" />
-              <Stack.Screen name="folder/[key]" />
-              <Stack.Screen name="playlist/[id]" />
-              {/* Online content. Three levels, pushed in the order the listener
-                  walks them: language → source → collection. They use the
-                  default slide so arriving at a course feels the same as
-                  arriving at a folder. */}
-              <Stack.Screen name="online/language/[code]" />
-              <Stack.Screen name="online/source/[id]" />
-              <Stack.Screen name="online/[key]" />
-              <Stack.Screen name="smart/[rule]" />
-              <Stack.Screen name="missing" />
-              <Stack.Screen name="import" />
-              <Stack.Screen name="settings" />
-              <Stack.Screen
-                name="player"
-                options={{
-                  presentation: "transparentModal",
-                  animation: "none",
-                  contentStyle: { backgroundColor: "transparent" },
-                }}
-              />
-            </Stack.Protected>
-            <Stack.Protected guard={status !== "authenticated"}>
-              <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
-            </Stack.Protected>
-          </Stack>
+          <GlassBlurTarget
+            style={StyleSheet.absoluteFill}
+            background={
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  animation: "slide_from_right",
+                  animationDuration: duration.screen,
+                  gestureEnabled: true,
+                }}>
+                <Stack.Protected guard={status === "authenticated"}>
+                  <Stack.Screen name="(tabs)" options={{ animation: "fade" }} />
+                  <Stack.Screen name="track/[id]" />
+                  <Stack.Screen name="folder/[key]" />
+                  <Stack.Screen name="playlist/[id]" />
+                  {/* Online content. Three levels, pushed in the order the
+                      listener walks them: language → source → collection. They
+                      use the default slide so arriving at a course feels the
+                      same as arriving at a folder. */}
+                  <Stack.Screen name="online/language/[code]" />
+                  <Stack.Screen name="online/source/[id]" />
+                  <Stack.Screen name="online/[key]" />
+                  <Stack.Screen name="smart/[rule]" />
+                  <Stack.Screen name="missing" />
+                  <Stack.Screen name="import" />
+                  <Stack.Screen name="settings" />
+                  <Stack.Screen
+                    name="player"
+                    options={{
+                      presentation: "transparentModal",
+                      animation: "none",
+                      contentStyle: { backgroundColor: "transparent" },
+                    }}
+                  />
+                </Stack.Protected>
+                <Stack.Protected guard={status !== "authenticated"}>
+                  <Stack.Screen name="(auth)" options={{ animation: "fade" }} />
+                </Stack.Protected>
+              </Stack>
+            }>
+            {/* A stack screen has no navigation dock, so it carries the player
+                half on its own. The tab layout draws its own copy inside the
+                dock; the full player is the thing this bar would open. */}
+            {status === "authenticated" &&
+            !isTabPathname(pathname) &&
+            pathname !== "/player" ? (
+              <StackMiniPlayer />
+            ) : null}
+          </GlassBlurTarget>
         )}
         {/* Mounted above the navigator on purpose. It renders a `Modal`, which
             is its own window, so it can be opened from the player — itself a

@@ -27,7 +27,7 @@ import type { LocalTrack } from "@/lib/db/types";
 import { paletteFor } from "@/lib/palette";
 import { describeContextStats } from "@/lib/playbackContext";
 import { PlaylistService } from "@/services/PlaylistService";
-import { card as cardTokens, control, iconSize, radius as radii, spacing, tile, tileRadius } from "@/theme/tokens";
+import { card as cardTokens, control, iconSize, miniPlayerInset, radius as radii, spacing, tile, tileRadius } from "@/theme/tokens";
 
 export default function PlaylistDetailScreen() {
   const params = useLocalSearchParams<{ id?: string }>();
@@ -395,7 +395,7 @@ export default function PlaylistDetailScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
     gap: spacing.xl,
   },
   renameBlock: {

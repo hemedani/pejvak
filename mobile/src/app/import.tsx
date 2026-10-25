@@ -11,7 +11,7 @@ import { GlassChip, GlassProgress } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { ListGroup, ListRow } from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
-import { control, iconSize, radius as radii, spacing } from "@/theme/tokens";
+import { control, iconSize, miniPlayerInset, radius as radii, spacing } from "@/theme/tokens";
 import {
   describePermissionRefusal,
   enumerateDeviceAudio,
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
   list: {
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
   },
   headerBlock: {
     gap: spacing.lg,

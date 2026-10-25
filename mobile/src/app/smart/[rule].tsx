@@ -29,7 +29,7 @@ import {
 } from "@/lib/smartPlaylists";
 import { formatClock } from "@/lib/time";
 import { SmartPlaylistService } from "@/services/SmartPlaylistService";
-import { control, iconSize, spacing, tile, tileRadius } from "@/theme/tokens";
+import { control, iconSize, miniPlayerInset, spacing, tile, tileRadius } from "@/theme/tokens";
 
 export default function SmartPlaylistScreen() {
   const params = useLocalSearchParams<{ rule?: string }>();
@@ -229,7 +229,7 @@ export default function SmartPlaylistScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
     gap: spacing.xl,
   },
   chipRow: {

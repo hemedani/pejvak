@@ -1,4 +1,4 @@
-import { tabHref, tabNameForPathname } from "../tabNavigation";
+import { isTabPathname, tabHref, tabNameForPathname } from "../tabNavigation";
 
 describe("tabNameForPathname", () => {
   it.each([
@@ -23,6 +23,21 @@ describe("tabNameForPathname", () => {
   it("falls back to the library for a non-tab path", () => {
     expect(tabNameForPathname("/online/archive-fa/foo")).toBe("index");
     expect(tabNameForPathname("")).toBe("index");
+  });
+});
+
+describe("isTabPathname", () => {
+  it.each(["/", "/history", "/discover", "/stats", "/playlists", "/(tabs)/discover"])(
+    "treats %s as a tab",
+    (pathname) => {
+      expect(isTabPathname(pathname)).toBe(true);
+    },
+  );
+
+  it("does not treat a pushed screen as a tab", () => {
+    expect(isTabPathname("/online/language/fa")).toBe(false);
+    expect(isTabPathname("/track/abc")).toBe(false);
+    expect(isTabPathname("/settings")).toBe(false);
   });
 });
 

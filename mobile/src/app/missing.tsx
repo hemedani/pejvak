@@ -32,7 +32,7 @@ import { useMissingTracks } from "@/hooks/use-missing-tracks";
 import { useTheme } from "@/hooks/use-theme";
 import { paletteFor } from "@/lib/palette";
 import { describeStake, groupByFolder, summariseMissing } from "@/services/RelinkService";
-import { iconSize, spacing, tile, tileRadius } from "@/theme/tokens";
+import { iconSize, miniPlayerInset, spacing, tile, tileRadius } from "@/theme/tokens";
 
 export default function MissingFilesScreen() {
   const router = useRouter();
@@ -146,7 +146,7 @@ export default function MissingFilesScreen() {
 const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant,
+    paddingBottom: spacing.giant + miniPlayerInset,
     gap: spacing.xl,
   },
   section: {

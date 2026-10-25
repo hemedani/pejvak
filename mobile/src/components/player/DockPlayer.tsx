@@ -20,7 +20,7 @@
  * sit, and one of them got it wrong.
  */
 
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef } from "react";
 import { StyleSheet, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -36,6 +36,7 @@ import { usePlaybackContext } from "@/hooks/use-playback-context";
 import { useWaitProgress } from "@/hooks/use-wait-progress";
 import { paletteFor } from "@/lib/palette";
 import { contextRouteTarget } from "@/lib/playbackContext";
+import { isTabPathname } from "@/lib/tabNavigation";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useNowPlayingStore } from "@/store/nowPlayingStore";
 import { usePlayerStore } from "@/store/playerStore";
@@ -62,6 +63,7 @@ export function DockPlayer() {
 
   const setAnchor = useNowPlayingStore((state) => state.setAnchor);
   const motionEnabled = useMotionEnabled();
+  const pathname = usePathname();
   const drag = useSharedValue(0);
 
   const { context } = usePlaybackContext();
@@ -92,6 +94,16 @@ export function DockPlayer() {
       });
     });
   }, [setAnchor]);
+
+  // The same row exists in the tab dock and in the standalone stack bar, and
+  // they sit at different heights. Coming back from a pushed screen has to
+  // re-measure the dock's copy, or the sheet would grow out of the stack bar's
+  // old rectangle.
+  useEffect(() => {
+    if (isTabPathname(pathname)) {
+      measure();
+    }
+  }, [measure, pathname]);
 
   // Reset the peek once the sheet has closed, so the bar is at rest next time.
   useEffect(() => {
