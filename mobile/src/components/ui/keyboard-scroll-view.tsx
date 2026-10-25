@@ -18,23 +18,28 @@
  * ## How the overlap is found
  *
  * The keyboard covers the bottom of the window. The viewport may already have
- * lost some of that height when the window resized (`adjustResize` on Android),
- * so the overlap is whatever the keyboard takes *beyond* the shrink:
+ * lost some of that height when the window resized (`adjustResize` on older
+ * Android), so the overlap is whatever the keyboard takes *beyond* the shrink:
  *
  *   `overlap = max(0, keyboardHeight − (restingHeight − viewportHeight))`
  *
- * On Android the viewport shrinks by the keyboard's full height and the overlap
- * is zero — adding the keyboard height again would leave a keyboard-tall gap
- * under the form. Without a resize (`adjustResize` off, or iOS) the overlap is
- * the keyboard's own height and the space has to be supplied by us.
+ * Android 15+ is edge-to-edge and **no longer shrinks the window** for the
+ * keyboard (Expo SDK 53+ enables edge-to-edge; `adjustResize` still sits in the
+ * manifest but the resize it relied on is gone). There the overlap is the
+ * keyboard's own height and the space has to be supplied by us. iOS behaves the
+ * same way. Only a genuinely resized viewport makes the overlap zero, where
+ * adding the keyboard height again would leave a keyboard-tall gap.
  *
  * `revealTargetY` then scrolls inside `viewportHeight − overlap`, the band the
  * user can actually see.
  *
  * The focused field is remembered and re-revealed when the keyboard finishes
- * appearing and when the viewport finishes shrinking. Focus fires *before* the
- * keyboard reports its height, so measuring only once would use a band that is
- * still the full viewport and leave the field behind the keyboard.
+ * appearing and when the viewport finishes resizing. It is revealed *again*
+ * after `overlap` is committed, because on edge-to-edge Android the content is
+ * shorter than the full-height viewport until the keyboard padding is laid out:
+ * scrolling before that render is clamped to zero, and the field stays behind
+ * the keyboard. Focus fires before the keyboard reports its height, so measuring
+ * only once would use a band that is still the full viewport.
  *
  * ## No native dependency, deliberately
  *
@@ -141,7 +146,7 @@ type RevealBand = { viewportHeight: number; overlap: number };
 
 type RevealHandler = (node: View, band: RevealBand) => void;
 
-function useKeyboardReveal(onReveal: RevealHandler) {
+export function useKeyboardReveal(onReveal: RevealHandler) {
   const restingHeight = useRef(0);
   const viewportHeight = useRef(0);
   const keyboardHeight = useRef(0);
@@ -218,6 +223,19 @@ function useKeyboardReveal(onReveal: RevealHandler) {
       hide.remove();
     };
   }, [revealFocused]);
+
+  // The keyboard padding is applied by a render, and only then does the content
+  // grow enough to scroll on edge-to-edge Android (where the window keeps its
+  // full height). Revealing in the same frame as `setOverlap` would measure
+  // against an unscrollable content view and clamp the target to zero. Wait for
+  // the committed padding, then give the native layout one frame to settle.
+  useEffect(() => {
+    if (!keyboardUp.current) {
+      return;
+    }
+    const frame = requestAnimationFrame(revealFocused);
+    return () => cancelAnimationFrame(frame);
+  }, [overlap, revealFocused]);
 
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {

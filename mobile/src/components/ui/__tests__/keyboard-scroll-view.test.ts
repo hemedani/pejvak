@@ -1,6 +1,17 @@
+import { act, renderHook, waitFor } from "@testing-library/react-native";
+import {
+  Keyboard,
+  Platform,
+  type KeyboardEvent,
+  type KeyboardEventName,
+  type LayoutChangeEvent,
+  type View,
+} from "react-native";
+
 import {
   keyboardOverlapFor,
   revealTargetY,
+  useKeyboardReveal,
 } from "@/components/ui/keyboard-scroll-view";
 
 describe("keyboardOverlapFor", () => {
@@ -142,5 +153,60 @@ describe("revealTargetY", () => {
       gap: 0,
     });
     expect(500 - target).toBe(400 - 50);
+  });
+});
+
+describe("useKeyboardReveal", () => {
+  type Band = { viewportHeight: number; overlap: number };
+  const listeners: Partial<
+    Record<KeyboardEventName, (event: KeyboardEvent) => void>
+  > = {};
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("re-reveals the focused field after the keyboard padding is committed", async () => {
+    const onReveal = jest.fn<void, [View, Band]>();
+    jest.spyOn(Keyboard, "addListener").mockImplementation((event, listener) => {
+      listeners[event] = listener;
+      return { remove: jest.fn() } as unknown as ReturnType<
+        typeof Keyboard.addListener
+      >;
+    });
+
+    const { result } = await renderHook(() => useKeyboardReveal(onReveal));
+
+    await act(() => {
+      result.current.handleLayout({
+        nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } },
+      } as LayoutChangeEvent);
+    });
+    await act(() => {
+      result.current.registrar.reveal({} as View);
+    });
+
+    expect(onReveal).toHaveBeenCalledTimes(1);
+
+    const show =
+      listeners[Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow"];
+    expect(show).toBeDefined();
+    await act(() => {
+      show?.({
+        duration: 0,
+        easing: "keyboard",
+        endCoordinates: { screenX: 0, screenY: 500, width: 400, height: 300 },
+      });
+    });
+
+    // The focus reveal and the keyboard-show reveal both run before the
+    // `overlap` render. The third is the regression: on edge-to-edge Android the
+    // content only becomes scrollable after that render, so the early scroll was
+    // clamped to zero and had to be retried.
+    await waitFor(() => expect(onReveal).toHaveBeenCalledTimes(3));
+    expect(onReveal.mock.calls[2][1]).toEqual({
+      viewportHeight: 800,
+      overlap: 300,
+    });
   });
 });
