@@ -1,0 +1,162 @@
+/**
+ * Pejvak design tokens, translated from `mobile/src/theme/tokens.ts`.
+ *
+ * That file is the source of truth; this is a transcription, not a second
+ * palette. When a colour changes there, it changes here, and the ratios quoted
+ * in the comments below travel with it because they are the *reason* the value
+ * is what it is.
+ *
+ * Three things are load-bearing and must not be "cleaned up":
+ *
+ *   1. **Two materials.** `--surface` / `--surface-sunken` are opaque and carry
+ *      everything the reader reads. Glass is only for what floats.
+ *   2. **The three content tiers.** `--text` (label) → `--text-secondary`
+ *      (value) → `--text-tertiary` (detail). Never inverted.
+ *   3. **The radius ramp.** One strictly-increasing even ramp. A component asks
+ *      for a step, never for pixels.
+ */
+
+:root {
+  /* ── Surfaces ─────────────────────────────────────────────────────────── */
+  --canvas: #e4e9ef;
+  --canvas-elevated: #edf1f6;
+  --surface: #ffffff;
+  --surface-sunken: #edf1f6;
+
+  /* ── Structure ────────────────────────────────────────────────────────── */
+  --outline: #b4c0cc;
+  --outline-strong: #7c8996;
+  --outline-variant: #dce3ea;
+
+  /* ── Floating material ────────────────────────────────────────────────── */
+  --glass: rgba(255, 255, 255, 0.78);
+  --glass-strong: rgba(255, 255, 255, 0.92);
+  /* Dark, not white: a white border on a near-white fill measures 1.00:1
+     against its own fill — literally invisible. */
+  --glass-border: rgba(20, 32, 39, 0.13);
+  --glass-highlight: rgba(255, 255, 255, 0.95);
+  --shadow: rgba(20, 32, 39, 0.16);
+
+  /* ── Text tiers ───────────────────────────────────────────────────────── */
+  --text: #0e1720;
+  --text-secondary: #41505a;
+  --text-tertiary: #5b6a75;
+
+  /* ── Accent, danger, utility ──────────────────────────────────────────── */
+  --accent: #0a635c;
+  --accent-soft: rgba(10, 99, 92, 0.12);
+  --on-accent: #ffffff;
+  --danger: #b02f45;
+  --danger-soft: rgba(176, 47, 69, 0.1);
+  --scrim: rgba(12, 18, 24, 0.38);
+  --track: rgba(65, 80, 90, 0.18);
+  --icon: #2c3a43;
+
+  /* ── Shape ramp ───────────────────────────────────────────────────────── */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-card: 28px;
+  --radius-xl: 32px;
+  --radius-xxl: 40px;
+  --radius-pill: 999px;
+
+  /* ── Spacing (4pt rhythm) ─────────────────────────────────────────────── */
+  --space-xxs: 2px;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 20px;
+  --space-xxl: 24px;
+  --space-xxxl: 32px;
+  --space-huge: 44px;
+  --space-giant: 64px;
+
+  /* ── Bars ─────────────────────────────────────────────────────────────── */
+  --bar-thin: 4px;
+  --bar-thick: 6px;
+
+  /* ── Elevation ────────────────────────────────────────────────────────── */
+  /* An opaque card on a canvas already 1.22:1 above it does not need a deep
+     drop shadow; a heavy one reads as a dialog. */
+  --elevation-card: 0 2px 8px var(--shadow);
+  --elevation-panel: 0 12px 28px var(--shadow);
+  --elevation-float: 0 16px 34px var(--shadow);
+
+  /* ── Type ─────────────────────────────────────────────────────────────── */
+  /* `Vazirmatn` is declared by `@font-face` in globals.css and served from
+     /public/fonts, so there is no build-time or runtime third-party request. The
+     stack after it is a fallback for the first paint, not a second choice. */
+  --font-sans: "Vazirmatn", "IRANSansX", "Segoe UI", Tahoma, system-ui, sans-serif;
+
+  color-scheme: light;
+}
+
+.dark {
+  --canvas: #060910;
+  --canvas-elevated: #0e1520;
+  --surface: #1a2330;
+  --surface-sunken: #222d3a;
+
+  --outline: #4c5b68;
+  --outline-strong: #6b7a87;
+  --outline-variant: #2e3a46;
+
+  --glass: rgba(28, 37, 50, 0.72);
+  --glass-strong: rgba(30, 40, 54, 0.9);
+  --glass-border: rgba(226, 238, 255, 0.22);
+  --glass-highlight: rgba(255, 255, 255, 0.24);
+  --shadow: rgba(0, 0, 0, 0.55);
+
+  --text: #f0f5f4;
+  --text-secondary: #b4c4cb;
+  --text-tertiary: #8b9ea8;
+
+  --accent: #5fd9c6;
+  --accent-soft: rgba(95, 217, 198, 0.16);
+  --on-accent: #04231f;
+  --danger: #ff8296;
+  --danger-soft: rgba(255, 130, 150, 0.14);
+  --scrim: rgba(0, 0, 0, 0.58);
+  --track: rgba(180, 196, 203, 0.2);
+  --icon: #d6e2e6;
+
+  color-scheme: dark;
+}
+
+/**
+ * Tailwind v4 theme bridge.
+ *
+ * `inline` is required, not stylistic: it makes `bg-surface` compile to
+ * `background-color: var(--surface)` rather than baking the light value into
+ * the utility. Without it the dark theme would not reach any utility class.
+ *
+ * Only the **colours** are mapped. Radii, shadows and type sizes are used as
+ * arbitrary values (`rounded-[var(--radius-card)]`) so each one reads at the call
+ * site as the token it is, and so the ramp cannot be bypassed by a `rounded-xl`
+ * that happens to exist. Mapping them here would also mean writing
+ * `--radius-card: var(--radius-card)` — a variable that defines itself.
+ */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-canvas-elevated: var(--canvas-elevated);
+  --color-surface: var(--surface);
+  --color-surface-sunken: var(--surface-sunken);
+
+  --color-outline: var(--outline);
+  --color-outline-strong: var(--outline-strong);
+  --color-outline-variant: var(--outline-variant);
+
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
+
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-icon: var(--icon);
+}

@@ -10,7 +10,7 @@ This is the root agent file. The `back/` (backend) and `mobile/` workspaces each
 
 ## Architecture
 
-Three-tier, offline-first monorepo. `mobile/` and `back/` are independent projects; a future `web/` reuses the same generated Lesan client types.
+Three-tier, offline-first monorepo. `mobile/` and `back/` are independent projects; the `front/` web client reuses the same generated Lesan client types.
 
 ```
 Pejvak/
@@ -28,7 +28,7 @@ Pejvak/
 │   ├── store/               # Zustand stores
 │   ├── lib/                 # Lesan client wrapper, utils
 │   └── AGENTS.md            # Mobile-specific agent rules
-├── web/                     # (Future) Next.js / React frontend
+├── front/                   # Next.js 16 web client (console + streaming player)
 ├── docker-compose.yml       # Production MongoDB + backend
 ├── docker-compose.dev.yml   # Development MongoDB + backend
 └── AGENTS.md                # Root agent rules (this file) — authoritative
@@ -48,9 +48,10 @@ This file is the **root** and is authoritative. Each major workspace also has it
 | [`AGENTS.md`](./AGENTS.md) (root) | Whole repo | Domain model, tech stack, Lesan conventions, coding standards, offline-first sync contract, roadmap, commands, reference specs. Authoritative — read first. |
 | [`back/AGENTS.md`](./back/AGENTS.md) | `back/` — Deno + Lesan + MongoDB backend | Per-model field/index/relation details, the acts reference (`register`, `login`, `getMe`, `registerTrack`, `getMyTracks`, `syncLocalData`), Lesan framework patterns (one-directional relations, embedded single relations, `hardCascade`), idempotent `syncLocalData` behavior, env vars, and backend test/lint commands. |
 | [`mobile/AGENTS.md`](./mobile/AGENTS.md) | `mobile/` — React Native (Expo) app | Expo SDK 57 platform rule, audio engine rules (`expo-audio`, lock-screen/Expo Go limits, no `setInterval` tracking), `LocalDBService` schema, `SyncService` queue states, Lesan request wire format, screen and annotation UX expectations, and mobile dev commands. |
+| [`front/AGENTS.md`](./front/AGENTS.md) | `front/` — Next.js 16 web client | Next 16 conventions (`proxy.ts`, async `cookies()`/`searchParams`, `error.tsx` takes `retry`), Server-Actions-only transport, `httpOnly` token cookie, the 17-act map with its traps, Persian-only RTL UI, and the port-don't-reinvent list. |
 
 - The backend folder is named **`back/`** (not `backend/`).
-- `web/` is future work and has no `AGENTS.md` yet; create one alongside it.
+- The web client is **`front/`**, not `web/`. It has its own [`front/AGENTS.md`](./front/AGENTS.md) and a plan at `front/docs/PLAN.md`; read the plan before touching it.
 - **Precedence:** nearest `AGENTS.md` → root `AGENTS.md` → `docs/`. If a nested file contradicts this file, this file wins.
 
 ---

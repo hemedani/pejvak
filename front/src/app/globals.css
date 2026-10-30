@@ -1,0 +1,168 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/**
+ * Vazirmatn, vendored rather than fetched from Google at build or runtime.
+ *
+ * A build that needs the network to succeed is a build that fails on a plane,
+ * and a runtime third-party font request is a privacy and latency decision made
+ * by a stylesheet. Two subsets are enough: Persian and Latin.
+ */
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/vazirmatn-arabic.woff2") format("woff2");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-0891, U+0897-08E1,
+    U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF,
+    U+FE70-FE74, U+FE76-FEFC;
+}
+
+@font-face {
+  font-family: "Vazirmatn";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/vazirmatn-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+2000-206F, U+20AC, U+2122, U+2212, U+FEFF, U+FFFD;
+}
+
+@layer base {
+  * {
+    border-color: var(--outline-variant);
+  }
+
+  html {
+    /* RTL is structural (D10, §7.7). `dir` is on the element; this keeps form
+       controls and scrollbars agreeing with it. */
+    direction: rtl;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--canvas);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 23px;
+    font-weight: 500;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* The focus ring is a ring, not a colour change: it has to survive a
+     low-contrast day and a forced-colours mode. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Numbers that count get tabular figures (§7.4). */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  ::selection {
+    background-color: var(--accent-soft);
+    color: var(--text);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/**
+ * The type scale, verbatim from `mobile/src/theme/tokens.ts`.
+ *
+ * A component asks for a step (`type-heading`), never for a size. Two headings
+ * on one screen that disagree by 1px are what make a page look assembled rather
+ * than designed.
+ */
+@layer components {
+  .type-hero {
+    font-size: 40px;
+    line-height: 44px;
+    font-weight: 700;
+    letter-spacing: -1.1px;
+  }
+  .type-display {
+    font-size: 34px;
+    line-height: 40px;
+    font-weight: 700;
+    letter-spacing: -0.8px;
+  }
+  .type-title {
+    font-size: 28px;
+    line-height: 34px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .type-figure {
+    font-size: 26px;
+    line-height: 32px;
+    font-weight: 700;
+    letter-spacing: -0.6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .type-heading {
+    font-size: 20px;
+    line-height: 26px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+  }
+  .type-body {
+    font-size: 16px;
+    line-height: 23px;
+    font-weight: 500;
+    letter-spacing: -0.1px;
+  }
+  .type-body-strong {
+    font-size: 16px;
+    line-height: 23px;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+  }
+  .type-label {
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 600;
+  }
+  .type-caption {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 500;
+    letter-spacing: 0.05px;
+  }
+  .type-overline {
+    font-size: 11px;
+    line-height: 15px;
+    font-weight: 700;
+    letter-spacing: 1.3px;
+  }
+  .type-numeric {
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Scrollbars: a hairline track that does not fight the canvas. */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--outline) transparent;
+  }
+}
