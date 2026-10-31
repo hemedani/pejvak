@@ -11,7 +11,7 @@ import { PLAYLIST_PAGE_SIZE } from "@/lib/domain/playlist-query";
 import { now as clock } from "@/lib/now";
 import { pageParam, type SearchParamValue } from "@/lib/search-params";
 
-export const metadata = { title: "فهرست‌ها" };
+export const metadata = { title: "Playlists" };
 
 type Search = { page?: SearchParamValue };
 
@@ -50,9 +50,9 @@ export default async function PlaylistsPage({
   return (
     <div className="flex flex-col gap-[var(--space-lg)]">
       <PageHeader
-        overline="مجموعه‌های شما"
-        title="فهرست‌ها"
-        description="ترکیب دلخواهی از ترک‌ها، با ترتیب قابل تغییر."
+        overline="Your collections"
+        title="Playlists"
+        description="A hand-picked set of tracks, in an order you can change."
       />
 
       <PlaylistCreateForm />
@@ -94,15 +94,15 @@ async function PlaylistList({ page, now }: { page: number; now: number }) {
           // may have several, just not on this page.
           <EmptyState
             icon="playlist"
-            title="این صفحه خالی است"
-            description="به نظر می‌رسد به انتهای فهرست رسیده‌اید."
-            action={{ label: "بازگشت به صفحهٔ اول", href: "/playlists" }}
+            title="This page is empty"
+            description="You appear to have reached the end of the list."
+            action={{ label: "Back to the first page", href: "/playlists" }}
           />
         ) : (
           <EmptyState
             icon="playlist"
-            title="هنوز فهرستی نساخته‌اید"
-            description="ترک‌ها را در یک فهرست جمع کنید تا پشت‌سرهم بشنوید."
+            title="You haven't made a playlist yet"
+            description="Gather tracks into a playlist to hear them back to back."
           />
         )}
       </Card>

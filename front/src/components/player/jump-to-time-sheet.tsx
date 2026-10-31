@@ -12,9 +12,8 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { TextField } from "@/components/ui/text-field";
-import { formatClockFa } from "@/lib/format";
 import { seek } from "@/lib/player/controller";
-import { clampSeconds, digitsToSeconds } from "@/lib/time";
+import { clampSeconds, digitsToSeconds, formatClock } from "@/lib/time";
 import { usePlayerStore } from "@/stores/player";
 
 import { Sheet } from "./sheet";
@@ -39,11 +38,11 @@ export function JumpToTimeSheet({
   const submit = () => {
     const seconds = digitsToSeconds(value);
     if (seconds === 0 && !/[0۰]/.test(value)) {
-      setError("یک زمان وارد کنید؛ مثلاً ۱۲:۳۴.");
+      setError("Enter a time, for example 12:34.");
       return;
     }
     if (durationSec > 0 && seconds > durationSec) {
-      setError(`این قطعه ${formatClockFa(durationSec)} است.`);
+      setError(`This track is ${formatClock(durationSec)} long.`);
       return;
     }
     setError(null);
@@ -61,17 +60,17 @@ export function JumpToTimeSheet({
         }
         onOpenChange(next);
       }}
-      title="پرش به زمان"
+      title="Jump to time"
       description={
         durationSec > 0
-          ? `اکنون ${formatClockFa(positionSec)} از ${formatClockFa(durationSec)}`
-          : "برای پرش، زمان را وارد کنید."
+          ? `Now ${formatClock(positionSec)} of ${formatClock(durationSec)}`
+          : "Enter a time to jump to."
       }
     >
       <div className="flex flex-col gap-[var(--space-lg)]">
         <TextField
-          label="زمان"
-          hint="مثلاً ۱۲:۳۴ یا ۱:۰۲:۳۰"
+          label="Time"
+          hint="For example 12:34 or 1:02:30"
           inputMode="numeric"
           autoFocus
           value={value}
@@ -88,7 +87,7 @@ export function JumpToTimeSheet({
           }}
         />
         <Button variant="primary" onClick={submit} disabled={value.trim() === ""}>
-          برو
+          Go
         </Button>
       </div>
     </Sheet>

@@ -82,7 +82,7 @@ export function HistorySkeleton({ rows = 8 }: { rows?: number }) {
       <div
         className="px-[var(--space-lg)]"
         role="status"
-        aria-label="در حال بارگذاری"
+        aria-label="Loading"
       >
         {Array.from({ length: rows }, (_, index) => (
           <div

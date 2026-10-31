@@ -109,7 +109,7 @@ export function parseSessionDetail(raw: unknown): SessionDetail | null {
     ...summary,
     startPositionSec: asInt(record.startPositionSec) ?? 0,
     endPositionSec: asInt(record.endPositionSec) ?? 0,
-    // A missing speed is 1×, not 0× — 0 would render "۰×" beside every row the
+    // A missing speed is 1×, not 0× — 0 would render `0×` beside every row the
     // phone recorded before it started sending the field.
     playbackSpeed: asNumber(record.playbackSpeed) ?? 1,
     stretchId: asString(record.stretchId),

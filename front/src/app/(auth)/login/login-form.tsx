@@ -27,8 +27,8 @@ import { TextField } from "@/components/ui/text-field";
 import { failureMessage } from "@/lib/messages";
 
 const schema = z.object({
-  email: z.email("ایمیل معتبر نیست."),
-  password: z.string().min(8, "رمز عبور باید حداقل ۸ نویسه باشد."),
+  email: z.email("That email address is not valid."),
+  password: z.string().min(8, "A password must be at least 8 characters."),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -80,7 +80,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       ) : null}
 
       <TextField
-        label="ایمیل"
+        label="Email"
         type="email"
         inputMode="email"
         autoComplete="email"
@@ -91,7 +91,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       />
 
       <TextField
-        label="رمز عبور"
+        label="Password"
         type="password"
         autoComplete="current-password"
         error={form.formState.errors.password?.message}
@@ -99,7 +99,7 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
       />
 
       <Button type="submit" variant="primary" size="lg" disabled={pending}>
-        {pending ? "در حال ورود…" : "ورود"}
+        {pending ? "Signing in…" : "Sign in"}
       </Button>
     </form>
   );

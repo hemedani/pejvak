@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
 import type { Annotation } from "@/lib/domain/annotation";
-import { formatClockFa } from "@/lib/format";
+import { formatClock } from "@/lib/time";
 import {
   deletedNoteClientIds,
   deletePlayerNote,
@@ -231,7 +231,7 @@ export function AnnotationList({
 
     const result = await deleteNote(note.serverId);
     if (!result.success) {
-      setError("حذف در سرور انجام نشد؛ دوباره تلاش کنید.");
+      setError("The server did not delete it. Try again.");
       return;
     }
     refresh();
@@ -242,11 +242,11 @@ export function AnnotationList({
     <section aria-labelledby="notes-heading" className="flex flex-col gap-[var(--space-md)]">
       <div className="flex items-center justify-between gap-[var(--space-md)]">
         <h2 id="notes-heading" className="type-heading text-text">
-          یادداشت‌ها
+          Notes
         </h2>
         <Button variant="secondary" size="sm" onClick={openNew}>
           <Icon name="plus" size="sm" />
-          یادداشت در این لحظه
+          Note at this moment
         </Button>
       </div>
 
@@ -258,7 +258,7 @@ export function AnnotationList({
 
       {notes.length === 0 ? (
         <p className="type-body rounded-[var(--radius-md)] bg-surface-sunken px-[var(--space-lg)] py-[var(--space-xl)] text-center text-text-secondary">
-          هنوز یادداشتی برای این قطعه نیست.
+          There are no notes for this track yet.
         </p>
       ) : (
         <ul className="flex flex-col divide-y divide-outline-variant rounded-[var(--radius-lg)] border border-outline-variant bg-surface">
@@ -274,15 +274,15 @@ export function AnnotationList({
               <button
                 type="button"
                 className="type-numeric shrink-0 rounded-[var(--radius-xs)] px-[var(--space-xs)] py-[var(--space-xxs)] text-accent hover:bg-accent-soft"
-                aria-label={`پرش به ${formatClockFa(note.positionSec)}`}
+                aria-label={`Jump to ${formatClock(note.positionSec)}`}
                 onClick={() => onSeek(note.positionSec)}
               >
-                {formatClockFa(note.positionSec)}
+                {formatClock(note.positionSec)}
               </button>
 
               <div className="min-w-0 flex-1">
                 <p className={cn("type-body text-text", note.text === "" && "text-text-tertiary")}>
-                  {note.text === "" ? "نشانهٔ بی‌متن" : note.text}
+                  {note.text === "" ? "Untitled marker" : note.text}
                 </p>
                 {note.tags.length > 0 ? (
                   <p className="type-caption mt-[var(--space-xxs)] text-text-tertiary">
@@ -291,7 +291,7 @@ export function AnnotationList({
                 ) : null}
                 {note.pending ? (
                   <p className="type-caption mt-[var(--space-xxs)] text-text-tertiary">
-                    در صف همگام‌سازی
+                    Queued for sync
                   </p>
                 ) : null}
               </div>
@@ -306,7 +306,7 @@ export function AnnotationList({
                 <button
                   type="button"
                   className="grid size-9 place-items-center rounded-[var(--radius-xs)] text-text-tertiary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-                  aria-label="ویرایش یادداشت"
+                  aria-label="Edit note"
                   onClick={() => openEdit(note)}
                 >
                   <Icon name="note" size="sm" />
@@ -314,7 +314,7 @@ export function AnnotationList({
                 <button
                   type="button"
                   className="grid size-9 place-items-center rounded-[var(--radius-xs)] text-text-tertiary hover:bg-danger-soft hover:text-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-                  aria-label="حذف یادداشت"
+                  aria-label="Delete note"
                   onClick={() => setPendingDelete(note)}
                 >
                   <Icon name="delete" size="sm" />
@@ -332,12 +332,12 @@ export function AnnotationList({
             setPendingDelete(null);
           }
         }}
-        title="حذف یادداشت؟"
-        description="این یادداشت حذف و همگام‌سازی می‌شود."
+        title="Delete this note?"
+        description="The note is deleted and the deletion is synced."
         footer={
           <div className="flex justify-end gap-[var(--space-sm)]">
             <Button variant="ghost" onClick={() => setPendingDelete(null)}>
-              انصراف
+              Cancel
             </Button>
             <Button
               variant="danger"
@@ -349,16 +349,16 @@ export function AnnotationList({
                 }
               }}
             >
-              حذف
+              Delete
             </Button>
           </div>
         }
       >
         <p className="type-body text-text">
-          {pendingDelete?.text === "" ? "نشانهٔ بی‌متن" : pendingDelete?.text}
+          {pendingDelete?.text === "" ? "Untitled marker" : pendingDelete?.text}
         </p>
         <p className="type-caption mt-[var(--space-xs)] text-text-tertiary">
-          {pendingDelete ? formatClockFa(pendingDelete.positionSec) : ""}
+          {pendingDelete ? formatClock(pendingDelete.positionSec) : ""}
         </p>
       </Sheet>
 

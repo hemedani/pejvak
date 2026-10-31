@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/state";
  */
 export default function Loading() {
   return (
-    <div className="flex flex-col gap-[var(--space-xl)]" role="status" aria-label="در حال بارگذاری">
+    <div className="flex flex-col gap-[var(--space-xl)]" role="status" aria-label="Loading">
       <div className="flex flex-col gap-[var(--space-sm)]">
         <Skeleton className="h-4 w-24" />
         <Skeleton className="h-8 w-56" />

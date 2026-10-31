@@ -25,19 +25,11 @@
 import { TrackRow } from "@/components/online/track-row";
 import { Skeleton } from "@/components/ui/state";
 import type { PlayableCollection } from "@/lib/online/play";
-import { buildSeriesSections } from "@/lib/online/series";
+import { STANDALONE_TITLE, buildSeriesSections } from "@/lib/online/series";
 import type { OnlineSource, OnlineSourceKind, OnlineTrack } from "@/lib/online/types";
 
 /** The kinds whose episode titles carry a series name. */
 const GROUPED_KINDS: ReadonlySet<OnlineSourceKind> = new Set(["manahej", "aminikhaah"]);
-
-/**
- * The trailing bucket, in the app's voice.
- *
- * `series.ts` exports an English constant because it is a pure module the mobile
- * app shares; the web has no English in it (D10), so the label is chosen here.
- */
-const STANDALONE_LABEL = "قطعه‌های پراکنده";
 
 export function TrackList({
   source,
@@ -66,7 +58,7 @@ export function TrackList({
       {sections.map((section) => (
         <section key={section.key} className="border-b border-outline-variant last:border-b-0">
           <h3 className="type-label bg-surface-sunken px-[var(--space-lg)] py-[var(--space-sm)] text-text-secondary">
-            {section.standalone ? STANDALONE_LABEL : section.title}
+            {section.standalone ? STANDALONE_TITLE : section.title}
           </h3>
           <ul className="divide-y divide-outline-variant">
             {section.tracks.map((track) => (
@@ -82,7 +74,7 @@ export function TrackList({
 /** Eight row-shaped placeholders, for a track list that is still loading. */
 export function TrackListSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="flex flex-col gap-[var(--space-sm)] p-[var(--space-lg)]" role="status" aria-label="در حال بارگذاری">
+    <div className="flex flex-col gap-[var(--space-sm)] p-[var(--space-lg)]" role="status" aria-label="Loading">
       {Array.from({ length: rows }, (_, index) => (
         <div key={index} className="flex items-center gap-[var(--space-md)]">
           <Skeleton className="size-11 shrink-0 rounded-[var(--radius-sm)]" />

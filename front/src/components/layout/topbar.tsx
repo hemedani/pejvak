@@ -22,7 +22,7 @@ export function Topbar({ user }: { user: CurrentUser }) {
     <header className="sticky top-0 z-30 bg-canvas/85 backdrop-blur-[22px] lg:bg-transparent lg:backdrop-blur-none">
       <div className="flex h-16 items-center justify-between gap-[var(--space-md)] px-[var(--space-lg)] lg:px-[var(--space-xxl)]">
         <Link href="/" className="flex items-center gap-[var(--space-sm)] text-text lg:hidden">
-          <span className="type-heading">پژواک</span>
+          <span className="type-heading">Pejvak</span>
         </Link>
 
         <div className="ms-auto flex items-center gap-[var(--space-xs)]">
@@ -32,7 +32,7 @@ export function Topbar({ user }: { user: CurrentUser }) {
       </div>
 
       <nav
-        aria-label="ناوبری اصلی"
+        aria-label="Main navigation"
         className="scrollbar-thin flex gap-[var(--space-xs)] overflow-x-auto px-[var(--space-lg)] pb-[var(--space-sm)] lg:hidden"
       >
         {NAV_ITEMS.map((item) => (

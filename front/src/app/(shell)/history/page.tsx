@@ -17,7 +17,7 @@ import {
 import { now as clock } from "@/lib/now";
 import { afterParam, firstParam, type SearchParamValue } from "@/lib/search-params";
 
-export const metadata = { title: "تاریخ شنیدن" };
+export const metadata = { title: "History" };
 
 type Search = {
   after?: SearchParamValue;
@@ -67,9 +67,9 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
   return (
     <div className="flex flex-col gap-[var(--space-lg)]">
       <PageHeader
-        overline="همهٔ نشست‌ها"
-        title="تاریخ شنیدن"
-        description="هر بار شنیدن، با زمان، مدت و نتیجه‌اش."
+        overline="Every session"
+        title="History"
+        description="Every listen, with its time, length and outcome."
       />
 
       {/*
@@ -127,25 +127,25 @@ async function HistoryList({
           // have years of it, just not this week.
           <EmptyState
             icon="clock"
-            title="در این بازه چیزی شنیده نشده"
-            description="تاریخچه‌ای در این بازه نیست. بازه را کوتاه‌تر کنید یا پاک کنید."
-            action={{ label: "پاک کردن بازه", href: "/history" }}
+            title="Nothing heard in this range"
+            description="There is no history in this range. Narrow it or clear it."
+            action={{ label: "Clear range", href: "/history" }}
           />
         ) : after > 0 ? (
           // Reached by a hand-typed `after`, or by history shrinking between two
           // pages. Either way the cursor points past the end.
           <EmptyState
             icon="history"
-            title="این صفحه خالی است"
-            description="به نظر می‌رسد به انتهای تاریخچه رسیده‌اید."
-            action={{ label: "بازگشت به ابتدای تاریخچه", href: "/history" }}
+            title="This page is empty"
+            description="You appear to have reached the end of the history."
+            action={{ label: "Back to the start of the history", href: "/history" }}
           />
         ) : (
           <EmptyState
             icon="history"
-            title="هنوز چیزی نشنیده‌اید"
-            description="با پخش یک ترک از کتابخانه یا کاوش، تاریخچه اینجا ساخته می‌شود."
-            action={{ label: "کاوش مجموعه‌ها", href: "/browse" }}
+            title="You haven't listened to anything yet"
+            description="Play a track from your library or from Browse and the history is built here."
+            action={{ label: "Browse collections", href: "/browse" }}
           />
         )}
       </Card>

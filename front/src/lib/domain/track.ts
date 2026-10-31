@@ -76,7 +76,7 @@ export function parseTrackSummary(raw: unknown): TrackSummary | null {
   return {
     id,
     contentHash,
-    title: asString(record.title) ?? "بدون عنوان",
+    title: asString(record.title) ?? "Untitled",
     durationSec: asInt(record.durationSec) ?? 0,
     isAudiobook: record.isAudiobook === true,
     author: asString(record.author),

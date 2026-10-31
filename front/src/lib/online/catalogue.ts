@@ -12,7 +12,7 @@
  * happens to serve it today.
  */
 
-import { fa } from "@/lib/format";
+import { formatCount } from "@/lib/format";
 import { archiveLanguageFacets, archiveSources } from "@/lib/online/archive-languages";
 
 // Re-exported because it is part of the catalogue the UI reads, and because a
@@ -53,7 +53,7 @@ export const AMINIKHAAH_PODCASTS_SOURCE: OnlineSource = {
   nativeName: "پادکست‌های امینی خواه",
   languageCode: "fa",
   homepage: "https://aminikhaah.ir/podcast",
-  description: "Persian روضه podcast episodes, streamed from aminikhaah.ir.",
+  description: "Persian rowzeh podcast episodes, streamed from aminikhaah.ir.",
   attribution: "Podcasts by Hojjat al-Islam Amini-Khah, streamed from aminikhaah.ir.",
 };
 
@@ -181,9 +181,9 @@ export function parseCollectionKey(key: string): { sourceId: string; externalId:
   return { sourceId: key.slice(0, separator), externalId: key.slice(separator + 1) };
 }
 
-/** "۱۲ قطعه" / "۱ قطعه". Persian does not inflect a noun after a number. */
+/** `12 tracks` / `1 track` — English does inflect, so the count owns the word. */
 export function describeTrackCount(count: number): string {
-  return `${fa(Math.max(0, Math.floor(count)))} قطعه`;
+  return formatCount(Math.max(0, Math.floor(count)), "track");
 }
 
 /**
@@ -193,7 +193,7 @@ export function describeTrackCount(count: number): string {
  * A source is not always able to state a collection's size before it is opened:
  * the Internet Archive's search index holds no per-item track count, so its
  * listings report `0` and the real figure is known the first time the
- * collection is opened. Rendering that as "۰ قطعه" would label a thirty-part
+ * collection is opened. Rendering that as "0 tracks" would label a thirty-part
  * course as empty, so an unknown size prints nothing at all.
  */
 export function describeKnownTrackCount(count: number): string | null {
@@ -221,17 +221,17 @@ export function describeCollectionLine(collection: {
 export function describeSourceKind(kind: OnlineSourceKind): string {
   switch (kind) {
     case "manahej":
-      return "دسته";
+      return "Category";
     case "aminikhaah":
-      return "مجموعه";
+      return "Collection";
     case "aminikhaahpodcasts":
-      return "قسمت";
+      return "Episode";
     case "librivox":
-      return "کتاب صوتی";
+      return "Audiobook";
     case "radiobrowser":
-      return "ایستگاه";
+      return "Station";
     default:
-      return "مجموعه";
+      return "Collection";
   }
 }
 

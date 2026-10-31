@@ -34,7 +34,7 @@
  *
  * A removed row takes its buttons with it, and the browser drops focus to
  * `<body>` — a screen reader then restarts at the top of the page. After a remove
- * focus moves to the row that took its place (or to «افزودن ترک» when the last
+ * focus moves to the row that took its place (or to "Add tracks" when the last
  * row went), and after a move it stays on the button that was pressed.
  */
 
@@ -55,7 +55,8 @@ import { cn } from "@/lib/cn";
 import type { Playlist, PlaylistEntry } from "@/lib/domain/playlist";
 import { PLAYLIST_TITLE_MAX } from "@/lib/domain/playlist-query";
 import { isPlayableOnWeb, type TrackSummary } from "@/lib/domain/track";
-import { fa, formatClockFa, formatSpan } from "@/lib/format";
+import { formatCount, formatSpan } from "@/lib/format";
+import { formatClock } from "@/lib/time";
 import { failureMessage } from "@/lib/messages";
 import { appendTracks, moveItem, playableEntries, removeTrack } from "@/lib/playlists";
 import type { ActResult } from "@/lib/result";
@@ -115,7 +116,7 @@ export function PlaylistEditor({
   const sequence = useMemo(() => entries.map((entry) => entry.item), [entries]);
 
   const playableDurationSec = playable.reduce((total, entry) => total + entry.track.durationSec, 0);
-  // «فقط در گوشی» is about where the bytes are, so it counts local-origin rows
+  // "On phone only" is about where the bytes are, so it counts local-origin rows
   // only — a track that left the library is not "on the phone", it is gone, and
   // its own row says so.
   const localCount = entries.filter(
@@ -123,9 +124,9 @@ export function PlaylistEditor({
   ).length;
 
   const meta = [
-    `${fa(entries.length)} ترک`,
+    formatCount(entries.length, "track"),
     playableDurationSec > 0 ? formatSpan(playableDurationSec) : null,
-    localCount > 0 ? `${fa(localCount)} فقط در گوشی` : null,
+    localCount > 0 ? `${localCount} on phone only` : null,
   ]
     .filter((part): part is string => part !== null)
     .join(" · ");
@@ -230,7 +231,7 @@ export function PlaylistEditor({
           // A rejected action (an expired session redirects from inside
           // `callAct`) must still settle: a promise that never resolves would
           // leave the picker's button disabled for the rest of the visit.
-          setError("درخواست انجام نشد. دوباره تلاش کنید.");
+          setError("That request did not go through. Try again.");
           resolve(false);
         }
       });
@@ -337,7 +338,7 @@ export function PlaylistEditor({
     <div className="flex flex-col gap-[var(--space-lg)]">
       <header className="flex flex-col gap-[var(--space-md)]">
         <div>
-          <p className="type-overline text-text-tertiary">فهرست</p>
+          <p className="type-overline text-text-tertiary">Playlist</p>
 
           {renaming ? (
             <form
@@ -346,7 +347,7 @@ export function PlaylistEditor({
             >
               <div className="min-w-0 flex-1">
                 <TextField
-                  label="نام فهرست"
+                  label="Playlist name"
                   value={draftTitle}
                   onChange={(event) => setDraftTitle(event.target.value)}
                   maxLength={PLAYLIST_TITLE_MAX}
@@ -369,10 +370,10 @@ export function PlaylistEditor({
                   size="md"
                   disabled={pending || draftTitle.trim().length === 0}
                 >
-                  ذخیره
+                  Save
                 </Button>
                 <Button type="button" variant="ghost" size="md" onClick={cancelRename} disabled={pending}>
-                  لغو
+                  Cancel
                 </Button>
               </div>
             </form>
@@ -394,7 +395,7 @@ export function PlaylistEditor({
             onClick={startRename}
             disabled={pending || renaming}
           >
-            تغییر نام
+            Rename
           </Button>
 
           <Button
@@ -406,12 +407,12 @@ export function PlaylistEditor({
             disabled={pending}
             aria-expanded={pickerOpen}
           >
-            {pickerOpen ? "بستن" : "افزودن ترک"}
+            {pickerOpen ? "Close" : "Add tracks"}
           </Button>
         </div>
 
         {entries.length > 0 && playable.length === 0 ? (
-          <p className="type-caption text-text-tertiary">هیچ ترک این فهرست در وب پخش نمی‌شود.</p>
+          <p className="type-caption text-text-tertiary">No track in this playlist can be played on the web.</p>
         ) : null}
 
         {error ? (
@@ -429,8 +430,8 @@ export function PlaylistEditor({
         <Card>
           <EmptyState
             icon="playlist"
-            title="این فهرست خالی است"
-            description="از «افزودن ترک» شروع کنید."
+            title="This playlist is empty"
+            description="Start with “Add tracks”."
           />
         </Card>
       ) : (
@@ -462,9 +463,9 @@ export function PlaylistEditor({
       ) : null}
 
       <Card className="p-[var(--space-lg)]">
-        <h2 className="type-heading text-text">حذف فهرست</h2>
+        <h2 className="type-heading text-text">Delete playlist</h2>
         <p className="type-caption mt-[var(--space-xs)] max-w-[62ch] text-text-tertiary">
-          فهرست حذف می‌شود؛ ترک‌ها، تاریخچه و یادداشت‌ها در کتابخانه می‌مانند.
+          The playlist is deleted; its tracks, history and notes stay in your library.
         </p>
 
         <div className="mt-[var(--space-md)]">
@@ -476,7 +477,7 @@ export function PlaylistEditor({
               className="rounded-[var(--radius-md)] border border-danger/40 bg-danger-soft p-[var(--space-md)]"
             >
               <p id={confirmLabelId} className="type-body-strong text-danger">
-                «{playlist.title}» حذف شود؟
+                Delete “{playlist.title}”?
               </p>
 
               <div className="mt-[var(--space-md)] flex flex-wrap gap-[var(--space-sm)]">
@@ -488,10 +489,10 @@ export function PlaylistEditor({
                   disabled={pending}
                   aria-busy={pending || undefined}
                 >
-                  حذف قطعی
+                  Delete permanently
                 </Button>
                 <Button type="button" variant="ghost" size="md" onClick={cancelDelete} disabled={pending}>
-                  لغو
+                  Cancel
                 </Button>
               </div>
             </div>
@@ -504,7 +505,7 @@ export function PlaylistEditor({
               onClick={() => setConfirming(true)}
               disabled={pending}
             >
-              حذف فهرست
+              Delete playlist
             </Button>
           )}
         </div>
@@ -542,7 +543,7 @@ function PlaylistRow({
 }) {
   const { track } = entry;
   const trackId = entry.item.trackId;
-  const title = track?.title ?? "این ترک دیگر در کتابخانه نیست";
+  const title = track?.title ?? "This track is no longer in your library";
   const isLocal = track !== null && !isPlayableOnWeb(track);
 
   const meta =
@@ -550,7 +551,7 @@ function PlaylistRow({
       ? null
       : [
           track.author,
-          track.durationSec > 0 ? formatClockFa(track.durationSec) : null,
+          track.durationSec > 0 ? formatClock(track.durationSec) : null,
         ]
           .filter((part): part is string => Boolean(part))
           .join(" · ");
@@ -587,7 +588,7 @@ function PlaylistRow({
 
         {isLocal ? (
           <Badge tone="muted" size="sm" className="mt-[2px] shrink-0">
-            فقط در برنامهٔ اندروید
+            Android app only
           </Badge>
         ) : null}
 
@@ -600,8 +601,8 @@ function PlaylistRow({
             className="size-10"
             onClick={() => onMove(trackId, index, index - 1, "up")}
             disabled={pending || index === 0}
-            aria-label={`بالا بردن «${title}»`}
-            title={`بالا بردن «${title}»`}
+            aria-label={`Move “${title}” up`}
+            title={`Move “${title}” up`}
           >
             <Icon name="up" size="sm" />
           </Button>
@@ -614,8 +615,8 @@ function PlaylistRow({
             className="size-10"
             onClick={() => onMove(trackId, index, index + 1, "down")}
             disabled={pending || last}
-            aria-label={`پایین بردن «${title}»`}
-            title={`پایین بردن «${title}»`}
+            aria-label={`Move “${title}” down`}
+            title={`Move “${title}” down`}
           >
             <Icon name="down" size="sm" />
           </Button>
@@ -627,9 +628,9 @@ function PlaylistRow({
             size="sm"
             onClick={() => onRemove(trackId, index)}
             disabled={pending}
-            aria-label={`برداشتن «${title}» از فهرست`}
+            aria-label={`Remove “${title}” from the playlist`}
           >
-            برداشتن
+            Remove
           </Button>
         </div>
       </div>

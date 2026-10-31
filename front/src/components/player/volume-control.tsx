@@ -27,7 +27,7 @@ export function VolumeControl({ withSlider = false }: { withSlider?: boolean }) 
       <button
         type="button"
         className="grid size-11 place-items-center rounded-[var(--radius-sm)] text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-        aria-label={muted ? "وصل صدا" : "بی‌صدا"}
+        aria-label={muted ? "Unmute" : "Mute"}
         aria-pressed={muted}
         aria-keyshortcuts="M"
         onClick={toggleMute}
@@ -37,13 +37,13 @@ export function VolumeControl({ withSlider = false }: { withSlider?: boolean }) 
 
       {withSlider ? (
         <Slider.Root
-          dir="rtl"
+          dir="ltr"
           className="flex h-6 w-32 touch-none select-none items-center"
           min={0}
           max={1}
           step={0.01}
           value={[audible]}
-          aria-label="بلندی صدا"
+          aria-label="Volume"
           aria-valuetext={formatPercent(audible)}
           onValueChange={(values) => {
             const next = values[0];
@@ -57,7 +57,7 @@ export function VolumeControl({ withSlider = false }: { withSlider?: boolean }) 
           </Slider.Track>
           <Slider.Thumb
             className="block size-4 rounded-full border-2 border-surface bg-accent shadow-[var(--elevation-card)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-            aria-label="دستگیرهٔ بلندی صدا"
+            aria-label="Volume handle"
           />
         </Slider.Root>
       ) : null}

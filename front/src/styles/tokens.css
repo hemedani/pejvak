@@ -86,10 +86,16 @@
   --elevation-float: 0 16px 34px var(--shadow);
 
   /* ── Type ─────────────────────────────────────────────────────────────── */
-  /* `Vazirmatn` is declared by `@font-face` in globals.css and served from
-     /public/fonts, so there is no build-time or runtime third-party request. The
-     stack after it is a fallback for the first paint, not a second choice. */
-  --font-sans: "Vazirmatn", "IRANSansX", "Segoe UI", Tahoma, system-ui, sans-serif;
+  /* The UI is English, so the Latin face is the platform's own — the same choice
+     the phone app makes by not setting a font at all. `Vazirmatn` stays in the
+     stack *behind* it for Persian catalogue titles: fallback is per glyph, so
+     English copy renders in the system face and a Persian title still gets a face
+     designed for it.
+
+     `Vazirmatn` is declared by `@font-face` in globals.css and served from
+     /public/fonts, so there is no build-time or runtime third-party request. */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Vazirmatn", sans-serif;
 
   color-scheme: light;
 }

@@ -21,8 +21,8 @@
 
 import { Badge } from "@/components/ui/badge";
 import type { SessionDetail } from "@/lib/domain/session";
-import { fa, formatClockFa, formatSpeed, formatSpan } from "@/lib/format";
-import { formatDateTime } from "@/lib/time";
+import { formatCount, formatSpeed, formatSpan } from "@/lib/format";
+import { formatClock, formatDateTime } from "@/lib/time";
 
 export function SessionList({ sessions }: { sessions: readonly SessionDetail[] }) {
   return (
@@ -42,7 +42,7 @@ export function SessionList({ sessions }: { sessions: readonly SessionDetail[] }
 function SessionRow({ session, last }: { session: SessionDetail; last: boolean }) {
   // Only meaningful when the listen actually moved. A session that recorded
   // `0 → 0` (a row synced before the phone tracked positions) would otherwise
-  // read "از ۰:۰۰ تا ۰:۰۰" beside every entry.
+  // read "from 0:00 to 0:00" beside every entry.
   const moved = session.endPositionSec > session.startPositionSec;
 
   return (
@@ -58,7 +58,7 @@ function SessionRow({ session, last }: { session: SessionDetail; last: boolean }
           <Verdict session={session} />
           {session.seeked ? (
             <Badge tone="muted" size="sm">
-              پرش
+              Seek
             </Badge>
           ) : null}
         </div>
@@ -67,15 +67,15 @@ function SessionRow({ session, last }: { session: SessionDetail; last: boolean }
           <span className="type-numeric">{formatSpan(session.durationListenedSec)}</span>
           {moved ? (
             <>
-              {" · از "}
-              <span className="type-numeric">{formatClockFa(session.startPositionSec)}</span>
-              {" تا "}
-              <span className="type-numeric">{formatClockFa(session.endPositionSec)}</span>
+              {" · from "}
+              <span className="type-numeric">{formatClock(session.startPositionSec)}</span>
+              {" to "}
+              <span className="type-numeric">{formatClock(session.endPositionSec)}</span>
             </>
           ) : null}
           {session.playbackSpeed === 1 ? null : (
             <>
-              {" · سرعت "}
+              {" · speed "}
               <span className="type-numeric">{formatSpeed(session.playbackSpeed)}</span>
             </>
           )}
@@ -97,7 +97,7 @@ function Verdict({ session }: { session: SessionDetail }) {
   if (session.completed) {
     return (
       <Badge tone="accent" size="sm">
-        تا پایان
+        Finished
       </Badge>
     );
   }
@@ -105,14 +105,14 @@ function Verdict({ session }: { session: SessionDetail }) {
   if (session.interrupted) {
     return (
       <Badge tone="danger" size="sm">
-        قطع‌شده
+        Interrupted
       </Badge>
     );
   }
 
   return (
     <Badge tone="neutral" size="sm">
-      نیمه‌کاره
+      Unfinished
     </Badge>
   );
 }
@@ -136,9 +136,9 @@ export function SessionListSummary({
 
   return (
     <p className="type-caption text-text-tertiary">
-      {fa(sessions.length)} نشست در این صفحه ·{" "}
+      {formatCount(sessions.length, "session")} on this page ·{" "}
       <span className="type-numeric">{formatSpan(listenedSec)}</span>
-      {page > 1 ? ` · صفحهٔ ${fa(page)}` : ""}
+      {page > 1 ? ` · page ${page}` : ""}
     </p>
   );
 }

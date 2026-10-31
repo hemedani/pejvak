@@ -75,15 +75,15 @@ describe("sameContext", () => {
 });
 
 describe("labels", () => {
-  it("names both context kinds in Persian", () => {
-    expect(describeContextType("online")).toBe("آنلاین");
-    expect(describeContextType("playlist")).toBe("پلی‌لیست");
+  it("names both context kinds", () => {
+    expect(describeContextType("online")).toBe("Online");
+    expect(describeContextType("playlist")).toBe("Playlist");
   });
 
-  it("counts from one with Persian digits", () => {
-    expect(formatContextPosition(0, 12)).toBe("۱ از ۱۲");
-    expect(formatContextPosition(8, 24)).toBe("۹ از ۲۴");
-    expect(formatContextPosition(99, 12)).toBe("۱۲ از ۱۲");
+  it("counts from one", () => {
+    expect(formatContextPosition(0, 12)).toBe("1 of 12");
+    expect(formatContextPosition(8, 24)).toBe("9 of 24");
+    expect(formatContextPosition(99, 12)).toBe("12 of 12");
     expect(formatContextPosition(0, 0)).toBe("");
   });
 });
@@ -105,27 +105,27 @@ describe("runs", () => {
 
   it("describes the outcome without making the reader subtract", () => {
     expect(describeRunOutcome(run({ completed: true }))).toEqual({
-      label: "تمام شد",
+      label: "Finished",
       tone: "done",
     });
     expect(describeRunOutcome(run({ finishedCount: 24 }))).toEqual({
-      label: "همهٔ قطعه‌ها شنیده شد",
+      label: "Every track heard",
       tone: "done",
     });
     expect(describeRunOutcome(run())).toEqual({
-      label: "متوقف در ۹ از ۲۴",
+      label: "Stopped at 9 of 24",
       tone: "partial",
     });
     expect(describeRunOutcome(run({ finishedCount: 0 }))).toEqual({
-      label: "زودتر رها شد",
+      label: "Left early",
       tone: "partial",
     });
   });
 
   it("names the scope in words", () => {
-    expect(describeRunScope(run())).toBe("۹ از ۲۴ قطعه شنیده شد");
-    expect(describeRunScope(run({ finishedCount: 24 }))).toBe("همهٔ ۲۴ قطعه شنیده شد");
-    expect(describeRunScope(run({ trackCount: 0, finishedCount: 0 }))).toBe("مجموعهٔ خالی");
+    expect(describeRunScope(run())).toBe("9 of 24 tracks heard");
+    expect(describeRunScope(run({ finishedCount: 24 }))).toBe("All 24 tracks heard");
+    expect(describeRunScope(run({ trackCount: 0, finishedCount: 0 }))).toBe("Empty collection");
   });
 
   it("resumes at 0 once the run finished", () => {

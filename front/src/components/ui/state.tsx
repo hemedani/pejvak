@@ -31,7 +31,7 @@ export function Skeleton({ className }: { className?: string }) {
 /** A table-shaped skeleton: the header row, then N body rows. */
 export function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="flex flex-col gap-[var(--space-sm)]" role="status" aria-label="در حال بارگذاری">
+    <div className="flex flex-col gap-[var(--space-sm)]" role="status" aria-label="Loading">
       {Array.from({ length: rows }, (_, index) => (
         <Skeleton key={index} className="h-14 w-full rounded-[var(--radius-md)]" />
       ))}
@@ -83,9 +83,10 @@ type ErrorStateProps = {
 /**
  * What a failed read looks like.
  *
- * The Persian sentence comes from `failureMessage`, never from the backend — a
- * raw English string in a Persian page reads as a crash (see `lib/messages.ts`).
- * The raw message is kept in a `<details>` so it is available to whoever is
+ * The sentence comes from `failureMessage`, never from the backend — a raw
+ * server string is written for a developer, and printing it here would be the
+ * one place the UI showed text it did not choose (see `lib/messages.ts`). The
+ * raw message is kept in a `<details>` so it is available to whoever is
  * debugging without being the thing the listener reads first.
  */
 export function ErrorState({ failure, retryHref, className }: ErrorStateProps) {
@@ -105,7 +106,7 @@ export function ErrorState({ failure, retryHref, className }: ErrorStateProps) {
 
       <div>
         <p className="type-body-strong text-text">
-          {offline ? "ارتباط برقرار نشد" : "این بخش بارگذاری نشد"}
+          {offline ? "Could not connect" : "This section could not load"}
         </p>
         <p className="type-caption text-text-tertiary mt-[var(--space-xs)]">
           {failureMessage(failure)}
@@ -114,13 +115,13 @@ export function ErrorState({ failure, retryHref, className }: ErrorStateProps) {
 
       {retryHref && isRetryable(failure) ? (
         <Button asChild variant="secondary" size="md">
-          <Link href={retryHref}>تلاش دوباره</Link>
+          <Link href={retryHref}>Try again</Link>
         </Button>
       ) : null}
 
       {failure.message ? (
         <details className="type-caption text-text-tertiary">
-          <summary className="cursor-pointer select-none">جزئیات فنی</summary>
+          <summary className="cursor-pointer select-none">Technical details</summary>
           <p className="mt-[var(--space-xs)] break-all" dir="ltr">
             {failure.message}
           </p>
@@ -147,7 +148,7 @@ export function OfflineBanner({ className }: { className?: string }) {
       role="status"
     >
       <Icon name="offline" size="sm" />
-      <p className="type-caption">اتصال به سرور قطع است. اطلاعات نمایشدادهشده ممکن است قدیمی باشد.</p>
+      <p className="type-caption">The server connection is down. What you see may be out of date.</p>
     </div>
   );
 }

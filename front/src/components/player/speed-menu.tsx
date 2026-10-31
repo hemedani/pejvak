@@ -21,7 +21,7 @@ export function SpeedMenu({ compact = false }: { compact?: boolean }) {
   const speed = usePlayerStore((state) => state.playbackSpeed);
 
   return (
-    <DropdownMenu.Root dir="rtl">
+    <DropdownMenu.Root dir="ltr">
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
@@ -31,7 +31,7 @@ export function SpeedMenu({ compact = false }: { compact?: boolean }) {
             "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
             compact ? "h-9 px-[var(--space-sm)] type-numeric" : "h-11 px-[var(--space-md)] type-label",
           )}
-          aria-label={`سرعت پخش، ${formatSpeed(speed)}`}
+          aria-label={`Playback speed, ${formatSpeed(speed)}`}
         >
           <Icon name="speed" size="sm" />
           <span className="type-numeric">{formatSpeed(speed)}</span>
@@ -45,7 +45,7 @@ export function SpeedMenu({ compact = false }: { compact?: boolean }) {
           className="z-50 min-w-40 rounded-[var(--radius-md)] border border-[var(--glass-border)] bg-[var(--glass-strong)] p-[var(--space-xs)] shadow-[var(--elevation-panel)] backdrop-blur-xl"
         >
           <DropdownMenu.Label className="type-overline px-[var(--space-sm)] py-[var(--space-xs)] text-text-tertiary">
-            سرعت پخش
+            Playback speed
           </DropdownMenu.Label>
           {SPEEDS.map((rate) => {
             const active = Math.abs(rate - speed) < 0.001;

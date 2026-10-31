@@ -8,7 +8,7 @@ import { NAV_ITEMS } from "./nav-items";
 /**
  * The desktop sidebar.
  *
- * It sits on the *start* edge — the right, in RTL — and the layout uses logical
+ * It sits on the *start* edge — the left, in LTR — and the layout uses logical
  * properties so nothing here has to know that. The bottom slot is reserved for
  * the player bar's queue entry (Phase 5); nothing occupies it yet, and an empty
  * box that grows when the player arrives is better than a bar that moves.
@@ -21,10 +21,10 @@ export function Sidebar() {
         className="flex items-center gap-[var(--space-sm)] px-[var(--space-sm)] text-text"
       >
         <BrandMark />
-        <span className="type-heading">پژواک</span>
+        <span className="type-heading">Pejvak</span>
       </Link>
 
-      <nav aria-label="ناوبری اصلی" className="flex flex-col gap-[var(--space-xxs)]">
+      <nav aria-label="Main navigation" className="flex flex-col gap-[var(--space-xxs)]">
         {NAV_ITEMS.map((item) => (
           <NavLink key={item.href} item={item} />
         ))}

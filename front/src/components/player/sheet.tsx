@@ -38,7 +38,7 @@ export function Sheet({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-[var(--scrim)] data-[state=open]:animate-[fade-in_160ms_ease-out]" />
         <Dialog.Content
-          dir="rtl"
+          dir="ltr"
           className={cn(
             "fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] flex-col",
             "rounded-t-[var(--radius-xl)] border border-[var(--glass-border)]",
@@ -60,7 +60,7 @@ export function Sheet({
               ) : null}
             </div>
             <Dialog.Close asChild>
-              <Button variant="ghost" size="icon" aria-label="بستن" className="-me-[var(--space-xs)] -mt-[var(--space-xs)]">
+              <Button variant="ghost" size="icon" aria-label="Close" className="-me-[var(--space-xs)] -mt-[var(--space-xs)]">
                 <Icon name="close" size="md" />
               </Button>
             </Dialog.Close>

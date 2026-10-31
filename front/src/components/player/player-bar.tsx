@@ -17,7 +17,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Icon } from "@/components/ui/icon";
-import { formatClockFa } from "@/lib/format";
+import { formatClock } from "@/lib/time";
 import { closePlayer } from "@/lib/player/controller";
 import { progressRatio } from "@/lib/player/progressSmoothing";
 import { usePlayerStore } from "@/stores/player";
@@ -62,7 +62,7 @@ export function PlayerBar() {
               <span className="min-w-0">
                 <span className="type-label block truncate text-text">{current.title}</span>
                 <span className="type-caption block truncate text-text-secondary">
-                  {current.artist ?? (current.origin === "local" ? "روی دستگاه شما" : "بیشناسه")}
+                  {current.artist ?? (current.origin === "local" ? "On your device" : "Unknown artist")}
                 </span>
               </span>
             </Link>
@@ -84,7 +84,7 @@ export function PlayerBar() {
               <button
                 type="button"
                 className="grid size-11 place-items-center rounded-[var(--radius-sm)] text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-                aria-label="صف پخش"
+                aria-label="Playback queue"
                 onClick={() => setQueueOpen(true)}
               >
                 <Icon name="queue" size="md" />
@@ -92,7 +92,7 @@ export function PlayerBar() {
               <button
                 type="button"
                 className="grid size-11 place-items-center rounded-[var(--radius-sm)] text-text-tertiary hover:bg-danger-soft hover:text-danger focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-                aria-label="بستن پخش‌کننده"
+                aria-label="Close the player"
                 onClick={closePlayer}
               >
                 <Icon name="close" size="md" />
@@ -122,12 +122,12 @@ function BarProgress() {
     <div
       className="absolute inset-x-0 top-0 h-[2px] bg-track"
       role="progressbar"
-      aria-label="پیشرفت پخش"
+      aria-label="Playback progress"
       aria-valuemin={0}
       aria-valuemax={durationSec > 0 ? durationSec : undefined}
       aria-valuenow={durationSec > 0 ? Math.min(positionSec, durationSec) : undefined}
       aria-valuetext={
-        durationSec > 0 ? `${formatClockFa(positionSec)} از ${formatClockFa(durationSec)}` : undefined
+        durationSec > 0 ? `${formatClock(positionSec)} of ${formatClock(durationSec)}` : undefined
       }
     >
       <span

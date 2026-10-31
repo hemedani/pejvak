@@ -6,10 +6,10 @@
  * One component for three places, because they differ only in what they say and
  * where they start:
  *
- *   · the collection page — «پخش», with the whole collection already loaded;
- *   · a Continue card — «ادامه», which resumes at a stored index and position
+ *   · the collection page — "Play", with the whole collection already loaded;
+ *   · a Continue card — "Continue", which resumes at a stored index and position
  *     and has no tracks of its own (it asks the source on click);
- *   · a row inside the track list — «پخش از این قطعه», which starts at that row
+ *   · a row inside the track list — "Play from this track", which starts at that row
  *     but still queues the **whole** collection, so the run's `trackCount` is
  *     the collection rather than one episode.
  *
@@ -22,8 +22,8 @@
  *     queues — the second one winning with the same content, which looks like
  *     the first one silently restarting.
  *   · **Failure is shown, never thrown.** A source that is down gets its own
- *     Persian sentence under the button and a retry, not an `alert()` and not a
- *     broken page.
+ *     sentence under the button and a retry, not an `alert()` and not a broken
+ *     page.
  */
 
 import { useRef, useState } from "react";
@@ -76,7 +76,7 @@ export function PlayCollectionButton({
         setError(result.message);
       }
     } catch {
-      setError("پخش آغاز نشد. دوباره تلاش کنید.");
+      setError("Playback did not start. Try again.");
     } finally {
       busy.current = false;
       setPending(false);

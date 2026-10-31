@@ -70,8 +70,8 @@ export function PlaylistCreateForm() {
         <div className="min-w-0 flex-1">
           <TextField
             ref={inputRef}
-            label="فهرست تازه"
-            placeholder="نام فهرست"
+            label="New playlist"
+            placeholder="Playlist name"
             maxLength={PLAYLIST_TITLE_MAX}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -79,7 +79,7 @@ export function PlaylistCreateForm() {
         </div>
 
         <Button type="submit" variant="primary" size="lg" disabled={disabled}>
-          ساخت
+          Create
         </Button>
       </form>
 

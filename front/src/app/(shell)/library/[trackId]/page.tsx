@@ -15,10 +15,10 @@ import { Icon } from "@/components/ui/icon";
 import { Pagination } from "@/components/ui/pagination";
 import { EmptyState, ErrorState } from "@/components/ui/state";
 import { isPlayableOnWeb, type TrackDetail } from "@/lib/domain/track";
-import { faNumber, formatBytes, formatClockFa, formatSpan } from "@/lib/format";
+import { formatBytes, formatNumber, formatSpan } from "@/lib/format";
 import { pageParam, type SearchParamValue } from "@/lib/search-params";
 import { now as clock } from "@/lib/now";
-import { formatDate, formatRelativeTime } from "@/lib/time";
+import { formatClock, formatDate, formatRelativeTime } from "@/lib/time";
 
 /**
  * One track: what it is, what has been heard of it, and what was written on it.
@@ -59,7 +59,7 @@ export async function generateMetadata({ params }: { params: Promise<RouteParams
 
   // A failed or missing read keeps the generic title: the page itself renders
   // the reason, and a tab that says "error" is not more informative.
-  return { title: result.success && result.body ? result.body.title : "ترک" };
+  return { title: result.success && result.body ? result.body.title : "Track" };
 }
 
 export default async function TrackPage({
@@ -100,7 +100,7 @@ export default async function TrackPage({
         className="type-caption inline-flex w-fit items-center gap-[var(--space-xs)] text-text-tertiary transition-colors hover:text-text"
       >
         <Icon name="start" size="xs" />
-        کتابخانه
+        Library
       </Link>
 
       <Card className="p-[var(--space-lg)]">
@@ -109,7 +109,7 @@ export default async function TrackPage({
 
           <div className="min-w-0 flex-1">
             <p className="type-overline mb-[var(--space-xs)] text-text-tertiary">
-              {track.isAudiobook ? "کتاب صوتی" : "ترک"}
+              {track.isAudiobook ? "Audiobook" : "Track"}
             </p>
 
             <h1 className="type-title text-text">{track.title}</h1>
@@ -120,15 +120,15 @@ export default async function TrackPage({
 
             <div className="mt-[var(--space-sm)] flex flex-wrap items-center gap-[var(--space-xs)]">
               {track.origin === "local" ? (
-                <Badge tone="muted">محلی</Badge>
+                <Badge tone="muted">Local</Badge>
               ) : (
-                <Badge tone="accent">آنلاین</Badge>
+                <Badge tone="accent">Online</Badge>
               )}
 
               {track.collectionTitle ? <Badge tone="neutral">{track.collectionTitle}</Badge> : null}
 
               <Badge tone="neutral">
-                <span className="type-numeric">{formatClockFa(track.durationSec)}</span>
+                <span className="type-numeric">{formatClock(track.durationSec)}</span>
               </Badge>
             </div>
           </div>
@@ -137,32 +137,32 @@ export default async function TrackPage({
 
       <div className="grid gap-[var(--space-md)] sm:grid-cols-2 xl:grid-cols-4">
         <StatCell
-          label="زمان شنیدن"
+          label="Listening time"
           value={formatSpan(track.totalListenTimeSec)}
-          detail={track.totalPlayCount === 0 ? "هنوز پخش نشده" : undefined}
+          detail={track.totalPlayCount === 0 ? "Never played" : undefined}
           icon="clock"
         />
         <StatCell
-          label="بار پخش"
-          value={faNumber(track.totalPlayCount)}
+          label="Play count"
+          value={formatNumber(track.totalPlayCount)}
           icon="stats"
         />
         <StatCell
-          label="آخرین پخش"
+          label="Last played"
           value={track.lastPlayedAt === null ? "—" : formatRelativeTime(track.lastPlayedAt, now)}
-          detail={track.lastPlayedAt === null ? "در تاریخچه ثبت نشده" : formatDate(track.lastPlayedAt)}
+          detail={track.lastPlayedAt === null ? "Not in history" : formatDate(track.lastPlayedAt)}
           icon="history"
         />
         <StatCell
-          label="یادداشت‌ها"
-          value={faNumber(track.annotations.length)}
+          label="Notes"
+          value={formatNumber(track.annotations.length)}
           detail={
             track.annotations.length === 0
-              ? "یادداشتی ثبت نشده"
+              ? "No notes yet"
               : // The relation arrives sorted by position, so the first row is
                 // the earliest marker. Naming it is a fact about the list, not a
                 // count derived from it.
-                `نخستین نشانه: ${formatClockFa(track.annotations[0]?.positionSec ?? 0)}`
+                `First marker at ${formatClock(track.annotations[0]?.positionSec ?? 0)}`
           }
           icon="note"
         />
@@ -171,7 +171,7 @@ export default async function TrackPage({
       <PlaybackNote track={track} />
 
       <section className="flex flex-col gap-[var(--space-md)]">
-        <CardHeading overline="تاریخچه" title="نشست‌های شنیدن" />
+        <CardHeading overline="History" title="Listening sessions" />
 
         {!sessions.success ? (
           <Card>
@@ -185,15 +185,15 @@ export default async function TrackPage({
           <Card>
             <EmptyState
               icon="history"
-              title={sessionPage > 1 ? "این صفحه خالی است" : "این ترک هنوز شنیده نشده"}
+              title={sessionPage > 1 ? "This page is empty" : "This track has not been heard yet"}
               description={
                 sessionPage > 1
-                  ? "به نظر می‌رسد به انتهای تاریخچه رسیده‌اید."
-                  : "نشست‌ها از اپلیکیشن موبایل همگام می‌شوند و هر شنیدن، با زمان و محدوده‌اش، اینجا فهرست می‌شود."
+                  ? "You appear to have reached the end of the history."
+                  : "Sessions sync from the mobile app; every listen is listed here with its time and span."
               }
               action={
                 sessionPage > 1
-                  ? { label: "بازگشت به صفحهٔ اول", href: `/library/${trackId}` }
+                  ? { label: "Back to the first page", href: `/library/${trackId}` }
                   : undefined
               }
             />
@@ -217,8 +217,8 @@ export default async function TrackPage({
 
       <section className="flex flex-col gap-[var(--space-md)]">
         <CardHeading
-          overline="یادداشت‌ها"
-          title={track.annotations.length > 0 ? `${faNumber(track.annotations.length)} یادداشت` : "یادداشت"}
+          overline="Notes"
+          title={track.annotations.length > 0 ? `${formatNumber(track.annotations.length)} notes` : "Note"}
         />
 
         <Card className="p-[var(--space-lg)]">
@@ -254,12 +254,12 @@ function PlaybackNote({ track }: { track: TrackDetail }) {
 
         <div className="min-w-0">
           <p className="type-body-strong text-text">
-            {playable ? "در مرورگر قابل پخش است" : "صدا روی دستگاه شماست"}
+            {playable ? "Playable in the browser" : "The audio is on your device"}
           </p>
           <p className="type-caption mt-[var(--space-xs)] max-w-[62ch] text-text-tertiary">
             {playable
-              ? "این ترک از یک منبع آنلاین می‌آید، پس نشانی صوتی دارد و در مرورگر پخش می‌شود."
-              : "فایل صوتی این ترک روی گوشی ذخیره شده و سرور نشانی‌ای از آن نگه نمی‌دارد، بنابراین در نسخهٔ وب پخش نمی‌شود. اطلاعات و تاریخچهٔ آن کامل است."}
+              ? "This track comes from an online source, so it has an audio address and plays in the browser."
+              : "This track's audio file is stored on your phone and the server keeps no address for it, so it cannot be played on the web. Its details and history are complete."}
           </p>
           <PlayTrackButton track={track} />
         </div>
@@ -282,7 +282,7 @@ function FileFacts({ track }: { track: TrackDetail }) {
 
   if (track.fileName) {
     rows.push({
-      label: "نام فایل",
+      label: "File name",
       value: (
         <span dir="ltr" className="break-all">
           {track.fileName}
@@ -292,24 +292,24 @@ function FileFacts({ track }: { track: TrackDetail }) {
   }
   if (track.fileSizeBytes > 0) {
     rows.push({
-      label: "حجم",
+      label: "Size",
       value: <span className="type-numeric">{formatBytes(track.fileSizeBytes)}</span>,
     });
   }
   if (track.mimeType) {
     rows.push({
-      label: "قالب",
+      label: "Format",
       value: <span dir="ltr">{track.mimeType}</span>,
     });
   }
   if (track.createdAt !== null) {
-    rows.push({ label: "افزوده به کتابخانه", value: formatDate(track.createdAt) });
+    rows.push({ label: "Added to library", value: formatDate(track.createdAt) });
   }
   if (track.downloadedAt !== null) {
-    rows.push({ label: "دانلود روی دستگاه", value: formatDate(track.downloadedAt) });
+    rows.push({ label: "Downloaded to device", value: formatDate(track.downloadedAt) });
   }
   rows.push({
-    label: "شناسهٔ محتوا",
+    label: "Content ID",
     value: (
       <span dir="ltr" className="break-all text-text-tertiary">
         {track.contentHash}
@@ -319,7 +319,7 @@ function FileFacts({ track }: { track: TrackDetail }) {
 
   return (
     <section className="flex flex-col gap-[var(--space-md)]">
-      <CardHeading overline="فایل" title="دربارهٔ این فایل" />
+      <CardHeading overline="File" title="About this file" />
 
       <Card className="p-[var(--space-lg)]">
         <dl className="grid gap-x-[var(--space-lg)] gap-y-[var(--space-sm)] sm:grid-cols-[max-content_1fr]">

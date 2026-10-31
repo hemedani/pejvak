@@ -57,7 +57,7 @@ export const PLAYLIST_LIBRARY_PAGE_SIZE = 100;
  * Past that, items are resolved one by one with `getTrackDetail` for the ids the
  * index did not cover (bounded concurrency, see the action). The index is the
  * fast path; the fallback is what keeps an old playlist correct in a very large
- * library instead of showing a page of «این ترک دیگر در کتابخانه نیست».
+ * library instead of showing a page of "This track is no longer in your library".
  */
 export const PLAYLIST_LIBRARY_MAX_PAGES = 50;
 

@@ -5,7 +5,7 @@ import { ErrorState } from "@/components/ui/state";
 import { PageHeader } from "@/components/ui/page-header";
 import { displayNameOf, initialOf } from "@/lib/domain/user";
 
-export const metadata = { title: "تنظیمات" };
+export const metadata = { title: "Settings" };
 
 /**
  * Settings, read-only.
@@ -26,10 +26,10 @@ export default async function SettingsPage() {
 
   return (
     <div className="flex max-w-[820px] flex-col gap-[var(--space-lg)]">
-      <PageHeader overline="حساب" title="تنظیمات" description="اطلاعات حساب و ترجیحات نمایش." />
+      <PageHeader overline="Account" title="Settings" description="Account details and display preferences." />
 
       <Card className="p-[var(--space-xl)]">
-        <CardHeading overline="حساب کاربری" title="مشخصات" />
+        <CardHeading overline="Signed in as" title="Profile" />
 
         <div className="mt-[var(--space-lg)] flex items-center gap-[var(--space-md)]">
           <span className="grid size-12 place-items-center rounded-full bg-accent-soft type-heading text-accent">
@@ -44,23 +44,23 @@ export default async function SettingsPage() {
         </div>
 
         <dl className="mt-[var(--space-lg)] grid gap-[var(--space-md)] sm:grid-cols-2">
-          <Field label="نام کاربری" value={user.username} ltr />
-          <Field label="ایمیل" value={user.email} ltr />
+          <Field label="Username" value={user.username} ltr />
+          <Field label="Email" value={user.email} ltr />
         </dl>
 
         <p className="type-caption mt-[var(--space-lg)] text-text-tertiary">
-          ویرایش مشخصات در نسخهٔ وب ممکن نیست؛ سرور فعلاً راهی برای تغییر پروفایل ندارد. از اپلیکیشن
-          موبایل استفاده کنید.
+          Profiles cannot be edited on the web; the server has no way to change one yet. Use the
+          mobile app.
         </p>
       </Card>
 
       <Card className="p-[var(--space-xl)]">
-        <CardHeading overline="نمایش" title="پوسته" />
+        <CardHeading overline="Display" title="Theme" />
         <div className="mt-[var(--space-md)] flex items-center justify-between gap-[var(--space-md)]">
           <div>
-            <p className="type-label text-text">روشن یا تاریک</p>
+            <p className="type-label text-text">Light or dark</p>
             <p className="type-caption text-text-tertiary">
-              در اولین بازدید از تنظیمات سیستم شما پیروی می‌کند.
+              On a first visit it follows your system setting.
             </p>
           </div>
           <ThemeToggle />
@@ -68,13 +68,13 @@ export default async function SettingsPage() {
       </Card>
 
       <Card className="p-[var(--space-xl)]">
-        <CardHeading overline="دربارهٔ این نسخه" title="آنچه وب می‌تواند و نمی‌تواند" />
+        <CardHeading overline="About this version" title="What the web can and cannot do" />
         <ul className="mt-[var(--space-md)] flex flex-col gap-[var(--space-sm)]">
-          <Capability ok>دیدن کتابخانه، تاریخ شنیدن و آمار</Capability>
-          <Capability ok>پخش مجموعه‌های آنلاین از منبع خودشان</Capability>
-          <Capability ok>یادداشت‌گذاری روی زمان مشخص</Capability>
-          <Capability>پخش فایل‌های روی گوشی — صدا هرگز به سرور نمی‌رود</Capability>
-          <Capability>دانلود برای حالت آفلاین — وب فایل‌سیستم ندارد</Capability>
+          <Capability ok>See your library, listening history and stats</Capability>
+          <Capability ok>Play online collections from their own source</Capability>
+          <Capability ok>Take notes at a specific moment</Capability>
+          <Capability>Play files on your phone — the audio never reaches the server</Capability>
+          <Capability>Download for offline use — the web has no filesystem</Capability>
         </ul>
       </Card>
     </div>

@@ -26,7 +26,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import type { Annotation } from "@/lib/domain/annotation";
-import { fa, formatClockFa } from "@/lib/format";
+import { formatClock } from "@/lib/time";
 
 /** `#abc` and `#aabbcc` only. Anything else is the phone's problem, not the page's. */
 const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
@@ -48,9 +48,9 @@ export function AnnotationPanel({
           <Icon name="note" size="md" />
         </span>
         <div>
-          <p className="type-body-strong text-text">یادداشتی روی این ترک نیست</p>
+          <p className="type-body-strong text-text">No notes on this track</p>
           <p className="type-caption mt-[var(--space-xs)] max-w-[54ch] text-text-tertiary">
-            یادداشت‌ها از اپلیکیشن موبایل همگام می‌شوند؛ در نسخهٔ وب فعلاً فقط خوانده می‌شوند.
+            Notes sync from the mobile app; on the web they are read-only for now.
           </p>
         </div>
       </div>
@@ -69,9 +69,9 @@ export function AnnotationPanel({
  * Where the notes sit in the track.
  *
  * The ticks are positioned with `inset-inline-start`, so the rail runs with the
- * text: in RTL the start of the track is at the right-hand edge, which is where
- * a Persian reader begins. A percentage from `left` would put 0% at the far end
- * of the track for every reader of this app.
+ * text: in LTR the start of the track is at the left-hand edge, which is where
+ * the reading begins. A percentage from `left` would look identical today and
+ * would be wrong the moment the rail sits inside right-to-left content.
  */
 function MarkerRail({
   annotations,
@@ -84,7 +84,7 @@ function MarkerRail({
     <div
       className="relative h-2 rounded-[var(--radius-pill)] bg-surface-sunken"
       role="img"
-      aria-label={`${fa(annotations.length)} یادداشت روی خط زمانی این ترک`}
+      aria-label={`${annotations.length} notes on this track's timeline`}
     >
       {annotations.map((annotation) => {
         const percent = Math.min(100, Math.max(0, (annotation.positionSec / durationSec) * 100));
@@ -111,14 +111,14 @@ function AnnotationList({ annotations }: { annotations: readonly Annotation[] })
       {annotations.map((annotation) => (
         <li key={annotation.id} className="flex gap-[var(--space-md)] py-[var(--space-md)] first:pt-0 last:pb-0">
           <span className="type-numeric shrink-0 pt-[1px] text-text-tertiary">
-            {formatClockFa(annotation.positionSec)}
+            {formatClock(annotation.positionSec)}
           </span>
 
           <div className="min-w-0 flex-1">
             {annotation.text.length > 0 ? (
               <p className="type-body whitespace-pre-wrap break-words text-text">{annotation.text}</p>
             ) : (
-              <p className="type-caption text-text-tertiary">بدون متن — فقط نشانه</p>
+              <p className="type-caption text-text-tertiary">No text — marker only</p>
             )}
 
             {annotation.tags.length > 0 || annotation.timesPlayedBefore > 0 ? (
@@ -130,7 +130,7 @@ function AnnotationList({ annotations }: { annotations: readonly Annotation[] })
                 ))}
                 {annotation.timesPlayedBefore > 0 ? (
                   <span className="type-caption text-text-tertiary">
-                    {fa(annotation.timesPlayedBefore)} بار پیش‌تر شنیده شده
+                    Heard {annotation.timesPlayedBefore} times before
                   </span>
                 ) : null}
               </div>

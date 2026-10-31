@@ -80,7 +80,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggle}
-      aria-label={dark ? "تغییر به پوستهٔ روشن" : "تغییر به پوستهٔ تاریک"}
+      aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
       aria-pressed={dark}
       className="grid size-11 place-items-center rounded-[var(--radius-md)] text-text-secondary transition-colors hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
     >

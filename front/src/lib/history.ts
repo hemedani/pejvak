@@ -24,8 +24,8 @@
  */
 
 import type { HistorySession } from "@/lib/domain/history";
-import { formatClockFa, formatSpan, fa } from "@/lib/format";
-import { formatDayHeading, formatTimeOfDay, formatYear, startOfDay } from "@/lib/time";
+import { formatCount, formatSpan } from "@/lib/format";
+import { formatClock, formatDayHeading, formatTimeOfDay, formatYear, startOfDay } from "@/lib/time";
 
 export type ListeningStretch = {
   id: string;
@@ -163,22 +163,22 @@ export function describeStretchOutcome(stretch: ListeningStretch): StretchOutcom
 /**
  * The verdict as one badge, or `null` while the listen is still open.
  *
- * The words are the app's, not the phone's: mobile renders "Complete" and
- * "Finished" in English, and translating those two would give «کامل» and
- * «تمام», which read as synonyms. «تا پایان ترک» says what `finished` actually
- * means — the last track ran out — and stops it from claiming a complete listen
- * it did not have.
+ * Two words for two facts, and the difference is worth keeping: `complete` means
+ * the whole stretch was heard, from the first second of the first track to the
+ * end of the last; `finished` means only that the last track ran out, which is
+ * also what happens to a listener who opened a book at chapter three. Collapsing
+ * them into one word would let a partial listen claim a complete one.
  */
 export function describeStretchVerdict(
   stretch: ListeningStretch,
 ): { label: string; tone: "accent" | "neutral" | "danger" } | null {
   switch (describeStretchOutcome(stretch)) {
     case "complete":
-      return { label: "کامل", tone: "accent" };
+      return { label: "Complete", tone: "accent" };
     case "finished":
-      return { label: "تا پایان ترک", tone: "neutral" };
+      return { label: "Finished", tone: "neutral" };
     case "interrupted":
-      return { label: "قطع‌شده", tone: "danger" };
+      return { label: "Interrupted", tone: "danger" };
     default:
       return null;
   }
@@ -238,7 +238,7 @@ export function stretchTitleParts(stretch: ListeningStretch): StretchTitle {
   const last = stretch.members[stretch.members.length - 1] ?? null;
 
   const start = {
-    title: first?.track?.title ?? "ترک حذف‌شده",
+    title: first?.track?.title ?? "Deleted track",
     trackId: first?.track?.id ?? null,
   };
 
@@ -249,7 +249,7 @@ export function stretchTitleParts(stretch: ListeningStretch): StretchTitle {
   return {
     start,
     end: {
-      title: last?.track?.title ?? "ترک حذف‌شده",
+      title: last?.track?.title ?? "Deleted track",
       trackId: last?.track?.id ?? null,
     },
   };
@@ -261,10 +261,10 @@ export function describeStretchTitle(stretch: ListeningStretch): string {
   return parts.end === null ? parts.start.title : `${parts.start.title} → ${parts.end.title}`;
 }
 
-/** `۰۹:۱۵ – ۰۹:۲۲` — the clock range a stretch covers. */
+/** `09:15 – 09:22` — the clock range a stretch covers. */
 export function formatStretchTimeRange(stretch: ListeningStretch): string {
   if (stretch.endedAt === null) {
-    return `${formatTimeOfDay(stretch.startedAt)} – در جریان`;
+    return `${formatTimeOfDay(stretch.startedAt)} – in progress`;
   }
   return `${formatTimeOfDay(stretch.startedAt)} – ${formatTimeOfDay(stretch.endedAt)}`;
 }
@@ -273,31 +273,31 @@ export function formatStretchTimeRange(stretch: ListeningStretch): string {
  * The position range inside the tracks, only when the listen actually moved.
  *
  * A session that recorded `0 → 0` — a row synced before the phone tracked
- * positions — would otherwise read «۰:۰۰ – ۰:۰۰» beside every entry.
+ * positions — would otherwise read `0:00 – 0:00` beside every entry.
  */
 export function formatStretchPositionRange(stretch: ListeningStretch): string | null {
   const end = stretch.endPositionSec;
   if (end === null || end <= stretch.startPositionSec) {
     return null;
   }
-  return `${formatClockFa(stretch.startPositionSec)} – ${formatClockFa(end)}`;
+  return `${formatClock(stretch.startPositionSec)} – ${formatClock(end)}`;
 }
 
 /**
- * «۳ قطعه», or `null` for a single-track listen.
+ * `3 tracks`, or `null` for a single-track listen.
  *
  * The count is omitted for one track because the title already says it, and
- * «۱ قطعه» beside one title is noise. A row that prints nothing is more accurate
+ * `1 track` beside one title is noise. A row that prints nothing is more accurate
  * than a row that prints a tautology.
  */
 export function describeStretchTracks(stretch: ListeningStretch): string | null {
-  return stretch.trackCount > 1 ? `${fa(stretch.trackCount)} قطعه` : null;
+  return stretch.trackCount > 1 ? `${stretch.trackCount} tracks` : null;
 }
 
 /** A section of the list: one calendar day, or a flat list. */
 export type HistorySection = {
   key: string;
-  /** Persian day label, or null for a flat list. */
+  /** Day label ("Today", "October 14"), or null for a flat list. */
   title: string | null;
   data: ListeningStretch[];
   /** Total listened time in the group; enables a day header figure. */
@@ -316,7 +316,7 @@ export type HistorySection = {
  * second opinion about "recent".
  *
  * The year is printed only when the day is not in the current year. A history
- * from three years ago must not show two «۱۴ مهر» headings with no way to tell
+ * from three years ago must not show two "October 14" headings with no way to tell
  * them apart.
  */
 export function buildHistorySections(
@@ -344,9 +344,9 @@ export function buildHistorySections(
       const sameYear = new Date(key).getFullYear() === currentYear;
       const title =
         key === today
-          ? "امروز"
+          ? "Today"
           : key === yesterday
-            ? "دیروز"
+            ? "Yesterday"
             : sameYear
               ? formatDayHeading(key)
               : `${formatDayHeading(key)} ${formatYear(key)}`;
@@ -363,7 +363,7 @@ export function buildHistorySections(
 /** The count and the total of one page — never a lifetime figure. */
 export function describeHistorySummary(stretches: readonly ListeningStretch[]): string {
   const listenedSec = stretches.reduce((total, stretch) => total + stretch.listenedSec, 0);
-  return `${fa(stretches.length)} شنیدن در این صفحه · ${formatSpan(listenedSec)}`;
+  return `${formatCount(stretches.length, "session")} on this page · ${formatSpan(listenedSec)}`;
 }
 
 /**
@@ -371,7 +371,7 @@ export function describeHistorySummary(stretches: readonly ListeningStretch[]): 
  *
  * `from`/`to` arrive as `YYYY-MM-DD` and are parsed at local midnight, because
  * that is the day the listener means. `to` is inclusive, so it covers the whole
- * day: an end date of «۳۰ مهر» that stopped at midnight would hide everything
+ * day: an end date of "October 30" that stopped at midnight would hide everything
  * heard on the 30th.
  *
  * An invalid or reversed range is not an error state. It is ignored, with a
@@ -440,7 +440,7 @@ export function isoDay(timestamp: number): string {
 /**
  * A `/history` URL from the state the page is in.
  *
- * One builder for both controls, so the «قدیمی‌تر» link and the retry link
+ * One builder for both controls, so the "Older" link and the retry link
  * cannot disagree about which range is active:
  *
  *   · a cursor of 0 is the first page, so it is omitted — `/history?after=0`

@@ -14,21 +14,21 @@ import Link from "next/link";
 
 import { Icon } from "@/components/ui/icon";
 import type { TopTrackRow } from "@/lib/insights";
-import { fa, faNumber, formatSpan } from "@/lib/format";
+import { formatNumber, formatSpan } from "@/lib/format";
 import { formatRelativeTime } from "@/lib/time";
 
 export function TopTracksTable({ rows, now }: { rows: readonly TopTrackRow[]; now: number }) {
   return (
     <div className="overflow-hidden rounded-[var(--radius-card)] border border-outline-variant bg-surface shadow-[var(--elevation-card)]">
       <table className="w-full border-collapse text-start">
-        <caption className="sr-only">ده ترک با بیشترین زمان شنیدن</caption>
+        <caption className="sr-only">The ten tracks with the most listening time</caption>
         <thead>
           <tr className="border-b border-outline-variant">
             <Th className="w-10 text-center">#</Th>
-            <Th>عنوان</Th>
-            <Th className="hidden sm:table-cell">زمان شنیدن</Th>
-            <Th className="hidden text-center md:table-cell">بار پخش</Th>
-            <Th className="hidden text-end lg:table-cell">آخرین بار</Th>
+            <Th>Title</Th>
+            <Th className="hidden sm:table-cell">Listening time</Th>
+            <Th className="hidden text-center md:table-cell">Plays</Th>
+            <Th className="hidden text-end lg:table-cell">Last played</Th>
           </tr>
         </thead>
         <tbody>
@@ -38,7 +38,7 @@ export function TopTracksTable({ rows, now }: { rows: readonly TopTrackRow[]; no
               className="border-b border-outline-variant last:border-b-0 hover:bg-surface-sunken/60"
             >
               <td className="type-numeric py-[var(--space-md)] text-center text-text-tertiary">
-                {fa(index + 1)}
+                {index + 1}
               </td>
 
               <td className="py-[var(--space-md)] pe-[var(--space-md)]">
@@ -63,7 +63,7 @@ export function TopTracksTable({ rows, now }: { rows: readonly TopTrackRow[]; no
                     ) : (
                       <>
                         <p className="type-label truncate text-text-tertiary">
-                          ترک در کتابخانه نیست
+                          Not in your library
                         </p>
                         <p className="type-caption truncate text-text-tertiary" dir="ltr">
                           {row.contentHash.slice(0, 12)}…
@@ -79,7 +79,7 @@ export function TopTracksTable({ rows, now }: { rows: readonly TopTrackRow[]; no
               </td>
 
               <td className="type-numeric hidden py-[var(--space-md)] text-center text-text-secondary md:table-cell">
-                {faNumber(row.playCount)}
+                {formatNumber(row.playCount)}
               </td>
 
               <td className="type-caption hidden py-[var(--space-md)] text-end text-text-tertiary lg:table-cell">

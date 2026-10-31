@@ -35,9 +35,15 @@
   }
 
   html {
-    /* RTL is structural (D10, §7.7). `dir` is on the element; this keeps form
-       controls and scrollbars agreeing with it. */
-    direction: rtl;
+    /* Direction is structural (D10, §7.7). `dir` is on the element; this keeps
+       form controls and scrollbars agreeing with it.
+
+       The app is **LTR**: English is the product language, and it ships to the
+       global store in English only. A Persian *title* from the catalogue is the
+       one thing that renders right-to-left, and it says so locally with `dir` on
+       the text itself — the document direction is not something content can
+       change. */
+    direction: ltr;
     -webkit-text-size-adjust: 100%;
   }
 

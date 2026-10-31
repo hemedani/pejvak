@@ -44,7 +44,7 @@ export function SourceCard({ source, href }: { source: OnlineSource; href: strin
             ) : null}
             {source.live ? (
               <Badge tone="accent" size="sm">
-                زنده
+                Live
               </Badge>
             ) : null}
           </div>

@@ -4,8 +4,8 @@ import { cookies } from "next/headers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "پژواک", template: "%s · پژواک" },
-  description: "کنسول شنیدن پژواک: کتابخانه، تاریخ شنیدن و پخش آنلاین.",
+  title: { default: "Pejvak", template: "%s · Pejvak" },
+  description: "The Pejvak listening console: your library, your listening history, and online playback.",
 };
 
 export const viewport: Viewport = {
@@ -33,8 +33,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html
-      lang="fa"
-      dir="rtl"
+      lang="en"
+      dir="ltr"
       className={dark ? "dark" : undefined}
       // The bootstrap script may add `.dark` before hydration, so the server's
       // class and the client's first read can differ by design.

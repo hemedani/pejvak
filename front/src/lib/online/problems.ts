@@ -1,7 +1,7 @@
 /**
  * What a source's failure says to the listener.
  *
- * A third-party failure has two audiences. The listener needs one Persian
+ * A third-party failure has two audiences. The listener needs one
  * sentence that tells them what happened and whether trying again is worth it;
  * the developer needs the source's own error, which belongs in a `<details>` and
  * in the log, never in the heading.
@@ -26,11 +26,11 @@ import type { ActFailure } from "@/lib/result";
 export type OnlineProblemCode = "offline" | "timeout" | "not_found" | "invalid_response" | "unavailable";
 
 const COPY: Record<OnlineProblemCode, string> = {
-  offline: "به منبع وصل نشدیم. اتصال خود را بررسی کنید.",
-  timeout: "منبع دیر جواب داد. دوباره تلاش کنید.",
-  invalid_response: "پاسخ منبع خوانا نبود. شاید ساختارش عوض شده است.",
-  not_found: "این مجموعه در منبع پیدا نشد.",
-  unavailable: "این منبع فعلاً در دسترس نیست.",
+  offline: "Could not reach the source. Check your connection.",
+  timeout: "The source took too long to answer. Try again.",
+  invalid_response: "The source's reply could not be read. Its structure may have changed.",
+  not_found: "That collection was not found at this source.",
+  unavailable: "This source is not available right now.",
 };
 
 export function onlineProblemMessage(code: OnlineProblemCode): string {

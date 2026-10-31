@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { EmptyState } from "@/components/ui/state";
-import { fa } from "@/lib/format";
+import { formatNumber } from "@/lib/format";
 import {
   collectionKey,
   describeKnownTrackCount,
@@ -66,7 +66,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }) 
   const { sourceId, externalId } = await params;
   const source = findSource(sourceId);
   if (!source) {
-    return { title: "مجموعه" };
+    return { title: "Collection" };
   }
   // The catalogue cache makes this a second read of an answer the page needs
   // anyway, not a second request to the source.
@@ -130,12 +130,12 @@ export default async function CollectionPage({ params }: { params: Promise<Param
   const resumable = resumeRun !== null;
 
   const playLabel = source.live
-    ? "پخش زنده"
+    ? "Play live"
     : resumable
-      ? `ادامه از قطعهٔ ${fa(startIndex + 1)}`
+      ? `Continue from track ${formatNumber(startIndex + 1)}`
       : lastRun
-        ? "پخش دوباره"
-        : "پخش";
+        ? "Play again"
+        : "Play";
 
   const playable: PlayableCollection = {
     key: collection.key,
@@ -221,7 +221,7 @@ export default async function CollectionPage({ params }: { params: Promise<Param
                   tracks={tracks}
                   index={0}
                   startPositionSec={0}
-                  label="از ابتدا"
+                  label="From the start"
                   variant="secondary"
                   size="md"
                 />
@@ -235,7 +235,7 @@ export default async function CollectionPage({ params }: { params: Promise<Param
                 <Button asChild variant="ghost" size="md">
                   <a href={collection.pageUrl} target="_blank" rel="noreferrer noopener">
                     <Icon name="external" size="sm" />
-                    صفحهٔ منبع
+                    Source page
                   </a>
                 </Button>
               ) : null}
@@ -246,16 +246,16 @@ export default async function CollectionPage({ params }: { params: Promise<Param
 
       <Card className="overflow-hidden p-0">
         <div className="flex items-center justify-between gap-[var(--space-md)] border-b border-outline-variant px-[var(--space-lg)] py-[var(--space-md)]">
-          <h2 className="type-heading text-text">قطعه‌ها</h2>
-          <span className="type-numeric text-text-tertiary">{fa(tracks.length)}</span>
+          <h2 className="type-heading text-text">Tracks</h2>
+          <span className="type-numeric text-text-tertiary">{formatNumber(tracks.length)}</span>
         </div>
 
         {tracks.length === 0 ? (
           <EmptyState
             icon="empty"
-            title="این مجموعه قطعه‌ای ندارد"
-            description="منبع مجموعه را می‌شناسد، اما برایش فایلی برنگرداند."
-            action={{ label: "بازگشت به منبع", href: `/browse/source/${source.id}` }}
+            title="This collection has no tracks"
+            description="The source knows the collection, but returned no files for it."
+            action={{ label: "Back to the source", href: `/browse/source/${source.id}` }}
           />
         ) : (
           <TrackList source={source} collection={playable} tracks={tracks} />

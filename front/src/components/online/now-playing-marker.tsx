@@ -40,7 +40,7 @@ export function NowPlayingMarker({
       {active ? (
         <>
           <span aria-hidden className="size-2 rounded-full bg-accent" />
-          <span className="sr-only">در حال پخش</span>
+          <span className="sr-only">Playing now</span>
         </>
       ) : null}
     </span>

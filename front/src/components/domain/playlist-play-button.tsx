@@ -88,7 +88,7 @@ export function PlaylistPlayButton({
 
       await playQueueAt(queue, index, { context, startPositionSec });
     } catch {
-      setError("پخش آغاز نشد. دوباره تلاش کنید.");
+      setError("Playback did not start. Try again.");
     } finally {
       busy.current = false;
       setPending(false);
@@ -106,7 +106,7 @@ export function PlaylistPlayButton({
         aria-busy={pending || undefined}
       >
         <Icon name="play" size="sm" />
-        پخش
+        Play
       </Button>
 
       {error ? (

@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState } from "@/components/ui/state";
-import { fa } from "@/lib/format";
+import { formatCount } from "@/lib/format";
 import { findLanguage, sourcesForLanguage } from "@/lib/online";
 
 /**
@@ -20,7 +20,7 @@ import { findLanguage, sourcesForLanguage } from "@/lib/online";
 export async function generateMetadata({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   const language = findLanguage(code);
-  return { title: language ? language.nativeName : "زبان" };
+  return { title: language ? language.nativeName : "Language" };
 }
 
 export default async function LanguagePage({ params }: { params: Promise<{ code: string }> }) {
@@ -39,16 +39,16 @@ export default async function LanguagePage({ params }: { params: Promise<{ code:
         className="type-caption inline-flex w-fit items-center gap-[var(--space-xs)] text-text-secondary transition-colors hover:text-text"
       >
         <Icon name="start" size="sm" />
-        همهٔ زبان‌ها
+        All languages
       </Link>
 
       <PageHeader
-        overline="زبان"
+        overline="Language"
         title={language.nativeName}
         description={
           sources.length > 0
-            ? `${language.name} · ${fa(sources.length)} منبع`
-            : `${language.name} · هنوز منبعی نیست`
+            ? `${language.name} · ${formatCount(sources.length, "source")}`
+            : `${language.name} · no sources yet`
         }
       />
 
@@ -56,9 +56,9 @@ export default async function LanguagePage({ params }: { params: Promise<{ code:
         <Card>
           <EmptyState
             icon="browse"
-            title="هنوز منبعی برای این زبان نیست"
-            description="فهرست زبان‌ها کامل است، اما هر زبانی هنوز منبعی ندارد."
-            action={{ label: "زبان دیگر", href: "/browse" }}
+            title="No source for this language yet"
+            description="The language list is complete, but not every language has a source yet."
+            action={{ label: "Another language", href: "/browse" }}
           />
         </Card>
       ) : (

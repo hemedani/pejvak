@@ -44,7 +44,7 @@ export function ContinueShelf({ items }: { items: readonly ContinueItem[] }) {
                 collection={playable}
                 index={live ? 0 : item.lastIndex}
                 startPositionSec={live ? 0 : item.resumeTargetSec}
-                label={live ? "پخش زنده" : "ادامه"}
+                label={live ? "Live" : "Continue"}
                 variant="secondary"
                 size="sm"
               />

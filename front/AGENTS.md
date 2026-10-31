@@ -36,11 +36,18 @@ experimental flags to get a 401 page when `redirect()` already works.
 3. **Never redirect a non-GET in `proxy.ts`.** Server Actions are POSTs to the page's own
    route; answering one with a 307 produces "unexpected response from the server" with no
    clue in it. Auth is re-checked inside every action.
-4. **Persian only, RTL only** (D10). No locale switcher, no English strings in the UI —
-   including backend error messages, which are translated in `lib/messages.ts`.
-5. **`dir="rtl"` is structural.** Logical properties only (`ps-`/`pe-`/`ms-`/`me-`/
-   `start-`/`end-`), never `left`/`right`. Base-UI primitives default to LTR: pass
-   `dir="rtl"` explicitly.
+4. **English only, LTR only** (D10). No locale switcher, no Persian strings in the UI — including
+   backend error messages, which are turned into sentences in `lib/messages.ts`. The product is intended
+   for sale on the global store, which is why the web app ships in English and in the same single
+   language as the phone app. **Catalogue content is not copy**: a Persian collection title, a language's
+   native name (`فارسی`) and the Persian folding tables in `lib/search.ts` are data. Do not translate them.
+5. **Direction is structural.** `dir="ltr"` on `<html>`. Logical properties only (`ps-`/`pe-`/
+   `ms-`/`me-`/`start-`/`end-`), never `left`/`right` — that is what makes the one RTL exception
+   (a Persian title) safe to nest. Radix/base-UI primitives default to LTR, which now matches the app;
+   the five that are told `dir="ltr"` explicitly (account menu, sheet, volume, scrubber, speed menu) are
+   self-documenting rather than load-bearing. The one place direction is decided for the whole app is
+   `components/ui/icon.tsx`, where `start` is `ChevronLeft` and `end` is `ChevronRight` — flipping those
+   two glyphs is the whole chevron story.
 6. **Two materials.** Opaque `surface` for anything read; glass only for what floats.
    A frosted content card is the mistake the split exists to prevent.
 7. **Four states, not one** (plan §6.4). Every data surface renders skeleton, empty, error
@@ -102,7 +109,7 @@ src/
 │   ├── (shell)/               behind the guard: layout.tsx IS the guard
 │   ├── actions/<domain>/      one verb per file, "use server"
 │   ├── api/session/expired/   the only place a stale cookie is deleted
-│   └── layout.tsx             <html dir="rtl" lang="fa">
+│   └── layout.tsx             <html dir="ltr" lang="en">
 ├── components/{ui,layout,domain}
 ├── lib/
 │   ├── call-act.ts            the one path to the backend
@@ -143,15 +150,22 @@ is why the gate ends with `next build` and not with `tsc`.
 These are pure TypeScript in `mobile/src/lib/` and were copied with their tests, not
 rewritten. Keep the comments: they encode the reasons.
 
-`search.ts` · `time.ts` (except `formatRelativeTime`, see below) · `librarySearch.ts` ·
+`search.ts` · `time.ts` · `format.ts` · `librarySearch.ts` ·
 `sessionTracking.ts` · `playbackContext.ts` · `listeningStretch.ts` · `online/*`.
 
-Two edits were made on the way in, and both are deliberate:
+**Nothing was rewritten on the way in.** Both of these were once exceptions, made under the
+Persian-only decision, and the English-only decision (D10) removed them — the ports are now the
+phone's code:
 
-- `describeField()` returns Persian labels — the mobile version returned English words.
-  The test that pins them changed with it.
-- `formatRelativeTime()` uses `Intl.RelativeTimeFormat("fa")` instead of the English
-  strings the phone used, so Persian plurals come from ICU rather than from a table.
+- `describeField()` returns `Author` / `Album` / `Narrator` / `File name` / `Folder` / `Path` /
+  `Description` / `Title`, exactly as the phone does. A row that explains "why is this a result"
+  must use the same word the UI uses for that field.
+- `formatRelativeTime()` returns the phone's words — `"Just now"`, `"3 hr ago"`, `"Yesterday"`,
+  `"3 days ago"`, then a date. `Intl.RelativeTimeFormat` was tried and produced different words
+  for the same event, which is the bug this avoids.
+
+**Every `Intl` call pins `"en-US"`.** Not the runtime default: a date that renders `31/10/2026`
+on one machine and `10/31/2026` on another is a screenshot that cannot be trusted.
 
 ---
 
@@ -181,5 +195,5 @@ when `check` is green and the phase's "Done when" line is true.
 - **TypeScript:** `strict`, no `any`, no non-null `!` where a guard reads better. Types
   come from `selectInp.ts`; the wire is decoded once, in `lib/domain/`.
 - **Naming:** `PascalCase.tsx`, `camelCase.ts`, route folders `kebab-case`.
-- **Text:** UI copy is Persian. Code, comments and commits are English.
+- **Text:** UI copy is English (D10). Code, comments and commits are English too.
 - **A new act** is added to plan §8 in the same commit that uses it.

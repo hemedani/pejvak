@@ -49,15 +49,15 @@ describe("describeKnownTrackCount", () => {
   });
 
   it("speaks as soon as the size is known", () => {
-    expect(describeKnownTrackCount(1)).toBe("۱ قطعه");
-    expect(describeKnownTrackCount(35)).toBe("۳۵ قطعه");
+    expect(describeKnownTrackCount(1)).toBe("1 track");
+    expect(describeKnownTrackCount(35)).toBe("35 tracks");
   });
 });
 
 describe("describeCollectionLine", () => {
   it("joins the grouping and the known size", () => {
     expect(describeCollectionLine({ subtitle: "اخلاق", trackCount: 41 })).toBe(
-      "اخلاق · ۴۱ قطعه",
+      "اخلاق · 41 tracks",
     );
   });
 
@@ -66,7 +66,7 @@ describe("describeCollectionLine", () => {
   });
 
   it("omits a missing grouping line", () => {
-    expect(describeCollectionLine({ subtitle: null, trackCount: 29 })).toBe("۲۹ قطعه");
+    expect(describeCollectionLine({ subtitle: null, trackCount: 29 })).toBe("29 tracks");
   });
 
   it("says nothing when neither half is true", () => {

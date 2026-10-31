@@ -4,7 +4,7 @@
  * ## Why this is a module
  *
  * A Server Component renders once per request, so reading the clock there is not
- * impurity — it is the whole point of a page that says "۲ ساعت پیش". But the
+ * impurity — it is the whole point of a page that says "2 hours ago". But the
  * React lint rule `react-hooks/purity` cannot tell a Server Component from a
  * Client one: it sees `Date.now()` in a component body and flags it, and it is
  * right to, because the same code in a Client Component would break memoisation

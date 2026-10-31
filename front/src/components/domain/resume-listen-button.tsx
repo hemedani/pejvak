@@ -27,7 +27,7 @@ import { getTrackDetail } from "@/app/actions/tracks/get-track-detail";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { isPlayableOnWeb } from "@/lib/domain/track";
-import { formatClockFa } from "@/lib/format";
+import { formatClock } from "@/lib/time";
 import { failureMessage } from "@/lib/messages";
 import { playQueueAt } from "@/lib/player/controller";
 import { playerTrackFromTrack } from "@/lib/player/from-track";
@@ -62,13 +62,13 @@ export function ResumeListenButton({
   }
 
   const startAt = live ? 0 : Math.max(0, Math.round(positionSec));
-  const label = live ? "پخش زنده" : kind === "continue" ? "ادامه" : "پخش دوباره";
-  // The position is part of the accessible name, not a tooltip: "ادامه" alone
+  const label = live ? "Live" : kind === "continue" ? "Continue" : "Play again";
+  // The position is part of the accessible name, not a tooltip: "Continue" alone
   // does not say where, and a screen reader has no title attribute to read.
-  const position = live ? label : `${label} از ${formatClockFa(startAt)}`;
-  // The track is named as well: a list of eight «ادامه از ۲:۰۵» rows is
+  const position = live ? label : `${label} from ${formatClock(startAt)}`;
+  // The track is named as well: a list of eight "Continue from 2:05" rows is
   // indistinguishable to someone listening to the screen.
-  const accessible = `${position}، ${title}`;
+  const accessible = `${position}, ${title}`;
 
   if (!playable) {
     return (
@@ -77,7 +77,7 @@ export function ResumeListenButton({
           <Icon name="play" size="sm" />
           {label}
         </Button>
-        <span className="type-caption text-text-tertiary">صدا روی گوشی است</span>
+        <span className="type-caption text-text-tertiary">Audio is on your phone</span>
       </div>
     );
   }
@@ -98,13 +98,13 @@ export function ResumeListenButton({
         return;
       }
       if (result.body === null) {
-        setError("این ترک پیدا نشد.");
+        setError("That track could not be found.");
         return;
       }
 
       const track = result.body;
       if (!isPlayableOnWeb(track)) {
-        setError("صدا روی گوشی است.");
+        setError("The audio for this track is on your phone.");
         return;
       }
 
@@ -114,7 +114,7 @@ export function ResumeListenButton({
       const position = isLiveSource(track.sourceId) ? 0 : startAt;
       await playQueueAt(queue, 0, { startPositionSec: position });
     } catch {
-      setError("پخش آغاز نشد. دوباره تلاش کنید.");
+      setError("Playback did not start. Try again.");
     } finally {
       busy.current = false;
       setPending(false);

@@ -7,12 +7,12 @@
  *   · **A verdict is reported, never recomputed.** `completed`, `interrupted`
  *     and `seeked` are the phone's. A stretch that ran to the end of its last
  *     track but started at 0:30 has *not* been heard, and must never be labelled
- *     «کامل» — that is a stronger claim than the stored row supports.
+ *     "Complete" — that is a stronger claim than the stored row supports.
  *   · **A day is a number, not a string.** Bucketing on a formatted heading
  *     merges two different days whenever the calendar and the zone disagree, and
  *     the list silently loses one.
  *
- * The fixtures are local-time `Date`s on purpose: `startOfDay`, «امروز» and the
+ * The fixtures are local-time `Date`s on purpose: `startOfDay`, "Today" and the
  * Jalali heading all read the machine's zone, so a test written in UTC offsets
  * would pass in one zone and fail in another.
  */
@@ -248,7 +248,7 @@ describe("titles", () => {
     ])!;
 
     expect(describeStretchTitle(stretch)).toBe("اول → آخر");
-    expect(describeStretchTracks(stretch)).toBe("۲ قطعه");
+    expect(describeStretchTracks(stretch)).toBe("2 tracks");
   });
 
   it("falls back to a removed-track label with no id to link", () => {
@@ -258,21 +258,21 @@ describe("titles", () => {
     ])!;
 
     const parts = stretchTitleParts(stretch);
-    expect(parts.start).toEqual({ title: "ترک حذف‌شده", trackId: null });
-    expect(parts.end).toEqual({ title: "ترک حذف‌شده", trackId: null });
+    expect(parts.start).toEqual({ title: "Deleted track", trackId: null });
+    expect(parts.end).toEqual({ title: "Deleted track", trackId: null });
   });
 });
 
 describe("verdicts", () => {
-  it("never calls a finished-but-not-complete listen «کامل»", () => {
+  it("never calls a finished-but-not-complete listen «Complete»", () => {
     const finished = buildStretch([session({ startPositionSec: 30 })])!;
     expect(describeStretchVerdict(finished)).toEqual({
-      label: "تا پایان ترک",
+      label: "Finished",
       tone: "neutral",
     });
 
     const complete = buildStretch([session()])!;
-    expect(describeStretchVerdict(complete)).toEqual({ label: "کامل", tone: "accent" });
+    expect(describeStretchVerdict(complete)).toEqual({ label: "Complete", tone: "accent" });
   });
 
   it("has no badge while the listen is still open", () => {
@@ -287,12 +287,12 @@ describe("meta lines", () => {
     expect(formatStretchPositionRange(stuck)).toBeNull();
 
     const moved = buildStretch([session({ startPositionSec: 0, endPositionSec: 240 })])!;
-    expect(formatStretchPositionRange(moved)).toBe("۰:۰۰ – ۴:۰۰");
+    expect(formatStretchPositionRange(moved)).toBe("0:00 – 4:00");
   });
 
   it("says a stretch is still running when it has no end", () => {
     const open = buildStretch([session({ endedAt: null })])!;
-    expect(formatStretchTimeRange(open)).toContain("در جریان");
+    expect(formatStretchTimeRange(open)).toContain("in progress");
   });
 });
 
@@ -310,8 +310,8 @@ describe("buildHistorySections", () => {
     );
 
     expect(sections.map((section) => section.title)).toEqual([
-      "امروز",
-      "دیروز",
+      "Today",
+      "Yesterday",
       `${formatDayHeading(lastYear)} ${formatYear(lastYear)}`,
     ]);
   });
@@ -327,7 +327,7 @@ describe("buildHistorySections", () => {
 
     const [section] = buildHistorySections([stretch], now);
     expect(section!.key).toBe(String(startOfDay(lateEvening)));
-    expect(section!.title).toBe("دیروز");
+    expect(section!.title).toBe("Yesterday");
   });
 
   it("orders days newest first and sums each day's listening", () => {
@@ -351,7 +351,7 @@ describe("buildHistorySections", () => {
 
   it("says how many listens this page holds, never a lifetime figure", () => {
     expect(describeHistorySummary([stretchAt(today, "a"), stretchAt(today, "b")])).toBe(
-      "۲ شنیدن در این صفحه · ۲۰ دقیقه",
+      "2 sessions on this page · 20 min",
     );
   });
 });
@@ -408,7 +408,7 @@ describe("parseHistorySession", () => {
   it("asks for the track fields a row prints", () => {
     // A projection typo is a compile error, but this is the net under the
     // declarations: if `track` is ever dropped from the projection the row
-    // silently becomes «ترک حذف‌شده» for every session.
+    // silently becomes "Deleted track" for every session.
     expect(HISTORY_SESSION_GET.track).toMatchObject({
       _id: 1,
       contentHash: 1,

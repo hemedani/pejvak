@@ -66,7 +66,7 @@ export async function playOnlineCollection(input: {
 }): Promise<PlayResult> {
   const source = findSource(input.collection.sourceId);
   if (!source) {
-    return { ok: false, message: "این منبع شناخته نشد." };
+    return { ok: false, message: "That source is not recognised." };
   }
 
   let tracks = input.tracks ? [...input.tracks] : null;
@@ -82,7 +82,7 @@ export async function playOnlineCollection(input: {
   }
 
   if (tracks.length === 0) {
-    return { ok: false, message: "این مجموعه قطعهٔ قابل‌پخشی ندارد." };
+    return { ok: false, message: "This collection has nothing that can be played." };
   }
 
   const index = Math.max(0, Math.min(input.index ?? 0, tracks.length - 1));

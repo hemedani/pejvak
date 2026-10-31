@@ -305,14 +305,14 @@ describe("highlight", () => {
 });
 
 describe("describeField", () => {
-  // Ported from mobile, where these labels were English. The web UI is Persian
-  // only (D10), so the label a row uses to explain "why is this a result" has to
-  // be Persian too — an English word in the middle of a Persian row reads as a
-  // bug, not as a technical term.
+  // The label a row uses to explain "why is this a result". It has to be the
+  // same word the UI uses for that field, so it lives in English alongside every
+  // other string (D10) rather than staying as the phone's original labels.
   it("names the field so a row can explain why it is a result", () => {
-    expect(describeField("fileName")).toBe("نام فایل");
-    expect(describeField("folder")).toBe("مجموعه");
-    expect(describeField("path")).toBe("مسیر");
-    expect(describeField("title")).toBe("عنوان");
+    expect(describeField("fileName")).toBe("File name");
+    expect(describeField("folder")).toBe("Folder");
+    expect(describeField("path")).toBe("Path");
+    expect(describeField("title")).toBe("Title");
+    expect(describeField("author")).toBe("Author");
   });
 });

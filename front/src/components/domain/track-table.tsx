@@ -18,9 +18,9 @@ import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import type { TrackSummary } from "@/lib/domain/track";
 import { cn } from "@/lib/cn";
-import { faNumber, formatClockFa, formatSpan } from "@/lib/format";
+import { formatCount, formatSpan } from "@/lib/format";
 import { highlight } from "@/lib/search";
-import { formatRelativeTime } from "@/lib/time";
+import { formatClock, formatRelativeTime } from "@/lib/time";
 import type { TrackSortField } from "@/lib/domain/track-query";
 
 export type SortState = { field: TrackSortField; order: "asc" | "desc" };
@@ -47,23 +47,23 @@ export function TrackTable({ tracks, sort, buildSortHref, now, matches }: TrackR
       {/* Table: md and up. */}
       <div className="hidden overflow-hidden rounded-[var(--radius-card)] border border-outline-variant bg-surface shadow-[var(--elevation-card)] md:block">
         <table className="w-full border-collapse">
-          <caption className="sr-only">کتابخانهٔ شما</caption>
+          <caption className="sr-only">Your library</caption>
           <thead>
             <tr className="border-b border-outline-variant">
-              <SortHeader field="title" label="عنوان" sort={sort} buildHref={buildSortHref} />
+              <SortHeader field="title" label="Title" sort={sort} buildHref={buildSortHref} />
               <SortHeader
                 field="lastPlayedAt"
-                label="آخرین پخش"
+                label="Last played"
                 sort={sort}
                 buildHref={buildSortHref}
                 className="hidden lg:table-cell"
               />
               <th scope="col" className="type-caption px-[var(--space-md)] py-[var(--space-sm)] text-center font-semibold text-text-tertiary">
-                زمان شنیدن
+                Listening time
               </th>
               <SortHeader
                 field="createdAt"
-                label="افزوده"
+                label="Added"
                 sort={sort}
                 buildHref={buildSortHref}
                 className="hidden xl:table-cell"
@@ -95,7 +95,7 @@ export function TrackTable({ tracks, sort, buildSortHref, now, matches }: TrackR
 
                 <td className="type-caption hidden py-[var(--space-md)] px-[var(--space-md)] text-text-tertiary xl:table-cell">
                   <span className="type-numeric">
-                    {faNumber(track.totalPlayCount)} بار · {formatClockFa(track.durationSec)}
+                    {formatCount(track.totalPlayCount, "play")} · {formatClock(track.durationSec)}
                   </span>
                 </td>
               </tr>
@@ -114,7 +114,7 @@ export function TrackTable({ tracks, sort, buildSortHref, now, matches }: TrackR
             <TitleCell track={track} matches={matches} />
             <div className="mt-[var(--space-sm)] flex items-center justify-between gap-[var(--space-sm)]">
               <span className="type-numeric text-text-secondary">
-                {track.totalListenTimeSec === 0 ? "شنیده نشده" : formatSpan(track.totalListenTimeSec)}
+                {track.totalListenTimeSec === 0 ? "Not listened" : formatSpan(track.totalListenTimeSec)}
               </span>
               <span className="type-caption text-text-tertiary">
                 {track.lastPlayedAt === null ? "—" : formatRelativeTime(track.lastPlayedAt, now)}
@@ -169,7 +169,7 @@ function TitleCell({
         {/* §9.6: a local track is not an error and not a disabled button — it is a
             fact about where the audio is. Stated, not apologised for. */}
         {track.origin === "local" ? (
-          <p className="type-caption mt-[2px] text-text-tertiary">صدا روی دستگاه شماست</p>
+          <p className="type-caption mt-[2px] text-text-tertiary">Audio is on your device</p>
         ) : null}
       </div>
     </div>
@@ -216,14 +216,14 @@ function OriginBadge({ track }: { track: TrackSummary }) {
   if (track.origin === "local") {
     return (
       <Badge tone="muted" size="sm">
-        محلی
+        Local
       </Badge>
     );
   }
 
   return (
     <Badge tone="accent" size="sm">
-      آنلاین
+      Online
     </Badge>
   );
 }

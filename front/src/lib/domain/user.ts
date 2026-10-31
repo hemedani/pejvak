@@ -59,5 +59,5 @@ export function displayNameOf(user: CurrentUser): string {
 /** The first glyph of the name, for an avatar with no image. */
 export function initialOf(user: CurrentUser): string {
   const name = displayNameOf(user).trim();
-  return name.length > 0 ? name.slice(0, 1) : "؟";
+  return name.length > 0 ? name.slice(0, 1).toUpperCase() : "?";
 }

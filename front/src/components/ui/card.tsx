@@ -30,9 +30,8 @@ export function Card({ className, ...rest }: ComponentProps<"section">) {
 /**
  * A card's heading block: an eyebrow and a title.
  *
- * `overline` above `heading` rather than beside it — a Persian label set to the
- * left of a title competes with it for the same line, and in RTL "left" is the
- * reading edge.
+ * `overline` above `heading` rather than beside it — a label set beside a title
+ * competes with it for the same line, and it would sit on the reading edge.
  */
 export function CardHeading({
   overline,

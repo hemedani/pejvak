@@ -41,12 +41,18 @@ describe("problemCodeFor", () => {
 });
 
 describe("onlineProblemMessage", () => {
-  it("answers every code with Persian, never with an empty string", () => {
+  it("answers every code with a sentence, never with an empty string", () => {
     for (const code of ["offline", "timeout", "not_found", "invalid_response", "unavailable"] as const) {
       const message = onlineProblemMessage(code);
       expect(message.length).toBeGreaterThan(0);
-      // A sentence in the listener's language, not the source's.
-      expect(/[a-z]/i.test(message)).toBe(false);
+      // A sentence for the listener, not the source's own error text.
+      expect(message).toMatch(/^[A-Z].*\.$/);
     }
+  });
+
+  it("keeps timeout and offline apart", () => {
+    // Both arrive as `kind: "offline"`, so identical copy would tell a listener
+    // with a working connection to check it.
+    expect(onlineProblemMessage("timeout")).not.toBe(onlineProblemMessage("offline"));
   });
 });

@@ -91,8 +91,8 @@ export function LibrarySearch({ initialQuery }: { initialQuery: string }) {
         type="search"
         value={value}
         onChange={(event) => setValue(event.target.value)}
-        placeholder="جست‌وجوی عنوان، نویسنده یا مجموعه…"
-        aria-label="جست‌وجو در کتابخانه"
+        placeholder="Search by title, author or collection…"
+        aria-label="Search the library"
         className="h-11 w-full rounded-[var(--radius-pill)] border border-outline-strong bg-surface-sunken ps-10 pe-[var(--space-lg)] type-body text-text placeholder:text-text-tertiary focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
       />
 
@@ -100,7 +100,7 @@ export function LibrarySearch({ initialQuery }: { initialQuery: string }) {
         <button
           type="button"
           onClick={clear}
-          aria-label="پاک کردن جست‌وجو"
+          aria-label="Clear search"
           className="absolute inset-y-0 end-[var(--space-sm)] grid place-items-center px-[var(--space-sm)] text-text-tertiary hover:text-text"
         >
           <Icon name="close" size="sm" />

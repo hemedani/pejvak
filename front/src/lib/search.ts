@@ -244,29 +244,28 @@ export type SearchFieldName =
 /**
  * The label a row uses to say *why* it is a result.
  *
- * Ported from mobile, where these were English words ("file name", "folder").
- * The web UI has no English in it (D10), so the labels are Persian — and this is
- * the only line of the port that changed. The test that pins them changed with
- * it.
+ * These are the phone's own words ("file name", "folder"), restored: the port
+ * translated them to Persian for a Persian-only web UI (D10), and the UI is
+ * English again, so the port is now literal and the labels match the phone's.
  */
 export function describeField(field: SearchFieldName): string {
   switch (field) {
     case "author":
-      return "نویسنده";
+      return "Author";
     case "album":
-      return "آلبوم";
+      return "Album";
     case "narrator":
-      return "راوی";
+      return "Narrator";
     case "fileName":
-      return "نام فایل";
+      return "File name";
     case "folder":
-      return "مجموعه";
+      return "Folder";
     case "path":
-      return "مسیر";
+      return "Path";
     case "description":
-      return "توضیحات";
+      return "Description";
     default:
-      return "عنوان";
+      return "Title";
   }
 }
 

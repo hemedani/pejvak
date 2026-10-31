@@ -31,10 +31,10 @@ export function PlaybackStatusLine() {
   if (error) {
     return (
       <div className="flex flex-wrap items-center gap-[var(--space-md)]" role="alert">
-        <p className="type-caption text-danger">پخش ممکن نشد. {error}</p>
+        <p className="type-caption text-danger">Playback failed. {error}</p>
         {current && current.origin !== "local" ? (
           <Button variant="secondary" size="sm" onClick={() => void retry()}>
-            تلاش دوباره
+            Try again
           </Button>
         ) : null}
       </div>
@@ -44,7 +44,7 @@ export function PlaybackStatusLine() {
   if (current?.origin === "local") {
     return (
       <p className="type-caption text-text-secondary" role="status">
-        صدای این قطعه روی دستگاه شماست و در وب پخش نمی‌شود.
+        This track&rsquo;s audio is on your device and cannot be played on the web.
       </p>
     );
   }
@@ -52,7 +52,7 @@ export function PlaybackStatusLine() {
   if (blocked) {
     return (
       <p className="type-caption text-text-secondary" role="status" aria-live="polite">
-        برای شروع، پخش را بزنید.
+        Press play to start.
       </p>
     );
   }

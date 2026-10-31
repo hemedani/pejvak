@@ -39,7 +39,7 @@ export function CollectionGridSkeleton({ count = 6 }: { count?: number }) {
     <div
       className="grid grid-cols-1 gap-[var(--space-md)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
       role="status"
-      aria-label="در حال بارگذاری"
+      aria-label="Loading"
     >
       {Array.from({ length: count }, (_, index) => (
         <div

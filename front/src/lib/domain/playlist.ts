@@ -25,7 +25,7 @@
  *
  * An item can name a track that has since left the library, and the item must
  * survive that: it is a removable row, not a silently shorter playlist. The join
- * produces `track: null` and the row says «این ترک دیگر در کتابخانه نیست».
+ * produces `track: null` and the row says "Deleted track".
  */
 
 import { asArray, asBoolean, asInt, asRecord, asString, asTimestamp } from "../parse";
@@ -42,7 +42,7 @@ export type Playlist = {
   items: PlaylistItem[];
   /**
    * `null` when the backend did not send one. Not `0`: `formatRelativeTime`
-   * prints «هرگز» for `null`, and 1970 for zero.
+   * prints "Never" for `null`, and 1970 for zero.
    */
   createdAt: number | null;
   updatedAt: number | null;

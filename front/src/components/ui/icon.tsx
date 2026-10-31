@@ -90,12 +90,13 @@ const ICONS = {
   check: Check,
   /**
    * Reading-direction arrows, named by *direction in the text*, not by the
-   * shape. In RTL "start" is the right-hand side, so `start` is a right chevron —
-   * a component that asks for `start` gets the correct arrow without knowing
-   * which way the document runs.
+   * shape. The document is LTR, so "start" is the left-hand side and `start` is a
+   * left chevron. A component that asks for `start` gets the correct arrow
+   * without knowing which way the document runs — which is why this mapping is
+   * the only place the direction is decided for every chevron in the app.
    */
-  start: ChevronRight,
-  end: ChevronLeft,
+  start: ChevronLeft,
+  end: ChevronRight,
   up: ChevronUp,
   down: ChevronDown,
   plus: Plus,

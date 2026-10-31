@@ -2,13 +2,12 @@
  * The collection a queue belongs to, and what a run through it means.
  *
  * Ported from `mobile/src/lib/playbackContext.ts`. The arithmetic and the
- * handover rules are unchanged; the labels are Persian because the web has no
- * locale switcher (D10). A run is described by three numbers — how many tracks
- * the collection had, how many were finished, and whether the queue ran out —
- * and every label is derived from those rather than stored.
+ * handover rules are unchanged, and so are the labels: the web app speaks the
+ * same English as the phone. A run is described by three numbers — how many
+ * tracks the collection had, how many were finished, and whether the queue ran
+ * out — and every label is derived from those rather than stored.
  */
 
-import { fa } from "@/lib/format";
 import type { LocalRun, PlaybackContext, QueuedSession } from "./types";
 
 export type RunShape = Pick<LocalRun, "completed" | "finishedCount" | "trackCount">;
@@ -24,17 +23,17 @@ export function sameContext(
   return a.type === b.type && a.key === b.key;
 }
 
-/** `آنلاین` / `پلی‌لیست`, for an overline or a chip subtitle. */
+/** `Online` / `Playlist`, for an overline or a chip subtitle. */
 export function describeContextType(type: PlaybackContext["type"]): string {
-  return type === "online" ? "آنلاین" : "پلی‌لیست";
+  return type === "online" ? "Online" : "Playlist";
 }
 
-/** `۴ از ۱۲` — where playback is inside the collection. */
+/** `4 of 12` — where playback is inside the collection. */
 export function formatContextPosition(index: number, trackCount: number): string {
   if (trackCount <= 0) {
     return "";
   }
-  return `${fa(Math.max(1, Math.min(index + 1, trackCount)))} از ${fa(trackCount)}`;
+  return `${Math.max(1, Math.min(index + 1, trackCount))} of ${trackCount}`;
 }
 
 /** Finished share of a run, clamped to 0–1. A zero-length run reports 0. */
@@ -59,36 +58,36 @@ export function isPartialRun(run: RunShape): boolean {
 /**
  * How a run reads in one line.
  *
- * "متوقف در ۹ از ۲۴" names the partially completed series without making the
+ * "Stopped at 9 of 24" names the partially completed series without making the
  * reader compare two numbers. A run that heard every track but was left before
  * the queue ran out is reported as such, because from the listener's side the
  * collection *was* heard.
  */
 export function describeRunOutcome(run: RunShape): { label: string; tone: "done" | "partial" } {
   if (run.completed) {
-    return { label: "تمام شد", tone: "done" };
+    return { label: "Finished", tone: "done" };
   }
   if (run.trackCount > 0 && run.finishedCount >= run.trackCount) {
-    return { label: "همهٔ قطعه‌ها شنیده شد", tone: "done" };
+    return { label: "Every track heard", tone: "done" };
   }
   if (run.finishedCount > 0) {
     return {
-      label: `متوقف در ${fa(run.finishedCount)} از ${fa(run.trackCount)}`,
+      label: `Stopped at ${run.finishedCount} of ${run.trackCount}`,
       tone: "partial",
     };
   }
-  return { label: "زودتر رها شد", tone: "partial" };
+  return { label: "Left early", tone: "partial" };
 }
 
 /** The second line under a run's title: what it covered, and how much of it. */
 export function describeRunScope(run: RunShape): string {
   if (run.trackCount <= 0) {
-    return "مجموعهٔ خالی";
+    return "Empty collection";
   }
   if (run.finishedCount >= run.trackCount) {
-    return `همهٔ ${fa(run.trackCount)} قطعه شنیده شد`;
+    return `All ${run.trackCount} tracks heard`;
   }
-  return `${fa(run.finishedCount)} از ${fa(run.trackCount)} قطعه شنیده شد`;
+  return `${run.finishedCount} of ${run.trackCount} tracks heard`;
 }
 
 /**

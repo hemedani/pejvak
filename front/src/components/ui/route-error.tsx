@@ -8,9 +8,9 @@
  * has to do — a `router.refresh()` would drop the client state the listener had
  * on the page.
  *
- * The raw message is not shown. A Persian UI with `TypeError: Cannot read
- * properties of undefined` in it tells the listener nothing and tells them the
- * app is broken; the digest is what support needs, and it is kept.
+ * The raw message is not shown. `TypeError: Cannot read properties of undefined`
+ * tells the listener nothing except that the app is broken; the digest is what
+ * support needs, and it is kept.
  */
 
 import { useEffect } from "react";
@@ -39,9 +39,9 @@ export function RouteError({
       </span>
 
       <div className="max-w-[52ch]">
-        <p className="type-body-strong text-text">این صفحه نمایش داده نشد</p>
+        <p className="type-body-strong text-text">This page could not be displayed</p>
         <p className="type-caption text-text-tertiary mt-[var(--space-xs)]">
-          خطایی در ساخت صفحه رخ داد. اگر تکرار شد، شناسهٔ زیر را گزارش کنید.
+          Something went wrong while building this page. If it keeps happening, report the ID below.
         </p>
         {error.digest ? (
           <p className="type-numeric mt-[var(--space-sm)] text-text-tertiary" dir="ltr">
@@ -51,7 +51,7 @@ export function RouteError({
       </div>
 
       <Button type="button" variant="secondary" size="md" onClick={() => retry()}>
-        تلاش دوباره
+        Try again
       </Button>
     </div>
   );

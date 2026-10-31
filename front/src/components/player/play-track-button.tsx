@@ -34,7 +34,7 @@ export function PlayTrackButton({ track }: { track: TrackDetail }) {
     <div className="mt-[var(--space-md)] flex flex-wrap items-center gap-[var(--space-sm)]">
       <Button variant="primary" onClick={() => void playQueueAt([playerTrack], 0)}>
         <Icon name="play" size="sm" />
-        پخش
+        Play
       </Button>
       <Button
         variant="secondary"
@@ -44,7 +44,7 @@ export function PlayTrackButton({ track }: { track: TrackDetail }) {
         }}
       >
         <Icon name="queue" size="sm" />
-        {added ? "به صف اضافه شد" : "افزودن به صف"}
+        {added ? "Added to queue" : "Add to queue"}
       </Button>
     </div>
   );

@@ -15,7 +15,7 @@ import { buildContinueItems } from "@/lib/online/continue";
 import { LANGUAGES } from "@/lib/online/languages";
 import { firstParam, type SearchParamValue } from "@/lib/search-params";
 
-export const metadata = { title: "کاوش" };
+export const metadata = { title: "Browse" };
 
 type Search = { tab?: SearchParamValue };
 
@@ -53,9 +53,9 @@ export default async function BrowsePage({ searchParams }: { searchParams: Promi
   return (
     <div className="flex flex-col gap-[var(--space-lg)]">
       <PageHeader
-        overline="کتابخانهٔ آزاد"
-        title="کاوش"
-        description="صداهای رایگان از منبع‌های خودشان، برای شنیدن در همین مرورگر."
+        overline="The free library"
+        title="Browse"
+        description="Free audio from its own source, played in this browser."
       />
 
       <BrowseTabs active={tab} />
@@ -105,9 +105,9 @@ async function ContinuePanel() {
       <Card>
         <EmptyState
           icon="history"
-          title="چیزی برای ادامه نیست"
-          description="هر مجموعه‌ای را که نیمه‌کاره رها کنید، اینجا منتظر شما می‌ماند."
-          action={{ label: "کاوش مجموعه‌ها", href: "/browse?tab=browse" }}
+          title="Nothing to continue"
+          description="Any collection you leave half-finished waits for you here."
+          action={{ label: "Browse collections", href: "/browse?tab=browse" }}
         />
       </Card>
     );
@@ -132,9 +132,9 @@ async function FavoritesPanel() {
       <Card>
         <EmptyState
           icon="favorite"
-          title="هنوز مجموعه‌ای نشان نکرده‌اید"
-          description="قلب روی هر مجموعه‌ای آن را به این فهرست می‌آورد."
-          action={{ label: "کاوش مجموعه‌ها", href: "/browse?tab=browse" }}
+          title="You haven't saved a collection yet"
+          description="The heart on any collection brings it to this list."
+          action={{ label: "Browse collections", href: "/browse?tab=browse" }}
         />
       </Card>
     );

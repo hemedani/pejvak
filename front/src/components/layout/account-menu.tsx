@@ -21,14 +21,14 @@ export function AccountMenu({ user }: { user: CurrentUser }) {
   return (
     // A Radix primitive takes its direction from the provider on `Root`, not
     // from the content element — the arrow-key handling and the `dir` attribute
-    // are decided there. It defaults to LTR, so RTL has to be passed explicitly
-    // (plan §7.7).
-    <DropdownMenu.Root dir="rtl">
+    // are decided there. It defaults to LTR, which is the app's direction, but it
+    // is passed explicitly so the default is never the thing holding it up.
+    <DropdownMenu.Root dir="ltr">
       <DropdownMenu.Trigger asChild>
         <button
           type="button"
           className="flex h-11 items-center gap-[var(--space-sm)] rounded-[var(--radius-md)] pe-[var(--space-md)] ps-[var(--space-xs)] text-text-secondary transition-colors hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-          aria-label={`حساب ${name}`}
+          aria-label={`Account: ${name}`}
         >
           <Avatar user={user} />
           <span className="type-label hidden max-w-[16ch] truncate sm:inline">{name}</span>
@@ -57,7 +57,7 @@ export function AccountMenu({ user }: { user: CurrentUser }) {
                 className="flex w-full items-center gap-[var(--space-sm)] rounded-[var(--radius-sm)] px-[var(--space-md)] py-[var(--space-sm)] type-label text-danger outline-none data-[highlighted]:bg-danger-soft"
               >
                 <Icon name="logout" size="sm" />
-                خروج از حساب
+                Sign out
               </button>
             </DropdownMenu.Item>
           </form>

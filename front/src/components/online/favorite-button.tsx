@@ -52,7 +52,7 @@ export function FavoriteButton({
 
     if (!collection.languageCode) {
       setFavorite(!next);
-      setError("زبان این مجموعه معلوم نیست؛ نشان کردن ممکن نشد.");
+      setError("This collection's language is unknown, so it could not be saved.");
       busy.current = false;
       return;
     }
@@ -95,7 +95,7 @@ export function FavoriteButton({
         className={favorite ? "text-accent" : undefined}
       >
         <Icon name="favorite" size="sm" className={favorite ? "fill-current" : undefined} />
-        {favorite ? "نشان‌شده" : "نشان کردن"}
+        {favorite ? "Saved" : "Save"}
       </Button>
 
       {error ? (

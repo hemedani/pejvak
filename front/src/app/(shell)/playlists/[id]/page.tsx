@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { ErrorState } from "@/components/ui/state";
 
-export const metadata = { title: "فهرست" };
+export const metadata = { title: "Playlist" };
 
 /**
  * One playlist.
@@ -24,7 +24,7 @@ export const metadata = { title: "فهرست" };
  *
  * `generateMetadata` would need a second read of the same playlist for a tab
  * title, and a Server Action is not cached between the page and its metadata.
- * «فهرست» is enough; the heading on the page says the rest.
+ * "Playlist" is enough; the heading on the page says the rest.
  *
  * ## Everything interactive is one client component
  *
@@ -69,7 +69,7 @@ function BackLink() {
       className="type-caption inline-flex w-fit items-center gap-[var(--space-xs)] text-text-tertiary transition-colors hover:text-text"
     >
       <Icon name="start" size="xs" />
-      فهرست‌ها
+      Playlists
     </Link>
   );
 }

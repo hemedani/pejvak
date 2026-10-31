@@ -43,7 +43,7 @@ export function LanguageRow({ language }: { language: OnlineLanguage }) {
         <Icon name="end" size="sm" className="shrink-0 text-text-tertiary" />
       ) : (
         <Badge tone="muted" size="sm">
-          به‌زودی
+          Coming soon
         </Badge>
       )}
     </>
@@ -85,7 +85,7 @@ export function LanguageListSkeleton({ rows = 10 }: { rows?: number }) {
     <div
       className="divide-y divide-outline-variant rounded-[var(--radius-card)] border border-outline-variant bg-surface"
       role="status"
-      aria-label="در حال بارگذاری"
+      aria-label="Loading"
     >
       {Array.from({ length: rows }, (_, index) => (
         <div key={index} className="flex items-center gap-[var(--space-md)] px-[var(--space-lg)] py-[var(--space-md)]">

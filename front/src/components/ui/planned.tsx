@@ -35,9 +35,9 @@ export function PlannedSurface({
           </span>
 
           <div className="min-w-0">
-            <p className="type-body-strong text-text">این بخش هنوز ساخته نشده است</p>
+            <p className="type-body-strong text-text">This screen has not been built yet</p>
             <p className="type-caption mt-[var(--space-xs)] max-w-[58ch] text-text-tertiary">
-              زیرساخت آن آماده است؛ صفحه در مرحلهٔ بعدی ساخت اضافه می‌شود.
+              The groundwork is in place; the screen itself arrives in a later build.
             </p>
 
             <ul className="mt-[var(--space-md)] flex flex-col gap-[var(--space-xs)]">

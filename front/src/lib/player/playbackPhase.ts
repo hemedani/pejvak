@@ -1,10 +1,9 @@
 /**
  * What the player is doing, and what to say about it while it is not doing it.
  *
- * Ported from `mobile/src/lib/playbackPhase.ts`. The reasoning travels with it:
- * `playing` does not mean audible, so a wait is its own state and it outranks
- * the transport state. Only the wording is new, because the web is Persian-only
- * (D10). A local file opens in a few tens of milliseconds, and drawing a loader
+ * Ported from `mobile/src/lib/playbackPhase.ts`, wording included. `playing` does
+ * not mean audible, so a wait is its own state and it outranks the transport
+ * state. A local file opens in a few tens of milliseconds, and drawing a loader
  * for that long is a flicker that makes the app look slower than it is.
  */
 
@@ -100,20 +99,20 @@ export function describeWait(wait: PlaybackWait, stage: WaitStage): WaitCopy {
 
   if (wait.kind === "buffering") {
     return {
-      label: long ? "هنوز در حال بارگذاری…" : "در حال بارگذاری…",
-      detail: long ? "پخش تا رسیدن بخش بعدی متوقف است." : null,
+      label: long ? "Still buffering…" : "Buffering…",
+      detail: long ? "Playback is paused until the next part arrives." : null,
     };
   }
 
   if (wait.stream) {
     return {
-      label: long ? "هنوز وصل نشده…" : "در حال اتصال به منبع…",
-      detail: long ? "منبع پاسخ نداده است. می‌توانید متوقف کنید و دوباره تلاش کنید." : null,
+      label: long ? "Still not connected…" : "Connecting to the source…",
+      detail: long ? "The source hasn't responded. You can stop and try again." : null,
     };
   }
 
   return {
-    label: long ? "آماده‌سازی طول کشیده…" : "در حال آماده‌سازی صدا…",
-    detail: long ? "باز کردن این فایل بیشتر از حد معمول طول می‌کشد." : null,
+    label: long ? "Taking a while to prepare…" : "Preparing audio…",
+    detail: long ? "Opening this file is taking longer than usual." : null,
   };
 }

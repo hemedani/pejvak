@@ -10,12 +10,12 @@ export default function NotFound() {
         <span className="grid size-14 place-items-center rounded-[var(--radius-lg)] bg-surface-sunken text-text-tertiary">
           <Icon name="search" size="xl" />
         </span>
-        <h1 className="type-heading text-text">این صفحه پیدا نشد</h1>
+        <h1 className="type-heading text-text">This page could not be found</h1>
         <p className="type-caption text-text-tertiary">
-          نشانی ممکن است تغییر کرده باشد، یا موردی که دنبالش بودید حذف شده باشد.
+          The address may have changed, or the item you were looking for may have been removed.
         </p>
         <Button asChild variant="primary" size="md">
-          <Link href="/">بازگشت به خانه</Link>
+          <Link href="/">Back to Home</Link>
         </Button>
       </div>
     </main>

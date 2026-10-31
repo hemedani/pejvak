@@ -27,7 +27,7 @@ export function TransportControls({ compact = false }: { compact?: boolean }) {
   const live = current.isLive;
   const playing = status === "playing";
   const waitingNow = waiting !== null;
-  const playLabel = waitingNow ? "توقف انتظار" : playing ? "توقف" : "پخش";
+  const playLabel = waitingNow ? "Stop waiting" : playing ? "Pause" : "Play";
 
   const onPlay = () => {
     if (waitingNow || playing) {
@@ -45,7 +45,7 @@ export function TransportControls({ compact = false }: { compact?: boolean }) {
       <button
         type="button"
         className="grid size-11 place-items-center rounded-full text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-        aria-label="قطعهٔ قبلی"
+        aria-label="Previous track"
         aria-keyshortcuts="Control+ArrowLeft"
         onClick={() => void previous()}
       >
@@ -56,7 +56,7 @@ export function TransportControls({ compact = false }: { compact?: boolean }) {
         <button
           type="button"
           className="grid size-11 place-items-center rounded-full text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:opacity-40"
-          aria-label="۳۰ ثانیه عقب"
+          aria-label="Back 30 seconds"
           disabled={live}
           onClick={() => seekBy(-30)}
         >
@@ -89,7 +89,7 @@ export function TransportControls({ compact = false }: { compact?: boolean }) {
         <button
           type="button"
           className="grid size-11 place-items-center rounded-full text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] disabled:opacity-40"
-          aria-label="۳۰ ثانیه جلو"
+          aria-label="Forward 30 seconds"
           disabled={live}
           onClick={() => seekBy(30)}
         >
@@ -100,7 +100,7 @@ export function TransportControls({ compact = false }: { compact?: boolean }) {
       <button
         type="button"
         className="grid size-11 place-items-center rounded-full text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-        aria-label="قطعهٔ بعدی"
+        aria-label="Next track"
         aria-keyshortcuts="Control+ArrowRight"
         onClick={() => void next()}
       >

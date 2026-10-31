@@ -36,7 +36,8 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { TextField } from "@/components/ui/text-field";
 import type { TrackSummary } from "@/lib/domain/track";
-import { fa, formatClockFa } from "@/lib/format";
+import { formatCount } from "@/lib/format";
+import { formatClock } from "@/lib/time";
 import { trackSearchFields, TITLE_FIELD } from "@/lib/librarySearch";
 import { createSearchIndex, foldQuery, searchIndex } from "@/lib/search";
 
@@ -114,19 +115,19 @@ export function PlaylistTrackPicker({
 
   return (
     <Card className="p-[var(--space-lg)]">
-      <h2 className="type-heading text-text">افزودن ترک</h2>
+      <h2 className="type-heading text-text">Add tracks</h2>
 
       {candidates.length === 0 ? (
         <p className="type-caption mt-[var(--space-sm)] text-text-tertiary">
           {library.length === 0
-            ? "کتابخانه خالی است؛ هنوز ترکی برای افزودن نیست."
-            : "همهٔ ترک‌های کتابخانه در این فهرست هستند."}
+            ? "Your library is empty, so there is nothing to add yet."
+            : "Every track in your library is already in this playlist."}
         </p>
       ) : (
         <>
           <div className="mt-[var(--space-md)]">
             <TextField
-              label="جست‌وجو در کتابخانه"
+              label="Search the library"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -135,7 +136,7 @@ export function PlaylistTrackPicker({
           <div className="mt-[var(--space-md)] max-h-[24rem] overflow-y-auto rounded-[var(--radius-md)] border border-outline-variant">
             {visible.length === 0 ? (
               <p className="type-caption px-[var(--space-md)] py-[var(--space-lg)] text-text-tertiary">
-                ترکی با این نام پیدا نشد.
+                No track matched that name.
               </p>
             ) : (
               <ul className="flex flex-col">
@@ -170,7 +171,7 @@ export function PlaylistTrackPicker({
 
                         {track.origin === "local" ? (
                           <Badge tone="muted" size="sm">
-                            فقط در برنامهٔ اندروید
+                            Android app only
                           </Badge>
                         ) : null}
                       </div>
@@ -185,7 +186,7 @@ export function PlaylistTrackPicker({
             {/* Announced, not just drawn: the row that was added disappears from
                 the list, so the count is the only confirmation there is. */}
             <p role="status" className="type-caption text-text-tertiary">
-              {added === null ? "" : `${fa(added)} ترک افزوده شد`}
+              {added === null ? "" : `${formatCount(added, "track")} added`}
             </p>
 
             <Button
@@ -196,7 +197,7 @@ export function PlaylistTrackPicker({
               disabled={busy || selection.size === 0}
               aria-busy={submitting || undefined}
             >
-              افزودن {fa(selection.size)} ترک
+              Add {formatCount(selection.size, "track")}
             </Button>
           </div>
         </>
@@ -205,16 +206,16 @@ export function PlaylistTrackPicker({
   );
 }
 
-/** `نویسنده · ۱۲:۳۴`, with either half dropped when it is not known. */
+/** `Author · 12:34`, with either half dropped when it is not known. */
 function describeCandidate(track: TrackSummary): string {
   const parts: string[] = [];
   if (track.author) {
     parts.push(track.author);
   }
-  // 0 means "the source did not say", not "zero seconds": printing «۰:۰۰»
+  // 0 means "the source did not say", not "zero seconds": printing `0:00`
   // beside a real track would read as a broken row.
   if (track.durationSec > 0) {
-    parts.push(formatClockFa(track.durationSec));
+    parts.push(formatClock(track.durationSec));
   }
   return parts.join(" · ");
 }

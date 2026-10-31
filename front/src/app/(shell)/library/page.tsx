@@ -12,13 +12,13 @@ import { Pagination } from "@/components/ui/pagination";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/ui/state";
 import type { TrackSummary } from "@/lib/domain/track";
 import { SEARCH_LIMIT, type TrackSortField } from "@/lib/domain/track-query";
-import { faNumber } from "@/lib/format";
+import { formatCount, formatNumber } from "@/lib/format";
 import { createSearchIndex, foldQuery, searchIndex, type Range } from "@/lib/search";
 import { pageParam, firstParam, type SearchParamValue } from "@/lib/search-params";
 import { now as clock } from "@/lib/now";
 import { trackSearchFields, TITLE_FIELD } from "@/lib/librarySearch";
 
-export const metadata = { title: "کتابخانه" };
+export const metadata = { title: "Library" };
 
 const PAGE_SIZE = 25;
 
@@ -122,16 +122,16 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
         <Card>
           <EmptyState
             icon="library"
-            title={page > 1 ? "این صفحه خالی است" : "کتابخانه خالی است"}
+            title={page > 1 ? "This page is empty" : "Your library is empty"}
             description={
               page > 1
-                ? "به نظر می‌رسد به انتهای فهرست رسیده‌اید."
-                : "ترک‌ها از اپلیکیشن موبایل همگام می‌شوند. تا آن زمان، مجموعه‌های آنلاین را کاوش کنید."
+                ? "You appear to have reached the end of the list."
+                : "Tracks sync from the mobile app. Until then, browse the online collections."
             }
             action={
               page > 1
-                ? { label: "بازگشت به صفحهٔ اول", href: "/library" }
-                : { label: "کاوش مجموعه‌ها", href: "/browse" }
+                ? { label: "Back to the first page", href: "/library" }
+                : { label: "Browse collections", href: "/browse" }
             }
           />
         </Card>
@@ -189,8 +189,8 @@ async function SearchResults({
       <Card>
         <EmptyState
           icon="search"
-          title="چیزی پیدا نشد"
-          description={`برای «${query}» موردی در کتابخانه نبود. املای دیگری را امتحان کنید؛ جست‌وجو نسبت به «ی/ي» و نیم‌فاصله حساس نیست.`}
+          title="Nothing found"
+          description={`No match for “${query}” in your library. Try a different spelling — the search ignores Persian letter variants and the zero-width non-joiner.`}
         />
       </Card>
     );
@@ -212,8 +212,8 @@ async function SearchResults({
   return (
     <>
       <p className="type-caption text-text-tertiary">
-        {faNumber(hits.length)} نتیجه
-        {capped ? ` — جست‌وجو تنها در ${faNumber(SEARCH_LIMIT)} ترک نخست انجام شد` : ""}
+        {formatCount(hits.length, "result")}
+        {capped ? ` — searched only the first ${formatNumber(SEARCH_LIMIT)} tracks` : ""}
       </p>
 
       <TrackTable
@@ -236,9 +236,9 @@ async function SearchResults({
 function LibraryHeader({ query }: { query: string }) {
   return (
     <PageHeader
-      overline="همهٔ ترک‌ها"
-      title="کتابخانه"
-      description="ترک‌های همگام‌شده از اپلیکیشن. فایل‌های محلی در وب پخش نمی‌شوند و فقط اطلاعاتشان نمایش داده می‌شود."
+      overline="All tracks"
+      title="Library"
+      description="Tracks synced from the mobile app. Local files cannot be played on the web — only their details are shown."
       actions={
         <div className="w-full min-w-[260px] sm:w-[340px]">
           <Suspense fallback={<div className="h-11" />}>

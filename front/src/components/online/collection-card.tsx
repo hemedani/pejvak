@@ -10,7 +10,7 @@
  *
  *   · **A size that is not known prints nothing.** The archive's search index
  *     has no per-item track count and aminikhaah's catalogue omits it, so a
- *     listing reports `0`. Rendering that as «۰ قطعه» would label a thirty-part
+ *     listing reports `0`. Rendering that as "0 tracks" would label a thirty-part
  *     course as empty — `describeCollectionLine` already answers `null`, and the
  *     card draws no line at all rather than an empty one.
  *   · **The card is one link, and its controls are not inside it.** A play or

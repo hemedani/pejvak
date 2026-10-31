@@ -10,7 +10,7 @@ import { Icon } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState, ErrorState, OfflineBanner } from "@/components/ui/state";
 import { bucketByDay, currentStreak, joinTopTracks } from "@/lib/insights";
-import { fa, faNumber, formatSpan } from "@/lib/format";
+import { formatNumber, formatSpan } from "@/lib/format";
 import { now as clock } from "@/lib/now";
 import { formatRelativeTime } from "@/lib/time";
 import Link from "next/link";
@@ -71,18 +71,18 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-[var(--space-xl)]">
       <PageHeader
-        overline="کنسول شنیدن"
-        title="خانه"
+        overline="Listening console"
+        title="Home"
         description={
           data.lastListenedAt === null
-            ? "هنوز چیزی ثبت نشده است."
-            : `آخرین شنیدن: ${formatRelativeTime(data.lastListenedAt, now)}`
+            ? "Nothing recorded yet."
+            : `Last listen: ${formatRelativeTime(data.lastListenedAt, now)}`
         }
         actions={
           <Button asChild variant="secondary" size="md">
             <Link href="/library">
               <Icon name="library" size="sm" />
-              کتابخانه
+              Library
             </Link>
           </Button>
         }
@@ -96,48 +96,48 @@ export default async function DashboardPage() {
         <Card>
           <EmptyState
             icon="play"
-            title="هنوز چیزی نشنیده‌اید"
-            description="با پخش یک مجموعهٔ آنلاین، تاریخ شنیدن و آمار شما اینجا ساخته می‌شود. فایل‌های روی گوشی در نسخهٔ وب پخش نمی‌شوند."
-            action={{ label: "کاوش مجموعه‌ها", href: "/browse" }}
+            title="You haven't listened to anything yet"
+            description="Playing an online collection builds your history and stats here. Files on your phone cannot be played on the web."
+            action={{ label: "Browse collections", href: "/browse" }}
           />
         </Card>
       ) : (
         <>
           <div className="grid gap-[var(--space-md)] sm:grid-cols-2 xl:grid-cols-4">
             <StatCell
-              label="مجموع زمان شنیدن"
+              label="Total listening time"
               value={formatSpan(data.totalListenTimeSec)}
               detail={
                 data.firstListenedAt === null
                   ? undefined
-                  : `از ${formatRelativeTime(data.firstListenedAt, now)}`
+                  : `Since ${formatRelativeTime(data.firstListenedAt, now)}`
               }
               icon="clock"
             />
             <StatCell
-              label="تعداد نشست‌ها"
-              value={faNumber(data.sessionCount)}
-              detail={streak > 0 ? `${fa(streak)} روز پیوسته` : "امروز شنیده نشده"}
+              label="Sessions"
+              value={formatNumber(data.sessionCount)}
+              detail={streak > 0 ? `${formatNumber(streak)}-day streak` : "Nothing today"}
               icon="stats"
             />
             <StatCell
-              label="ترک‌های شنیده‌شده"
-              value={faNumber(data.trackCount)}
-              detail={`از ${faNumber(tracks.length)} ترک در کتابخانه`}
+              label="Tracks heard"
+              value={formatNumber(data.trackCount)}
+              detail={`of ${formatNumber(tracks.length)} in your library`}
               icon="player"
             />
             <StatCell
-              label="آخرین شنیدن"
+              label="Last listen"
               value={
                 data.lastListenedAt === null ? "—" : formatRelativeTime(data.lastListenedAt, now)
               }
-              detail="بر اساس پایان آخرین نشست"
+              detail="Based on the end of your last session"
               icon="history"
             />
           </div>
 
           <Card className="p-[var(--space-lg)]">
-            <CardHeading overline="۳۰ روز گذشته" title="فعالیت شنیدن" />
+            <CardHeading overline="Last 30 days" title="Listening activity" />
             <div className="mt-[var(--space-lg)]">
               {sessions.success ? (
                 <>
@@ -153,14 +153,14 @@ export default async function DashboardPage() {
           </Card>
 
           <section className="flex flex-col gap-[var(--space-md)]">
-            <CardHeading overline="بیشترین زمان" title="ده ترک برتر" />
+            <CardHeading overline="Most time" title="Top ten tracks" />
 
             {topRows.length === 0 ? (
               <Card>
                 <EmptyState
                   icon="stats"
-                  title="آماری برای نمایش نیست"
-                  description="پس از چند نشست شنیدن، پرشنیده‌ترین ترک‌ها اینجا فهرست می‌شوند."
+                  title="No stats to show"
+                  description="After a few listening sessions, your most-played tracks appear here."
                 />
               </Card>
             ) : (

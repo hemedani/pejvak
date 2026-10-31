@@ -102,39 +102,36 @@ describe("toAsciiDigits", () => {
 describe("formatRelativeTime", () => {
   const now = new Date(2026, 9, 30, 12, 0, 0).getTime();
 
-  it("says «now» for the last 45 seconds and for a future timestamp", () => {
-    expect(formatRelativeTime(now - 10_000, now)).toBe("همین حالا");
+  it("says «Just now» for the last 45 seconds and for a future timestamp", () => {
+    expect(formatRelativeTime(now - 10_000, now)).toBe("Just now");
     // A clock that is behind is a clock change, not negative time ago.
-    expect(formatRelativeTime(now + 60_000, now)).toBe("همین حالا");
+    expect(formatRelativeTime(now + 60_000, now)).toBe("Just now");
   });
 
-  it("never returns English", () => {
-    // The port replaced the mobile version's "3 hr ago" with ICU's Persian. The
-    // assertion is on the *absence* of the English words, which is the thing that
-    // would regress if someone copied the mobile body back in.
-    for (const elapsed of [60_000, 3 * 3600_000, 2 * 24 * 3600_000]) {
-      const text = formatRelativeTime(now - elapsed, now);
-      expect(text).not.toMatch(/ago|yesterday|just now|min|hr/i);
-      expect(text.length).toBeGreaterThan(0);
-    }
+  it("matches the phone word for word", () => {
+    // The two apps must not disagree about the same event: a listener who
+    // installs both should read "3 hr ago" on either. These are the phone's
+    // exact strings (`mobile/src/lib/time.ts`), not a paraphrase of them.
+    expect(formatRelativeTime(now - 60_000, now)).toBe("1 min ago");
+    expect(formatRelativeTime(now - 5 * 60_000, now)).toBe("5 min ago");
+    expect(formatRelativeTime(now - 3 * 3600_000, now)).toBe("3 hr ago");
+    expect(formatRelativeTime(now - 24 * 3600_000, now)).toBe("Yesterday");
+    expect(formatRelativeTime(now - 3 * 24 * 3600_000, now)).toBe("3 days ago");
   });
 
-  it("uses the words Persian actually uses", () => {
-    // `numeric: "auto"` gives «دیروز» rather than «۱ روز پیش», which is what a
-    // Persian speaker says. Pinning it here means a future "always" would be a
-    // deliberate change rather than a silent one.
-    expect(formatRelativeTime(now - 2 * 24 * 3600_000, now)).toBe("پریروز");
-    expect(formatRelativeTime(now - 3 * 3600_000, now)).toContain("ساعت");
+  it("uses Latin digits, never Persian ones", () => {
+    const text = formatRelativeTime(now - 3 * 3600_000, now);
+    expect(text).not.toMatch(/[۰-۹٠-٩]/);
   });
 
   it("falls back to a date after a week", () => {
     const text = formatRelativeTime(now - 30 * 24 * 3600_000, now);
-    expect(text).toMatch(/[۰-۹]/);
-    expect(text).not.toMatch(/پیش/);
+    expect(text).toBe("September 30, 2026");
+    expect(text).not.toMatch(/ago/);
   });
 
-  it("says «هرگز» for a null timestamp", () => {
-    expect(formatRelativeTime(null, now)).toBe("هرگز");
+  it("says «Never» for a null timestamp", () => {
+    expect(formatRelativeTime(null, now)).toBe("Never");
   });
 });
 

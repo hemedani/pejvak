@@ -79,16 +79,16 @@ function errorMessageFor(error: unknown): string {
   if (error instanceof StreamError) {
     switch (error.code) {
       case "no-resolver":
-        return "منبع این قطعه هنوز به پخش‌کننده وصل نشده است.";
+        return "This track's source is not connected to the player yet.";
       case "not-found":
-        return "این قطعه در منبع پیدا نشد.";
+        return "This track was not found at its source.";
       case "invalid-url":
-        return "منبع نشانی قابل پخش برنگرداند.";
+        return "The source did not return a playable address.";
       default:
-        return "منبع در دسترس نیست.";
+        return "The source is not reachable.";
     }
   }
-  return "منبع در دسترس نیست.";
+  return "The source is not reachable.";
 }
 
 // ── MediaSession ───────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ function setMediaMetadata(track: PlayerTrack | null): void {
   media.metadata = new MediaMetadata({
     title: track.title,
     artist: track.artist ?? "",
-    album: track.albumTitle ?? track.collectionTitle ?? "پژواک",
+    album: track.albumTitle ?? track.collectionTitle ?? "Pejvak",
     artwork: track.artworkUrl ? [{ src: track.artworkUrl }] : [],
   });
 }
@@ -507,7 +507,7 @@ async function loadCurrent(input: {
 
   if (!track.sourceId || !track.externalId) {
     store().setStatus("error");
-    store().setError("این قطعه نشانی منبع ندارد.");
+    store().setError("This track has no source address.");
     return;
   }
 
@@ -726,7 +726,7 @@ function handleEngineEvent(event: EngineEvent): void {
     case "error": {
       state.setWaiting(null);
       state.setStatus("error");
-      state.setError("پخش ممکن نشد.");
+      state.setError("Playback could not start.");
       finalizeSession({ completed: false, interrupted: true });
       setMediaPlaybackState("none");
       void reResolveAfterError();

@@ -60,18 +60,18 @@ export function RemoveButton({
     <>
       <Button type="button" variant="danger" size="md" onClick={() => setOpen(true)}>
         <Icon name="delete" size="sm" />
-        حذف از فهرست
+        Remove from saved
       </Button>
 
       <Sheet
         open={open}
         onOpenChange={setOpen}
-        title="حذف از فهرست"
-        description={`«${collection.title}» از فهرست شما حذف می‌شود.`}
+        title="Remove from saved"
+        description={`“${collection.title}” is removed from your saved collections.`}
         footer={
           <div className="flex flex-wrap items-center justify-end gap-[var(--space-sm)]">
             <Button type="button" variant="secondary" size="md" onClick={() => setOpen(false)}>
-              انصراف
+              Cancel
             </Button>
             <Button
               type="button"
@@ -81,14 +81,14 @@ export function RemoveButton({
               disabled={pending}
               aria-busy={pending || undefined}
             >
-              {pending ? "در حال حذف…" : "حذف"}
+              {pending ? "Removing…" : "Remove"}
             </Button>
           </div>
         }
       >
         <p className="type-caption text-text-secondary">
-          این مجموعه از قفسهٔ شما برداشته می‌شود. تاریخ شنیدن و جای ادامه‌دادن دست‌نخورده می‌ماند،
-          و می‌توانید هر وقت خواستید دوباره نشانش کنید.
+          The collection is taken off your shelf. Its listening history and the place you stopped
+          at are untouched, and you can save it again whenever you like.
         </p>
 
         {error ? (

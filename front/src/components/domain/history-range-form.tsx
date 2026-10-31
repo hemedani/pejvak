@@ -6,9 +6,9 @@
  * The URL is the state of this page, so the filter is a `<form method="get">`
  * with two native date inputs: it submits without JavaScript, the result is a
  * link the listener can bookmark, and Back undoes a filter the way it undoes a
- * page. A Jalali date picker would be a calendar library and a conversion table,
- * which is a different task; the native control's *display* follows the
- * browser's locale and is not ours to style.
+ * page. A custom calendar would be a calendar library, which is a different task; the
+ * native control's *display* follows the browser's locale and is not ours to
+ * style.
  *
  * ## Why this is a Server Component
  *
@@ -24,7 +24,7 @@
  * `after` — which is the rule: page four of a different range does not exist.
  * Empty inputs are submitted as `?from=&to=`, which the parser reads as "no
  * bound", so clearing both dates and pressing the button is the same as the
- * «پاک کردن بازه» link.
+ * "Clear range" link.
  */
 
 import Link from "next/link";
@@ -46,16 +46,16 @@ export function HistoryRangeForm({ range }: { range: HistoryRange }) {
         action="/history"
         className="flex flex-wrap items-end gap-[var(--space-md)]"
       >
-        <DateField id="history-from" name="from" label="از تاریخ" value={range.from} />
-        <DateField id="history-to" name="to" label="تا تاریخ" value={range.to} />
+        <DateField id="history-from" name="from" label="From" value={range.from} />
+        <DateField id="history-to" name="to" label="To" value={range.to} />
 
         <Button type="submit" variant="secondary" size="md">
-          اعمال بازه
+          Apply range
         </Button>
 
         {active ? (
           <Button asChild variant="ghost" size="md">
-            <Link href="/history">پاک کردن بازه</Link>
+            <Link href="/history">Clear range</Link>
           </Button>
         ) : null}
       </form>
@@ -65,7 +65,7 @@ export function HistoryRangeForm({ range }: { range: HistoryRange }) {
         // shown and this says why, so a hand-typed URL cannot make the page
         // refuse to render.
         <p className="type-caption mt-[var(--space-sm)] text-danger" role="status">
-          بازهٔ نامعتبر بود؛ همهٔ تاریخچه نمایش داده می‌شود.
+          That range is not valid, so the whole history is shown.
         </p>
       ) : active ? (
         <p className="type-caption mt-[var(--space-sm)] text-text-tertiary">
@@ -79,9 +79,9 @@ export function HistoryRangeForm({ range }: { range: HistoryRange }) {
 /**
  * One bound of the range.
  *
- * `dir="ltr"` because the value is a Gregorian date read as three numbers in
- * order; in an RTL field the segments would start at the right edge and the year
- * would sit where the day belongs.
+ * `dir="ltr"` because the value is a date read as three numbers in order. The
+ * document is LTR already; the attribute is here so the field keeps that reading
+ * order if it is ever placed inside a right-to-left title.
  */
 function DateField({
   id,
@@ -114,13 +114,13 @@ function DateField({
 /** The active range in the listener's calendar, or `null` when there is none. */
 function describeActiveRange(range: HistoryRange): string | null {
   if (range.from !== undefined && range.to !== undefined) {
-    return `از ${formatDate(range.from)} تا ${formatDate(range.to)}`;
+    return `From ${formatDate(range.from)} to ${formatDate(range.to)}`;
   }
   if (range.from !== undefined) {
-    return `از ${formatDate(range.from)} به بعد`;
+    return `From ${formatDate(range.from)} onwards`;
   }
   if (range.to !== undefined) {
-    return `تا ${formatDate(range.to)}`;
+    return `Up to ${formatDate(range.to)}`;
   }
   return null;
 }

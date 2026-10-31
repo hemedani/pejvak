@@ -155,10 +155,10 @@ join: that would make stats a second source of truth for a track's name.
 | D4 | **Transport:** Server Actions only; no client `fetch` to the backend, no second HTTP library. | Accepted |
 | D5 | **Auth:** JWT in an `httpOnly` cookie named `token`; middleware guards routes; every action re-checks. | Accepted |
 | D6 | **Design language:** Pejvak's own tokens (`mobile/src/theme/tokens.ts`), *not* the reference's midnight-glass skin. Borrow its architecture, not its palette. | Accepted |
-| D7 | **Dates & numerals:** `Intl.DateTimeFormat("fa-IR")` (ICU gives the Jalali calendar), Persian digits in the UI, `formatClock` ported from mobile. No date library. | Proposed |
+| D7 | **Dates & numerals:** `Intl.DateTimeFormat("en-US")` pinned explicitly — Gregorian, Latin digits, `October 31, 2026`. `formatClock` and `formatRelativeTime` are ported from mobile so both apps say the same words. No date library. | Accepted |
 | D8 | **Package manager:** npm (the monorepo convention; `mobile/` is npm). The reference used pnpm — do not copy that. | Accepted |
 | D9 | **Player persistence:** `registerTrack` for a track the server has not seen, then `syncLocalData` for sessions. | Accepted |
-| D10 | **i18n:** Persian only, RTL only — no locale switcher, no English strings in the UI. | Accepted |
+| D10 | **i18n:** English only, LTR only — no locale switcher, no Persian strings in the UI. The product is intended for sale on the global store, so the web app ships in the same single language as the phone app rather than growing a second one. Catalogue *content* is not copy: a Persian collection title, a language's native name (`فارسی`, `العربية`) and the Persian folding tables are data, and are rendered or used as-is. | Accepted |
 
 ---
 
@@ -183,7 +183,7 @@ library (D7), any audio library (a single `HTMLAudioElement` is enough and is th
 
 **Changed 2026-10-30:** `recharts` was on this list and is now off it. The dashboard has exactly one chart —
 thirty days of listening — and it is drawn with thirty divs and a percentage height, on the server, with no
-bundle and no RTL axis correction. A charting library earns its place at the second *interactive* chart, not
+bundle and no per-locale axis correction. A charting library earns its place at the second *interactive* chart, not
 the first static one. Re-add it when a chart needs zoom or a shared tooltip, and add it to this table then.
 
 ---
@@ -212,7 +212,7 @@ front/
 │   │   │   ├── player/page.tsx     # full-screen now playing
 │   │   │   └── settings/page.tsx
 │   │   ├── actions/                # Server Actions, one folder per domain
-│   │   ├── layout.tsx              # <html dir="rtl" lang="fa">
+│   │   ├── layout.tsx              # <html dir="ltr" lang="en">
 │   │   ├── error.tsx · loading.tsx · not-found.tsx
 │   │   └── globals.css
 │   ├── components/
@@ -228,7 +228,7 @@ front/
 │   │   ├── call-act.ts             # typed act call + error mapping
 │   │   ├── errors.ts
 │   │   ├── time.ts                 # formatClock, relative time (ported)
-│   │   ├── format.ts               # Persian digits, duration, bytes
+│   │   ├── format.ts               # numbers, duration, bytes
 │   │   ├── search.ts               # Persian folding (ported verbatim)
 │   │   ├── online/                 # ported source adapters (Phase 4)
 │   │   └── player/                 # engine, queue, session tracking (Phase 5)
@@ -334,8 +334,9 @@ palette.
    sideways every second cannot be read.
 5. **Radius is a ramp, never a literal.** Port `radius` / `tile` / `control` / `list` / `bar` from the tokens.
 6. **A chip is a filter; a segmented control is a choice.** Do not use one for the other.
-7. **RTL is structural.** `dir="rtl"` on `<html>`; use logical properties (`ps-`/`pe-`/`ms-`/`me-`/`start-`/`end-`)
-   — never `left`/`right`. Some base-ui primitives default to LTR: pass `dir="rtl"` explicitly.
+7. **Direction is structural.** `dir="ltr"` on `<html>`; use logical properties (`ps-`/`pe-`/`ms-`/`me-`/`start-`/`end-`)
+   — never `left`/`right`. Radix/base-ui primitives default to LTR, which now matches the app, so no `dir` prop is
+   needed; the one exception is a single Persian *title*, which carries its own `dir="rtl"` locally (see §7).
 8. **One icon family, behind one wrapper.** Screens ask for semantic names; they never import an icon set.
 
 **Deliberately not copied from the reference:** the midnight-glass canvas, the ambient orbs, the conic-border
@@ -485,11 +486,11 @@ Each phase: **Goal → Tasks → Done when → Gate**. Phases 0–5 are buildabl
 - [x] **0.4** Vendor `back/declarations/selectInp.ts` → `src/types/declarations/selectInp.ts` **byte for byte**;
       add `scripts/check-declarations.mjs` and wire it into `npm run check`.
 - [x] **0.5** `src/styles/tokens.css` with the light/dark custom properties from [§7](#7-design-system);
-      `dir="rtl" lang="fa"` on `<html>`; a `Card` and a `TextField` primitive.
+      `dir="ltr" lang="en"` on `<html>`; a `Card` and a `TextField` primitive.
 - [x] **0.6** `front/AGENTS.md`: the front-sector rules (D3–D10, the Next.js-16-docs warning, the act map, the
       "port don't reinvent" list). The repo convention expects it.
 
-**Done when:** `npm run check` is green on an empty app, and the app renders one RTL page in both themes.
+**Done when:** `npm run check` is green on an empty app, and the app renders one LTR page in both themes.
 **Gate:** `cd front && npm run check`
 
 ### Phase 1 — Auth and shell
@@ -507,7 +508,7 @@ Each phase: **Goal → Tasks → Done when → Gate**. Phases 0–5 are buildabl
 - [x] **1.6** Shell layout: sidebar nav, topbar (account menu, theme toggle), content area, player-bar slot.
 - [x] **1.7** `error.tsx`, `loading.tsx`, `not-found.tsx`; `"user not exist"` clears the cookie and redirects once.
 
-**Done when:** a wrong password shows a Persian message and no cookie; a correct one lands on the dashboard; a
+**Done when:** a wrong password shows an English message and no cookie; a correct one lands on the dashboard; a
 direct visit to `/library` while signed out redirects to `/login`; signing out cannot be undone with "back".
 **Gate:** `npm run check` + a manual round-trip against `deno task dev`
 
@@ -516,7 +517,7 @@ direct visit to `/library` while signed out redirects to `/login`; signing out c
 **Goal:** the first genuinely useful surface, and proof the read path works end to end.
 
 - [x] **2.1** `actions/tracks/*`, `actions/stats/*` with explicit projections.
-- [x] **2.2** `lib/time.ts`, `lib/format.ts` (Persian digits, `formatClock`, duration, bytes) + tests.
+- [x] **2.2** `lib/time.ts`, `lib/format.ts` (Latin digits, `formatClock`, duration, bytes) + tests.
 - [x] **2.3** Port `lib/search.ts` and its tests; build `lib/librarySearch.ts` for tracks
       (fold once per load, rank title-first, `null` never `""`).
 - [x] **2.4** Dashboard: totals, session count, first/last listen, top-10 tracks (**join `contentHash → title`
@@ -640,7 +641,7 @@ Test the pure logic, not the pixels. In priority order:
 3. **Persian folding** — `fold()` ranges point at the *original* string (test by slicing, not a magic number);
    ZWNJ folds to nothing; a `null` field never matches.
 4. **Adapters** — parse a recorded fixture per source; never hit the network in a test.
-5. **Formatting** — `formatClock`, Persian digits, duration, bytes.
+5. **Formatting** — `formatClock`, Latin digits, duration, bytes.
 
 Not worth testing: shadcn wrappers, layout. Worth one Playwright smoke (§7.3) once the player exists.
 
@@ -681,8 +682,11 @@ screens. 47 files under `src/`.
 
 - **Phase 0.** Next 16 + TS strict + Tailwind v4 + ESLint flat config, npm. `src/styles/tokens.css`
   is `mobile/src/theme/tokens.ts` transcribed into custom properties (light + dark, the radius
-  ramp, the 3-tier text ramp). Vazirmatn is **vendored** into `public/fonts` rather than fetched
-  from Google — a build that needs the network to succeed is a build that fails on a plane.
+  ramp, the 3-tier text ramp). `--font-sans` leads with the Latin system stack, matching the phone
+  (which sets no font at all), and lists Vazirmatn behind it — font fallback is per glyph, so a Persian
+  collection title still renders in Vazirmatn while every English string uses the system face. Vazirmatn is
+  **vendored** into `public/fonts` rather than fetched from Google — a build that needs the network to
+  succeed is a build that fails on a plane.
   `selectInp.ts` is byte-identical and `scripts/check-declarations.mjs` proves it.
 - **Phase 1.** `lib/call-act.ts` is the single path to the backend: cookie token, `success` checked
   before `body`, a four-word failure vocabulary, and `unauthorized` → a route handler that deletes
@@ -717,11 +721,11 @@ finds. Boxes 0.1–2.6 are ticked on the work existing, not on the gate passing.
 | `BACKEND_URL`, not `NEXT_PUBLIC_BACKEND_URL` | D4 puts every call in a Server Action. A `NEXT_PUBLIC_` prefix is exactly how the value would end up in a browser bundle. |
 | `src/proxy.ts`, not `middleware.ts` | Next 16 renamed the convention. `middleware.ts` is deprecated. |
 | `getMyStats` is under `playbackSession` | §2 C3 listed it under `stats`. The act's own `mod.ts` disagrees, and the act's own `mod.ts` is right. |
-| **No recharts** | One bar chart does not earn a hydrated charting library on an otherwise server-rendered page, and every chart library needs its axis direction corrected for RTL. `components/domain/activity-chart.tsx` is 30 divs and a percentage height. Revisit when a *second* chart needs interaction. |
+| **No recharts** | One bar chart does not earn a hydrated charting library on an otherwise server-rendered page, and every chart library brings its own axis direction to correct. `components/domain/activity-chart.tsx` is 30 divs and a percentage height. Revisit when a *second* chart needs interaction. |
 | `TrackTable`, not a generic `DataTable` | 2.6 asked for one. `Pagination` was extracted because it is genuinely shared; the table has one caller, and a generic table over one caller is two guesses. |
 | `ErrorState` retries with a **link** | A retry is a navigation. `<form action={fn}>` would need an action reference threaded through every caller to do the same thing. |
-| `describeField()` returns Persian | Ported from mobile, which returned English labels. The test that pins them changed in the same commit. |
-| `formatRelativeTime()` uses `Intl.RelativeTimeFormat` | The mobile body returned "3 hr ago". Persian plurals come from ICU, not from a hand-written table. It also gives «پریروز» for two days ago, which is what a person says. |
+| `describeField()` returns English | Ported from mobile, where it already returned English. The web briefly translated it to Persian under the old D10; the English-only decision (2026-10-31) restored the phone's labels, and the test that pins them moved back in the same commit. |
+| `formatRelativeTime()` copies the phone's words | It is the phone body, not ICU: "Just now", "3 hr ago", "Yesterday", "3 days ago", then a date. `Intl.RelativeTimeFormat` was tried under the old D10 and produced words the phone did not use — two apps disagreeing about the same event is the bug this avoids. |
 
 **Traps found while building** (worth not rediscovering):
 
@@ -808,8 +812,8 @@ table and the dashboard's top-ten now link into it.
 - `next build` **rewrites `tsconfig.json`** (`jsx: react-jsx`, and `.next/dev/types/**/*.ts` added to
   `include`). Committing that diff is expected, not drift.
 
-**Runtime smoke test** (production server on `:3100`): `/login` → 200 with `lang="fa" dir="rtl"` and
-the Persian `<h1>`; `theme=dark` cookie → `<html class="dark">`; `/library` and
+**Runtime smoke test** (production server on `:3100`): `/login` → 200 with `lang="en" dir="ltr"` and
+the English `<h1>`; `theme=dark` cookie → `<html class="dark">`; `/library` and
 `/library/<id>` → 307 to `/login?redirect=…` with the deep path preserved; both vendored fonts 200.
 A fake `token` on the track route → 200 and the shell's offline state, which is what proves the route
 resolves and `generateMetadata` + `cache()` do not throw.
@@ -840,9 +844,9 @@ sleep timer, jump-to-time, composer, notes, artwork, sidebar slot).
   is the only thing that remembers it.
 - **UI follows the two-material rule.** Floating bar/sheets are glass; content surfaces
   are opaque. The filled accent circle marks the current row everywhere it appears.
-  Sheets are Radix `Dialog` (focus trap/restore, `dir="rtl"` on the root), speed is a
-  Radix `DropdownMenu`, sliders are Radix `Slider` with `dir="rtl"`.
-- **Entry points are honest.** `library/[trackId]` gained «پخش» / «افزودن به صف»; a local
+  Sheets are Radix `Dialog` (focus trap/restore), speed is a Radix `DropdownMenu`,
+  sliders are Radix `Slider` — all at the default LTR, which is the app's direction.
+- **Entry points are honest.** `library/[trackId]` gained "Play" / "Add to queue"; a local
   track renders neither button, only the state sentence (no disabled affordance). The
   sidebar queue slot renders nothing until something is loaded, so it is never a dead
   control. The empty queue names the run it came from.
@@ -898,5 +902,6 @@ annotation writes, runs), and a manual backend pass for the phase-5 "Done when" 
   returns `{ success, body }`.
 - **Projections:** never send `get: {}`. A screen that renders four fields asks for four fields.
 - **No second source of truth:** derived counts are computed, never stored; the server's row is the row.
-- **Text:** all UI copy is Persian. Code, comments and commits are English.
+- **Text:** all UI copy is English (D10 — the product sells on the global store). Code, comments and commits are
+  English too. Catalogue content in another language is data, not copy, and is never translated.
 - **A new act** is added to [§8](#8-domain-map--act-to-surface) in the same commit that uses it.

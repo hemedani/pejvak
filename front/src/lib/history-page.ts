@@ -5,7 +5,7 @@
  *
  * `getMyListeningHistory` returns **sessions**, newest first, with
  * `page`/`limit`/`skip`. A page of 100 rows can end in the middle of a stretch.
- * Grouping that page and rendering "۲ از ۵ قطعه، قطع‌شده" would be a verdict
+ * Grouping that page and rendering "2 of 5 tracks, interrupted" would be a verdict
  * invented from a prefix: the other three members are on the next page, and the
  * last loaded session was not the last one heard.
  *

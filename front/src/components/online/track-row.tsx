@@ -4,7 +4,7 @@
  * A row rather than a table row: the source gives a title, sometimes an artist
  * and sometimes a length, and a table would claim columns it cannot fill. The
  * numbers that do exist are tabular, and the ones that do not are an em dash —
- * never «۰:۰۰», which reads as a real length of zero rather than as "the source
+ * never `0:00`, which reads as a real length of zero rather than as "the source
  * did not say".
  *
  * The play control starts **the whole collection at this row**, so the run it
@@ -16,7 +16,7 @@
 import { NowPlayingMarker } from "@/components/online/now-playing-marker";
 import { PlayCollectionButton } from "@/components/online/play-collection-button";
 import { Icon } from "@/components/ui/icon";
-import { fa, formatClockFa } from "@/lib/format";
+import { formatClock } from "@/lib/time";
 import type { PlayableCollection } from "@/lib/online/play";
 import type { OnlineTrack } from "@/lib/online/types";
 import { isPlayableUrl } from "@/lib/player/stream";
@@ -28,19 +28,19 @@ export function TrackRow({
   track: OnlineTrack;
   collection: PlayableCollection;
 }) {
-  const duration = track.durationSec > 0 ? formatClockFa(track.durationSec) : "—";
+  const duration = track.durationSec > 0 ? formatClock(track.durationSec) : "—";
   const pageUrl = track.pageUrl && isPlayableUrl(track.pageUrl) ? track.pageUrl : null;
 
   return (
     <li className="flex items-center gap-[var(--space-md)] px-[var(--space-md)] py-[var(--space-sm)] sm:px-[var(--space-lg)]">
       <span className="type-numeric w-7 shrink-0 text-end text-text-tertiary" dir="ltr">
-        {fa(track.order)}
+        {track.order}
       </span>
 
       <PlayCollectionButton
         collection={collection}
         index={track.order - 1}
-        label="پخش از این قطعه"
+        label="Play from this track"
         variant="ghost"
         size="icon"
         iconOnly
@@ -71,7 +71,7 @@ export function TrackRow({
           href={pageUrl}
           target="_blank"
           rel="noreferrer noopener"
-          aria-label="صفحهٔ این قطعه در منبع"
+          aria-label="This track's page at the source"
           className="grid size-9 shrink-0 place-items-center rounded-[var(--radius-sm)] text-text-tertiary transition-colors hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
         >
           <Icon name="external" size="sm" />

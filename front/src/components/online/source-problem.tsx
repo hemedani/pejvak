@@ -7,9 +7,8 @@
  * manahej.ir", and the sentence has to say so or the listener will restart their
  * router.
  *
- * The source's own English error never appears here. It is not actionable for
- * the listener, it is not in their language, and a raw stack in a Persian page
- * reads as a crash. The sentence comes from `problems.ts`; the technical detail
+ * The source's own error never appears here. It is not actionable for the
+ * listener and a raw stack reads as a crash, so the sentence is chosen for them. The sentence comes from `problems.ts`; the technical detail
  * is kept behind a disclosure for whoever is debugging.
  */
 
@@ -45,7 +44,7 @@ export function SourceProblem({
 
       <div>
         <p className="type-body-strong text-text">
-          {sourceName ? `${sourceName} پاسخ نداد` : "منبع پاسخ نداد"}
+          {sourceName ? `${sourceName} did not respond` : "The source did not respond"}
         </p>
         <p className="type-caption mt-[var(--space-xs)] max-w-[52ch] text-text-tertiary">
           {onlineProblemMessage(code)}
@@ -54,13 +53,13 @@ export function SourceProblem({
 
       {retryHref && RETRYABLE.has(code) ? (
         <Button asChild variant="secondary" size="md">
-          <Link href={retryHref}>تلاش دوباره</Link>
+          <Link href={retryHref}>Try again</Link>
         </Button>
       ) : null}
 
       {detail ? (
         <details className="type-caption text-text-tertiary">
-          <summary className="cursor-pointer select-none">جزئیات فنی</summary>
+          <summary className="cursor-pointer select-none">Technical details</summary>
           <p className="mt-[var(--space-xs)] break-all" dir="ltr">
             {detail}
           </p>

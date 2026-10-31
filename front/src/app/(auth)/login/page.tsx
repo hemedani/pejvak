@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
 import { LoginForm } from "./login-form";
 
-export const metadata: Metadata = { title: "ورود" };
+export const metadata: Metadata = { title: "Sign in" };
 
 /**
  * The signed-out screen.
@@ -33,9 +33,9 @@ export default async function LoginPage({
           <span className="grid size-14 place-items-center rounded-[var(--radius-lg)] bg-accent-soft text-accent">
             <Icon name="player" size="xl" />
           </span>
-          <h1 className="type-title text-text">ورود به پژواک</h1>
+          <h1 className="type-title text-text">Sign in to Pejvak</h1>
           <p className="type-caption text-text-tertiary">
-            کنسول شنیدن شما: کتابخانه، تاریخ و آمار.
+            Your listening console: library, history and stats.
           </p>
         </div>
 
@@ -47,7 +47,7 @@ export default async function LoginPage({
             >
               <Icon name="clock" size="sm" className="mt-[2px] shrink-0 text-text-tertiary" />
               <p className="type-caption text-text-secondary">
-                نشست شما منقضی شده بود. دوباره وارد شوید.
+                Your session had expired. Please sign in again.
               </p>
             </div>
           ) : null}
@@ -56,11 +56,11 @@ export default async function LoginPage({
         </div>
 
         <p className="mt-[var(--space-xl)] text-center type-caption text-text-tertiary">
-          حساب ندارید؟ ثبت‌نام در نسخهٔ وب هنوز ممکن نیست؛ از{" "}
+          No account? Signing up is not possible on the web yet — use the{" "}
           <Link href="/" className="text-accent underline underline-offset-4">
-            اپلیکیشن موبایل
-          </Link>{" "}
-          استفاده کنید.
+            mobile app
+          </Link>
+          .
         </p>
       </div>
     </main>

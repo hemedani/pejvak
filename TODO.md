@@ -480,8 +480,9 @@ thing a listener wants and the one thing the screen could not do.
 
 ### It has to search Persian, or it does not work
 
-This is a Persian-first audio app, and the same word is written several ways in
-the wild. «ماجراي شيعه» with an Arabic yeh (ي) and «ماجرای شیعه» with a Persian
+This is a Persian-first audio app — the *catalogue* is Persian, not the interface,
+which is English everywhere (see `front/docs/PLAN.md` D10) — and the same word is
+written several ways in the wild. «ماجراي شيعه» with an Arabic yeh (ي) and «ماجرای شیعه» with a Persian
 one (ی) are the same title; so are «ك» / «ک», and a ZWNJ (نیمفاصله) is invisible
 but significant. A byte-comparison search would find neither. So the query and
 the haystack are both normalised first — Arabic → Persian letters, ZWNJ and

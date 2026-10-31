@@ -72,7 +72,7 @@ export function buildContinueItems(
       sourceId: parsed.sourceId,
       externalId: parsed.externalId,
       // The run's own title, because the collection may be gone from the shelf.
-      title: run.contextTitle || savedByKey.get(run.contextKey)?.title || "مجموعه",
+      title: run.contextTitle || savedByKey.get(run.contextKey)?.title || "Collection",
       trackCount: run.trackCount,
       finishedCount: run.finishedCount,
       lastIndex: Math.max(0, run.lastIndex),

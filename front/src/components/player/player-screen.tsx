@@ -16,7 +16,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { fa } from "@/lib/format";
 import { playQueueAt, seek } from "@/lib/player/controller";
 import {
   describeContextType,
@@ -93,13 +92,13 @@ export function PlayerScreen({
             className="inline-flex items-center gap-[var(--space-xs)] rounded-[var(--radius-sm)] px-[var(--space-sm)] py-[var(--space-xs)] type-label text-text-secondary hover:bg-surface-sunken hover:text-text"
           >
             <Icon name="start" size="sm" />
-            بازگشت
+            Back
           </Link>
         </header>
 
         {deepLinkError ? (
           <p className="type-body rounded-[var(--radius-md)] bg-surface-sunken px-[var(--space-lg)] py-[var(--space-md)] text-text-secondary" role="status">
-            این قطعه در کتابخانه پیدا نشد.
+            That track could not be found in your library.
           </p>
         ) : null}
 
@@ -107,16 +106,20 @@ export function PlayerScreen({
           <span className="grid size-16 place-items-center rounded-full bg-surface text-text-tertiary">
             <Icon name="player" size="xl" />
           </span>
-          <h1 className="type-title text-text">چیزی در حال پخش نیست</h1>
+          <h1 className="type-title text-text">Nothing is playing</h1>
           <p className="type-body max-w-[44ch] text-text-secondary">
-            از کتابخانه یا کاوش یک قطعه انتخاب کنید تا پخش و تاریخچهٔ شنیدن آغاز شود.
+            Pick something from your library or Browse to start playback and begin your listening history.
           </p>
           <div className="mt-[var(--space-sm)] flex flex-wrap justify-center gap-[var(--space-sm)]">
             <Button asChild variant="primary">
-              <Link href="/library">کتابخانه</Link>
+              <Link href="/library">
+              Library
+            </Link>
             </Button>
             <Button asChild variant="secondary">
-              <Link href="/browse">کاوش</Link>
+              <Link href="/browse">
+              Browse
+            </Link>
             </Button>
           </div>
         </section>
@@ -135,14 +138,14 @@ export function PlayerScreen({
           className="inline-flex items-center gap-[var(--space-xs)] rounded-[var(--radius-sm)] px-[var(--space-sm)] py-[var(--space-xs)] type-label text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
         >
           <Icon name="start" size="sm" />
-          بازگشت
-        </Link>
+            Back
+          </Link>
 
         <div className="flex items-center gap-[var(--space-xs)]">
           <button
             type="button"
             className="grid size-11 place-items-center rounded-[var(--radius-sm)] text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-            aria-label="صف پخش"
+            aria-label="Playback queue"
             onClick={requestOpenQueue}
           >
             <Icon name="queue" size="md" />
@@ -150,14 +153,14 @@ export function PlayerScreen({
           <button
             type="button"
             className="relative grid size-11 place-items-center rounded-[var(--radius-sm)] text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-            aria-label="تایمر خواب"
+            aria-label="Sleep timer"
             aria-expanded={sleepOpen}
             onClick={() => setSleepOpen(true)}
           >
             <Icon name="sleep" size="md" />
             {sleep.deadline !== null ? (
               <span className="type-numeric absolute -top-1 end-0 rounded-[var(--radius-pill)] bg-accent px-[var(--space-xs)] text-on-accent">
-                {fa(formatRemaining(sleep.remainingMs))}
+                {formatRemaining(sleep.remainingMs)}
               </span>
             ) : null}
           </button>
@@ -174,7 +177,7 @@ export function PlayerScreen({
           {current.title}
         </h1>
         <p className="type-caption text-text-secondary">
-          {current.artist ?? current.albumTitle ?? "بیشناسه"}
+          {current.artist ?? current.albumTitle ?? "Unknown artist"}
         </p>
         {context ? (
           <Link
@@ -189,13 +192,13 @@ export function PlayerScreen({
 
       {deepLinkError ? (
         <p className="type-caption rounded-[var(--radius-md)] bg-surface-sunken px-[var(--space-md)] py-[var(--space-sm)] text-center text-text-secondary" role="status">
-          این قطعه در کتابخانه پیدا نشد.
+          That track could not be found in your library.
         </p>
       ) : null}
 
       {sleep.expired ? (
         <p className="type-caption text-center text-text-secondary" role="status">
-          پخش با تایمر خواب متوقف شد.
+          Playback stopped because the sleep timer ended.
         </p>
       ) : null}
 
@@ -221,7 +224,7 @@ export function PlayerScreen({
         </div>
       )}
 
-      <section aria-label="کنترل‌های بیشتر" className="flex flex-wrap items-center justify-center gap-[var(--space-sm)]">
+      <section aria-label="More controls" className="flex flex-wrap items-center justify-center gap-[var(--space-sm)]">
         <SpeedMenu />
         <button
           type="button"
@@ -230,7 +233,7 @@ export function PlayerScreen({
           disabled={current.isLive}
         >
           <Icon name="clock" size="sm" />
-          پرش به زمان
+          Jump to time
         </button>
         <button
           type="button"
@@ -238,7 +241,7 @@ export function PlayerScreen({
           onClick={() => setSleepOpen(true)}
         >
           <Icon name="sleep" size="sm" />
-          {sleep.deadline !== null ? `خواب ${fa(formatRemaining(sleep.remainingMs))}` : "تایمر خواب"}
+          {sleep.deadline !== null ? `Sleep ${formatRemaining(sleep.remainingMs)}` : "Sleep timer"}
         </button>
         {!local ? (
           <button
@@ -247,7 +250,7 @@ export function PlayerScreen({
             onClick={requestOpenNote}
           >
             <Icon name="note" size="sm" />
-            یادداشت
+            Note
           </button>
         ) : null}
         <VolumeControl withSlider />
@@ -269,8 +272,7 @@ export function PlayerScreen({
 
       <footer className="border-t border-outline-variant pt-[var(--space-md)]">
         <p className="type-caption text-center text-text-tertiary">
-          Space پخش و توقف · ← → ۵ ثانیه · Shift + ← → ۳۰ ثانیه · ↑ ↓ صدا · M بی‌صدا · J / L ۱۰ ثانیه
-        </p>
+          Space play/pause · ← → 5 seconds · Shift + ← → 30 seconds · ↑ ↓ volume · M mute · J / L 10 seconds</p>
       </footer>
 
       <SleepTimerSheet open={sleepOpen} onOpenChange={setSleepOpen} timer={sleep} />
@@ -295,7 +297,7 @@ function describeOverline(
     return current.albumTitle;
   }
   if (current.origin === "local") {
-    return "روی دستگاه شما";
+    return "On your device";
   }
-  return "آنلاین";
+  return "Online";
 }

@@ -16,7 +16,7 @@
  *
  * The model declares `track` required, but a projection can lose it and a future
  * `hardCascade` can delete a track out from under its history. The session still
- * happened, so it is kept with `track: null` and rendered as «ترک حذف‌شده». A
+ * happened, so it is kept with `track: null` and rendered as "Deleted track". A
  * dropped row would silently shorten the listener's history, which is the one
  * thing this screen must never do.
  */
@@ -124,7 +124,7 @@ export function parseHistoryTrack(raw: unknown): HistoryTrack | null {
   return {
     id,
     contentHash,
-    title: asString(record.title) ?? "بدون عنوان",
+    title: asString(record.title) ?? "Untitled",
     durationSec: Math.max(0, asInt(record.durationSec) ?? 0),
     author: asString(record.author),
     narrator: asString(record.narrator),
@@ -166,7 +166,7 @@ export function parseHistorySession(raw: unknown): HistorySession | null {
     // positions: a seek moves the position without adding listening time, so
     // deriving one from the other would invent minutes nobody heard.
     durationListenedSec: Math.max(0, asInt(record.durationListenedSec) ?? 0),
-    // A missing speed is 1×, not 0× — 0 would print «۰×» beside every row the
+    // A missing speed is 1×, not 0× — 0 would print `0×` beside every row the
     // phone recorded before it sent the field.
     playbackSpeed: asNumber(record.playbackSpeed) ?? 1,
     completed: asBoolean(record.completed),

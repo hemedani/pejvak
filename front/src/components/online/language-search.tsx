@@ -28,7 +28,6 @@ import { useDeferredValue, useMemo, useState } from "react";
 
 import { LanguageList } from "@/components/online/language-list";
 import { Icon } from "@/components/ui/icon";
-import { fa } from "@/lib/format";
 import { languageSearchFields } from "@/lib/online/catalogue";
 import type { OnlineLanguage } from "@/lib/online/types";
 import { createSearchIndex, foldQuery, searchIndex } from "@/lib/search";
@@ -65,8 +64,8 @@ export function LanguageSearch({ languages }: { languages: readonly OnlineLangua
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="جست‌وجوی زبان…"
-          aria-label="جست‌وجوی زبان"
+          placeholder="Search languages…"
+          aria-label="Search languages"
           className="h-11 w-full rounded-[var(--radius-pill)] border border-outline-strong bg-surface-sunken pe-[var(--space-lg)] ps-10 type-body text-text placeholder:text-text-tertiary focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
         />
 
@@ -74,7 +73,7 @@ export function LanguageSearch({ languages }: { languages: readonly OnlineLangua
           <button
             type="button"
             onClick={() => setQuery("")}
-            aria-label="پاک کردن جست‌وجو"
+            aria-label="Clear search"
             className="absolute inset-y-0 end-[var(--space-sm)] grid place-items-center px-[var(--space-sm)] text-text-tertiary hover:text-text"
           >
             <Icon name="close" size="sm" />
@@ -87,7 +86,7 @@ export function LanguageSearch({ languages }: { languages: readonly OnlineLangua
           <LanguageList languages={visible} />
         ) : (
           <p className="type-caption px-[var(--space-lg)] py-[var(--space-xxl)] text-center text-text-tertiary">
-            زبانی با این نام پیدا نشد.
+            No language matched that name.
           </p>
         )}
       </div>
@@ -96,7 +95,7 @@ export function LanguageSearch({ languages }: { languages: readonly OnlineLangua
         // Said out loud, because a shortened list with no explanation reads as a
         // catalogue that only has six languages.
         <p className="type-caption text-text-tertiary" aria-live="polite">
-          {`${fa(hits.length)} زبان از ${fa(languages.length)}`}
+          {`${hits.length} of ${languages.length} languages`}
         </p>
       ) : null}
     </div>

@@ -9,11 +9,11 @@
 import type { NavItem } from "./nav-link";
 
 export const NAV_ITEMS: readonly NavItem[] = [
-  { href: "/", label: "خانه", icon: "home" },
-  { href: "/library", label: "کتابخانه", icon: "library" },
-  { href: "/history", label: "تاریخ شنیدن", icon: "history" },
-  { href: "/playlists", label: "فهرست‌ها", icon: "playlist" },
-  { href: "/browse", label: "کاوش", icon: "browse" },
-  { href: "/player", label: "پخش", icon: "player" },
-  { href: "/settings", label: "تنظیمات", icon: "settings" },
+  { href: "/", label: "Home", icon: "home" },
+  { href: "/library", label: "Library", icon: "library" },
+  { href: "/history", label: "History", icon: "history" },
+  { href: "/playlists", label: "Playlists", icon: "playlist" },
+  { href: "/browse", label: "Browse", icon: "browse" },
+  { href: "/player", label: "Player", icon: "player" },
+  { href: "/settings", label: "Settings", icon: "settings" },
 ];

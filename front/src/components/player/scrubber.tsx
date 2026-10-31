@@ -8,14 +8,15 @@
  * reports, so the thumb moves at the speed of the voice rather than the speed of
  * `timeupdate`.
  *
- * Radial: the fill and the thumb work in reading direction, which in RTL means
- * starting at the right. The slider is told `dir="rtl"` explicitly.
+ * The fill and the thumb work in reading direction, which is left to right. The
+ * slider is told `dir="ltr"` explicitly rather than relying on the document's
+ * direction, so a slider embedded in RTL text still fills from the left.
  */
 
 import * as Slider from "@radix-ui/react-slider";
 import { useState } from "react";
 
-import { formatClockFa } from "@/lib/format";
+import { formatClock } from "@/lib/time";
 import { seek } from "@/lib/player/controller";
 import { markerOffsetRatio } from "@/lib/player/annotations";
 import { progressRatio } from "@/lib/player/progressSmoothing";
@@ -43,7 +44,7 @@ export function Scrubber({
       <div className="flex items-center gap-[var(--space-sm)]" data-player-surface>
         <span className="inline-flex items-center gap-[var(--space-xs)] rounded-[var(--radius-pill)] bg-danger-soft px-[var(--space-sm)] py-[var(--space-xxs)] type-caption text-danger">
           <span aria-hidden className="size-2 rounded-full bg-danger" />
-          زنده
+          Live
         </span>
         <div aria-hidden className="h-[var(--bar-thin)] flex-1 rounded-[var(--radius-pill)] bg-track" />
       </div>
@@ -61,13 +62,13 @@ export function Scrubber({
         <div
           className="relative h-[var(--bar-thick)] w-full overflow-hidden rounded-[var(--radius-pill)] bg-track"
           role="progressbar"
-          aria-label="در حال بارگذاری"
-          aria-valuetext="در حال بارگذاری"
+          aria-label="Loading"
+          aria-valuetext="Loading"
         >
           <span className="absolute inset-y-0 -inset-x-1/3 animate-[player-sweep_1.4s_ease-in-out_infinite] bg-accent/45 motion-reduce:animate-none motion-reduce:bg-accent/30" />
         </div>
         <p className="type-caption mt-[var(--space-xs)] text-text-tertiary">
-          {formatClockFa(value)} / {formatClockFa(durationSec)}
+          {formatClock(value)} / {formatClock(durationSec)}
         </p>
       </div>
     );
@@ -91,15 +92,15 @@ export function Scrubber({
         ) : null}
 
         <Slider.Root
-          dir="rtl"
+          dir="ltr"
           className="relative flex h-6 w-full touch-none select-none items-center"
           min={0}
           max={max}
           step={1}
           value={[value]}
           disabled={durationSec <= 0}
-          aria-label="جای پخش"
-          aria-valuetext={formatClockFa(value)}
+          aria-label="Playback position"
+          aria-valuetext={formatClock(value)}
           onValueChange={(values) => {
             const next = values[0];
             if (typeof next === "number") {
@@ -150,7 +151,7 @@ export function Scrubber({
           </Slider.Track>
           <Slider.Thumb
             className="block size-4 rounded-full border-2 border-surface bg-accent shadow-[var(--elevation-card)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
-            aria-label="دستگیرهٔ جای پخش"
+            aria-label="Playback position handle"
           />
         </Slider.Root>
 
@@ -159,14 +160,14 @@ export function Scrubber({
             className="pointer-events-none absolute -top-2 -translate-y-full translate-x-1/2 rounded-[var(--radius-sm)] bg-surface px-[var(--space-sm)] py-[var(--space-xxs)] type-numeric text-text shadow-[var(--elevation-card)]"
             style={{ insetInlineStart: `${activeRatio * 100}%` }}
           >
-            {formatClockFa(drag)}
+            {formatClock(drag)}
           </span>
         ) : null}
       </div>
 
       <div className="type-numeric flex justify-between text-text-tertiary">
-        <span className="text-text-secondary">{formatClockFa(value)}</span>
-        <span>{durationSec > 0 ? formatClockFa(Math.max(0, durationSec - value)) : "—"}</span>
+        <span className="text-text-secondary">{formatClock(value)}</span>
+        <span>{durationSec > 0 ? formatClock(Math.max(0, durationSec - value)) : "—"}</span>
       </div>
     </div>
   );

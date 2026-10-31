@@ -4,7 +4,7 @@ import { playerTrackFromTrack } from "@/lib/player/from-track";
 import type { PlayerTrack } from "@/lib/player/types";
 import { firstParam, type SearchParamValue } from "@/lib/search-params";
 
-export const metadata = { title: "پخش" };
+export const metadata = { title: "Player" };
 
 /**
  * The player route.

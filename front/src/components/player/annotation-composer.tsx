@@ -32,7 +32,6 @@ import {
 } from "@/lib/player/annotations";
 import { createNote, editNote, ensureNoteQueued } from "@/lib/player/notes";
 import { foldText } from "@/lib/search";
-import { formatClockFa } from "@/lib/format";
 import { clampSeconds, digitsToSeconds, formatClock } from "@/lib/time";
 
 import { Sheet } from "./sheet";
@@ -72,13 +71,13 @@ export function AnnotationComposer({
       onOpenChange={onOpenChange}
       title={
         initial
-          ? "ویرایش یادداشت"
-          : `یادداشت در ${formatClockFa(seedPositionSec)}`
+          ? "Edit note"
+          : `Note at ${formatClock(seedPositionSec)}`
       }
       description={
         initial === null || initial.pending
-          ? "جای یادداشت را می‌توانید تا پیش از همگام‌سازی تغییر دهید."
-          : "جای این یادداشت پس از همگام‌سازی ثابت است."
+          ? "You can change the note's position until it syncs."
+          : "This note's position is fixed once it has synced."
       }
     >
       <ComposerBody
@@ -110,7 +109,7 @@ function ComposerBody({
   onSaved: () => void;
 }) {
   const [text, setText] = useState(initial?.text ?? "");
-  const [tags, setTags] = useState((initial?.tags ?? []).join("، "));
+  const [tags, setTags] = useState((initial?.tags ?? []).join(", "));
   const [position, setPosition] = useState(
     formatClock(initial?.positionSec ?? Math.max(0, Math.round(seedPositionSec))),
   );
@@ -145,11 +144,11 @@ function ComposerBody({
       : (initial?.positionSec ?? 0);
 
     if (positionEditable && digitsToSeconds(position) <= 0 && !/[0۰]/.test(position)) {
-      setError("یک زمان برای یادداشت وارد کنید.");
+      setError("Enter a time for the note.");
       return;
     }
     if (text.trim() === "") {
-      setError("متن یادداشت نمی‌تواند خالی باشد.");
+      setError("A note cannot be empty.");
       return;
     }
 
@@ -194,7 +193,7 @@ function ComposerBody({
       onSaved();
       onOpenChange(false);
     } catch {
-      setError("ذخیره نشد. یادداشت در صف می‌ماند و دوباره تلاش می‌شود.");
+      setError("Could not save. The note stays queued and will be retried.");
     } finally {
       setBusy(false);
     }
@@ -210,21 +209,21 @@ function ComposerBody({
 
       {positionEditable ? (
         <TextField
-          label="زمان"
-          hint="مثلاً ۱۲:۳۴"
+          label="Time"
+          hint="For example 12:34"
           inputMode="numeric"
           value={position}
           onChange={(event) => setPosition(event.target.value)}
         />
       ) : (
         <p className="type-label text-text-secondary">
-          جای یادداشت: <span className="type-numeric text-text">{formatClock(initial?.positionSec ?? 0)}</span>
+          Note position: <span className="type-numeric text-text">{formatClock(initial?.positionSec ?? 0)}</span>
         </p>
       )}
 
       <div className="flex flex-col gap-[var(--space-sm)]">
         <label htmlFor={textId} className="type-label text-text">
-          متن یادداشت
+          Note text
         </label>
         <textarea
           id={textId}
@@ -232,20 +231,20 @@ function ComposerBody({
           rows={4}
           onChange={(event) => setText(event.target.value)}
           className="w-full resize-y rounded-[var(--radius-md)] border border-outline-strong bg-surface-sunken px-[var(--space-lg)] py-[var(--space-md)] type-body text-text placeholder:text-text-tertiary focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
-          placeholder="چیزی که می‌خواهید به یاد بسپارید…"
+          placeholder="Something you want to remember…"
           autoFocus
         />
       </div>
 
       <TextField
-        label="برچسب‌ها"
-        hint="با ویرگول جدا کنید؛ مثلاً ایده، بازبینی"
+        label="Tags"
+        hint="Separate with commas, for example idea, review"
         value={tags}
         onChange={(event) => setTags(event.target.value)}
       />
 
       <fieldset className="flex flex-col gap-[var(--space-sm)]">
-        <legend className="type-label text-text">رنگ نشانگر</legend>
+        <legend className="type-label text-text">Marker colour</legend>
         <div className="flex flex-wrap gap-[var(--space-sm)]">
           {ANNOTATION_COLORS.map((swatch) => {
             const active = swatch === color;
@@ -259,7 +258,7 @@ function ComposerBody({
                   active && "ring-2 ring-text ring-offset-2 ring-offset-[var(--glass)]",
                 )}
                 style={{ backgroundColor: swatch }}
-                aria-label={ANNOTATION_COLOR_NAMES[swatch] ?? "رنگ"}
+                aria-label={ANNOTATION_COLOR_NAMES[swatch] ?? "Colour"}
                 aria-pressed={active}
                 onClick={() => setColor(swatch)}
               >
@@ -272,14 +271,14 @@ function ComposerBody({
 
       <div className="flex justify-end gap-[var(--space-sm)] border-t border-[var(--glass-border)] pt-[var(--space-md)]">
         <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
-          انصراف
+          Cancel
         </Button>
         <Button
           variant="primary"
           onClick={() => void save()}
           disabled={busy || text.trim() === ""}
         >
-          {busy ? "در حال ذخیره…" : "ذخیره"}
+          {busy ? "Saving…" : "Save"}
         </Button>
       </div>
     </div>

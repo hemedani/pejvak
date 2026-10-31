@@ -16,7 +16,6 @@ import Link from "next/link";
 
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/cn";
-import { fa } from "@/lib/format";
 
 export function Pagination({
   page,
@@ -34,17 +33,17 @@ export function Pagination({
 
   return (
     <nav
-      aria-label="صفحه‌بندی"
+      aria-label="Pagination"
       className={cn("flex items-center justify-between gap-[var(--space-md)]", className)}
     >
       <PageLink href={buildHref(page - 1)} disabled={!hasPrevious} direction="previous">
-        قبلی
+        Previous
       </PageLink>
 
-      <p className="type-numeric text-text-tertiary">صفحهٔ {fa(page)}</p>
+      <p className="type-numeric text-text-tertiary">Page {page}</p>
 
       <PageLink href={buildHref(page + 1)} disabled={!hasMore} direction="next">
-        بعدی
+        Next
       </PageLink>
     </nav>
   );
@@ -90,7 +89,7 @@ function PageLink({
  * "Older" for a list that pages by a cursor rather than a page number.
  *
  * History's cursor is a count of rows consumed (`after`), which is not a page
- * index and cannot be rendered as «صفحهٔ ۳» — there is no third page, only "the
+ * index and cannot be rendered as "Page 3" — there is no third page, only "the
  * next hundred rows past where you stopped". So this is one link in one
  * direction, and the URL is still the state: Back returns to the previous page,
  * and the link carries the active date range as well as the cursor.
@@ -102,7 +101,7 @@ function PageLink({
 export function CursorPagination({
   href,
   hasMore,
-  label = "قدیمی‌تر",
+  label = "Older",
   className,
 }: {
   href: string;
@@ -114,7 +113,7 @@ export function CursorPagination({
     "inline-flex h-10 items-center gap-[var(--space-xs)] rounded-[var(--radius-md)] border border-outline-strong px-[var(--space-md)] type-label transition-colors";
 
   return (
-    <nav aria-label="صفحه‌بندی" className={cn("flex items-center justify-center", className)}>
+    <nav aria-label="Pagination" className={cn("flex items-center justify-center", className)}>
       {hasMore ? (
         <Link href={href} className={`${base} text-text hover:bg-surface-sunken`}>
           {label}

@@ -97,11 +97,11 @@ export function HistoryRow({
               {title.end ? (
                 <>
                   {/*
-                    The arrow is isolated, not the title. `dir="ltr"` on the whole
-                    title would lay the two Persian names out left-to-right and put
-                    the *end* of the listen at the reading edge — the brief's rule
-                    is about the arrow being punctuation, and isolating it is what
-                    that rule is for.
+                    The arrow is isolated, not the titles. A Persian title carries
+                    its own direction, and an arrow between two of them is
+                    punctuation with no strong direction of its own — isolating it
+                    keeps it between the names instead of letting bidi reorder it
+                    into one of them.
                   */}
                   <span dir="ltr" aria-hidden className="mx-[var(--space-xs)] text-text-tertiary">
                     →
@@ -119,7 +119,7 @@ export function HistoryRow({
 
             {stretch.seeked ? (
               <Badge tone="muted" size="sm">
-                پرش
+                Seek
               </Badge>
             ) : null}
           </div>
@@ -143,7 +143,7 @@ export function HistoryRow({
               {stretch.playbackSpeed !== 1 ? (
                 <span className="type-numeric">
                   {positionRange ? " · " : null}
-                  سرعت {formatSpeed(stretch.playbackSpeed)}
+                  Speed {formatSpeed(stretch.playbackSpeed)}
                 </span>
               ) : null}
             </p>
@@ -170,7 +170,7 @@ export function HistoryRow({
 /** One end of the title, linked when the track still exists. */
 function TrackTitle({ part }: { part: { title: string; trackId: string | null } }) {
   if (part.trackId === null) {
-    // «ترک حذف‌شده» — no link, because there is nowhere for it to go.
+    // "Deleted track" — no link, because there is nowhere for it to go.
     return <span className="text-text-tertiary">{part.title}</span>;
   }
   return (
@@ -213,8 +213,10 @@ function ContextLink({ stretch, title }: { stretch: ListeningStretch; title: str
 /**
  * A playlist run, as a badge rather than a link.
  *
- * Playlists are Phase 3.3 and have no route yet. A link to a page that does not
- * exist is worse than a label that says what the run was.
+ * The badge is deliberate rather than a link: a playlist can be deleted after a
+ * run through it, and a row in history must not become a link to a 404 because
+ * of something the listener did later. The label says what the run was, which is
+ * all history needs to say.
  */
 function PlaylistContext({ stretch }: { stretch: ListeningStretch }) {
   if (stretch.contextType !== "playlist") {
@@ -224,7 +226,7 @@ function PlaylistContext({ stretch }: { stretch: ListeningStretch }) {
     <>
       {" · "}
       <Badge tone="muted" size="sm">
-        پلی‌لیست
+        Playlist
       </Badge>
     </>
   );

@@ -16,14 +16,14 @@ export const ANNOTATION_COLORS = [
   "#12A594",
 ] as const;
 
-/** Persian names for the swatches, in the same order. */
+/** Names for the swatches, in the same order. */
 export const ANNOTATION_COLOR_NAMES: Record<string, string> = {
-  "#208AEF": "آبی",
-  "#E5484D": "قرمز",
-  "#30A46C": "سبز",
-  "#F5A623": "کهربایی",
-  "#8E4EC6": "بنفش",
-  "#12A594": "فیروزه‌ای",
+  "#208AEF": "Blue",
+  "#E5484D": "Red",
+  "#30A46C": "Green",
+  "#F5A623": "Amber",
+  "#8E4EC6": "Purple",
+  "#12A594": "Teal",
 };
 
 /** Fraction (0–1) of the track at which an annotation marker sits. */

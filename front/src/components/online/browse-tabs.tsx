@@ -1,5 +1,5 @@
 /**
- * The three shelves under «کاوش».
+ * The three shelves under Browse.
  *
  * Links, not buttons, and the tab lives in the URL (`?tab=`): a shelf is a place,
  * so the back button must walk through it, a link to Favorites must be
@@ -22,9 +22,9 @@ import { cn } from "@/lib/cn";
 export type BrowseTab = "continue" | "favorites" | "browse";
 
 const TABS: readonly { tab: BrowseTab; label: string }[] = [
-  { tab: "continue", label: "ادامه" },
-  { tab: "favorites", label: "نشان‌شده‌ها" },
-  { tab: "browse", label: "کاوش" },
+  { tab: "continue", label: "Continue" },
+  { tab: "favorites", label: "Saved" },
+  { tab: "browse", label: "Browse" },
 ];
 
 export function browseTabHref(tab: BrowseTab): string {
@@ -34,7 +34,7 @@ export function browseTabHref(tab: BrowseTab): string {
 export function BrowseTabs({ active }: { active: BrowseTab }) {
   return (
     <nav
-      aria-label="بخش‌های کاوش"
+      aria-label="Browse sections"
       className="-mx-[var(--space-xs)] flex gap-[var(--space-xs)] overflow-x-auto px-[var(--space-xs)] pb-[var(--space-xs)]"
     >
       {TABS.map(({ tab, label }) => {

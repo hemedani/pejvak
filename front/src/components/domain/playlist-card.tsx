@@ -5,7 +5,7 @@
  *
  * There is nothing interactive inside it — rename and delete live on the detail
  * page, where the contents are visible — so one `<Link>` wrapping the surface is
- * the largest honest hit area. The «باز کردن» affordance at the end edge is a
+ * the largest honest hit area. The "Open" affordance at the end edge is a
  * `<span>`, not a second anchor: an anchor inside an anchor is invalid, and two
  * links to one destination make a screen reader announce the card twice.
  *
@@ -22,18 +22,18 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import type { Playlist } from "@/lib/domain/playlist";
-import { fa } from "@/lib/format";
+import { formatCount } from "@/lib/format";
 import { formatRelativeTime } from "@/lib/time";
 
 export function PlaylistCard({ playlist, now }: { playlist: Playlist; now: number }) {
-  // The time clause is dropped rather than printed as «آخرین تغییر هرگز»: a row
+  // The time clause is dropped rather than printed as "Updated never": a row
   // with no timestamp is not "never changed", it is a row whose timestamp we do
   // not have, and the count alone is still true.
   const meta = [
-    `${fa(playlist.items.length)} ترک`,
+    formatCount(playlist.items.length, "track"),
     playlist.updatedAt === null
       ? null
-      : `آخرین تغییر ${formatRelativeTime(playlist.updatedAt, now)}`,
+      : `Updated ${formatRelativeTime(playlist.updatedAt, now)}`,
   ]
     .filter((part): part is string => part !== null)
     .join(" · ");
@@ -57,7 +57,7 @@ export function PlaylistCard({ playlist, now }: { playlist: Playlist; now: numbe
         </div>
 
         <span className="type-label inline-flex shrink-0 items-center gap-[var(--space-xs)] text-text-secondary">
-          باز کردن
+          Open
           <Icon name="end" size="xs" />
         </span>
       </Card>

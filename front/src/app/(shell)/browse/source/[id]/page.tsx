@@ -28,7 +28,7 @@ const PAGE_SIZE = 24;
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const source = findSource(id);
-  return { title: source ? source.nativeName : "منبع" };
+  return { title: source ? source.nativeName : "Source" };
 }
 
 /**
@@ -102,7 +102,7 @@ export default async function SourcePage({
           <Button asChild variant="ghost" size="sm">
             <a href={source.homepage} target="_blank" rel="noreferrer noopener">
               <Icon name="external" size="sm" />
-              صفحهٔ منبع
+              Source page
             </a>
           </Button>
         }
@@ -114,7 +114,7 @@ export default async function SourcePage({
         </Badge>
         {source.live ? (
           <Badge tone="accent" size="md">
-            زنده
+            Live
           </Badge>
         ) : null}
         {source.attribution ? (
@@ -134,13 +134,13 @@ export default async function SourcePage({
             type="search"
             name="q"
             defaultValue={search}
-            placeholder="جست‌وجو در این منبع…"
-            aria-label={`جست‌وجو در ${source.nativeName}`}
+            placeholder="Search this source…"
+            aria-label={`Search ${source.nativeName}`}
             className="h-11 w-full rounded-[var(--radius-pill)] border border-outline-strong bg-surface-sunken pe-[var(--space-lg)] ps-10 type-body text-text placeholder:text-text-tertiary focus:border-transparent focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
           />
         </div>
         <Button type="submit" variant="secondary" size="md">
-          جست‌وجو
+          Search
         </Button>
       </form>
 
@@ -208,9 +208,9 @@ async function CollectionPanel({
         <Card>
           <EmptyState
             icon="search"
-            title="چیزی پیدا نشد"
-            description={`«${search}» در این منبع نتیجه‌ای نداشت.`}
-            action={{ label: "پاک کردن جست‌وجو", href: clearSearchHref }}
+            title="Nothing found"
+            description={`“${search}” had no result in this source.`}
+            action={{ label: "Clear search", href: clearSearchHref }}
           />
         </Card>
       );
@@ -223,9 +223,9 @@ async function CollectionPanel({
         <Card>
           <EmptyState
             icon="empty"
-            title="این صفحه خالی است"
-            description="این منبع در این صفحه مجموعهٔ دیگری ندارد."
-            action={{ label: "بازگشت به صفحهٔ اول", href: hrefFor(1) }}
+            title="This page is empty"
+            description="This source has no further collections on this page."
+            action={{ label: "Back to the first page", href: hrefFor(1) }}
           />
         </Card>
       );
@@ -235,9 +235,9 @@ async function CollectionPanel({
       <Card>
         <EmptyState
           icon="browse"
-          title="این منبع فعلاً مجموعه‌ای ندارد"
-          description="منبع پاسخ داد، اما فهرستش برای این زبان خالی است."
-          action={{ label: "منبع دیگر", href: `/browse/language/${language}` }}
+          title="This source has no collections yet"
+          description="The source answered, but its list is empty for this language."
+          action={{ label: "Another source", href: `/browse/language/${language}` }}
         />
       </Card>
     );

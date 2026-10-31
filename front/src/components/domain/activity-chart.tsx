@@ -8,7 +8,7 @@
  * to a page that is otherwise entirely server-rendered, and every charting
  * library needs its axis direction corrected for RTL — which is the one thing
  * this chart cannot get wrong. Thirty divs and a percentage height render on the
- * server, weigh nothing, and flow right-to-left because the document does.
+ * server, weigh nothing, and flow left-to-right because the document does.
  *
  * Revisit when a *second* chart needs interaction (zoom, tooltips, a shared
  * axis). One chart is a shape; two are a system.
@@ -22,7 +22,7 @@
 
 import type { DailyBucket } from "@/lib/insights";
 import { peakOf } from "@/lib/insights";
-import { fa, formatSpan } from "@/lib/format";
+import { formatSpan } from "@/lib/format";
 import { formatDayHeading } from "@/lib/time";
 
 export function ActivityChart({ buckets }: { buckets: readonly DailyBucket[] }) {
@@ -40,22 +40,22 @@ export function ActivityChart({ buckets }: { buckets: readonly DailyBucket[] }) 
     <figure className="flex flex-col gap-[var(--space-md)]">
       <figcaption className="flex items-baseline justify-between gap-[var(--space-sm)]">
         <p className="type-caption text-text-tertiary">
-          {first ? formatDayHeading(first.day) : ""} تا {last ? formatDayHeading(last.day) : ""}
+          {first ? formatDayHeading(first.day) : ""} – {last ? formatDayHeading(last.day) : ""}
         </p>
         <p className="type-numeric text-text-secondary">
-          {peak === 0 ? "بدون شنیدن" : `${formatSpan(total)} در ۳۰ روز`}
+          {peak === 0 ? "No listening" : `${formatSpan(total)} in 30 days`}
         </p>
       </figcaption>
 
       {peak === 0 ? (
         <p className="type-caption py-[var(--space-xxl)] text-center text-text-tertiary">
-          در سی روز گذشته چیزی شنیده نشده است.
+          Nothing has been listened to in the last thirty days.
         </p>
       ) : (
         <div
           className="flex h-[168px] items-end gap-[3px]"
           role="img"
-          aria-label={`نمودار شنیدن سی روز گذشته، مجموع ${formatSpan(total)}`}
+          aria-label={`Listening over the last thirty days, ${formatSpan(total)} in total`}
         >
           {buckets.map((bucket) => {
             // A day with any listening gets at least 3% height: a bar of one
@@ -71,7 +71,7 @@ export function ActivityChart({ buckets }: { buckets: readonly DailyBucket[] }) 
                 title={
                   bucket.listenTimeSec > 0
                     ? `${formatDayHeading(bucket.day)} — ${formatSpan(bucket.listenTimeSec)}`
-                    : `${formatDayHeading(bucket.day)} — بدون شنیدن`
+                    : `${formatDayHeading(bucket.day)} — no listening`
                 }
               >
                 <div className="absolute inset-x-0 bottom-0 flex h-full items-end">
@@ -91,7 +91,7 @@ export function ActivityChart({ buckets }: { buckets: readonly DailyBucket[] }) 
       )}
 
       <p className="type-caption text-text-tertiary">
-        بیشترین روز: {peak === 0 ? "—" : formatSpan(peak)}
+        Busiest day: {peak === 0 ? "—" : formatSpan(peak)}
       </p>
     </figure>
   );
@@ -102,7 +102,7 @@ export function ActivitySummary({ buckets }: { buckets: readonly DailyBucket[] }
   const activeDays = buckets.filter((bucket) => bucket.listenTimeSec > 0).length;
   return (
     <p className="type-caption text-text-tertiary">
-      {fa(activeDays)} روز از ۳۰ روز فعال بوده‌اید.
+      Active on {activeDays} of the last 30 days.
     </p>
   );
 }

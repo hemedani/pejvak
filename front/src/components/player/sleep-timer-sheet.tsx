@@ -13,7 +13,6 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { TextField } from "@/components/ui/text-field";
-import { fa } from "@/lib/format";
 import { pause } from "@/lib/player/controller";
 import {
   SLEEP_TIMER_CHOICES,
@@ -108,7 +107,7 @@ export function SleepTimerSheet({
   const chooseCustom = () => {
     const minutes = Number(custom.replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit))));
     if (!Number.isFinite(minutes) || minutes < 1 || minutes > 180) {
-      setError("عددی بین ۱ تا ۱۸۰ دقیقه وارد کنید.");
+      setError("Enter a number between 1 and 180 minutes.");
       return;
     }
     setError(null);
@@ -120,29 +119,29 @@ export function SleepTimerSheet({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      title="تایمر خواب"
-      description="پخش در پایان زمان به‌آرامی متوقف می‌شود."
+      title="Sleep timer"
+      description="Playback stops gently when the time is up."
     >
       <div className="flex flex-col gap-[var(--space-lg)]">
         {timer.deadline !== null ? (
           <div className="flex items-center justify-between rounded-[var(--radius-md)] bg-accent-soft px-[var(--space-md)] py-[var(--space-sm)]">
             <p className="type-label flex items-center gap-[var(--space-sm)] text-text">
               <Icon name="sleep" size="md" className="text-accent" />
-              <span>باقی‌مانده</span>
-              <span className="type-numeric text-accent">{fa(formatRemaining(timer.remainingMs))}</span>
+              <span>Remaining</span>
+              <span className="type-numeric text-accent">{formatRemaining(timer.remainingMs)}</span>
             </p>
             <Button variant="ghost" size="sm" onClick={timer.cancel}>
-              لغو تایمر
+              Cancel timer
             </Button>
           </div>
         ) : null}
 
         <div>
-          <p className="type-label mb-[var(--space-sm)] text-text-secondary">یک بازه انتخاب کنید</p>
+          <p className="type-label mb-[var(--space-sm)] text-text-secondary">Choose a duration</p>
           <div className="flex flex-wrap gap-[var(--space-sm)]">
             {SLEEP_TIMER_CHOICES.map((minutes) => (
               <Button key={minutes} variant="secondary" size="sm" onClick={() => choose(minutes)}>
-                {fa(minutes)} دقیقه
+                {minutes} min
               </Button>
             ))}
           </div>
@@ -150,7 +149,7 @@ export function SleepTimerSheet({
 
         <div className="flex flex-col gap-[var(--space-sm)]">
           <TextField
-            label="بازهٔ دلخواه (دقیقه)"
+            label="Custom duration (minutes)"
             inputMode="numeric"
             value={custom}
             error={error ?? undefined}
@@ -163,7 +162,7 @@ export function SleepTimerSheet({
             }}
           />
           <Button variant="primary" onClick={chooseCustom} disabled={custom.trim() === ""}>
-            تنظیم تایمر
+            Set timer
           </Button>
         </div>
       </div>
