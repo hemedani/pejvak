@@ -131,6 +131,8 @@ is why the gate ends with `next build` and not with `tsc`.
 | `[safe-delete][SAFE_DELETE_BULK_CONFIRM_REQUIRED]` on `.next/trace-build` | The delete guard, not the build. `mv .next /tmp/next-old` and rebuild. |
 | `fish: Unknown command: unset`, exit 127, nothing runs | The harness escalates some commands and feeds a bash prelude to fish. Run the gate steps individually. |
 | `grep "\|"` matches nothing | macOS `grep` has no `\|\|` alternation. Use `grep -E "a|b"`. |
+| `ESLint: write EPIPE`, lint dies mid-run | The same fs broker, not a lint error. `env NODE_OPTIONS= npx eslint .` runs clean — and "clean" means `0 problems`, so read the summary line before believing it. |
+| `npm run check` dies at exit 137 with no output | The foreground budget, not a crash. Run it in the background and read the log; the four steps can also be run one at a time. |
 | `next build` rewrote `tsconfig.json` | Expected: it sets `jsx: react-jsx` and adds `.next/dev/types` to `include`. Commit it. |
 
 
