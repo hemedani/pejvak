@@ -574,14 +574,14 @@ reload with the same `clientId` it was sent with.
 
 **Goal:** [§9](#9-the-player-the-hard-part), built and tested.
 
-- [ ] **5.1** `lib/player/engine.ts` — the single audio element and its event surface.
-- [ ] **5.2** `lib/player/sessionTracking.ts` — ported state machine + tests (delta rule, seek, speed split).
-- [ ] **5.3** `lib/player/queue.ts` + `lib/playbackContext.ts` — queue, run open/re-enter/close, stretch handover.
-- [ ] **5.4** `stores/player.ts` — Zustand mirror of engine state; no derived state stored twice.
-- [ ] **5.5** Persistence: `registerTrack` when unknown → `syncLocalData` on session end → durable retry queue.
-- [ ] **5.6** Player bar, full player, scrubber with annotation markers, queue sheet, speed, sleep timer.
-- [ ] **5.7** `MediaSession` metadata and handlers; keyboard shortcuts; focus management in sheets.
-- [ ] **5.8** Wait states per [§9.7](#97-player-surfaces); the local-track state per [§9.6](#96-what-the-player-cannot-play).
+- [x] **5.1** `lib/player/engine.ts` — the single audio element and its event surface.
+- [x] **5.2** `lib/player/sessionTracking.ts` — ported state machine + tests (delta rule, seek, speed split).
+- [x] **5.3** `lib/player/queue.ts` + `lib/playbackContext.ts` — queue, run open/re-enter/close, stretch handover.
+- [x] **5.4** `stores/player.ts` — Zustand mirror of engine state; no derived state stored twice.
+- [x] **5.5** Persistence: `registerTrack` when unknown → `syncLocalData` on session end → durable retry queue.
+- [x] **5.6** Player bar, full player, scrubber with annotation markers, queue sheet, speed, sleep timer.
+- [x] **5.7** `MediaSession` metadata and handlers; keyboard shortcuts; focus management in sheets.
+- [x] **5.8** Wait states per [§9.7](#97-player-surfaces); the local-track state per [§9.6](#96-what-the-player-cannot-play).
 
 **Done when:** play → pause produces exactly one session on the server with the right `durationListenedSec`;
 scrubbing mid-track sets `seeked` and makes `isComplete` false; closing the tab mid-track still syncs on return.
@@ -816,6 +816,75 @@ resolves and `generateMetadata` + `cache()` do not throw.
 
 **Next action:** **3.2** (history, stretch-aware paging), then 3.3–3.5. Before Phase 6, resolve
 **D1** with the user (§3).
+
+---
+
+### 2026-10-31 — Phase 5 built (gate green; playback still source-less)
+
+**What exists.** The player, its pure engines and their tests. Player code lives in
+`src/lib/player/` (engine, controller, queue, session tracking, storage, sync, notes,
+stream seam), `src/stores/player.ts`, `src/app/actions/player/` (six actions) and
+`src/components/player/` (bar, full screen, scrubber/markers, queue, speed, volume,
+sleep timer, jump-to-time, composer, notes, artwork, sidebar slot).
+
+- **One element, module scope.** `engine.ts` owns the only `HTMLAudioElement`; React
+  never renders one. Position is `timeupdate` + a `requestAnimationFrame` interpolation
+  in the scrubber — no `setInterval` for playback position.
+- **Sessions are the ported mobile machine.** The delta rule, the `5`-second seek
+  boundary, speed splits, checkpoints every 10 s, orphan recovery, and stretch handover
+  at track end all came across with their tests. Session writes are local-first
+  (`localStorage`), then `syncLocalData`; `registerTrack` happens lazily and only for
+  hashes the client has not registered.
+- **Queue snapshots whole tracks.** Persisted locally, reduced in `queue.ts`, never
+  re-fetched on reload. A deleted track still occupies its slot and says so; the queue
+  is the only thing that remembers it.
+- **UI follows the two-material rule.** Floating bar/sheets are glass; content surfaces
+  are opaque. The filled accent circle marks the current row everywhere it appears.
+  Sheets are Radix `Dialog` (focus trap/restore, `dir="rtl"` on the root), speed is a
+  Radix `DropdownMenu`, sliders are Radix `Slider` with `dir="rtl"`.
+- **Entry points are honest.** `library/[trackId]` gained «پخش» / «افزودن به صف»; a local
+  track renders neither button, only the state sentence (no disabled affordance). The
+  sidebar queue slot renders nothing until something is loaded, so it is never a dead
+  control. The empty queue names the run it came from.
+
+**The gate, run individually (the `npm run check` wrapper still trips the fish prelude).**
+
+| Step | Result |
+|---|---|
+| `tsc --noEmit` | ✓ clean |
+| `eslint .` | ✓ 0 problems |
+| `vitest run` | ✓ **192 assertions** in 16 suites (10 player suites + 6 from Phases 0–3) |
+| `next build` | ✓ 11 routes, including `/player`; all still `ƒ` |
+
+**What is *not* proven — read this before calling the phase done.** The phase's own
+"Done when" line is **not** verified: no backend and no `mongod` were available, so no
+session was ever sent, and there was no real listening to compare `durationListenedSec`
+against. Worse, **no stream resolver is registered**. `stream.ts` defines the seam and
+`resolveStreamUrl` throws `no-resolver`, which the UI turns into a truthful source
+error state; the six adapters and their registration are **Phase 4.1/4.5**. Until then
+the only reachable playback states are the local-track state and that error. Also
+unverified in a browser: MediaSession handlers, keyboard shortcuts, tab-close recovery.
+This entry claims the code and the gate, not the end-to-end behavior.
+
+Traps hit this session:
+
+- `"use server"` cannot export a `const`. The annotation id-mapping projections were
+  written as objects first; Lesan's generated types require the array form
+  (`annotations: [{ clientId: 1, serverId: 1 }]`) and `next build` is what catches the
+  export mistake, not `tsc`.
+- `DropdownMenu`'s `dir` belongs on `Root`, not `Content`. `tsc` caught it this time.
+- `react-hooks/set-state-in-effect` rejected three natural designs. The fixes are
+  structural, not suppressions: the composer is a keyed child that remounts per note
+  target; each wait line owns its own `setTimeout`; the rAF anchor is created lazily
+  inside the effect.
+- Duplicate sheets are a real bug risk: two `Dialog.Root`s with the same `id` and the
+  bar turns into a lottery of which content is visible. There is exactly one queue
+  sheet, mounted by the bar, and the sidebar/screen only dispatch events.
+
+**Next action:** **4.1 + 4.5** — port the adapters, register their resolvers, and
+prove a real URL loads in the bare element. Then **3.2–3.5** (history, playlists,
+annotation writes, runs), and a manual backend pass for the phase-5 "Done when" line.
+**D1** is still open and still blocks only Phase 6.
 
 ---
 
