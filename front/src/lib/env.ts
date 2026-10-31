@@ -17,12 +17,14 @@ function required(name: string): string {
 }
 
 /**
- * The backend base URL, trailing slash stripped.
+ * The Lesan endpoint, built from the backend base URL.
  *
- * `lesanApi` posts to `URL` verbatim, so a trailing slash produces
- * `http://host//` — which the backend's router does not match. Stripping here
- * means the value in `.env.local` can be pasted from a browser address bar.
+ * `lesanApi` posts to `URL` verbatim, and Lesan only routes its acts at
+ * `/lesan`; posting to the bare origin answers "Expected POST to /lesan, got
+ * POST to /". Accepting either form means the value in `.env.local` can be
+ * pasted from the backend's startup banner or a browser address bar.
  */
 export function backendUrl(): string {
-  return required("BACKEND_URL").replace(/\/+$/, "");
+  const base = required("BACKEND_URL").replace(/\/+$/, "");
+  return base.endsWith("/lesan") ? base : `${base}/lesan`;
 }
