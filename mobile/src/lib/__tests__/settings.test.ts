@@ -1,21 +1,25 @@
 import {
   DEFAULT_SETTINGS,
+  DEFAULT_SHARED_SETTINGS,
   formatBytes,
   isThemePreference,
+  normalizeSharedSettings,
   parseBoolean,
   parseDefaultSpeed,
   parseHistorySort,
+  parseLanguageCode,
   parseMotionPreference,
 } from "@/lib/settings";
 
 describe("DEFAULT_SETTINGS", () => {
-  it("defaults to the system theme, 1x speed, newest-first history, system motion, and haptics on", () => {
+  it("defaults to the system theme, 1x speed, newest-first history, system motion, haptics on, and no language", () => {
     expect(DEFAULT_SETTINGS).toEqual({
       themePreference: "system",
       defaultSpeed: 1,
       historySort: "newest",
       motionPreference: "system",
       hapticsEnabled: true,
+      languageCode: null,
     });
   });
 });
@@ -56,15 +60,59 @@ describe("parseBoolean", () => {
   });
 });
 
-describe("parseDefaultSpeed", () => {
-  it("returns the stored speed when valid", () => {
-    expect(parseDefaultSpeed("1.5")).toBe(1.5);
+describe("parseLanguageCode", () => {
+  it("keeps a stored language code", () => {
+    expect(parseLanguageCode("fa")).toBe("fa");
   });
 
-  it("falls back to the default for missing or off-list values", () => {
+  it("treats blank and missing values as no language", () => {
+    expect(parseLanguageCode(null)).toBeNull();
+    expect(parseLanguageCode("")).toBeNull();
+    expect(parseLanguageCode("   ")).toBeNull();
+  });
+});
+
+describe("parseDefaultSpeed", () => {
+  it("accepts the player's full range, not only the settings list", () => {
+    expect(parseDefaultSpeed("0.5")).toBe(0.5);
+    expect(parseDefaultSpeed("1.5")).toBe(1.5);
+    expect(parseDefaultSpeed("3")).toBe(3);
+  });
+
+  it("falls back to the default for missing or out-of-range values", () => {
     expect(parseDefaultSpeed(null)).toBe(1);
-    expect(parseDefaultSpeed("3")).toBe(1);
+    expect(parseDefaultSpeed("0.1")).toBe(1);
+    expect(parseDefaultSpeed("3.1")).toBe(1);
     expect(parseDefaultSpeed("nope")).toBe(1);
+  });
+});
+
+describe("normalizeSharedSettings", () => {
+  it("keeps valid server values", () => {
+    expect(
+      normalizeSharedSettings({
+        languageCode: "fa",
+        defaultSpeed: 2.5,
+        historySort: "longest",
+        updatedAt: 1000,
+      }),
+    ).toEqual({
+      languageCode: "fa",
+      defaultSpeed: 2.5,
+      historySort: "longest",
+      updatedAt: 1000,
+    });
+  });
+
+  it("falls back per field instead of rejecting the whole response", () => {
+    expect(
+      normalizeSharedSettings({
+        languageCode: "  ",
+        defaultSpeed: 9,
+        historySort: "alphabetical",
+        updatedAt: 0,
+      }),
+    ).toEqual(DEFAULT_SHARED_SETTINGS);
   });
 });
 

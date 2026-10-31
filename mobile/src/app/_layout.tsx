@@ -32,6 +32,7 @@ export default function RootLayout() {
   const pathname = usePathname();
   const status = useAuthStore((state) => state.status);
   const restore = useAuthStore((state) => state.restore);
+  const settingsLoaded = useSettingsStore((state) => state.loaded);
   const [fontsLoaded, fontError] = useFonts(ICON_FONT);
   // A missing font must not strand the app on the splash screen; the icons may
   // render as blanks, but every other surface still works.
@@ -50,10 +51,12 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (canRender && status !== "loading") {
+    // Settings load before the first paint so the launch tab and theme are the
+    // listener's, not a default they watch change a frame later.
+    if (canRender && status !== "loading" && settingsLoaded) {
       void SplashScreen.hideAsync();
     }
-  }, [canRender, status]);
+  }, [canRender, settingsLoaded, status]);
 
   if (!canRender) {
     return null;

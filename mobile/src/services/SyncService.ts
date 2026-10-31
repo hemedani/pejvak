@@ -27,6 +27,7 @@ import {
   type SyncSummary,
   type SyncTransport,
 } from "@/lib/syncEngine";
+import { normalizeSharedSettings, type SharedSettings } from "@/lib/settings";
 import { LocalDBService } from "@/services/LocalDBService";
 import { SettingsService } from "@/services/SettingsService";
 
@@ -85,6 +86,7 @@ function syncLocalData(
   playlists: PlaylistSyncPayload[],
   contextPlays: ContextPlaySyncPayload[],
   onlineCollections: OnlineCollectionSyncPayload[],
+  settings: SharedSettings | null,
 ): Promise<SyncLocalDataResult> {
   const details: SyncLocalDataDetails = {
     set: {
@@ -167,12 +169,31 @@ function syncLocalData(
         deleted: annotation.deletedAt !== null,
         ...(annotation.color ? { color: annotation.color } : {}),
       })),
+      ...(settings
+        ? {
+            settings: {
+              // The generated declaration cannot express the nullable language
+              // that the runtime accepts; the value itself is sent unchanged.
+              languageCode: settings.languageCode as string,
+              defaultSpeed: settings.defaultSpeed,
+              historySort: settings.historySort,
+              updatedAt: settings.updatedAt,
+            },
+          }
+        : {}),
     },
     get: {
       syncedSessions: 1,
       syncedAnnotations: 1,
       syncedPlaylists: 1,
       syncedContextPlays: 1,
+      syncedSettings: 1,
+      settings: {
+        languageCode: 1,
+        defaultSpeed: 1,
+        historySort: 1,
+        updatedAt: 1,
+      },
       annotations: [],
       playlists: [],
       contextPlays: [],
@@ -213,6 +234,9 @@ export const localStore: SyncStore = {
   removeAnnotation: (id: string) => LocalDBService.hardDeleteAnnotation(id),
   removePlaylist: (id: string) => LocalDBService.deletePlaylist(id),
   removeOnlineCollection: (key: string) => LocalDBService.hardDeleteOnlineCollection(key),
+  getSharedSettings: () => SettingsService.getPendingSharedSettings(),
+  markSettingsSynced: (updatedAt) => SettingsService.markSettingsSynced(updatedAt),
+  applyRemoteSettings: (settings) => SettingsService.applyRemoteSettings(settings),
 };
 
 /** Push all pending local rows to the backend. Never throws for sync errors. */
@@ -630,6 +654,44 @@ async function fetchRemotePlaylists(): Promise<RemotePlaylistRow[]> {
   });
 }
 
+type RemoteSettingsRow = {
+  languageCode?: string | null;
+  defaultSpeed?: number;
+  historySort?: string;
+  updatedAt?: number;
+};
+
+/**
+ * Settings are a best-effort pull: a failure here must not abort restoring the
+ * history and annotations, which is the reason a listener signed in on a new
+ * device.
+ */
+async function fetchRemoteSettings(): Promise<SharedSettings | null> {
+  try {
+    const details: BackendActRequest<"main", "user", "getMySettings">["details"] = {
+      set: {},
+      get: { languageCode: 1, defaultSpeed: 1, historySort: 1, updatedAt: 1 },
+    };
+    const row = await callTypedAct<"main", "user", "getMySettings", RemoteSettingsRow>({
+      service: "main",
+      model: "user",
+      act: "getMySettings",
+      details,
+    });
+    if (!row || typeof row !== "object" || Array.isArray(row)) {
+      return null;
+    }
+    return normalizeSharedSettings({
+      languageCode: row.languageCode ?? null,
+      defaultSpeed: row.defaultSpeed,
+      historySort: row.historySort ?? null,
+      updatedAt: row.updatedAt ?? 0,
+    });
+  } catch {
+    return null;
+  }
+}
+
 export type PullSummary = {
   tracks: number;
   sessions: number;
@@ -652,6 +714,7 @@ export async function pullFromServer(): Promise<PullSummary> {
     remotePlaylists,
     remoteContextPlays,
     remoteOnlineCollections,
+    remoteSettings,
   ] = await Promise.all([
     fetchRemoteTracks(),
     fetchRemoteSessions(),
@@ -659,6 +722,7 @@ export async function pullFromServer(): Promise<PullSummary> {
     fetchRemotePlaylists(),
     fetchRemoteContextPlays(),
     fetchRemoteOnlineCollections(),
+    fetchRemoteSettings(),
   ]);
 
   const trackPlan = reconcileTracks(await LocalDBService.getAllTracks(), remoteTracks);
@@ -794,6 +858,12 @@ export async function pullFromServer(): Promise<PullSummary> {
   }
   for (const item of onlineCollectionPlan.backfill) {
     await LocalDBService.setOnlineCollectionSyncStatus(item.id, "synced", item.serverId);
+  }
+
+  if (remoteSettings) {
+    // `applyRemoteSettings` performs the last-write-wins check, so a device with
+    // a newer local change keeps it until its own push has gone out.
+    await SettingsService.applyRemoteSettings(remoteSettings).catch(() => false);
   }
 
   return {

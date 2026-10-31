@@ -7,6 +7,7 @@ import type {
   LocalTrack,
   SyncStatus,
 } from "@/lib/db/types";
+import type { SharedSettings } from "@/lib/settings";
 import {
   runSync,
   type SyncStore,
@@ -152,7 +153,11 @@ function createStore(seed: {
   playlists?: LocalPlaylist[];
   contextPlays?: LocalContextPlay[];
   onlineCollections?: LocalOnlineCollection[];
+  settings?: SharedSettings | null;
 }) {
+  let sharedSettings = seed.settings ?? null;
+  let syncedSettingsAt = 0;
+  const appliedSettings: SharedSettings[] = [];
   const tracks = new Map((seed.tracks ?? []).map((item) => [item.id, item]));
   const sessions = new Map((seed.sessions ?? []).map((item) => [item.id, item]));
   const annotations = new Map((seed.annotations ?? []).map((item) => [item.id, item]));
@@ -240,6 +245,23 @@ function createStore(seed: {
     removeOnlineCollection: async (key) => {
       onlineCollections.delete(key);
     },
+    getSharedSettings: async () =>
+      sharedSettings !== null && sharedSettings.updatedAt > syncedSettingsAt
+        ? sharedSettings
+        : null,
+    markSettingsSynced: async (updatedAt) => {
+      syncedSettingsAt = Math.max(syncedSettingsAt, updatedAt);
+    },
+    applyRemoteSettings: async (next) => {
+      appliedSettings.push(next);
+      if (next.updatedAt < (sharedSettings?.updatedAt ?? 0)) {
+        return false;
+      }
+      const changed = next.updatedAt > (sharedSettings?.updatedAt ?? 0);
+      sharedSettings = next;
+      syncedSettingsAt = Math.max(syncedSettingsAt, next.updatedAt);
+      return changed;
+    },
   };
 
   return {
@@ -250,6 +272,8 @@ function createStore(seed: {
     playlists,
     contextPlays,
     onlineCollections,
+    appliedSettings,
+    getSettings: () => sharedSettings,
   };
 }
 
@@ -274,6 +298,7 @@ function createTransport(overrides: Partial<SyncTransport> = {}) {
         playlists,
         contextPlays,
         onlineCollections,
+        settings,
       ) => {
         calls.syncLocalData.push([
           sessions,
@@ -281,6 +306,7 @@ function createTransport(overrides: Partial<SyncTransport> = {}) {
           playlists,
           contextPlays,
           onlineCollections,
+          settings,
         ]);
         return {
           syncedSessions: sessions.length,
@@ -507,5 +533,85 @@ describe("runSync", () => {
 
     expect(summary.failed).toBe(1);
     expect(tracks.get("t1")?.syncStatus).toBe("failed");
+  });
+
+  it("sends a changed settings snapshot with the batch", async () => {
+    const settings: SharedSettings = {
+      languageCode: "fa",
+      defaultSpeed: 2,
+      historySort: "oldest",
+      updatedAt: 5000,
+    };
+    const { store } = createStore({ settings });
+    const { transport, calls } = createTransport();
+
+    await runSync({ store, transport });
+
+    expect(calls.syncLocalData[0][5]).toEqual(settings);
+  });
+
+  it("pushes a settings change even when no rows are pending", async () => {
+    const settings: SharedSettings = {
+      languageCode: "fa",
+      defaultSpeed: 1,
+      historySort: "newest",
+      updatedAt: 5000,
+    };
+    const { store } = createStore({ settings });
+    const { transport, calls } = createTransport();
+
+    await runSync({ store, transport });
+
+    expect(calls.syncLocalData).toHaveLength(1);
+    expect(calls.syncLocalData[0][5]).toEqual(settings);
+  });
+
+  it("does not resend a snapshot the server already acknowledged", async () => {
+    const settings: SharedSettings = {
+      languageCode: "fa",
+      defaultSpeed: 1,
+      historySort: "newest",
+      updatedAt: 5000,
+    };
+    const { store } = createStore({ settings });
+    const { transport, calls } = createTransport();
+
+    await runSync({ store, transport });
+    await runSync({ store, transport });
+
+    expect(calls.syncLocalData).toHaveLength(1);
+  });
+
+  it("applies the authoritative settings returned by the server", async () => {
+    const remote: SharedSettings = {
+      languageCode: "en",
+      defaultSpeed: 1.5,
+      historySort: "longest",
+      updatedAt: 9000,
+    };
+    const { store, appliedSettings } = createStore({
+      settings: {
+        languageCode: "fa",
+        defaultSpeed: 1,
+        historySort: "newest",
+        updatedAt: 5000,
+      },
+    });
+    const { transport } = createTransport({
+      syncLocalData: async () => ({ settings: remote }),
+    });
+
+    await runSync({ store, transport });
+
+    expect(appliedSettings).toEqual([remote]);
+  });
+
+  it("does not call the batch endpoint when nothing is pending and settings never changed", async () => {
+    const { store } = createStore({});
+    const { transport, calls } = createTransport();
+
+    await runSync({ store, transport });
+
+    expect(calls.syncLocalData).toHaveLength(0);
   });
 });

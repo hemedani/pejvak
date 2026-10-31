@@ -48,7 +48,12 @@ jest.mock("@/services/LocalDBService", () => ({
 }));
 
 jest.mock("@/services/SettingsService", () => ({
-  SettingsService: { setLastSyncAt: jest.fn(() => Promise.resolve()) },
+  SettingsService: {
+    setLastSyncAt: jest.fn(() => Promise.resolve()),
+    getPendingSharedSettings: jest.fn(async () => null),
+    markSettingsSynced: jest.fn(async () => undefined),
+    applyRemoteSettings: jest.fn(async () => false),
+  },
 }));
 
 type CapturedRequest = {
@@ -89,6 +94,11 @@ const setSessionSyncStatus = jest.mocked(LocalDBService.setSessionSyncStatus);
 const setAnnotationSyncStatus = jest.mocked(LocalDBService.setAnnotationSyncStatus);
 const hardDeleteAnnotation = jest.mocked(LocalDBService.hardDeleteAnnotation);
 const setLastSyncAt = jest.mocked(SettingsService.setLastSyncAt);
+const getPendingSharedSettings = jest.mocked(
+  SettingsService.getPendingSharedSettings,
+);
+const markSettingsSynced = jest.mocked(SettingsService.markSettingsSynced);
+const applyRemoteSettings = jest.mocked(SettingsService.applyRemoteSettings);
 
 // Only what `pending` and `setSyncStatus` actually touch. An online collection
 // is keyed by `key`, not `id`, and neither helper reads the key — so requiring
@@ -132,12 +142,17 @@ function installClient(): void {
       const onlineCollections =
         (request.details?.set?.onlineCollections as { clientId: string }[] | undefined) ??
         [];
+      const settings = request.details?.set?.settings as
+        | { updatedAt: number }
+        | undefined;
       return {
         syncedSessions: sessions.length,
         syncedAnnotations: annotations.length,
         syncedPlaylists: playlists.length,
         syncedContextPlays: contextPlays.length,
         syncedOnlineCollections: onlineCollections.length,
+        syncedSettings: settings ? 1 : 0,
+        ...(settings ? { settings } : {}),
         annotations: annotations.map((annotation) => ({
           clientId: annotation.clientId,
           serverId: `srv-${annotation.clientId}`,
@@ -155,6 +170,9 @@ function installClient(): void {
           serverId: `srv-${saved.clientId}`,
         })),
       };
+    }
+    if (request.act === "getMySettings") {
+      return { languageCode: null, defaultSpeed: 1, historySort: "newest", updatedAt: 0 };
     }
     return [];
   });
@@ -175,6 +193,12 @@ function syncLocalDataPayloads(): {
     deleted: boolean;
     pageUrl?: string;
   }[];
+  settings?: {
+    languageCode: string | null;
+    defaultSpeed: number;
+    historySort: string;
+    updatedAt: number;
+  };
 }[] {
   return callTypedActMock.mock.calls
     .filter(([request]) => request.act === "syncLocalData")
@@ -202,6 +226,16 @@ function syncLocalDataPayloads(): {
           deleted: boolean;
           pageUrl?: string;
         }[]) ?? [],
+      ...(request.details?.set?.settings
+        ? {
+            settings: request.details.set.settings as {
+              languageCode: string | null;
+              defaultSpeed: number;
+              historySort: string;
+              updatedAt: number;
+            },
+          }
+        : {}),
     }));
 }
 
@@ -730,6 +764,27 @@ describe("syncPending", () => {
     expect(db.annotations.has("a1")).toBe(false);
     expect(setAnnotationSyncStatus).not.toHaveBeenCalledWith("a1", "synced", expect.anything());
   });
+
+  it("sends the shared settings snapshot even with no pending rows", async () => {
+    getPendingSharedSettings.mockResolvedValue({
+      languageCode: "fa",
+      defaultSpeed: 2,
+      historySort: "oldest",
+      updatedAt: 5000,
+    });
+
+    await syncPending();
+
+    const [payload] = syncLocalDataPayloads();
+    expect(payload.settings).toEqual({
+      languageCode: "fa",
+      defaultSpeed: 2,
+      historySort: "oldest",
+      updatedAt: 5000,
+    });
+    expect(markSettingsSynced).toHaveBeenCalledWith(5000);
+    expect(applyRemoteSettings).toHaveBeenCalledWith(payload.settings);
+  });
 });
 
 describe("syncAll", () => {
@@ -905,5 +960,28 @@ describe("pullFromServer", () => {
     expect(insertRemoteSession).toHaveBeenCalledWith(
       expect.objectContaining({ clientId: "ls1", stretchId: null, seeked: false }),
     );
+  });
+
+  it("restores the shared settings from getMySettings", async () => {
+    callTypedActMock.mockImplementation(async (request) => {
+      if (request.act === "getMySettings") {
+        return {
+          languageCode: "fa",
+          defaultSpeed: 2,
+          historySort: "oldest",
+          updatedAt: 9000,
+        };
+      }
+      return [];
+    });
+
+    await pullFromServer();
+
+    expect(applyRemoteSettings).toHaveBeenCalledWith({
+      languageCode: "fa",
+      defaultSpeed: 2,
+      historySort: "oldest",
+      updatedAt: 9000,
+    });
   });
 });

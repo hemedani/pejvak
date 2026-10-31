@@ -8,6 +8,7 @@ import type {
   LocalTrack,
   SyncStatus,
 } from "@/lib/db/types";
+import type { SharedSettings } from "@/lib/settings";
 
 export type RegisterTrackResult = { _id?: string };
 
@@ -21,6 +22,8 @@ export type SyncLocalDataResult = {
   contextPlays?: { clientId: string; serverId?: string }[];
   syncedOnlineCollections?: number;
   onlineCollections?: { clientId: string; serverId?: string }[];
+  syncedSettings?: number;
+  settings?: SharedSettings;
 };
 
 /** A playlist ready for the wire: item track ids replaced by content hashes. */
@@ -92,6 +95,7 @@ export type SyncTransport = {
     playlists: PlaylistSyncPayload[],
     contextPlays: ContextPlaySyncPayload[],
     onlineCollections: OnlineCollectionSyncPayload[],
+    settings: SharedSettings | null,
   ) => Promise<SyncLocalDataResult>;
 };
 
@@ -122,6 +126,15 @@ export type SyncStore = {
   removePlaylist: (id: string) => Promise<void>;
   /** Hard-delete a row (used for an acknowledged collection tombstone). */
   removeOnlineCollection: (key: string) => Promise<void>;
+  /** The shared preferences a sync still owes the server, or null. */
+  getSharedSettings: () => Promise<SharedSettings | null>;
+  /** Records the token the server acknowledged so it is not pushed again. */
+  markSettingsSynced: (updatedAt: number) => Promise<void>;
+  /** Adopts the server's snapshot; the second argument marks a push response. */
+  applyRemoteSettings: (
+    settings: SharedSettings,
+    expectedUpdatedAt?: number,
+  ) => Promise<boolean>;
 };
 
 export type SyncSummary = {
@@ -167,6 +180,10 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     onlineCollectionsSynced: 0,
     failed: 0,
   };
+
+  // The snapshot is read before the rows so a settings-only change is not lost
+  // when there is nothing else to send.
+  const sharedSettings = await store.getSharedSettings();
 
   const pendingTracks = await store.getPendingTracks(limit);
   for (const track of pendingTracks) {
@@ -296,7 +313,8 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
     annotations.length === 0 &&
     playlistPayloads.length === 0 &&
     contextPlayPayloads.length === 0 &&
-    onlineCollectionPayloads.length === 0
+    onlineCollectionPayloads.length === 0 &&
+    sharedSettings === null
   ) {
     return summary;
   }
@@ -324,7 +342,21 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
       playlistPayloads,
       contextPlayPayloads,
       onlineCollectionPayloads,
+      sharedSettings,
     );
+    if (result.settings) {
+      // A settings write failing must not turn an acknowledged batch into a
+      // failed one: the rows are already on the server, and the next sync will
+      // retry the snapshot.
+      await store
+        .applyRemoteSettings(result.settings, sharedSettings?.updatedAt)
+        .catch(() => false);
+    }
+    if (sharedSettings !== null) {
+      // The batch itself is the acknowledgement; this also records a push whose
+      // response had no snapshot, so a settings-only change is not sent forever.
+      await store.markSettingsSynced(sharedSettings.updatedAt).catch(() => undefined);
+    }
     const annotationServerIds = new Map(
       (result.annotations ?? []).map((mapping) => [mapping.clientId, mapping.serverId]),
     );
@@ -403,7 +435,8 @@ export async function runSync(options: SyncOptions): Promise<SyncSummary> {
       annotations.length +
       playlistPayloads.length +
       contextPlayPayloads.length +
-      onlineCollectionPayloads.length;
+      onlineCollectionPayloads.length +
+      (sharedSettings === null ? 0 : 1);
   }
 
   return summary;

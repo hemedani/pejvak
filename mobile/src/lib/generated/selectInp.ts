@@ -19,6 +19,12 @@ username: string;
 email: string;
 displayName?: string;
 avatarUrl?: string;
+setting?: {
+languageCode: string;
+defaultSpeed: number;
+historySort: ("newest" | "oldest" | "longest" );
+updatedAt: number;
+};
 createdAt?: Date;
 updatedAt?: Date;
 tracks: {
@@ -166,6 +172,12 @@ username: string;
 email: string;
 displayName?: string;
 avatarUrl?: string;
+setting?: {
+languageCode: string;
+defaultSpeed: number;
+historySort: ("newest" | "oldest" | "longest" );
+updatedAt: number;
+};
 };
 sessions: {
 _id?: string;
@@ -258,6 +270,12 @@ username: string;
 email: string;
 displayName?: string;
 avatarUrl?: string;
+setting?: {
+languageCode: string;
+defaultSpeed: number;
+historySort: ("newest" | "oldest" | "longest" );
+updatedAt: number;
+};
 };
 };
 ;
@@ -309,6 +327,12 @@ username: string;
 email: string;
 displayName?: string;
 avatarUrl?: string;
+setting?: {
+languageCode: string;
+defaultSpeed: number;
+historySort: ("newest" | "oldest" | "longest" );
+updatedAt: number;
+};
 };
 session?: {
 _id?: string;
@@ -356,6 +380,12 @@ username: string;
 email: string;
 displayName?: string;
 avatarUrl?: string;
+setting?: {
+languageCode: string;
+defaultSpeed: number;
+historySort: ("newest" | "oldest" | "longest" );
+updatedAt: number;
+};
 };
 };
 ;
@@ -391,6 +421,12 @@ username: string;
 email: string;
 displayName?: string;
 avatarUrl?: string;
+setting?: {
+languageCode: string;
+defaultSpeed: number;
+historySort: ("newest" | "oldest" | "longest" );
+updatedAt: number;
+};
 };
 };
 ;
@@ -424,6 +460,12 @@ username: string;
 email: string;
 displayName?: string;
 avatarUrl?: string;
+setting?: {
+languageCode: string;
+defaultSpeed: number;
+historySort: ("newest" | "oldest" | "longest" );
+updatedAt: number;
+};
 };
 };
 ;
@@ -453,6 +495,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 createdAt?: (0 | 1 );
 updatedAt?: (0 | 1 );
 tracks?: {
@@ -575,6 +618,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 createdAt?: (0 | 1 );
 updatedAt?: (0 | 1 );
 tracks?: {
@@ -693,6 +737,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 createdAt?: (0 | 1 );
 updatedAt?: (0 | 1 );
 tracks?: {
@@ -724,6 +769,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 sessions?: {
 _id?: (0 | 1 );
@@ -806,6 +852,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
 annotations?: {
@@ -846,6 +893,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 session?: {
 _id?: (0 | 1 );
@@ -881,6 +929,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
 playbackContexts?: {
@@ -907,6 +956,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
 onlineCollections?: {
@@ -931,8 +981,37 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
+};
+};
+
+          
+            getMySettings: {
+set: {
+};
+get: {
+languageCode?: (0 | 1 );
+defaultSpeed?: (0 | 1 );
+historySort?: (0 | 1 );
+updatedAt?: (0 | 1 );
+};
+};
+
+          
+            updateMySettings: {
+set: {
+languageCode?: string;
+defaultSpeed?: number;
+historySort?: ("newest" | "oldest" | "longest" );
+updatedAt?: number;
+};
+get: {
+languageCode?: (0 | 1 );
+defaultSpeed?: (0 | 1 );
+historySort?: (0 | 1 );
+updatedAt?: (0 | 1 );
 };
 };
 
@@ -991,6 +1070,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 sessions?: {
 _id?: (0 | 1 );
@@ -1067,6 +1147,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 tracks?: {
 _id?: (0 | 1 );
 title?: (0 | 1 );
@@ -1218,6 +1299,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
 annotations?: {
@@ -1258,6 +1340,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 session?: {
 _id?: (0 | 1 );
@@ -1315,6 +1398,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 tracks?: {
 _id?: (0 | 1 );
 title?: (0 | 1 );
@@ -1466,6 +1550,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
 annotations?: {
@@ -1506,6 +1591,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 session?: {
 _id?: (0 | 1 );
@@ -1589,6 +1675,12 @@ completed: boolean;
 interrupted: boolean;
 updatedAt?: number;
 }[];
+settings?: {
+languageCode: string;
+defaultSpeed: number;
+historySort: ("newest" | "oldest" | "longest" );
+updatedAt: number;
+};
 onlineCollections?: {
 clientId: string;
 sourceId: string;
@@ -1611,6 +1703,13 @@ syncedAnnotations?: (0 | 1 );
 syncedPlaylists?: (0 | 1 );
 syncedContextPlays?: (0 | 1 );
 syncedOnlineCollections?: (0 | 1 );
+syncedSettings?: (0 | 1 );
+settings?: {
+languageCode?: (0 | 1 );
+defaultSpeed?: (0 | 1 );
+historySort?: (0 | 1 );
+updatedAt?: (0 | 1 );
+};
 annotations?: {
 clientId?: (0 | 1 );
 serverId?: (0 | 1 );
@@ -1683,6 +1782,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 session?: {
 _id?: (0 | 1 );
@@ -1759,6 +1859,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 sessions?: {
 _id?: (0 | 1 );
@@ -1799,6 +1900,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 tracks?: {
 _id?: (0 | 1 );
 title?: (0 | 1 );
@@ -1947,6 +2049,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
 };
@@ -2014,6 +2117,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 sessions?: {
 _id?: (0 | 1 );
@@ -2054,6 +2158,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 tracks?: {
 _id?: (0 | 1 );
 title?: (0 | 1 );
@@ -2215,6 +2320,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 sessions?: {
 _id?: (0 | 1 );
@@ -2255,6 +2361,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 tracks?: {
 _id?: (0 | 1 );
 title?: (0 | 1 );
@@ -2408,6 +2515,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
 };
@@ -2439,6 +2547,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
 };
@@ -2475,6 +2584,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
 };
@@ -2518,6 +2628,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 tracks?: {
 _id?: (0 | 1 );
 title?: (0 | 1 );
@@ -2668,6 +2779,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 };
 };
 };
@@ -2706,6 +2818,7 @@ username?: (0 | 1 );
 email?: (0 | 1 );
 displayName?: (0 | 1 );
 avatarUrl?: (0 | 1 );
+setting?: (0 | 1 );
 tracks?: {
 _id?: (0 | 1 );
 title?: (0 | 1 );

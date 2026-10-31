@@ -8,7 +8,7 @@ import {
   type MotionPreference,
   type ThemePreference,
 } from "@/lib/settings";
-import { SettingsService } from "@/services/SettingsService";
+import { SettingsService, subscribeToSettings } from "@/services/SettingsService";
 
 type SettingsState = {
   themePreference: ThemePreference;
@@ -16,6 +16,7 @@ type SettingsState = {
   historySort: HistorySort;
   motionPreference: MotionPreference;
   hapticsEnabled: boolean;
+  languageCode: string | null;
   loaded: boolean;
   load: () => Promise<void>;
   setTheme: (preference: ThemePreference) => Promise<void>;
@@ -23,6 +24,7 @@ type SettingsState = {
   setHistorySort: (sort: HistorySort) => Promise<void>;
   setMotionPreference: (preference: MotionPreference) => Promise<void>;
   setHapticsEnabled: (enabled: boolean) => Promise<void>;
+  setLanguage: (code: string | null) => Promise<void>;
 };
 
 /** Forces RN's color scheme so `useColorScheme`/`useTheme` reflect the choice. */
@@ -35,10 +37,16 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   loaded: false,
 
   load: async () => {
-    const settings = await SettingsService.load();
-    applyTheme(settings.themePreference);
-    setHapticsPreference(settings.hapticsEnabled);
-    set({ ...settings, loaded: true });
+    try {
+      const settings = await SettingsService.load();
+      applyTheme(settings.themePreference);
+      setHapticsPreference(settings.hapticsEnabled);
+      set({ ...settings, loaded: true });
+    } catch {
+      // The defaults above are already in state. A failed read must not hold
+      // the splash screen or keep the app on the wrong launch tab forever.
+      set({ loaded: true });
+    }
   },
 
   setTheme: async (preference) => {
@@ -67,4 +75,15 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ hapticsEnabled: enabled });
     await SettingsService.setHapticsEnabled(enabled);
   },
+
+  setLanguage: async (code) => {
+    set({ languageCode: code });
+    await SettingsService.setLanguage(code);
+  },
 }));
+
+// A snapshot that won on the server must reach the screens without waiting for
+// a relaunch. The service owns the DB write; this is the UI's own refresh.
+subscribeToSettings(() => {
+  void useSettingsStore.getState().load();
+});
