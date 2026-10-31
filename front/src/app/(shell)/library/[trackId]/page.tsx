@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { getTrackSessions } from "@/app/actions/sessions/get-track-sessions";
 import { getTrackDetail } from "@/app/actions/tracks/get-track-detail";
 import { AnnotationPanel } from "@/components/domain/annotation-list";
+import { PlayTrackButton } from "@/components/player/play-track-button";
 import { SessionList, SessionListSummary } from "@/components/domain/session-list";
 import { StatCell } from "@/components/domain/stat-cell";
 import { Badge } from "@/components/ui/badge";
@@ -257,9 +258,10 @@ function PlaybackNote({ track }: { track: TrackDetail }) {
           </p>
           <p className="type-caption mt-[var(--space-xs)] max-w-[62ch] text-text-tertiary">
             {playable
-              ? "این ترک از یک منبع آنلاین می‌آید، پس نشانی صوتی دارد. پخش‌کننده در مرحلهٔ بعدی ساخته می‌شود؛ تا آن زمان این صفحه فقط اطلاعات و تاریخچه را نشان می‌دهد."
+              ? "این ترک از یک منبع آنلاین می‌آید، پس نشانی صوتی دارد و در مرورگر پخش می‌شود."
               : "فایل صوتی این ترک روی گوشی ذخیره شده و سرور نشانی‌ای از آن نگه نمی‌دارد، بنابراین در نسخهٔ وب پخش نمی‌شود. اطلاعات و تاریخچهٔ آن کامل است."}
           </p>
+          <PlayTrackButton track={track} />
         </div>
       </div>
     </Card>

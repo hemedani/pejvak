@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { SidebarQueueSlot } from "@/components/player/sidebar-queue-slot";
+
 import { NavLink } from "./nav-link";
 import { NAV_ITEMS } from "./nav-items";
 
@@ -28,7 +30,9 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="mt-auto" id="sidebar-player-slot" />
+      <div className="mt-auto" id="sidebar-player-slot">
+        <SidebarQueueSlot />
+      </div>
     </aside>
   );
 }

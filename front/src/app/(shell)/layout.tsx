@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { getMe } from "@/app/actions/auth/get-me";
 import { Sidebar } from "@/components/layout/sidebar";
+import { PlayerBar } from "@/components/player/player-bar";
 import { Topbar } from "@/components/layout/topbar";
 import { ErrorState } from "@/components/ui/state";
 
@@ -41,10 +42,12 @@ export default async function ShellLayout({ children }: { children: React.ReactN
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar user={result.body} />
-        <main className="mx-auto w-full max-w-[1180px] flex-1 px-[var(--space-lg)] pb-[var(--space-giant)] pt-[var(--space-md)] lg:px-[var(--space-xxl)]">
+        <main className="mx-auto w-full max-w-[1180px] flex-1 px-[var(--space-lg)] pb-[calc(var(--space-giant)+76px)] pt-[var(--space-md)] lg:px-[var(--space-xxl)]">
           {children}
         </main>
       </div>
+
+      <PlayerBar />
     </div>
   );
 }
