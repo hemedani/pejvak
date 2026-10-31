@@ -9,6 +9,11 @@ import {
   track,
 } from "../../../mod.ts";
 import { type MyContext } from "@lib";
+import {
+  mergeSetting,
+  readCanonicalSetting,
+  type SettingInput,
+} from "../../settings/mergeSetting.ts";
 
 export const syncLocalDataFn: ActFn = async (body) => {
   const { user }: MyContext = coreApp.contextFns.getContextModel() as MyContext;
@@ -19,6 +24,7 @@ export const syncLocalDataFn: ActFn = async (body) => {
       playlists = [],
       contextPlays = [],
       onlineCollections = [],
+      settings,
     },
   } = body.details;
 
@@ -452,12 +458,32 @@ export const syncLocalDataFn: ActFn = async (body) => {
     }
   }
 
+  // Settings are a snapshot, not a batch: the device sends every field, so the
+  // same LWW merge used by updateMySettings can be reused without duplication.
+  // The authoritative object is always returned, turning a sync into a pull.
+  let syncedSettings = 0;
+  let authoritativeSetting;
+
+  if (settings) {
+    const merged = await mergeSetting(
+      userId,
+      settings as SettingInput,
+      "snapshot",
+    );
+    syncedSettings = merged.applied ? 1 : 0;
+    authoritativeSetting = merged.setting;
+  } else {
+    authoritativeSetting = await readCanonicalSetting(userId);
+  }
+
   return {
     syncedSessions,
     syncedAnnotations,
     syncedPlaylists,
     syncedContextPlays,
     syncedOnlineCollections,
+    syncedSettings,
+    settings: authoritativeSetting,
     annotations: annotationMappings,
     playlists: playlistMappings,
     contextPlays: contextPlayMappings,

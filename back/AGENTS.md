@@ -46,6 +46,7 @@ back/
 │   ├── playlists/          # create/update/delete/getMyPlaylists
 │   ├── contexts/           # getMyPlaybackContexts
 │   ├── online/             # save/get/remove online collections
+│   ├── settings/           # getMySettings, updateMySettings + mergeSetting
 │   └── sync/               # syncLocalData
 ├── utils/                  # shared helpers
 │   ├── mod.ts              # barrel (@lib)
@@ -71,11 +72,31 @@ Lesan models are declared in `models/*.ts` as a `*_pure` field map (Superstruct 
 
 ### User
 
-`models/user.ts` — credentials only.
+`models/user.ts` — credentials plus the listener's shared preferences.
 
-- Pure: `username`, `email` (`emailPattern`), `password`, optional `displayName`, optional `avatarUrl`, `createdAt`, `updatedAt`.
+- Pure: `username`, `email` (`emailPattern`), `password`, optional `displayName`, optional `avatarUrl`, optional `setting`, `createdAt`, `updatedAt`.
+- `setting` is an **optional embedded object on `User`** — no separate model, collection, relation, or index. Its fields:
+  - `languageCode: string | null` — the one online language the listener chose; `null` means none. Unknown codes are accepted (the catalogue lives in the clients), and `null`/`""` clears the choice.
+  - `defaultSpeed: number` — speed for a **new** session, inclusive `0.5–3.0`; existing sessions keep their own `playbackSpeed`.
+  - `historySort: "newest" | "oldest" | "longest"` — a display choice with no server-side effect.
+  - `updatedAt: number` — epoch milliseconds and the settings' own last-write-wins token. It is never the user document's top-level `updatedAt`.
+- Defaults are `null`, `1`, `"newest"`, `0` (`0` means "never written"). They are applied **on read**, not written at registration, so an existing user stays valid with no `setting` object.
 - Unique index on `email`; `password` is model-level `excludes` so it never leaks through a relation.
 - Relations: none declared here. Child models (Track, PlaybackSession, Annotation, Playlist) own the relation to User and let Lesan generate the reverse arrays.
+
+**Shared vs device-local.**
+
+| State | Share across devices? | Backend storage |
+|---|---|---|
+| `displayName`, `avatarUrl` | Yes | `User` |
+| Online language, default speed, history sort | Yes | `User.setting` |
+| Tracks, sessions, annotations, playlists, runs, saved collections | Yes | their own models |
+| Theme, motion, haptics | No | device/OS only |
+| File URIs, folder paths, tree grants | No | **never** |
+| Download state/path, file bytes | No | **never** |
+| Checkpoints, `lastSyncAt`, UI state | No | **never** |
+
+`Track.downloadedAt` is device-specific despite living on the server; do not treat it as shared download state. See `prompts/01-shared-listener-state.md` §1 for the full inventory.
 
 ### Track
 
@@ -146,13 +167,15 @@ Every act lives in `src/<domain>/<actName>/` and consists of three files: `mod.t
 | `register` | `POST /user/register` | public | Create a user, return `{ token, user }`. |
 | `login` | `POST /user/login` | public | Verify password, return `{ token, user }`. |
 | `getMe` | `POST /user/getMe` | token | Return the current user with a deep `get` projection. |
+| `getMySettings` | `POST /user/getMySettings` | token | Return the caller's shared settings, filling defaults on read without writing. |
+| `updateMySettings` | `POST /user/updateMySettings` | token | Patch the caller's settings with atomic last-write-wins on `setting.updatedAt`. |
 | `registerTrack` | `POST /track/registerTrack` | token | Insert a track owned by the caller. |
 | `getMyTracks` | `POST /track/getMyTracks` | token | Paginated/filterable list of the caller's tracks. |
 | `getMyPlaybackContexts` | `POST /playbackContext/getMyPlaybackContexts` | token | Paginated runs through a collection; `contextType`/`contextKey` narrow to one. |
 | `saveOnlineCollection` | `POST /onlineCollection/saveOnlineCollection` | token | Upsert a saved/favourite online collection. LWW on `updatedAt`; `deleted` removes the row. |
 | `getMyOnlineCollections` | `POST /onlineCollection/getMyOnlineCollections` | token | The listener's shelf, filterable by `isFavorite`, `sourceId`, `languageCode`. |
 | `removeOnlineCollection` | `POST /onlineCollection/removeOnlineCollection` | token | Delete by `sourceId` + `externalId`. Idempotent: an absent row is a success. |
-| `syncLocalData` | `POST /track/syncLocalData` | token | Batch-ingest offline sessions, annotations, playlists, runs and online collections; bump track aggregates. |
+| `syncLocalData` | `POST /track/syncLocalData` | token | Batch-ingest offline sessions, annotations, playlists, runs, online collections and a settings snapshot; bump track aggregates. |
 
 **Request shape**: `{ "details": { "set": { ... }, "get": { ... } } }`; the token goes in the `token` header. `set` is validated by the act's validator; `get` drives the projection via `selectStruct(model, depth)`.
 
@@ -163,9 +186,12 @@ Every act lives in `src/<domain>/<actName>/` and consists of three files: `mod.t
 2. Skip any row whose `clientId` already exists.
 3. Insert the session/annotation with its `track` and `user` relations wired.
 4. For sessions, `$inc` the parent Track's `totalPlayCount` and `totalListenTimeSec`, and set `lastPlayedAt`.
-5. Return `{ syncedSessions, syncedAnnotations, syncedPlaylists, syncedContextPlays, syncedOnlineCollections }` plus a `clientId -> serverId` mapping per collection.
+5. If `set.settings` is present, merge it as a **snapshot** (`mergeSetting(..., "snapshot")`): it is last-write-wins on `setting.updatedAt`, and omitted fields mean defaults because the device sends every field.
+6. Return `{ syncedSessions, syncedAnnotations, syncedPlaylists, syncedContextPlays, syncedOnlineCollections, syncedSettings, settings }` plus a `clientId -> serverId` mapping per collection.
 
 Runs are processed before sessions so a session that names one can be linked to a row that already exists. Playlists and online collections need nothing resolved first: a playlist carries content hashes, and a collection carries its own key. Every batchable row follows the same shape — idempotent on `clientId`, last-write-wins on `updatedAt`, and a `deleted` flag that removes the server row rather than resurrecting it.
+
+**Settings on sync.** `syncedSettings` is `1` only when the incoming snapshot was applied and `0` when it was absent or lost LWW. The authoritative `settings` object is returned on every call, so a sync doubles as a settings pull. A newer server value (`settings.updatedAt > local.settingsUpdatedAt`) is applied locally; otherwise the local values stay. Resending the full snapshot on every sync is safe because the merge is atomic, idempotent, and ignores equal timestamps. Both `updateMySettings` and `syncLocalData` share `src/settings/mergeSetting.ts`; do not duplicate the LWW logic.
 
 Unknown `contentHash` rows are skipped (the device registers the track first). Never surface partial failures as a blocking error — the device retries.
 
@@ -253,6 +279,7 @@ Default (`false`) deletes the child and auto-cleans the parent's embedded revers
 2. `SyncService` batches pending rows and calls `syncLocalData`.
 3. The backend validates the batch, skips already-synced `clientId`s, inserts the rest, wires relations, and increments track aggregates.
 4. The device replaces its temp id with the returned server id and marks the rows `synced`.
+5. Shared settings travel inside the same batch as a full snapshot (`settings.updatedAt = settingsUpdatedAt`). The merge is snapshot LWW; after the response the device applies the server values only when `settings.updatedAt > local.settingsUpdatedAt`. The web reads `getMySettings` after login and writes with `updateMySettings`; it does not need `syncLocalData` for settings.
 
 The backend must be **idempotent** (`clientId` unique index) because the device may resend a batch after a dropped response.
 

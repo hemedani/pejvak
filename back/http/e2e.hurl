@@ -62,6 +62,338 @@ jsonpath "$.success" == true
 jsonpath "$.body._id" == "{{userId}}"
 
 
+# ── Shared listener settings (User.setting) ─────────────────────
+
+# Defaults are returned without writing: updatedAt == 0 means "never written".
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "getMySettings",
+  "details": {
+    "set": {},
+    "get": {
+      "languageCode": 1,
+      "defaultSpeed": 1,
+      "historySort": 1,
+      "updatedAt": 1
+    }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.languageCode" == null
+jsonpath "$.body.defaultSpeed" == 1
+jsonpath "$.body.historySort" == "newest"
+jsonpath "$.body.updatedAt" == 0
+
+
+# Create: the code is trimmed and lowercased before storage.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "updateMySettings",
+  "details": {
+    "set": { "languageCode": "  FA  ", "updatedAt": 1760000000000 },
+    "get": {
+      "languageCode": 1,
+      "defaultSpeed": 1,
+      "historySort": 1,
+      "updatedAt": 1
+    }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.languageCode" == "fa"
+jsonpath "$.body.updatedAt" == 1760000000000
+
+
+# Persist: a fresh read sees the stored value.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "getMySettings",
+  "details": {
+    "set": {},
+    "get": { "languageCode": 1, "updatedAt": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.languageCode" == "fa"
+jsonpath "$.body.updatedAt" == 1760000000000
+
+
+# Stored inside the user document: getMe can project it, proving no second collection.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "getMe",
+  "details": {
+    "set": {},
+    "get": { "_id": 1, "setting": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.setting.languageCode" == "fa"
+jsonpath "$.body.setting.updatedAt" == 1760000000000
+
+
+# Stale writes lose: an older updatedAt does not overwrite "fa".
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "updateMySettings",
+  "details": {
+    "set": { "languageCode": "en", "updatedAt": 1750000000000 },
+    "get": { "languageCode": 1, "updatedAt": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.languageCode" == "fa"
+jsonpath "$.body.updatedAt" == 1760000000000
+
+
+# Newer writes win.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "updateMySettings",
+  "details": {
+    "set": { "languageCode": "ar", "updatedAt": 1770000000000 },
+    "get": { "languageCode": 1, "updatedAt": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.languageCode" == "ar"
+jsonpath "$.body.updatedAt" == 1770000000000
+
+
+# Equal timestamps are idempotent: a replay with a different value loses.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "updateMySettings",
+  "details": {
+    "set": { "languageCode": "en", "updatedAt": 1770000000000 },
+    "get": { "languageCode": 1, "updatedAt": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.languageCode" == "ar"
+
+
+# Per-user isolation: a second listener starts from defaults.
+POST {{serverAddress}}/lesan
+{
+  "model": "user",
+  "act": "register",
+  "details": {
+    "set": {
+      "username": "settings-intruder-{{unique}}",
+      "email": "settings-intruder-{{unique}}@pejvak.app",
+      "password": "password123"
+    },
+    "get": { "token": 1 }
+  }
+}
+
+HTTP 200
+[Captures]
+settingsIntruderToken: jsonpath "$.body.token"
+
+
+POST {{serverAddress}}/lesan
+token: {{settingsIntruderToken}}
+{
+  "model": "user",
+  "act": "getMySettings",
+  "details": {
+    "set": {},
+    "get": { "languageCode": 1, "defaultSpeed": 1, "historySort": 1, "updatedAt": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.languageCode" == null
+jsonpath "$.body.updatedAt" == 0
+
+
+# Clearing the language round-trips as null.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "updateMySettings",
+  "details": {
+    "set": { "languageCode": null, "updatedAt": 1780000000000 },
+    "get": { "languageCode": 1, "updatedAt": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.languageCode" == null
+jsonpath "$.body.updatedAt" == 1780000000000
+
+
+# Speed accepts the player's full range.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "updateMySettings",
+  "details": {
+    "set": { "defaultSpeed": 3, "updatedAt": 1781000000000 },
+    "get": { "defaultSpeed": 1, "updatedAt": 1 }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.defaultSpeed" == 3
+
+
+# Speed outside 0.5–3.0 is a validation error.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "updateMySettings",
+  "details": {
+    "set": { "defaultSpeed": 0.1, "updatedAt": 1782000000000 },
+    "get": { "defaultSpeed": 1 }
+  }
+}
+
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
+
+
+# An unknown history sort is a validation error.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "user",
+  "act": "updateMySettings",
+  "details": {
+    "set": { "historySort": "daily", "updatedAt": 1783000000000 },
+    "get": { "historySort": 1 }
+  }
+}
+
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
+
+
+# Sync push: a settings snapshot applies and returns the authoritative object.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "track",
+  "act": "syncLocalData",
+  "details": {
+    "set": {
+      "settings": {
+        "languageCode": "fa",
+        "defaultSpeed": 1.5,
+        "historySort": "longest",
+        "updatedAt": 1790000000000
+      }
+    },
+    "get": { "syncedSettings": 1, "settings": {} }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.syncedSettings" == 1
+jsonpath "$.body.settings.languageCode" == "fa"
+jsonpath "$.body.settings.defaultSpeed" == 1.5
+jsonpath "$.body.settings.historySort" == "longest"
+jsonpath "$.body.settings.updatedAt" == 1790000000000
+
+
+# Sync pull: no snapshot still returns the current settings, applied == 0.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "track",
+  "act": "syncLocalData",
+  "details": {
+    "set": {},
+    "get": { "syncedSettings": 1, "settings": {} }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.syncedSettings" == 0
+jsonpath "$.body.settings.languageCode" == "fa"
+jsonpath "$.body.settings.updatedAt" == 1790000000000
+
+
+# Sync LWW: an older snapshot loses and the response names the winner.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "track",
+  "act": "syncLocalData",
+  "details": {
+    "set": {
+      "settings": {
+        "languageCode": "en",
+        "defaultSpeed": 1,
+        "historySort": "newest",
+        "updatedAt": 1780000000000
+      }
+    },
+    "get": { "syncedSettings": 1, "settings": {} }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.syncedSettings" == 0
+jsonpath "$.body.settings.languageCode" == "fa"
+jsonpath "$.body.settings.defaultSpeed" == 1.5
+jsonpath "$.body.settings.updatedAt" == 1790000000000
+
+
 # ── Tracks ──────────────────────────────────────────────────────
 
 POST {{serverAddress}}/lesan

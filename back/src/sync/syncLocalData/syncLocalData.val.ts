@@ -3,9 +3,12 @@ import {
   boolean,
   defaulted,
   enums,
+  nullable,
   number,
   object,
   optional,
+  refine,
+  size,
   string,
 } from "lesan";
 
@@ -92,6 +95,22 @@ export const syncLocalDataValidator = () =>
         ),
       ),
       /**
+       * The full shared-settings snapshot. Optional so every existing client
+       * keeps working; `updatedAt` is the device's LWW token, not a Date.
+       */
+      settings: optional(
+        object({
+          languageCode: nullable(size(string(), 0, 16)),
+          defaultSpeed: refine(
+            number(),
+            "defaultSpeed between 0.5 and 3.0",
+            (value) => value >= 0.5 && value <= 3,
+          ),
+          historySort: enums(["newest", "oldest", "longest"]),
+          updatedAt: number(),
+        }),
+      ),
+      /**
        * Saved / favourited / downloaded online collections.
        *
        * Nothing here is resolved server-side: the collection is named by its own
@@ -127,6 +146,15 @@ export const syncLocalDataValidator = () =>
         syncedPlaylists: optional(enums([0, 1])),
         syncedContextPlays: optional(enums([0, 1])),
         syncedOnlineCollections: optional(enums([0, 1])),
+        syncedSettings: optional(enums([0, 1])),
+        settings: optional(
+          object({
+            languageCode: optional(enums([0, 1])),
+            defaultSpeed: optional(enums([0, 1])),
+            historySort: optional(enums([0, 1])),
+            updatedAt: optional(enums([0, 1])),
+          }),
+        ),
         annotations: optional(
           array(
             object({

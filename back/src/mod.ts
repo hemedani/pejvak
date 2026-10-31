@@ -4,6 +4,7 @@ import { contextsSetup } from "./contexts/mod.ts";
 import { onlineSetup } from "./online/mod.ts";
 import { playlistsSetup } from "./playlists/mod.ts";
 import { sessionsSetup } from "./sessions/mod.ts";
+import { settingsSetup } from "./settings/mod.ts";
 import { statsSetup } from "./stats/mod.ts";
 import { syncSetup } from "./sync/mod.ts";
 import { tracksSetup } from "./tracks/mod.ts";
@@ -18,4 +19,5 @@ export const functionsSetup = () => {
   playlistsSetup();
   contextsSetup();
   onlineSetup();
+  settingsSetup();
 };
