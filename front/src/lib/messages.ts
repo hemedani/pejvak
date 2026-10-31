@@ -21,6 +21,14 @@ const KNOWN_VALIDATION: readonly { pattern: RegExp; fa: string }[] = [
   { pattern: /already exists|duplicate key/i, fa: "این مورد از قبل وجود دارد." },
   { pattern: /password/i, fa: "رمز عبور باید بین ۸ تا ۱۰۰ نویسه باشد." },
   { pattern: /email/i, fa: "ایمیل واردشده معتبر نیست." },
+  // Sentinels a Server Action throws itself, before the backend sees the
+  // request. They are English and live in this table for the same reason the
+  // backend's do: this is the only place a failure becomes a Persian sentence,
+  // and a screen that printed a Persian string it had written itself would be
+  // the second such place.
+  { pattern: /playlist title is required/i, fa: "نام فهرست را بنویسید." },
+  { pattern: /playlist title is too long/i, fa: "نام فهرست باید کوتاه‌تر از ۱۲۰ نویسه باشد." },
+  { pattern: /playlist not found/i, fa: "این فهرست پیدا نشد." },
 ];
 
 const BY_KIND: Record<Exclude<ActFailure["kind"], "validation">, string> = {
