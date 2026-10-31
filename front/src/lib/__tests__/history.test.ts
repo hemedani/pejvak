@@ -30,6 +30,7 @@ import {
   buildHistoryHref,
   buildHistorySections,
   buildStretch,
+  describeHistoryOrder,
   describeHistorySummary,
   describeStretchOutcome,
   describeStretchTitle,
@@ -90,6 +91,19 @@ function session(overrides: Partial<HistorySession> = {}): HistorySession {
 /** One stretch of one session that began at `startedAt`. */
 function stretchAt(startedAt: number, id: string) {
   return buildStretch([session({ id, stretchId: id, startedAt, endedAt: startedAt + HOUR })])!;
+}
+
+/** One stretch of one session that lasted `listenedSec`, for the "longest" order. */
+function stretchOf(startedAt: number, id: string, listenedSec: number) {
+  return buildStretch([
+    session({
+      id,
+      stretchId: id,
+      startedAt,
+      endedAt: startedAt + listenedSec * 1000,
+      durationListenedSec: listenedSec,
+    }),
+  ])!;
 }
 
 describe("buildStretch", () => {
@@ -353,6 +367,79 @@ describe("buildHistorySections", () => {
     expect(describeHistorySummary([stretchAt(today, "a"), stretchAt(today, "b")])).toBe(
       "2 sessions on this page · 20 min",
     );
+  });
+});
+
+/**
+ * The order is a preference, and the whole point of these is that it is applied
+ * here rather than asked for: `getMyListeningHistory` has no sort parameter, so
+ * "oldest" and "longest" are orderings of the page that was read. A regression
+ * that made "oldest" quietly identical to "newest" would look perfectly fine on
+ * screen, which is why the rows inside a day are asserted and not only the days.
+ */
+describe("buildHistorySections order", () => {
+  const now = new Date(2026, 9, 31, 12, 0, 0).getTime();
+  const today = new Date(2026, 9, 31, 9, 0, 0).getTime();
+  const laterToday = today + HOUR;
+  const yesterday = new Date(2026, 9, 30, 9, 0, 0).getTime();
+
+  it("puts the newest row first inside a day", () => {
+    const sections = buildHistorySections(
+      [stretchAt(today, "a"), stretchAt(laterToday, "b")],
+      now,
+      "newest",
+    );
+
+    expect(sections[0]!.data.map((stretch) => stretch.id)).toEqual(["b", "a"]);
+  });
+
+  it("reverses the days and the rows inside them for oldest", () => {
+    const sections = buildHistorySections(
+      [stretchAt(today, "a"), stretchAt(laterToday, "b"), stretchAt(yesterday, "c")],
+      now,
+      "oldest",
+    );
+
+    expect(sections.map((section) => section.key)).toEqual([
+      String(startOfDay(yesterday)),
+      String(startOfDay(today)),
+    ]);
+    expect(sections[1]!.data.map((stretch) => stretch.id)).toEqual(["a", "b"]);
+  });
+
+  it("draws longest as one flat section, with no day heading", () => {
+    const sections = buildHistorySections(
+      [
+        stretchOf(today, "short", 60),
+        stretchOf(laterToday, "long", 900),
+        stretchOf(yesterday, "mid", 300),
+      ],
+      now,
+      "longest",
+    );
+
+    // A heading would claim the length has something to do with the day.
+    expect(sections).toHaveLength(1);
+    expect(sections[0]!.title).toBeNull();
+    expect(sections[0]!.data.map((stretch) => stretch.id)).toEqual(["long", "mid", "short"]);
+    expect(sections[0]!.listenedSec).toBe(1260);
+  });
+
+  it("breaks a tie in length by recency, so two renders agree", () => {
+    const sections = buildHistorySections(
+      [stretchOf(today, "early", 600), stretchOf(laterToday, "late", 600)],
+      now,
+      "longest",
+    );
+
+    expect(sections[0]!.data.map((stretch) => stretch.id)).toEqual(["late", "early"]);
+  });
+
+  it("explains only the orders that need explaining", () => {
+    // The act already answers newest first, so a caption there is noise.
+    expect(describeHistoryOrder("newest")).toBeNull();
+    expect(describeHistoryOrder("oldest")).toContain("this page");
+    expect(describeHistoryOrder("longest")).toContain("this page");
   });
 });
 

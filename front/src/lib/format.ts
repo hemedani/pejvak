@@ -96,15 +96,22 @@ export function formatPercent(ratio: number): string {
 }
 
 /**
- * A playback speed: `1` → `"1×"`, `1.5` → `"1.5×"`.
+ * A playback speed: `1` → `"1×"`, `1.5` → `"1.5×"`, `0.75` → `"0.75×"`.
  *
  * The `×` rather than "times" because it sits in a dense caption next to a
  * duration, and because a speed is a multiplier. Whole speeds drop the decimal —
  * `2.0×` looks like a measurement with a precision that is not there.
+ *
+ * **Two decimals, then trailing zeros stripped.** One decimal was wrong for the
+ * quarter steps this app actually offers: `(0.75).toFixed(1)` is `"0.8"` and
+ * `(1.25).toFixed(1)` is `"1.3"`, so the speed menu labelled 0.75× as 0.8× and
+ * 1.25× as 1.3× — a label naming a rate the player was not running at. Rounding
+ * through `Number` is what removes the zeros, so `1` stays `"1"` and `1.5` stays
+ * `"1.5"` without a special case for whole numbers.
  */
 export function formatSpeed(speed: number): string {
   const safe = Number.isFinite(speed) && speed > 0 ? speed : 1;
-  return Number.isInteger(safe) ? `${safe}×` : `${safe.toFixed(1)}×`;
+  return `${Number(safe.toFixed(2))}×`;
 }
 
 /**

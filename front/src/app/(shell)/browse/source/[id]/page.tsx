@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { getBrowseCollections } from "@/app/actions/online/get-browse-collections";
+import { getMySettings } from "@/app/actions/settings/get-my-settings";
 import { CollectionCard } from "@/components/online/collection-card";
 import { CollectionGrid, CollectionGridSkeleton } from "@/components/online/collection-grid";
 import { SourceProblem } from "@/components/online/source-problem";
@@ -25,6 +26,18 @@ type Search = {
 
 const PAGE_SIZE = 24;
 
+/**
+ * The listener's stored language, or null.
+ *
+ * A failed read is null rather than an error: the language is a default, and the
+ * source's own primary language is a perfectly good answer. Turning a preference
+ * that could not be loaded into a failed page would be the tail wagging the dog.
+ */
+async function preferredLanguage(): Promise<string | null> {
+  const result = await getMySettings();
+  return result.success ? result.body.languageCode : null;
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const source = findSource(id);
@@ -38,9 +51,16 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
  *
  * A provider may serve several languages (LibriVox and Radio Browser do), so the
  * language the listener arrived with travels in `?language=` and is validated
- * against the source's own list. An unknown or unserved value falls back to the
- * source's primary language rather than being passed to an adapter that would
- * ignore it and return the wrong shelf.
+ * against the source's own list. An unknown or unserved value falls back — first
+ * to the listener's shared `languageCode` preference, then to the source's
+ * primary language — rather than being passed to an adapter that would ignore it
+ * and return the wrong shelf.
+ *
+ * The preference is the second step, not the first: a listener who tapped Dutch
+ * on the Browse tab asked for Dutch, and a stored preference must not overrule
+ * the thing they just clicked. It is also **not read when the URL already
+ * answered**, which is the common path — arriving from a language page costs no
+ * extra round trip, and only a direct link to a source pays for one.
  *
  * ## Search is a form, not a field with a timer
  *
@@ -71,8 +91,16 @@ export default async function SourcePage({
   const page = pageParam(query.page);
   const search = (firstParam(query.q) ?? "").trim();
   const requested = firstParam(query.language);
+  const served = sourceLanguages(source);
+
+  // The URL wins when it names a language this source serves — the listener got
+  // here by choosing one. Only when it does not is the stored preference asked
+  // for, so the ordinary path (Browse → language → source) reads no settings.
+  const chosen = requested && served.includes(requested) ? requested : null;
+  const preferred = chosen === null ? await preferredLanguage() : null;
+
   const language =
-    requested && sourceLanguages(source).includes(requested) ? requested : source.languageCode;
+    chosen ?? (preferred && served.includes(preferred) ? preferred : source.languageCode);
   const languageName = findLanguage(language)?.nativeName ?? language;
 
   const hrefFor = (nextPage: number): string => {

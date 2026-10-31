@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { getMe } from "@/app/actions/auth/get-me";
 import { Sidebar } from "@/components/layout/sidebar";
+import { DefaultSpeed } from "@/components/player/default-speed";
 import { OnlineStreamBridge } from "@/components/player/online-stream-bridge";
 import { PlayerBar } from "@/components/player/player-bar";
 import { Topbar } from "@/components/layout/topbar";
@@ -48,6 +49,12 @@ export default async function ShellLayout({ children }: { children: React.ReactN
   return (
     <div className="flex min-h-dvh">
       <OnlineStreamBridge sources={STREAM_SOURCES} />
+      {/*
+        Asks for the listener's starting speed after hydration, not during this
+        render: the shell's one act is `getMe`, and a preference is not worth a
+        second one on the critical path. Renders nothing.
+      */}
+      <DefaultSpeed />
 
       <Sidebar />
 

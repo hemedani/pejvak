@@ -1,32 +1,56 @@
 import { getMe } from "@/app/actions/auth/get-me";
+import { getMySettings } from "@/app/actions/settings/get-my-settings";
+import { SettingsForm } from "@/components/domain/settings-form";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Card, CardHeading } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/state";
 import { PageHeader } from "@/components/ui/page-header";
 import { displayNameOf, initialOf } from "@/lib/domain/user";
+import { AVAILABLE_LANGUAGES } from "@/lib/online/languages";
 
 export const metadata = { title: "Settings" };
 
 /**
- * Settings, read-only.
+ * Settings.
  *
- * There is no `updateMe` act (plan §2 C3), so nothing here edits anything — and
- * a form that looks editable and silently discards the change is worse than a
- * field that says why it cannot be changed. When the act arrives, this page gains
- * its form and nothing else.
+ * ## What can be changed here, and what cannot
+ *
+ * Three preferences are shared with the phone — starting speed, History order,
+ * the language Browse opens on — and this page edits all three through
+ * `updateMySettings` (box 3.6). A fourth, the theme, belongs to this browser and
+ * is a cookie, so it stays a toggle rather than a form field.
+ *
+ * The profile is still read-only, and still says so. There is no `updateMe` act
+ * (plan §2 C3), and a field that looks editable and silently discards the change
+ * is worse than a sentence explaining why it cannot be changed.
+ *
+ * ## A failed settings read replaces the form
+ *
+ * Not a fallback to defaults. The defaults are real values — 1× speed, newest
+ * first, no language — so rendering the form on top of a failed read would let
+ * the listener overwrite a preference they never saw, and the first control they
+ * touched would silently reset the other two. An error state with a retry is the
+ * only version of this screen that cannot lose data.
+ *
+ * The theme and the profile do not depend on that read, so they still render —
+ * the failure is contained in the card that needs it.
  */
 export default async function SettingsPage() {
-  const result = await getMe();
+  const [me, settings] = await Promise.all([getMe(), getMySettings()]);
 
-  if (!result.success) {
-    return <ErrorState failure={result.error} retryHref="/settings" />;
+  if (!me.success) {
+    return <ErrorState failure={me.error} retryHref="/settings" />;
   }
 
-  const user = result.body;
+  const user = me.body;
 
   return (
     <div className="flex max-w-[820px] flex-col gap-[var(--space-lg)]">
-      <PageHeader overline="Account" title="Settings" description="Account details and display preferences." />
+      <PageHeader
+        overline="Account"
+        title="Settings"
+        description="Account details, display preferences, and the choices that follow you to the phone."
+      />
 
       <Card className="p-[var(--space-xl)]">
         <CardHeading overline="Signed in as" title="Profile" />
@@ -55,7 +79,7 @@ export default async function SettingsPage() {
       </Card>
 
       <Card className="p-[var(--space-xl)]">
-        <CardHeading overline="Display" title="Theme" />
+        <CardHeading overline="This browser" title="Theme" />
         <div className="mt-[var(--space-md)] flex items-center justify-between gap-[var(--space-md)]">
           <div>
             <p className="type-label text-text">Light or dark</p>
@@ -66,6 +90,18 @@ export default async function SettingsPage() {
           <ThemeToggle />
         </div>
       </Card>
+
+      {settings.success ? (
+        <SettingsForm
+          settings={settings.body}
+          languages={AVAILABLE_LANGUAGES.map(({ code, name }) => ({ code, name }))}
+        />
+      ) : (
+        <Card className="p-[var(--space-xl)]">
+          <CardHeading overline="Every device" title="Playback, language and history" />
+          <ErrorState failure={settings.error} retryHref="/settings" />
+        </Card>
+      )}
 
       <Card className="p-[var(--space-xl)]">
         <CardHeading overline="About this version" title="What the web can and cannot do" />

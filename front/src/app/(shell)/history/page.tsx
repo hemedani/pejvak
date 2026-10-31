@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 
 import { getHistoryPage } from "@/app/actions/sessions/get-history-page";
+import { getMySettings } from "@/app/actions/settings/get-my-settings";
 import { HistoryRangeForm } from "@/components/domain/history-range-form";
 import { HistorySections, HistorySkeleton } from "@/components/domain/history-sections";
 import { Card } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { EmptyState, ErrorState } from "@/components/ui/state";
 import {
   buildHistoryHref,
   buildHistorySections,
+  describeHistoryOrder,
   describeHistorySummary,
   parseHistoryRange,
   type HistoryRange,
@@ -43,12 +45,14 @@ type Search = {
  * be shared as a link. Nothing here is client state — the only client leaf on
  * this screen is a resume button inside a row.
  *
- * ## No sort control
+ * ## Order is a preference, applied to the page
  *
- * The act sorts by `startedAt: -1` and offers nothing else. A control that
- * reordered the current page would be a claim about the whole history that the
- * backend cannot keep, so "oldest" and "longest" are absent rather than
- * decorative.
+ * `getMyListeningHistory` sorts by `startedAt: -1` and takes no sort parameter,
+ * so the order comes from the listener's shared settings and is applied **here**,
+ * to the page that was read — the same thing the phone does, and the same thing
+ * `describeHistoryOrder` says in a caption when the order is not the default. A
+ * server-side sort would be a claim about the whole history that the act cannot
+ * keep; this one is a claim about fifty rows, which it can.
  *
  * ## No delete
  *
@@ -101,7 +105,17 @@ async function HistoryList({
   range: HistoryRange;
   now: number;
 }) {
-  const result = await getHistoryPage({ after, from: range.from, to: range.to });
+  /*
+    Two acts in parallel: the page, and the order it should be drawn in. Neither
+    depends on the other, and the settings read is a preference — if it fails the
+    list still renders, newest first, which is what the act returns anyway. A
+    failed preference must never turn a working screen into an error state.
+  */
+  const [result, preferences] = await Promise.all([
+    getHistoryPage({ after, from: range.from, to: range.to }),
+    getMySettings(),
+  ]);
+
   const filtered = range.from !== undefined || range.to !== undefined;
 
   if (!result.success) {
@@ -118,6 +132,7 @@ async function HistoryList({
   }
 
   const { stretches, after: nextAfter, hasMore } = result.body;
+  const sort = preferences.success ? preferences.body.historySort : "newest";
 
   if (stretches.length === 0) {
     return (
@@ -152,11 +167,22 @@ async function HistoryList({
     );
   }
 
+  const orderNote = describeHistoryOrder(sort);
+
   return (
     <>
-      <p className="type-caption text-text-tertiary">{describeHistorySummary(stretches)}</p>
+      <div className="flex flex-col gap-[var(--space-xs)]">
+        <p className="type-caption text-text-tertiary">{describeHistorySummary(stretches)}</p>
+        {/*
+          The qualifier, on its own line under the figure it qualifies. Both are
+          captions, so they read as one block; running them together on one line
+          would bury the "this page only" half of the sentence at the end of a
+          longer one.
+        */}
+        {orderNote ? <p className="type-caption text-text-tertiary">{orderNote}</p> : null}
+      </div>
 
-      <HistorySections sections={buildHistorySections(stretches, now)} />
+      <HistorySections sections={buildHistorySections(stretches, now, sort)} />
 
       <CursorPagination
         href={buildHistoryHref({ after: nextAfter, from: range.from, to: range.to })}

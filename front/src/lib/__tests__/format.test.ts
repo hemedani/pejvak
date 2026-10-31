@@ -114,9 +114,20 @@ describe("formatSpeed", () => {
     expect(formatSpeed(1)).toBe("1×");
   });
 
-  it("keeps one decimal on a fractional speed", () => {
+  it("keeps one decimal on a half-step speed", () => {
     expect(formatSpeed(1.5)).toBe("1.5×");
-    expect(formatSpeed(1.44)).toBe("1.4×");
+    expect(formatSpeed(0.5)).toBe("0.5×");
+  });
+
+  it("keeps the quarter steps the player actually offers", () => {
+    // One decimal used to round these: 0.75 → "0.8×", 1.25 → "1.3×", 1.75 →
+    // "1.8×". A label that names a rate the player is not running at is worse
+    // than a longer label.
+    expect(formatSpeed(0.75)).toBe("0.75×");
+    expect(formatSpeed(1.25)).toBe("1.25×");
+    expect(formatSpeed(1.75)).toBe("1.75×");
+    expect(formatSpeed(2.5)).toBe("2.5×");
+    expect(formatSpeed(3)).toBe("3×");
   });
 
   it("treats a missing or impossible speed as 1×", () => {

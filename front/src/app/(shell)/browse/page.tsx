@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { getMyContexts } from "@/app/actions/online/get-my-contexts";
 import { getMyOnlineCollections } from "@/app/actions/online/get-my-online-collections";
+import { getMySettings } from "@/app/actions/settings/get-my-settings";
 import { BrowseTabs, type BrowseTab } from "@/components/online/browse-tabs";
 import { CollectionGridSkeleton } from "@/components/online/collection-grid";
 import { ContinueShelf } from "@/components/online/continue-shelf";
@@ -34,10 +35,11 @@ const TABS: readonly BrowseTab[] = ["continue", "favorites", "browse"];
  * ## The landing makes no third-party request
  *
  * `tab=browse` renders the language catalogue, which is a static table compiled
- * into the bundle. Continue and Favorites read only the backend. **No adapter
- * runs until a source's page is opened**, so opening `/browse` costs this app's
- * own server and nothing else — no source learns that the listener looked, and a
- * slow archive cannot delay the page.
+ * into the bundle. All three tabs read only this app's own backend — Continue
+ * and Favorites their own lists, Browse the listener's language preference, and
+ * nothing else. **No adapter runs until a source's page is opened**, so opening
+ * `/browse` costs this app's own server and nothing else — no source learns that
+ * the listener looked, and a slow archive cannot delay the page.
  *
  * ## The header and tabs never wait
  *
@@ -69,11 +71,26 @@ export default async function BrowsePage({ searchParams }: { searchParams: Promi
         ) : tab === "favorites" ? (
           <FavoritesPanel />
         ) : (
-          <LanguageSearch languages={LANGUAGES} />
+          <LanguagePanel />
         )}
       </Suspense>
     </div>
   );
+}
+
+/**
+ * The language catalogue, with the listener's own language offered first.
+ *
+ * Its own component so the settings read happens **inside** the Suspense
+ * boundary: the header and the tabs must paint without waiting for a preference,
+ * and a failed read is not an error here — the catalogue is complete either way,
+ * so the shortcut is simply absent.
+ */
+async function LanguagePanel() {
+  const preferences = await getMySettings();
+  const preferred = preferences.success ? preferences.body.languageCode : null;
+
+  return <LanguageSearch languages={LANGUAGES} preferred={preferred} />;
 }
 
 /**

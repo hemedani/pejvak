@@ -82,9 +82,14 @@ Four things that bite:
   page?" is answered by `rows.length >= limit`, and there is no total to render.
 - **`getMyStats` returns `contentHash`, not titles** (C4). Join against `getMyTracks`.
 - **`getMySettings` is the only act that returns the listener's preferences**
-  (`languageCode`, `defaultSpeed`, `historySort`) and the web does not read it yet — see
-  plan §10 box 3.6. `updateMySettings` writes the same three fields and nothing about the
-  profile, so it is not the `updateMe` the plan lists as missing.
+  (`languageCode`, `defaultSpeed`, `historySort`) and **each one has a consumer** — do not add a
+  fourth field without one, because a stored preference that changes nothing is a screen that
+  lies. `defaultSpeed` seeds the player (`player/default-speed.tsx`, after hydration, guarded
+  against splitting a session); `historySort` orders `/history` **on the page that was read**,
+  since `getMyListeningHistory` has no sort parameter; `languageCode` is the fallback language
+  on `/browse/source/[id]` behind `?language=`, plus a shortcut on `/browse`.
+  `updateMySettings` writes those three fields and nothing about the profile, so it is not the
+  `updateMe` the plan lists as missing.
 
 ### Embedded relations — read the limit *and the sort*
 

@@ -305,24 +305,95 @@ export type HistorySection = {
 };
 
 /**
- * Groups stretches into the days they began on, newest day first.
+ * How the History screen orders its entries.
+ *
+ * Ported from `mobile/src/lib/history.ts`, and it means the same thing there:
+ * an order applied to the entries this screen already holds, not a query
+ * parameter. See `buildHistorySections` for why that distinction is the honest
+ * one rather than a shortcut.
+ */
+export type HistorySort = "newest" | "oldest" | "longest";
+
+/** Derived from `HistorySort`, so an order cannot exist without a label. */
+export const HISTORY_SORT_OPTIONS: readonly { value: HistorySort; label: string }[] = [
+  { value: "newest", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "longest", label: "Longest" },
+];
+
+/**
+ * The order, as one sentence about what it actually covers.
+ *
+ * `null` for the default: the act already answers newest first, and a caption
+ * explaining the obvious is noise above a list that has not been reordered.
+ *
+ * Both sentences say "this page" because both are true of this page only.
+ * `getMyListeningHistory` takes a cursor and a date range and **no sort at all**,
+ * so the order is applied here, to the page that was read. A caption that
+ * implied otherwise would be claiming a whole-history sort the server cannot
+ * keep — and the summary line beside it already says "on this page" for the same
+ * reason.
+ */
+export function describeHistoryOrder(sort: HistorySort): string | null {
+  switch (sort) {
+    case "oldest":
+      return "Oldest first. The list is reordered within this page.";
+    case "longest":
+      return "Longest first. Lengths are compared within this page, not across your whole history.";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Groups stretches for the History list, in the chosen order.
+ *
+ * ## Chronological orders keep their day headings
  *
  * Bucketed by `startOfDay(startedAt)` — a number, never a formatted string: two
  * different days can format the same way, and the chart-style grouping that
  * compares strings silently merges them. A listen that ran past midnight belongs
  * to the evening it began, which is where the listener looks for it.
  *
- * Within a day the act's newest-first order is kept: a second sort would be a
- * second opinion about "recent".
- *
  * The year is printed only when the day is not in the current year. A history
- * from three years ago must not show two "October 14" headings with no way to tell
- * them apart.
+ * from three years ago must not show two "October 14" headings with no way to
+ * tell them apart.
+ *
+ * ## "Longest" is deliberately flat
+ *
+ * How long a listen ran has nothing to do with the day it happened, so a day
+ * heading there would be a label the data never asked for. One section, no
+ * title, ordered by length and tie-broken by recency so two equal lengths cannot
+ * swap places between two renders of the same page.
+ *
+ * ## Both branches sort explicitly
+ *
+ * The act returns newest first — it is the only order it has — so the tempting
+ * version of this function trusts its input and only reverses the days. That
+ * makes "oldest" silently identical to "newest" the day the act's ordering
+ * changes, with nothing to catch it. Sorting here is one comparison and removes
+ * the assumption.
  */
 export function buildHistorySections(
   stretches: readonly ListeningStretch[],
   now: number,
+  sort: HistorySort = "newest",
 ): HistorySection[] {
+  if (sort === "longest") {
+    return [
+      {
+        key: "longest",
+        title: null,
+        data: [...stretches].sort(
+          (a, b) => b.listenedSec - a.listenedSec || b.startedAt - a.startedAt,
+        ),
+        listenedSec: stretches.reduce((total, stretch) => total + stretch.listenedSec, 0),
+      },
+    ];
+  }
+
+  const direction = sort === "oldest" ? -1 : 1;
+
   const buckets = new Map<number, ListeningStretch[]>();
   for (const stretch of stretches) {
     const key = startOfDay(stretch.startedAt);
@@ -339,7 +410,7 @@ export function buildHistorySections(
   const currentYear = new Date(now).getFullYear();
 
   return [...buckets.entries()]
-    .sort((a, b) => b[0] - a[0])
+    .sort((a, b) => (b[0] - a[0]) * direction)
     .map(([key, data]) => {
       const sameYear = new Date(key).getFullYear() === currentYear;
       const title =
@@ -354,7 +425,7 @@ export function buildHistorySections(
       return {
         key: String(key),
         title,
-        data,
+        data: [...data].sort((a, b) => (b.startedAt - a.startedAt) * direction),
         listenedSec: data.reduce((total, stretch) => total + stretch.listenedSec, 0),
       };
     });

@@ -24,6 +24,7 @@
  * and a search field that stutters.
  */
 
+import Link from "next/link";
 import { useDeferredValue, useMemo, useState } from "react";
 
 import { LanguageList } from "@/components/online/language-list";
@@ -32,7 +33,26 @@ import { languageSearchFields } from "@/lib/online/catalogue";
 import type { OnlineLanguage } from "@/lib/online/types";
 import { createSearchIndex, foldQuery, searchIndex } from "@/lib/search";
 
-export function LanguageSearch({ languages }: { languages: readonly OnlineLanguage[] }) {
+export function LanguageSearch({
+  languages,
+  preferred = null,
+}: {
+  languages: readonly OnlineLanguage[];
+  /**
+   * The listener's chosen language (`settings.languageCode`), or null.
+   *
+   * Offered as a shortcut **above** the catalogue rather than by moving its row
+   * to the top. The catalogue's order is English-name ascending on purpose (see
+   * `language-list.tsx`): it is the one order that is the same on every device,
+   * which is what makes the list learnable. Reordering it per listener would
+   * trade that for a convenience the shortcut already provides.
+   *
+   * Only a language that is actually browsable gets the shortcut. A stored code
+   * whose source has since been removed must quietly stop being offered, not
+   * become a link to an empty shelf — and not an error, either.
+   */
+  preferred?: string | null;
+}) {
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
 
@@ -53,8 +73,28 @@ export function LanguageSearch({ languages }: { languages: readonly OnlineLangua
 
   const visible = hits ?? languages;
 
+  const shortcut = useMemo(
+    () => languages.find((language) => language.code === preferred && language.available) ?? null,
+    [languages, preferred],
+  );
+
   return (
     <div className="flex flex-col gap-[var(--space-md)]">
+      {shortcut ? (
+        <Link
+          href={`/browse/language/${shortcut.code}`}
+          className="flex items-center gap-[var(--space-md)] rounded-[var(--radius-card)] border border-outline-variant bg-surface px-[var(--space-lg)] py-[var(--space-md)] shadow-[var(--elevation-card)] transition-colors hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--accent)]"
+        >
+          <div className="min-w-0 flex-1">
+            <p className="type-overline text-text-tertiary">Your language</p>
+            <p className="type-label mt-[var(--space-xs)] truncate text-text" dir={shortcut.direction}>
+              {shortcut.nativeName}
+            </p>
+          </div>
+          <Icon name="end" size="sm" className="shrink-0 text-text-tertiary" />
+        </Link>
+      ) : null}
+
       <div className="relative">
         <span className="pointer-events-none absolute inset-y-0 start-[var(--space-md)] grid place-items-center text-text-tertiary">
           <Icon name="search" size="sm" />

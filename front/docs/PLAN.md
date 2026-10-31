@@ -7,8 +7,9 @@
 > Nothing here is aspirational: every claim about the backend in [§2](#2-ground-truth--what-the-backend-actually-offers)
 > was read out of `back/` on 2026-10-30. Where this plan and the code disagree, the code is right and this file is a bug.
 
-**Status:** Phases 0–5 built, plus 3.2–3.5 and 4.1–4.5 — the whole console and the streaming player,
-in English and LTR. Plan authored 2026-10-30, reconciled against the code 2026-10-31.
+**Status:** Phases 0–5 built, plus 3.2–3.6 and 4.1–4.5 — the whole console and the streaming player,
+in English and LTR, with the three shared preferences editable and in effect. Plan authored 2026-10-30,
+reconciled against the code 2026-10-31.
 **Blocking decision:** [D1](#3-decisions) = (a), provisional. It blocks **Phase 6 only**; Phase 7 can proceed.
 
 ---
@@ -358,7 +359,7 @@ hover, the single saturated CTA per viewport. Those belong to a different produc
 |---|---|---|---|
 | `login` | `email`, `password` | `token`, `user { _id, username, email, displayName }` | `/login` |
 | `getMe` | — | `_id, username, email, displayName, avatarUrl` | shell, `/settings` |
-| `getMySettings` / `updateMySettings` | `languageCode, defaultSpeed, historySort, updatedAt` | the same | `/settings` — **not used yet**, box 3.6 |
+| `getMySettings` / `updateMySettings` | `languageCode, defaultSpeed, historySort, updatedAt` | the same | `/settings`; `defaultSpeed` also seeds the player, `historySort` orders `/history`, `languageCode` is the fallback on `/browse/source/[id]` and a shortcut on `/browse` |
 | `getMyStats` | — | `totalListenTimeSec, sessionCount, trackCount, firstListenedAt, lastListenedAt, tracks[]` | dashboard |
 | `getMyTracks` | `page, limit, search?, sortBy?, sortOrder?, isAudiobook?` | `_id, title, contentHash, durationSec, isAudiobook, author, artworkUrl, totalPlayCount, totalListenTimeSec, lastPlayedAt, origin, sourceId, externalId, collectionKey` | library, queue source |
 | `getTrackDetail` | `trackId` | the above + `sessions[]`, `annotations[]` | track page |
@@ -580,7 +581,7 @@ direct visit to `/library` while signed out redirects to `/login`; signing out c
       > run's own state — outcome, progress bar, resume target — renders on the **collection page**, which is
       > where a listener would look for "where was I in this?"; a separate runs index would be a third view of
       > the same rows. `getMyContexts` is the one act behind all three surfaces.
-- [ ] **3.6** Settings the backend already stores: read `getMySettings` and let the listener change
+- [x] **3.6** Settings the backend already stores: read `getMySettings` and let the listener change
       `defaultSpeed`, `historySort` and `languageCode` through `updateMySettings`.
       > **Found while reconciling this file against `back/`, 2026-10-31.** The plan has claimed since Phase 1
       > that settings is read-only because "there is no `updateMe` act", and the *profile* half of that is
@@ -592,6 +593,17 @@ direct visit to `/library` while signed out redirects to `/login`; signing out c
       > always opens on Persian). This needs **no backend change** — an act call and a form. It is the
       > smallest honest gap left in the console, and the reason `/settings` currently says more about what it
       > cannot do than about what the listener has chosen.
+      > **Built, 2026-10-31.** All three are editable, and each one now has a consumer — a preference with no
+      > effect would have been a form that lies. `defaultSpeed` seeds the player from a client leaf in the
+      > shell (`player/default-speed.tsx`), guarded so it cannot split a session or overwrite a rate chosen
+      > mid-listen. `historySort` orders `/history`, and because `getMyListeningHistory` takes **no sort
+      > parameter**, it is applied to the page that was read — exactly what the phone does, with a caption
+      > saying so (`describeHistoryOrder`). `languageCode` is the fallback language on
+      > `/browse/source/[id]` (behind `?language=`, never ahead of it) and a shortcut above the catalogue on
+      > `/browse`. Two deviations worth recording: the speed control offers the phone's **five** rates, not
+      > the player menu's nine, because a default the phone's own settings screen cannot display would show
+      > there as "nothing chosen"; and a stored rate that is off that list is still rendered, sorted into
+      > place, so the control never shows an empty selection.
 
 **Done when:** a playlist round-trips through create → reorder → delete, and a new annotation appears after a
 reload with the same `clientId` it was sent with.
@@ -1116,6 +1128,68 @@ claims had gone stale.
 need a live backend, which this environment does not have. Each now carries an explicit
 not-verified block rather than a bare tick, so the gap is visible in the roadmap instead of
 living only in the log.
+
+---
+
+### 2026-10-31 — Box 3.6: the settings the backend was already storing
+
+**Built.** `getMySettings`/`updateMySettings` are now read and written, and — the part that
+mattered — **each of the three preferences has a consumer**, because a settings form whose
+values change nothing is a screen that lies:
+
+| Preference | Where it acts |
+|---|---|
+| `defaultSpeed` | seeds the player from `player/default-speed.tsx`, a client leaf in the shell |
+| `historySort` | orders `/history` |
+| `languageCode` | fallback language on `/browse/source/[id]`; a shortcut above the catalogue on `/browse` |
+
+**Three design decisions worth the ink:**
+
+- **`historySort` is applied to the page, not asked for.** `getMyListeningHistory`'s validator
+  is `{ page, limit, from, to }` — there is no sort parameter, so a control that promised a
+  whole-history order would be promising something the backend cannot deliver. The order is
+  computed in `buildHistorySections` over the rows that were read, which is exactly what
+  `mobile/src/lib/history.ts` does, and `describeHistoryOrder` says "within this page" out loud
+  for the two orders that are not the act's own. The alternative — refusing the box — would
+  have left the phone and the web disagreeing about a stored field.
+- **The speed control offers five rates, not the player menu's nine.** A default the phone's
+  own settings screen cannot display would render there as "nothing chosen", so the settings
+  list is the phone's (`0.75 … 2`) even though the player menu offers nine. A stored rate that
+  is off the list — legal to the backend's 0.5–3 refine — is still rendered and sorted into
+  place, so the control never shows an empty selection.
+- **`defaultSpeed` is seeded after hydration, not in the shell's read.** The shell's one act is
+  `getMe`; a preference is not worth a second one on the critical path. Two guards keep the
+  late write honest: `current !== null` (a track is already loaded — changing the rate would
+  split the listener's session and write an artificial boundary into their history) and
+  `playbackSpeed !== 1` (they already opened the speed menu). Both are read with `getState()`,
+  because the check and the write have to see the same value.
+
+**A bug this surfaced:** `formatSpeed` used one decimal, so `(0.75).toFixed(1)` labelled 0.75×
+as **0.8×** and 1.25× as **1.3×** — the speed menu had been naming rates the player was not
+running at. Fixed to two decimals with the zeros stripped, and the test that had encoded the
+wrong precision now asserts the quarter steps.
+
+**A new primitive:** `ui/segmented-control.tsx`, per §7 rule 6. Native radios rather than
+`role="radiogroup"` plus a key handler — arrow keys, the single tab stop and the "3 of 5"
+announcement all come free, and `sr-only` rather than `display:none` because a hidden input is
+not focusable. The selected segment is `bg-accent-soft`, the app's one "you are here" signal;
+a shadow was rejected because elevation on this canvas means "floats above the page".
+
+**Verified visually, not only by the gate.** A throwaway `/probe-settings` route rendered the
+real component with fixture values, and headless Chrome was driven from the built CSS at
+1100 px, 500 px, in dark, and with an off-list `1.75×` stored — the last of which confirmed the
+six-segment fallback. The probe was deleted before the commit. One false alarm worth recording:
+a 390 px screenshot appeared to overflow, but Chrome's macOS minimum window width is 500 px, so
+the image was a 500 px layout clipped to 390 — `document.documentElement.clientWidth` said so.
+Measure the viewport before believing the picture.
+
+**Gate:** declarations in sync, `tsc` clean, `eslint` 0 problems, **499 tests**, `next build`
+15 routes. No backend was available, so the round trip itself is untested: the form's
+optimistic write, its per-field revert and the LWW merge are reasoned from the code, not
+observed. That is the same honest gap Phases 3–5 carry.
+
+**Next action:** **7.1–7.4** (accessibility, performance, Playwright smoke, container + CI) —
+all unblocked and needing no backend decision. Before Phase 6, confirm **D1** with the user.
 
 ---
 
