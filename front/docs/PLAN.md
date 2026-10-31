@@ -7,8 +7,9 @@
 > Nothing here is aspirational: every claim about the backend in [§2](#2-ground-truth--what-the-backend-actually-offers)
 > was read out of `back/` on 2026-10-30. Where this plan and the code disagree, the code is right and this file is a bug.
 
-**Status:** Phase 0 — foundation. Plan authored 2026-10-30.
-**Blocking decision:** [D1](#3-decisions) (what "admin panel" means without RBAC). Everything else can proceed.
+**Status:** Phases 0–5 built, plus 3.2–3.5 and 4.1–4.5 — the whole console and the streaming player,
+in English and LTR. Plan authored 2026-10-30, reconciled against the code 2026-10-31.
+**Blocking decision:** [D1](#3-decisions) = (a), provisional. It blocks **Phase 6 only**; Phase 7 can proceed.
 
 ---
 
@@ -91,10 +92,10 @@ says it outright: *"The server stores addresses and user state, never media."*
 **Consequence:** the web player can only play what a browser can fetch by URL. That is the online sources, not the
 listener's library.
 
-### C3 — There are exactly 17 acts, and several verbs are missing
+### C3 — There are exactly 23 acts, and several verbs are missing
 
 ```
-user            register, login, getMe
+user            register, login, getMe, getMySettings, updateMySettings
 track           registerTrack, getMyTracks, getTrackDetail, syncLocalData
 playbackSession getMyListeningHistory, getTrackSessions, getMyStats
 annotation      getMyAnnotations, updateAnnotation, deleteAnnotation
@@ -102,6 +103,12 @@ playlist        getMyPlaylists, createPlaylist, updatePlaylist, deletePlaylist
 playbackContext getMyPlaybackContexts
 onlineCollection saveOnlineCollection, getMyOnlineCollections, removeOnlineCollection
 ```
+
+> **Corrected 2026-10-31 (Phase 4).** This section first said "exactly 17 acts" and omitted
+> the three `onlineCollection` acts, which were read out of `back/` in Phase 4 and which the
+> whole of §8 already assumed. Re-counted from `back/src/*/*/mod.ts`: **23**. The left column
+> is the **Lesan schema**, not the folder — `stats/` registers under `playbackSession`,
+> `sync/` under `track`, and `settings/` under `user`. The schema is what goes in `model:`.
 
 > **Corrected 2026-10-30 (Phase 2).** This table first listed `getMyStats` under a `stats`
 > model. It is registered on **`playbackSession`** — `back/src/stats/getMyStats/mod.ts`
@@ -116,7 +123,7 @@ Missing, and each one changes a screen's design:
 | `createAnnotation` | "add a note" | send it through `syncLocalData.annotations[]` with a `clientId` |
 | `createSession` | recording a listen | `syncLocalData.sessions[]` (same shape the phone sends) |
 | `updateTrack` / `deleteTrack` | managing the library | read-only library |
-| `updateMe` | editing the profile | settings is read-only |
+| `updateMe` | editing the profile (username, email, display name) | settings is read-only. **`updateMySettings` exists and is not this** — it writes `languageCode`, `defaultSpeed` and `historySort`, so preferences are editable today and the profile is not |
 | any upload | artwork upload | `artworkUrl` must already be a URL |
 | any cross-user act | admin panel | [D1](#3-decisions) |
 
@@ -336,7 +343,8 @@ palette.
 6. **A chip is a filter; a segmented control is a choice.** Do not use one for the other.
 7. **Direction is structural.** `dir="ltr"` on `<html>`; use logical properties (`ps-`/`pe-`/`ms-`/`me-`/`start-`/`end-`)
    — never `left`/`right`. Radix/base-ui primitives default to LTR, which now matches the app, so no `dir` prop is
-   needed; the one exception is a single Persian *title*, which carries its own `dir="rtl"` locally (see §7).
+   needed; the one exception is a single Persian *title*, which carries its own `dir="rtl"` locally —
+   `browse/collection/[sourceId]/[externalId]/page.tsx` is the only place that does it.
 8. **One icon family, behind one wrapper.** Screens ask for semantic names; they never import an icon set.
 
 **Deliberately not copied from the reference:** the midnight-glass canvas, the ambient orbs, the conic-border
@@ -350,6 +358,7 @@ hover, the single saturated CTA per viewport. Those belong to a different produc
 |---|---|---|---|
 | `login` | `email`, `password` | `token`, `user { _id, username, email, displayName }` | `/login` |
 | `getMe` | — | `_id, username, email, displayName, avatarUrl` | shell, `/settings` |
+| `getMySettings` / `updateMySettings` | `languageCode, defaultSpeed, historySort, updatedAt` | the same | `/settings` — **not used yet**, box 3.6 |
 | `getMyStats` | — | `totalListenTimeSec, sessionCount, trackCount, firstListenedAt, lastListenedAt, tracks[]` | dashboard |
 | `getMyTracks` | `page, limit, search?, sortBy?, sortOrder?, isAudiobook?` | `_id, title, contentHash, durationSec, isAudiobook, author, artworkUrl, totalPlayCount, totalListenTimeSec, lastPlayedAt, origin, sourceId, externalId, collectionKey` | library, queue source |
 | `getTrackDetail` | `trackId` | the above + `sessions[]`, `annotations[]` | track page |
@@ -478,7 +487,9 @@ Each phase: **Goal → Tasks → Done when → Gate**. Phases 0–5 are buildabl
 - [x] **0.1** Resolve [D1](#3-decisions) with the user (console-only vs admin-later). Write the answer into §3.
 - [x] **0.2** Scaffold Next.js 16 + TypeScript strict + Tailwind v4 + ESLint in `front/` (npm, D8). Add
       `npm run typecheck`, `npm run lint`, `npm run test`, `npm run build`, `npm run check` (all four).
-- [x] **0.3** `.env.local` with `BACKEND_URL=http://localhost:1405`; `.env.example` committed.
+- [x] **0.3** `.env.local` with `BACKEND_URL`; `.env.example` committed.
+      > **Corrected 2026-10-31.** The value in use is a remote host, not `http://localhost:1405`;
+      > the box's example was the local dev default, not what shipped. Read `.env.local`.
       Confirm the backend's `cors` list still covers `http://localhost:3000` (`back/mod.ts`).
       > **Corrected 2026-10-30.** This box first said `NEXT_PUBLIC_BACKEND_URL`. D4 puts every
       > call in a Server Action, so the value must never be inlined into a client bundle — and
@@ -545,31 +556,99 @@ direct visit to `/library` while signed out redirects to `/login`; signing out c
       > week uploads a week at once and every row lands at the top. The timeline therefore uses `getTrackSessions`
       > (sorted `startedAt: -1`, paginated) for both the recent strip and the older pages. One extra act call, run
       > in parallel, so the page is no slower.
-- [ ] **3.2** History (`getMyListeningHistory`): day groups, `from`/`to` range, stretch-aware paging
+- [x] **3.2** History (`getMyListeningHistory`): day groups, `from`/`to` range, stretch-aware paging
       (a page must not split a stretch and then compute a verdict from the prefix).
-- [ ] **3.3** Playlists: list, create, rename, reorder, delete (`items[]` with `order`).
-- [ ] **3.4** Annotations: edit/delete via their acts; **create** via `syncLocalData` with a `clientId` (§8).
-- [ ] **3.5** Runs view (`getMyPlaybackContexts`) and a "continue" card on the dashboard.
+      > **Built 2026-10-31** (`326ea3a`). The read is a *cursor* page, not a numbered one: `after` is a row
+      > cursor, `from`/`to` are dates, and all three live in the query string, so the first paint is right and
+      > a filtered history can be shared as a link. `get-history-page` reads as many batches as it needs to
+      > close its last stretch, which is what makes "do not split a stretch" a property of the act rather
+      > than a rule the UI has to remember.
+- [x] **3.3** Playlists: list, create, rename, reorder, delete (`items[]` with `order`).
+      > **Built 2026-10-31** (`91247ab`). One act covers all four mutations: `updatePlaylist` `$set`s the
+      > whole `items` array, so add, remove and move are three ways to compute one sequence, sent once.
+      > `order` is data, not array position — `orderedItems()` is the single reader of sequence, and every
+      > mutation writes a contiguous numbering back. There is deliberately **no optimistic reorder**: a
+      > failed move would have to restore an array that may already be stale.
+- [x] **3.4** Annotations: edit/delete via their acts; **create** via `syncLocalData` with a `clientId` (§8).
+      > **Built 2026-10-31** — edit and delete are `actions/player/update-note.ts` and `delete-note.ts`;
+      > create is the composer in `components/player/annotation-composer.tsx`, which mints the `clientId`
+      > once and reuses it on every retry, because the server is idempotent on that id and nothing else.
+- [x] **3.5** Runs view (`getMyPlaybackContexts`) and a "continue" card on the dashboard.
+      > **Deviation, 2026-10-31.** Both landed somewhere better than the box said, so the box is closed
+      > rather than left open as phantom work. "Continue" is a **tab in `/browse`** beside Favorites, not a
+      > dashboard card: a shelf is a place the listener returns to, and the dashboard's job is totals. The
+      > run's own state — outcome, progress bar, resume target — renders on the **collection page**, which is
+      > where a listener would look for "where was I in this?"; a separate runs index would be a third view of
+      > the same rows. `getMyContexts` is the one act behind all three surfaces.
+- [ ] **3.6** Settings the backend already stores: read `getMySettings` and let the listener change
+      `defaultSpeed`, `historySort` and `languageCode` through `updateMySettings`.
+      > **Found while reconciling this file against `back/`, 2026-10-31.** The plan has claimed since Phase 1
+      > that settings is read-only because "there is no `updateMe` act", and the *profile* half of that is
+      > still true. But `getMySettings` / `updateMySettings` have existed since the phone grew its settings
+      > screen (`2fd78c3`, `ba59684`), they are registered under the **`user`** schema, and the web neither
+      > reads nor writes them. Three stored preferences are therefore ignored:
+      > `defaultSpeed` (the player opens at 1× no matter what the phone saved), `historySort` (the history
+      > page always opens newest-first, and has no sort control by design) and `languageCode` (the catalogue
+      > always opens on Persian). This needs **no backend change** — an act call and a form. It is the
+      > smallest honest gap left in the console, and the reason `/settings` currently says more about what it
+      > cannot do than about what the listener has chosen.
 
 **Done when:** a playlist round-trips through create → reorder → delete, and a new annotation appears after a
 reload with the same `clientId` it was sent with.
+
+> **Not verified as written, 2026-10-31.** Both halves need a live backend and neither was available, so this
+> line is a claim about the code and the gate rather than about a round trip. What *is* proven: the pure layer
+> (`lib/playlists.ts`, `lib/history.ts`) is covered by tests, the four playlist mutations converge on one
+> `updatePlaylist` write, and the composer mints one `clientId` per note. Verify against a real backend before
+> calling Phase 3 closed for release.
 
 ### Phase 4 — Online catalogue
 
 **Goal:** browse and resolve playable URLs — the prerequisite for the player.
 
-- [ ] **4.1** Port `lib/online/{types,registry,naming,text,series}` and the six adapters
+- [x] **4.1** Port `lib/online/{types,registry,naming,text,series}` and the six adapters
       (`archive`, `librivox`, `manahej`, `aminikhaah`, `aminikhaahPodcasts`, `radiobrowser`); drop the RN-only
       imports (`rowStatus`, `db/types`) behind thin local types. Keep the comments.
-- [ ] **4.2** CORS strategy: direct `fetch` where the source allows it; a Next route handler proxy where it does
+      > **Built 2026-10-31** (`ca3c31f`). All six adapters are in `lib/online/adapters/`, and the parts that
+      > were identical for all of them were extracted into `lib/online/transport.ts` — one place that applies
+      > a timeout, a response-size cap, a **host allow-list** and a typed error. A seventh source should bring
+      > its mapping rules and nothing else.
+- [x] **4.2** CORS strategy: direct `fetch` where the source allows it; a Next route handler proxy where it does
       not (server-side, authenticated, allow-listed per source — never an open proxy).
-- [ ] **4.3** Browse: languages → sources → collections → tracks, with the archive's per-language facets and the
+      > **Deviation, 2026-10-31 — and a better answer than the box.** There is **no proxy route handler**, and
+      > no browser-side `fetch` at all. Every adapter is `server-only` and is reached through a Server Action,
+      > so the request is made by our own server and **CORS never applies**. The box anticipated the problem
+      > and then solved it the expensive way: a proxy is an authenticated open-proxy risk that has to be
+      > allow-listed per source, while a server-side adapter cannot be talked into fetching anything — the
+      > host allow-list in `transport.ts` is a second lock on the same door.
+- [x] **4.3** Browse: languages → sources → collections → tracks, with the archive's per-language facets and the
       "unknown track count" rule (never print "0 tracks").
-- [ ] **4.4** Shelf: `getMyOnlineCollections`, favourite toggle (`saveOnlineCollection`), remove.
-- [ ] **4.5** Resolve a stream URL for a collection and prove it plays in a bare `<audio>` element.
+      > **Built 2026-10-31** (`0b110c9`). Four routes: `/browse` (three tabs), `/browse/language/[code]`,
+      > `/browse/source/[id]`, `/browse/collection/[sourceId]/[externalId]`. The landing page makes **no
+      > third-party request** — no adapter runs until a source's own page is opened — so opening `/browse`
+      > costs this app's server and tells no source that the listener looked. The unknown-size rule is
+      > `describeKnownTrackCount`, which returns `null` rather than "0 tracks".
+- [x] **4.4** Shelf: `getMyOnlineCollections`, favourite toggle (`saveOnlineCollection`), remove.
+      > **Built 2026-10-31** (`0b110c9`): the Favorites tab, `favorite-button.tsx`, `remove-button.tsx`, and
+      > the three online-collection actions. A collection the listener has opened is saved as a row; the heart
+      > and the remove control both write that row, so "saved" and "favourited" are one fact, not two.
+- [x] **4.5** Resolve a stream URL for a collection and prove it plays in a bare `<audio>` element.
+      > **Built 2026-10-31.** `actions/online/resolve-online-stream.ts` is the server half of the player's
+      > `StreamResolver`: the queue stores **ids, never a URL**, because a signed address expires between
+      > opening a collection and reaching its tenth track. It re-reads through the short-lived cache and hands
+      > back the adapter's current address immediately before the element loads it. It does **not** `HEAD`
+      > the URL — the media element is the authority on whether an address plays. The URL is never logged.
+      > **Not verified:** a live source playing end to end (no browser or backend in this environment); the
+      > claim here is the code and the gate, as with Phase 5.
 
 **Done when:** a real Internet Archive collection lists its tracks and its first file plays from a resolved URL.
 **Gate:** `npm run check` + the adapter tests ported from mobile
+
+> **Not verified as written, 2026-10-31.** The adapters are tested against recorded fixtures and never touch the
+> network in a test — that is the rule, and it is also why "a real collection lists its tracks" cannot be proven
+> by the gate. Reaching a source from this environment was not possible. The gate is green and the code path is
+> complete (`getBrowseCollections` → adapter → `transport` → parsed items; `resolveOnlineStream` → `<audio>`);
+> the live round trip is the open item, together with Phase 5's.
 
 ### Phase 5 — The player
 
@@ -606,7 +685,11 @@ scrubbing mid-track sets `seeked` and makes `isComplete` false; closing the tab 
       fetch waterfalls.
 - [ ] **7.3** Playwright smoke: login → library → play → history.
 - [ ] **7.4** `Dockerfile` + compose entry; `next build` in CI with `npm run check`.
-- [ ] **7.5** Update the root `AGENTS.md` and `back/AGENTS.md` to describe `front/` (they currently call it `web/`).
+- [x] **7.5** Update the root `AGENTS.md` and `back/AGENTS.md` to describe `front/` (they currently call it `web/`).
+      > **Done 2026-10-31.** Neither file said `web/` any more; the root index already listed `front/AGENTS.md`.
+      > What was missing was the other direction — `back/AGENTS.md` never mentioned its two clients, so a
+      > backend change that regenerates `declarations/selectInp.ts` looked harmless. It now says that both
+      > copies are byte-identical and that regenerating is a breaking change for each client.
 
 ---
 
@@ -889,6 +972,150 @@ Traps hit this session:
 prove a real URL loads in the bare element. Then **3.2–3.5** (history, playlists,
 annotation writes, runs), and a manual backend pass for the phase-5 "Done when" line.
 **D1** is still open and still blocks only Phase 6.
+
+---
+
+### 2026-10-31 — Phase 4.1–4.4 built: the catalogue and Discover
+
+**What exists.** `lib/online/` (types, registry, transport, cache, errors, catalogue,
+series, languages, archive-languages, continue, play, server) and the six adapters —
+`archive`, `librivox`, `manahej`, `aminikhaah`, `aminikhaah-podcasts`, `radiobrowser`.
+Four routes: `/browse` with three tabs, `/browse/language/[code]`, `/browse/source/[id]`,
+`/browse/collection/[sourceId]/[externalId]`.
+
+**The CORS box was solved by removing the problem.** 4.2 proposed a Next route handler
+proxy for sources that do not send CORS headers. The adapters are instead `server-only`
+and are reached only through a Server Action, so the browser never talks to a source and
+CORS never applies. That deletes the whole risk class the box was worried about: there is
+no proxy to leave open, and `transport.ts` carries a **host allow-list** that runs before
+the request — a compromised response cannot make the adapter fetch somewhere else.
+
+**Decisions recorded:**
+
+| What | Why |
+|---|---|
+| **One `transport.ts` for six adapters** | Timeout, response-size cap, host allow-list and typed errors were identical six times over. A seventh source should bring its mapping rules and nothing else. |
+| **The landing page makes no third-party request** | No adapter runs until a source's own page is opened. Opening `/browse` costs this app's server and tells no source that the listener looked — and a slow archive cannot delay the page. |
+| **`describeKnownTrackCount` returns `null`, never "0 tracks"** | The archive's search index holds no per-item track count, so its listings report `0`. Printing that would label a thirty-part course as empty. |
+| **Series grouping kept its Persian part-marker regex** | `قسمت|بخش|پارت|part|episode|ep` is how the *source* names parts. It is a parser, not copy — translating it would stop the grouping working. |
+
+**Traps:** a signed media URL is a bearer token for the source's bytes and must never be
+logged; and a collection the source has dropped must 404 rather than offer a retry that
+cannot help.
+
+---
+
+### 2026-10-31 — Phase 3.2 built: History
+
+`/history`: day groups, a `from`/`to` range form, cursor pagination, and verdicts
+(`Complete` / `Finished` / `Interrupted`). The stretch is the unit, not the session — eight
+rows for one commute would read as eight listens, and the verdict belongs to the whole run
+rather than to its last file.
+
+**The paging is the hard part.** `get-history-page` reads as many batches as it needs to
+close its last stretch, so "a page must not split a stretch and then compute a verdict from
+the prefix" is a property of the act instead of a rule the UI has to remember. There is no
+sort control and no delete: the act offers neither, and a control that reordered only the
+current page would be a claim about the whole history that the backend cannot keep.
+
+**Traps:** `track.sessions` is sorted by `_id`, which is *sync* order — a phone that was
+offline for a week uploads a week at once and every row lands at the top. The timeline
+therefore reads `getTrackSessions` (`startedAt: -1`), never the embedded relation.
+
+---
+
+### 2026-10-31 — Phase 3.3 + 3.4 built: Playlists and annotation writes
+
+`/playlists` (paged list + inline create) and `/playlists/[id]` (rename, add, reorder,
+delete). Annotation edit/delete are `actions/player/update-note.ts` and `delete-note.ts`;
+create stays on `syncLocalData` with a `clientId`.
+
+**One write, not four.** `updatePlaylist` `$set`s what it is given and `items` is a whole
+array, so add, remove and move are not acts — they are three ways to compute the sequence
+that gets sent once. `order` is data, not array position: `orderedItems()` is the single
+reader of sequence and every mutation writes a contiguous numbering back. Passing the
+stored array to those helpers would silently re-sort a playlist whose array is not in
+order sequence — the failure the sort exists to prevent.
+
+**No optimistic reorder, deliberately.** A failed move would have to restore an array that
+may already be stale, so the controls disable while a write is in flight and the new order
+arrives from the server.
+
+---
+
+### 2026-10-31 — The web console went English and LTR (`4ebcf07`)
+
+**D10 reversed.** `front/` was Persian-only and RTL-only; it is now English-only and
+LTR-only, matching `mobile/`. The reason is a product one and is now recorded in D10: the
+app is intended for sale on the global store, so it ships in one language.
+
+107 files. The judgement that made this a port rather than a translation is the line
+between **copy** and **content**. Copy became English — every label, sentence, empty state,
+aria label, zod message and metadata title. Content did not: catalogue titles, `nativeName`
+(`فارسی`, `العربية`), the folding tables in `lib/search.ts`, `toAsciiDigits`, `/[0۰]/` and
+`/,،/`. Deleting the folding tables would have made the Persian catalogue unsearchable,
+which is a functional regression wearing a translation's clothes.
+
+`lib/time.ts` and `lib/format.ts` now match `mobile/src/lib/` verbatim — `"Just now"`,
+`"3 hr ago"`, `"Yesterday"`, then a date; Latin digits, English units, a full stop as the
+decimal separator. `fa()` and `faNumber()` are gone; `formatClockFa()` collapsed into
+`formatClock()`. Every `Intl` call pins `"en-US"`, so a store screenshot cannot differ
+from machine to machine.
+
+**The direction flip was structural, not a sweep.** The codebase had zero physical CSS
+properties, so it reduced to `<html lang="en" dir="ltr">`, `direction: ltr`, two icon
+glyphs (`start` is now `ChevronLeft`) and the five Radix roots. Logical properties stay
+mandatory anyway — they are what makes a single `dir="rtl"` Persian title safe to nest.
+`--font-sans` now leads with the Latin system stack and lists Vazirmatn behind it, since
+font fallback is per glyph.
+
+**Gate:** green — declarations in sync, `tsc` clean, `eslint` 0 problems, **482 tests**,
+`next build` 15 routes. The suites that pinned Persian words moved back to the phone's
+expectations in the same commit, and three gained assertions that make the new contract
+fail loudly (Latin digits, `en-US` grouping, timeout ≠ offline). A runtime smoke test
+confirms `lang="en" dir="ltr"` on `/login` and that the only Persian anywhere in a rendered
+page is four native language names.
+
+**Traps:** a `[^\n]*` anchor ate two `</Capability>` tags in the settings page — only `tsc`
+caught it, and it is the reason widening an anchor means widening its replacement. And
+`npm run check` still dies at `[safe-delete]` on `.next/trace-build`; move `.next` aside
+first or the build step fails after every other step has passed.
+
+**Next action:** **3.6** (settings the backend already stores), then **7.1–7.4**
+(accessibility, performance, Playwright smoke, container + CI) — all unblocked and needing no
+backend decision. Before Phase 6, confirm **D1** with the user. The live-backend passes for
+Phases 3, 4 and 5 remain the one honest gap.
+
+---
+
+### 2026-10-31 — The plan reconciled against the code
+
+**No code changed.** This session only made the record true, which the file's own preamble
+requires: *"Where this plan and the code disagree, the code is right and this file is a bug."*
+Four sessions had built work without ticking its boxes or logging it, and two ground-truth
+claims had gone stale.
+
+**Ticked, with the deviation recorded on each:** 3.2 (History), 3.3 (Playlists), 3.4
+(annotations), 3.5 (runs/Continue), 4.1–4.5 (adapters, CORS, Browse, shelf, stream), 7.5
+(the `web/` → `front/` rename, which was already done).
+
+**Two corrections that matter more than the ticks:**
+
+- **The act surface is 23, not 17.** §2 C3 said "exactly 17" and omitted the three
+  `onlineCollection` acts — while §8's whole domain map already assumed them. Re-counted from
+  `back/src/*/*/mod.ts`. The left column is the **Lesan schema**, not the folder: `stats/`
+  registers under `playbackSession`, `sync/` under `track`, `settings/` under `user`.
+  `front/AGENTS.md` and the root index said 17 too; all three now say 23.
+- **`updateMySettings` exists, and the web ignores it.** The plan has said since Phase 1 that
+  settings is read-only because there is no `updateMe` — true of the *profile*, and false as a
+  general statement. `getMySettings`/`updateMySettings` carry `defaultSpeed`, `historySort`
+  and `languageCode`; `rg` finds those names only in the vendored declarations. Opened as
+  **3.6**, the smallest gap left and the only one that needs no backend work.
+
+**The verification claim is unchanged and still honest:** Phase 3, 4 and 5 "Done when" lines
+need a live backend, which this environment does not have. Each now carries an explicit
+not-verified block rather than a bare tick, so the gap is visible in the roadmap instead of
+living only in the log.
 
 ---
 

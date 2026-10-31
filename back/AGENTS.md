@@ -181,6 +181,8 @@ Every act lives in `src/<domain>/<actName>/` and consists of three files: `mod.t
 
 **Client transport**: `typeGeneration: true` emits `declarations/selectInp.ts`, which exports the standard `lesanApi` fetch client (POST body `{ model, act, details }`, `{ success, body }` envelope) plus the `ReqType` request/response tree. Mobile consumes these directly by wrapping `lesanApi`; do not add another HTTP or server-state library. Projection fields inside an act's `get` validator must be declared as `enums([0, 1])` (or `selectStruct`), never as their output type — otherwise the generated `get` type is unusable as a projection (see `login`/`register`).
 
+> **Two consumers, both byte-identical.** `mobile/src/lib/generated/selectInp.ts` and `front/src/types/declarations/selectInp.ts` are vendored copies, and each app treats a mismatch as a bug. **Regenerating declarations here is a breaking change for both clients**, not just a backend edit: the next `npm run check` in `front/` fails at `scripts/check-declarations.mjs` until the copy is refreshed, and the copy must be refreshed byte for byte (no reformatting). Adding an act therefore lands as a backend commit followed by one commit per client — see `front/AGENTS.md` for the web half.
+
 **`syncLocalData` behavior** (idempotent):
 1. Resolve the caller's Track by `contentHash` + `user._id`.
 2. Skip any row whose `clientId` already exists.

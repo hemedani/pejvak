@@ -57,10 +57,10 @@ experimental flags to get a 401 page when `redirect()` already works.
 
 ---
 
-## The act surface (17 acts, read out of `back/` on 2026-10-30)
+## The act surface (23 acts, re-read out of `back/` on 2026-10-31)
 
 ```
-user             register, login, getMe
+user             register, login, getMe, getMySettings, updateMySettings
 track            registerTrack, getMyTracks, getTrackDetail, syncLocalData
 playbackSession  getMyListeningHistory, getTrackSessions, getMyStats
 annotation       getMyAnnotations, updateAnnotation, deleteAnnotation
@@ -69,13 +69,22 @@ playbackContext  getMyPlaybackContexts
 onlineCollection saveOnlineCollection, getMyOnlineCollections, removeOnlineCollection
 ```
 
-Three things that bite:
+The left column is the **Lesan schema**, not the folder — they differ in four places, and
+the schema is what goes in `model:`.
 
-- **`getMyStats` is under the `playbackSession` model**, not a `stats` model. Sending
-  `model: "stats"` fails validation with a message that looks like an auth problem.
+Four things that bite:
+
+- **The folder is not the schema.** `getMyStats` is under `playbackSession` (not `stats`),
+  `syncLocalData` is under `track`, and **`getMySettings` / `updateMySettings` are under
+  `user`** (not `settings`). Sending the folder name fails validation with a message that
+  looks like an auth problem.
 - **List acts return a bare array.** No `{ rows, total }`, no page echo. "Is there another
   page?" is answered by `rows.length >= limit`, and there is no total to render.
 - **`getMyStats` returns `contentHash`, not titles** (C4). Join against `getMyTracks`.
+- **`getMySettings` is the only act that returns the listener's preferences**
+  (`languageCode`, `defaultSpeed`, `historySort`) and the web does not read it yet — see
+  plan §10 box 3.6. `updateMySettings` writes the same three fields and nothing about the
+  profile, so it is not the `updateMe` the plan lists as missing.
 
 ### Embedded relations — read the limit *and the sort*
 
