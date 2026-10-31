@@ -31,6 +31,8 @@ export type LanguageRowProps = {
   language: OnlineLanguage;
   /** How many sources serve it. Zero means the row is inert. */
   sourceCount: number;
+  /** The listener's chosen language, when this row is in the picker. */
+  selected?: boolean;
   onPress: () => void;
   /** Supplied by `ListGroup`; not part of the row's own API. */
   position?: ListRowPosition;
@@ -39,6 +41,7 @@ export type LanguageRowProps = {
 export function LanguageRow({
   language,
   sourceCount,
+  selected = false,
   onPress,
   position,
 }: LanguageRowProps) {
@@ -65,7 +68,9 @@ export function LanguageRow({
             style={{ color: enabled ? theme.accent : theme.textTertiary }}>
             {enabled ? `${sourceCount} source${sourceCount === 1 ? "" : "s"}` : "Nothing yet"}
           </ThemedText>
-          {enabled ? (
+          {selected ? (
+            <Icon name="checkCircle" size={18} color={theme.accent} />
+          ) : enabled ? (
             <Icon name="chevronRight" size={16} color={theme.textTertiary} />
           ) : null}
         </View>

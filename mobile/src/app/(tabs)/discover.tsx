@@ -26,6 +26,8 @@ import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { CollectionCard } from "@/components/online/collection-card";
+import { LanguageButton } from "@/components/online/language-button";
+import { LanguagePickerSheet } from "@/components/online/language-picker-sheet";
 import { LanguageRow } from "@/components/online/language-row";
 import { SegmentedControl } from "@/components/ui/card/segmented-control";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
@@ -42,6 +44,7 @@ import {
   describeDownloadState,
   describeKnownTrackCount,
   describeTrackCount,
+  findLanguage,
   LANGUAGES,
   languageSearchFields,
   sourcesForLanguage,
@@ -50,6 +53,7 @@ import { describeRunOutcome, runProgressRatio } from "@/lib/playbackContext";
 import { createSearchIndex, foldQuery, searchIndex } from "@/lib/search";
 import { formatClock } from "@/lib/time";
 import { ContextService } from "@/services/ContextService";
+import { useSettingsStore } from "@/store/settingsStore";
 import { dockInset, spacing } from "@/theme/tokens";
 import { listPerformance } from "@/lib/listPerformance";
 
@@ -116,6 +120,10 @@ export default function DiscoverScreen() {
   const theme = useTheme();
   const [view, setView] = useState<DiscoverView>("continue");
   const [search, setSearch] = useState("");
+  const [pickingLanguage, setPickingLanguage] = useState(false);
+  const languageCode = useSettingsStore((state) => state.languageCode);
+  const setLanguage = useSettingsStore((state) => state.setLanguage);
+  const language = languageCode ? findLanguage(languageCode) : null;
 
   const {
     items: continuing,
@@ -278,9 +286,28 @@ export default function DiscoverScreen() {
     />
   );
 
+  const languagePicker = pickingLanguage ? (
+    <LanguagePickerSheet
+      currentCode={language?.code ?? null}
+      onSelect={(code) => void setLanguage(code)}
+      onClear={() => void setLanguage(null)}
+      onClose={() => setPickingLanguage(false)}
+    />
+  ) : null;
+
   const header = (
     <View style={styles.headerBlock}>
-      <ScreenHeader overline="DISCOVER" title="Listen online" subtitle={subtitle} />
+      <ScreenHeader
+        overline="DISCOVER"
+        title="Listen online"
+        subtitle={subtitle}
+        action={
+          <LanguageButton
+            language={language}
+            onPress={() => setPickingLanguage(true)}
+          />
+        }
+      />
       <SegmentedControl
         options={DISCOVER_VIEWS}
         value={view}
@@ -326,6 +353,7 @@ export default function DiscoverScreen() {
             browseEmpty
           )}
         </ScrollView>
+        {languagePicker}
       </Screen>
     );
   }
@@ -350,6 +378,7 @@ export default function DiscoverScreen() {
         ListHeaderComponent={header}
         ListEmptyComponent={loading ? null : emptyView}
       />
+      {languagePicker}
     </Screen>
   );
 }

@@ -17,50 +17,12 @@ import { ScrollView, StyleSheet, View } from "react-native";
 
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
-import { EmptyState, ListGroup, ListRow, type ListRowPosition } from "@/components/ui/row";
+import { SourceRow } from "@/components/online/source-row";
 import { ThemedText } from "@/components/themed-text";
-import { Icon } from "@/components/ui/icon";
-import { useTheme } from "@/hooks/use-theme";
-import { findLanguage, sourcesForLanguage, type OnlineSource } from "@/lib/online";
+import { EmptyState, ListGroup } from "@/components/ui/row";
+import { findLanguage, sourcesForLanguage } from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
-import { miniPlayerInset, spacing, tile, tileRadius } from "@/theme/tokens";
-
-/** One provider, as a dense row. */
-function SourceRow({
-  source,
-  onPress,
-  position,
-}: {
-  source: OnlineSource;
-  onPress: () => void;
-  position?: ListRowPosition;
-}) {
-  const theme = useTheme();
-  const ramp = paletteFor(source.id);
-
-  return (
-    <ListRow
-      position={position}
-      leading={
-        /* The mark is a gradient square rather than the provider's logo: we
-           do not hotlink their assets, and a deterministic tile keeps the row
-           recognisable without borrowing someone else's brand. */
-        <View style={[styles.mark, { backgroundColor: ramp[1] }]}>
-          <Icon name="radio" size={20} color={theme.onAccent} />
-        </View>
-      }
-      leadingWidth={tile.md}
-      title={source.name}
-      titleLines={1}
-      meta={source.nativeName}
-      detail={source.description}
-      trailing={<Icon name="chevronRight" size={16} color={theme.textTertiary} />}
-      onPress={onPress}
-      accessibilityLabel={`${source.name}, ${source.nativeName}`}
-      accessibilityHint="Opens this source's collections"
-    />
-  );
-}
+import { miniPlayerInset, spacing } from "@/theme/tokens";
 
 export default function LanguageSourcesScreen() {
   const params = useLocalSearchParams<{ code?: string }>();
@@ -123,12 +85,5 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.sm,
-  },
-  mark: {
-    width: tile.md,
-    height: tile.md,
-    borderRadius: tileRadius(tile.md),
-    alignItems: "center",
-    justifyContent: "center",
   },
 });

@@ -1,6 +1,11 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { StyleSheet, useWindowDimensions, View } from "react-native";
+import {
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
 import { LibraryFolderCard } from "@/components/library/folder-card";
 import { LibraryPlaylistCard } from "@/components/library/playlist-card";
@@ -10,12 +15,13 @@ import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
+import { SourceRow } from "@/components/online/source-row";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 import { GlassChip } from "@/components/ui/glass";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { EmptyState, InlineNotice } from "@/components/ui/row";
+import { EmptyState, InlineNotice, ListGroup } from "@/components/ui/row";
 import { SearchField } from "@/components/ui/search-field";
 import { useArtworkBackfill } from "@/hooks/use-artwork-backfill";
 import { useFolders } from "@/hooks/use-folders";
@@ -32,7 +38,15 @@ import {
   trackSearchFields,
 } from "@/lib/librarySearch";
 import { listPerformance } from "@/lib/listPerformance";
+import {
+  LIBRARY_VIEW_LABELS,
+  libraryTabs,
+  resolveLibraryView,
+  type LibraryView,
+  type SearchableLibraryView,
+} from "@/lib/libraryTabs";
 import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
+import { findLanguage, sourcesForLanguage } from "@/lib/online";
 import { paletteFor } from "@/lib/palette";
 import { describeRecentWhen, recentPlayKey, type RecentPlay } from "@/lib/recentPlays";
 import {
@@ -48,6 +62,7 @@ import { FolderService } from "@/services/FolderService";
 import { LocalDBService } from "@/services/LocalDBService";
 import { PlaylistService } from "@/services/PlaylistService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
+import { useSettingsStore } from "@/store/settingsStore";
 import {
   control,
   dockInset,
@@ -117,15 +132,6 @@ const RECENT_LIMIT = 12;
  */
 const RECENT_READ_LIMIT = 60;
 
-type LibraryView = "tracks" | "folders" | "recent";
-
-/** The three views, and the words the chips and the hint use for them. */
-const VIEW_LABELS: Record<LibraryView, string> = {
-  tracks: "Tracks",
-  folders: "Folders",
-  recent: "Recent",
-};
-
 type TrackHit = Hit<LocalTrack, SearchFieldName>;
 type FolderHit = Hit<FolderSummary, SearchFieldName>;
 type RecentHit = Hit<RecentPlay, SearchFieldName>;
@@ -170,17 +176,24 @@ function describeHit(hit: { field: SearchFieldName; value: string } | null): str
  * not reading the chips. Naming the other tab is the difference between "your
  * search found nothing" and "your search found it over there".
  */
-function describeElsewhere(counts: Record<LibraryView, number>, view: LibraryView): string | null {
-  if (counts[view] > 0) {
+function describeElsewhere(
+  counts: Record<SearchableLibraryView, number>,
+  view: LibraryView,
+): string | null {
+  // The language tab is a directory, not a search result, so it is never the
+  // "it is over there" answer.
+  if (view === "language" || counts[view] > 0) {
     return null;
   }
-  const others = (Object.keys(counts) as LibraryView[]).filter(
+  const others = (Object.keys(counts) as SearchableLibraryView[]).filter(
     (option) => option !== view && counts[option] > 0,
   );
   if (others.length === 0) {
     return null;
   }
-  return `Also ${others.map((option) => `${counts[option]} under ${VIEW_LABELS[option]}`).join(" · ")}`;
+  return `Also ${others
+    .map((option) => `${counts[option]} under ${LIBRARY_VIEW_LABELS[option]}`)
+    .join(" · ")}`;
 }
 
 export default function LibraryScreen() {
@@ -192,7 +205,15 @@ export default function LibraryScreen() {
     inset: spacing.xl,
     maxContentWidth: layout.maxContentWidth,
   });
-  const [view, setView] = useState<LibraryView>("tracks");
+  const languageCode = useSettingsStore((state) => state.languageCode);
+  const language = languageCode ? findLanguage(languageCode) : null;
+  const [chosenView, setChosenView] = useState<LibraryView | null>(null);
+  const view = resolveLibraryView(chosenView, language !== null);
+  const tabs = useMemo(() => libraryTabs(language !== null), [language]);
+  const sources = useMemo(
+    () => (language ? sourcesForLanguage(language.code) : []),
+    [language],
+  );
   const [tracks, setTracks] = useState<LocalTrack[]>([]);
   const [annotationCounts, setAnnotationCounts] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
@@ -253,7 +274,7 @@ export default function LibraryScreen() {
   const folderHits = useMemo(() => searchIndex(folderIndex, terms), [folderIndex, terms]);
   const recentHits = useMemo(() => searchIndex(recentIndex, terms), [recentIndex, terms]);
 
-  const counts: Record<LibraryView, number> = {
+  const counts: Record<SearchableLibraryView, number> = {
     tracks: trackHits.length,
     folders: folderHits.length,
     recent: recentHits.length,
@@ -327,7 +348,7 @@ export default function LibraryScreen() {
     });
     // A folder card draws its cover from one of its members, so it moves too.
     await refreshFolders();
-  }, [refreshFolders, runArtworkBackfill]);
+  }, [refreshFolders, runArtworkBackfill, setTracks]);
 
   /**
    * Defers a cover-art pass until the screen has settled.
@@ -371,7 +392,7 @@ export default function LibraryScreen() {
       refreshMissing(),
     ]);
     setAnnotationCounts(annotationTotals);
-  }, [refreshMissing]);
+  }, [refreshMissing, setAnnotationCounts]);
 
   const refresh = useCallback(async () => {
     const allTracks = await LocalDBService.getAllTracks();
@@ -389,7 +410,13 @@ export default function LibraryScreen() {
       void refreshSecondary();
     }, SECONDARY_READ_IDLE_TIMEOUT_MS);
     backfillCovers();
-  }, [backfillCovers, refreshFolders, refreshRecent, refreshSecondary]);
+  }, [
+    backfillCovers,
+    refreshFolders,
+    refreshRecent,
+    refreshSecondary,
+    setTracks,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -511,11 +538,13 @@ export default function LibraryScreen() {
         overline="YOUR LISTENING SPACE"
         title="Library"
         subtitle={
-          searching
-            ? `${totalMatches} match${totalMatches === 1 ? "" : "es"}`
-            : tracks.length > 0
-              ? `${tracks.length} tracks`
-              : undefined
+          view === "language" && language
+            ? `${sources.length} source${sources.length === 1 ? "" : "s"} for ${language.nativeName}`
+            : searching
+              ? `${totalMatches} match${totalMatches === 1 ? "" : "es"}`
+              : tracks.length > 0
+                ? `${tracks.length} tracks`
+                : undefined
         }
         action={
           <BouncyIconButton
@@ -537,58 +566,55 @@ export default function LibraryScreen() {
           as `() => <View/>` gets a fresh component type on every render, which
           remounts the `TextInput` and drops the keyboard on the first
           keystroke. */}
-      <Reveal index={1}>
-        <SearchField
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Search titles, folders, files…"
-          hint={hint}
-          accessibilityLabel="Search your library"
-        />
-      </Reveal>
+      {/* Search belongs to the library's three lists. The language tab is a
+          directory of sources, short enough to read whole, and the field would
+          otherwise promise to filter providers it does not search. */}
+      {view !== "language" ? (
+        <Reveal index={1}>
+          <SearchField
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search titles, folders, files…"
+            hint={hint}
+            accessibilityLabel="Search your library"
+          />
+        </Reveal>
+      ) : null}
 
       <Reveal index={2}>
-        {/* Three chips share the row equally rather than sizing to their
-            labels. "Tracks / Folders / Recent" at the chip's own padding is
-            wider than a small phone's content column, and a clipped third
+        {/* Four chips do not fit with glyphs on a small phone, so the labels
+            carry the whole meaning. They still share the row equally: a clipped
             option is worse than a tighter one.
 
-            While a query is active each chip carries its match count, which is
-            what stops a search for a folder name being trapped in the Tracks
-            tab — "Folders 1" says where to look. */}
+            While a query is active each library chip carries its match count,
+            which is what stops a search for a folder name being trapped in the
+            Tracks tab — "Folders 1" says where to look. The language chip has
+            no count because it is not searched. */}
         <View style={styles.viewToggle}>
-          <GlassChip
-            label="Tracks"
-            icon="music"
-            selected={view === "tracks"}
-            count={searching ? counts.tracks : null}
-            onPress={() => setView("tracks")}
-            style={styles.viewChip}
-          />
-          <GlassChip
-            label="Folders"
-            icon="folder"
-            selected={view === "folders"}
-            count={searching ? counts.folders : null}
-            onPress={() => setView("folders")}
-            style={styles.viewChip}
-          />
-          <GlassChip
-            label="Recent"
-            icon="history"
-            selected={view === "recent"}
-            count={searching ? counts.recent : null}
-            onPress={() => setView("recent")}
-            style={styles.viewChip}
-          />
+          {tabs.map((tab) => (
+            <GlassChip
+              key={tab.value}
+              label={tab.label}
+              selected={view === tab.value}
+              count={
+                searching && tab.value !== "language" ? counts[tab.value] : null
+              }
+              onPress={() => {
+                setChosenView(tab.value);
+                if (tab.value === "language") {
+                  setQuery("");
+                }
+              }}
+              style={styles.viewChip}
+            />
+          ))}
         </View>
       </Reveal>
 
       {/* The continue card, the missing-files alert and the Add button all step
-          aside while searching. They are the screen's standing furniture, and a
-          search is a focused mode: results belong at the top, not below a
-          promotion for something else. */}
-      {continueTrack && !searching ? (
+          aside while searching or looking at the language shelf. They are the
+          library's standing furniture, and neither of those is the library. */}
+      {continueTrack && !searching && view !== "language" ? (
         <Reveal index={3}>
           <Card style={styles.continueCard}>
             <ElasticPressable
@@ -632,7 +658,7 @@ export default function LibraryScreen() {
 
       {/* Only when something is actually broken. A standing "0 files missing"
           banner would just train the listener to ignore it. */}
-      {missing.length > 0 && !searching ? (
+      {missing.length > 0 && !searching && view !== "language" ? (
         <Reveal index={4}>
           <ElasticPressable
             accessibilityRole="button"
@@ -650,7 +676,7 @@ export default function LibraryScreen() {
         </Reveal>
       ) : null}
 
-      {searching ? null : (
+      {searching || view === "language" ? null : (
         <Reveal index={5}>
           <PrimaryButton label="Add audio" onPress={onImport} />
         </Reveal>
@@ -772,6 +798,57 @@ export default function LibraryScreen() {
     onMomentumScrollEnd: onScrollEnd,
   };
 
+  const openSource = useCallback(
+    (sourceId: string) => {
+      if (!language) {
+        return;
+      }
+      router.push({
+        pathname: "/online/source/[id]",
+        params: { id: sourceId, language: language.code },
+      });
+    },
+    [language, router],
+  );
+
+  /**
+   * The language shelf. A provider directory rather than a track list: the
+   * listener asked for a language, and the next question they have is which
+   * source to open — so the answer stays one tap away instead of a network
+   * request on launch.
+   */
+  if (view === "language" && language) {
+    return (
+      <Screen wash={wash}>
+        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+          {header}
+          {sources.length > 0 ? (
+            <View style={styles.languageSection}>
+              <ThemedText type="overline" themeColor="textTertiary">
+                SOURCES
+              </ThemedText>
+              <ListGroup>
+                {sources.map((source) => (
+                  <SourceRow
+                    key={source.id}
+                    source={source}
+                    onPress={() => openSource(source.id)}
+                  />
+                ))}
+              </ListGroup>
+            </View>
+          ) : (
+            <EmptyState
+              icon="globe"
+              title={`No sources for ${language.name} yet`}
+              message="We add them as we find them, and the rest of the app is unaffected."
+            />
+          )}
+        </ScrollView>
+      </Screen>
+    );
+  }
+
   return (
     <Screen wash={wash}>
       {view === "tracks" ? (
@@ -882,11 +959,14 @@ const styles = StyleSheet.create({
   },
   viewToggle: {
     flexDirection: "row",
-    gap: spacing.xs,
+    gap: spacing.xxs,
   },
   viewChip: {
     flex: 1,
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: spacing.xxs,
+  },
+  languageSection: {
+    gap: spacing.sm,
   },
   continueCard: {
     flexDirection: "row",
