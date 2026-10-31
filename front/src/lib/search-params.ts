@@ -24,3 +24,17 @@ export function pageParam(value: SearchParamValue, fallback = 1): number {
   const parsed = Number.parseInt(firstParam(value) ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
+
+/**
+ * A row cursor from the URL, clamped to `>= 0`.
+ *
+ * History pages by rows consumed rather than by page number, so the cursor is a
+ * count — and zero is a legal value (the first page), which is why this is not
+ * `pageParam` with a different default. A hand-typed `?after=abc` must reach the
+ * action as 0, not as `NaN`: `skip: NaN` would be a validator failure the
+ * listener cannot act on.
+ */
+export function afterParam(value: SearchParamValue): number {
+  const parsed = Number.parseInt(firstParam(value) ?? "", 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}

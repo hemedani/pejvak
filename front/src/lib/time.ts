@@ -104,6 +104,31 @@ export function formatDayHeading(timestamp: number): string {
 }
 
 /**
+ * A clock time in the listener's day: `۰۹:۱۵`.
+ *
+ * A separate function from `formatClock`, which formats a *duration* as
+ * `m:ss`/`h:mm:ss`. Reusing it for a time of day would print `9:15` where the
+ * listener expects `۰۹:۱۵`, and would drop the leading zero that makes a column
+ * of times line up.
+ */
+export function formatTimeOfDay(timestamp: number): string {
+  return new Intl.DateTimeFormat("fa-IR", { hour: "2-digit", minute: "2-digit" }).format(
+    new Date(timestamp),
+  );
+}
+
+/**
+ * The Jalali year of a timestamp: `۱۴۰۵`.
+ *
+ * Used only where a year is needed to disambiguate — a history heading from a
+ * previous year. `formatDate` already carries it, but a heading is short by
+ * design and prints the year as a suffix rather than in the middle.
+ */
+export function formatYear(timestamp: number): string {
+  return new Intl.DateTimeFormat("fa-IR", { year: "numeric" }).format(new Date(timestamp));
+}
+
+/**
  * Reads a run of digits from the right: the last two are seconds, the next two
  * minutes, and the rest hours. `"1234"` is 12:34, not 1,234 seconds.
  *

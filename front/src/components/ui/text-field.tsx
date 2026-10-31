@@ -26,6 +26,24 @@ type TextFieldProps = Omit<ComponentProps<"input">, "id"> & {
   error?: string;
 };
 
+/**
+ * The track itself, without the label or the message.
+ *
+ * Exported because History's date-range form must stay a Server Component — it
+ * is a plain GET form and the URL is its whole state — and `TextField` cannot
+ * render there: it pairs its label with `useId`, which is a hook. A field drawn
+ * with these classes is the same control as every other field; a field drawn
+ * with a hand-copied subset would drift the first time this one changed.
+ */
+export const fieldTrackClass = cn(
+  "h-[52px] w-full px-[var(--space-lg)]",
+  "rounded-[var(--radius-md)] bg-surface-sunken text-text type-body",
+  "border border-outline-strong",
+  "placeholder:text-text-tertiary",
+  "transition-[box-shadow,border-color] duration-150",
+  "focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent",
+);
+
 export function TextField({ label, hint, error, className, ...rest }: TextFieldProps) {
   const id = useId();
   const messageId = `${id}-message`;
@@ -43,12 +61,7 @@ export function TextField({ label, hint, error, className, ...rest }: TextFieldP
         aria-invalid={error ? true : undefined}
         aria-describedby={message ? messageId : undefined}
         className={cn(
-          "h-[52px] w-full px-[var(--space-lg)]",
-          "rounded-[var(--radius-md)] bg-surface-sunken text-text type-body",
-          "border border-outline-strong",
-          "placeholder:text-text-tertiary",
-          "transition-[box-shadow,border-color] duration-150",
-          "focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent",
+          fieldTrackClass,
           error && "border-danger ring-2 ring-[var(--danger)]",
           className,
         )}

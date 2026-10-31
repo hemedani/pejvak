@@ -183,8 +183,15 @@ export function parseTrackDetail(raw: unknown): TrackDetail | null {
  * `local` means the bytes live on the listener's phone and the server never saw
  * them — there is no URL to fetch. This is a *state*, not a failure, and the
  * row says so instead of offering a button that cannot work.
+ *
+ * Takes a structural subset rather than the whole `TrackSummary`, because the
+ * same question is asked of rows that are not tracks: a history entry carries
+ * its track as an embedded relation with fewer columns, and the rule must be the
+ * same one, not a second copy of it.
  */
-export function isPlayableOnWeb(track: TrackSummary): boolean {
+export function isPlayableOnWeb(
+  track: Pick<TrackSummary, "origin" | "sourceId" | "externalId">,
+): boolean {
   return track.origin !== "local" && (track.sourceId !== null || track.externalId !== null);
 }
 

@@ -85,3 +85,47 @@ function PageLink({
     </Link>
   );
 }
+
+/**
+ * "Older" for a list that pages by a cursor rather than a page number.
+ *
+ * History's cursor is a count of rows consumed (`after`), which is not a page
+ * index and cannot be rendered as «صفحهٔ ۳» — there is no third page, only "the
+ * next hundred rows past where you stopped". So this is one link in one
+ * direction, and the URL is still the state: Back returns to the previous page,
+ * and the link carries the active date range as well as the cursor.
+ *
+ * A disabled control is drawn rather than nothing at all, for the same reason
+ * `Pagination` keeps its disabled ends: the row must not change height when the
+ * last page is reached.
+ */
+export function CursorPagination({
+  href,
+  hasMore,
+  label = "قدیمی‌تر",
+  className,
+}: {
+  href: string;
+  hasMore: boolean;
+  label?: string;
+  className?: string;
+}) {
+  const base =
+    "inline-flex h-10 items-center gap-[var(--space-xs)] rounded-[var(--radius-md)] border border-outline-strong px-[var(--space-md)] type-label transition-colors";
+
+  return (
+    <nav aria-label="صفحه‌بندی" className={cn("flex items-center justify-center", className)}>
+      {hasMore ? (
+        <Link href={href} className={`${base} text-text hover:bg-surface-sunken`}>
+          {label}
+          <Icon name="end" size="sm" />
+        </Link>
+      ) : (
+        <span aria-disabled className={`${base} cursor-not-allowed text-text-tertiary opacity-40`}>
+          {label}
+          <Icon name="end" size="sm" />
+        </span>
+      )}
+    </nav>
+  );
+}
