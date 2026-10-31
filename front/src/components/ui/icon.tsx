@@ -27,6 +27,7 @@ import {
   Gauge,
   Globe,
   GripVertical,
+  Heart,
   History,
   House,
   Library,
@@ -112,6 +113,12 @@ const ICONS = {
   offline: WifiOff,
   delete: Trash2,
   empty: Sparkles,
+  /**
+   * A saved collection. The glyph is the same outline in both states; the
+   * *filled* one is drawn by `fill-current` at the call site, because whether
+   * "saved" is filled is a property of the control, not of the vocabulary.
+   */
+  favorite: Heart,
 } as const satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

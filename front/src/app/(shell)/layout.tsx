@@ -2,9 +2,18 @@ import { redirect } from "next/navigation";
 
 import { getMe } from "@/app/actions/auth/get-me";
 import { Sidebar } from "@/components/layout/sidebar";
+import { OnlineStreamBridge } from "@/components/player/online-stream-bridge";
 import { PlayerBar } from "@/components/player/player-bar";
 import { Topbar } from "@/components/layout/topbar";
 import { ErrorState } from "@/components/ui/state";
+import { SOURCES } from "@/lib/online/catalogue";
+
+/**
+ * Only the two fields the bridge needs cross into the client bundle. The source
+ * descriptors stay on the server: they carry homepages and attribution copy, and
+ * the module that holds them is one import away from an adapter.
+ */
+const STREAM_SOURCES = SOURCES.map(({ id, live }) => ({ id, live: live === true }));
 
 /**
  * Everything behind the guard.
@@ -38,6 +47,8 @@ export default async function ShellLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-dvh">
+      <OnlineStreamBridge sources={STREAM_SOURCES} />
+
       <Sidebar />
 
       <div className="flex min-w-0 flex-1 flex-col">
