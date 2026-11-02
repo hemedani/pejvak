@@ -165,7 +165,27 @@ These are pure TypeScript in `mobile/src/lib/` and were copied with their tests,
 rewritten. Keep the comments: they encode the reasons.
 
 `search.ts` · `time.ts` · `format.ts` · `librarySearch.ts` ·
-`sessionTracking.ts` · `playbackContext.ts` · `listeningStretch.ts` · `online/*`.
+`sessionTracking.ts` · `playbackContext.ts` · `listeningStretch.ts` · `online/*` ·
+`waveform.ts` · `palette.ts` · `listeningTimeline.ts`.
+
+Three of those carry the app's *identity* rather than its logic, and they are the ones most
+likely to be "simplified" by someone who has not read them:
+
+- **`waveform.ts`** is the geometry of the wave that stands for "audio is moving" in both
+  players. The smoothstep envelope at each end is not decoration — it is what guarantees the
+  stroke starts and ends exactly on the centreline, so a round cap reads as intentional.
+- **`palette.ts`** is the one place a track's colour is decided, from its `contentHash`. The
+  artwork tile and the ambient wash both read it, so they cannot disagree about which track is
+  playing. Do not add a second hue derivation.
+- **`listeningTimeline.ts`** is the history bar: one segment per track, each filled across the
+  part that was heard. Its resume marker is placed by the same function the Continue button
+  seeks with, so the bar and the button cannot drift apart.
+
+**Components ported the same way** — the browser paints them differently, the behaviour does
+not change: `WavyProgress` → `components/player/wavy-progress.tsx`, the session sheet →
+`components/domain/session-detail.tsx`, `Reveal` → `components/motion/reveal.tsx`. Each header
+says what changed in the browser and why; a rewrite that drops those notes drops the reason
+with them.
 
 **Nothing was rewritten on the way in.** Both of these were once exceptions, made under the
 Persian-only decision, and the English-only decision (D10) removed them — the ports are now the

@@ -22,7 +22,13 @@ const button = cva(
   [
     "inline-flex items-center justify-center gap-[var(--space-sm)]",
     "font-[var(--font-sans)] font-semibold whitespace-nowrap",
-    "transition-colors duration-150",
+    /*
+     * Press feedback is physical: the control gives a little under the finger and
+     * comes back. Ported from the phone's `ElasticPressable`, which is the whole
+     * reason a tap there feels answered. 0.97 rather than 0.9 — a large press
+     * scale on a 36px control reads as a wobble, not as a press.
+     */
+    "transition duration-150 ease-out active:scale-[0.97] motion-reduce:transform-none",
     "disabled:pointer-events-none disabled:opacity-50",
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
   ],
@@ -42,6 +48,8 @@ const button = cva(
         lg: "h-[52px] px-[var(--space-xl)] type-body rounded-[var(--radius-md)]",
         /** Square, for an icon-only transport control. */
         icon: "size-11 rounded-[var(--radius-md)]",
+        /** Square and dense, for a control inside a row that is already a list. */
+        iconSm: "size-9 rounded-[var(--radius-sm)]",
       },
     },
     defaultVariants: { variant: "secondary", size: "md" },

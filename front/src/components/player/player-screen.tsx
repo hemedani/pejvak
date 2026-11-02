@@ -25,6 +25,7 @@ import { formatRemaining } from "@/lib/player/sleepTimer";
 import type { PlaybackContext, PlayerTrack } from "@/lib/player/types";
 import { usePlayerStore } from "@/stores/player";
 
+import { AmbientWash } from "./ambient-wash";
 import { AnnotationList } from "./annotation-list";
 import type { TimelineMarker } from "./annotation-markers";
 import { JumpToTimeSheet } from "./jump-to-time-sheet";
@@ -131,7 +132,14 @@ export function PlayerScreen({
   const overline = describeOverline(context, current, queueIndex, queueLength);
 
   return (
-    <div className="mx-auto flex w-full max-w-[760px] flex-col gap-[var(--space-xxl)]">
+    <div className="relative isolate mx-auto flex w-full max-w-[760px] flex-col gap-[var(--space-xxl)]">
+      {/*
+        The track's own colour, behind everything and under nothing. `isolate`
+        is load-bearing: without a stacking context on this box, a `-z-10` layer
+        would paint behind the page canvas and disappear.
+      */}
+      <AmbientWash contentHash={current.contentHash} />
+
       <header className="flex items-center justify-between gap-[var(--space-md)]">
         <Link
           href="/"

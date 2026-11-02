@@ -11,6 +11,7 @@
  */
 
 import {
+  AudioLines,
   BookOpen,
   ChartLine,
   ChevronDown,
@@ -73,6 +74,11 @@ const ICONS = {
   search: Search,
   /** A note left at a point in a track — an annotation, not an edit affordance. */
   note: Pencil,
+  /**
+   * A listen's shape over time. Not `stats`: a chart is a quantity across a
+   * period, a timeline is what was heard and where inside one sit-down.
+   */
+  timeline: AudioLines,
   play: Play,
   pause: Pause,
   previous: SkipBack,

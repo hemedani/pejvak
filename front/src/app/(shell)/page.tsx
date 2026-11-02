@@ -4,9 +4,10 @@ import { getMyTracks } from "@/app/actions/tracks/get-my-tracks";
 import { ActivityChart, ActivitySummary } from "@/components/domain/activity-chart";
 import { StatCell } from "@/components/domain/stat-cell";
 import { TopTracksTable } from "@/components/domain/top-tracks-table";
+import { Reveal } from "@/components/motion/reveal";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeading } from "@/components/ui/card";
-import { Icon } from "@/components/ui/icon";
+import { Icon, type IconName } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState, ErrorState, OfflineBanner } from "@/components/ui/state";
 import { bucketByDay, currentStreak, joinTopTracks } from "@/lib/insights";
@@ -68,6 +69,62 @@ export default async function DashboardPage() {
 
   const hasHistory = data.sessionCount > 0;
 
+  /**
+   * The denominator on "Tracks heard", or nothing.
+   *
+   * `tracks` is the *page* of the library loaded for the top-tracks join
+   * (`JOIN_LIMIT`), not the library — so a library of 900 would have this card
+   * say "of 200 in your library", which is a count derived from a page presented
+   * as a total. It is only a total when the page did not hit the cap; when it
+   * did, the card says what it can honestly say, or nothing at all if the read
+   * failed.
+   */
+  const librarySize =
+    library.success && library.body.tracks.length < JOIN_LIMIT
+      ? `of ${formatNumber(library.body.tracks.length)} in your library`
+      : library.success
+        ? "of the tracks in your library"
+        : undefined;
+
+  /**
+   * The four figures, in one place.
+   *
+   * An array rather than four literals in the JSX because the reveal is
+   * index-driven: the order the cards are written in *is* the order they arrive
+   * in, and a component that reads its index from a list cannot get that wrong
+   * when a card is added.
+   */
+  const cells: { label: string; value: string; detail?: string; icon: IconName }[] = [
+    {
+      label: "Total listening time",
+      value: formatSpan(data.totalListenTimeSec),
+      detail:
+        data.firstListenedAt === null
+          ? undefined
+          : `Since ${formatRelativeTime(data.firstListenedAt, now)}`,
+      icon: "clock",
+    },
+    {
+      label: "Sessions",
+      value: formatNumber(data.sessionCount),
+      detail: streak > 0 ? `${formatNumber(streak)}-day streak` : "Nothing today",
+      icon: "stats",
+    },
+    {
+      label: "Tracks heard",
+      value: formatNumber(data.trackCount),
+      detail: librarySize,
+      icon: "player",
+    },
+    {
+      label: "Last listen",
+      value:
+        data.lastListenedAt === null ? "—" : formatRelativeTime(data.lastListenedAt, now),
+      detail: "Based on the end of your last session",
+      icon: "history",
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-[var(--space-xl)]">
       <PageHeader
@@ -103,70 +160,60 @@ export default async function DashboardPage() {
         </Card>
       ) : (
         <>
+          {/*
+            Four numbers, arriving one after the other. The stagger is the only
+            motion on this page: it says "this was assembled for you" without a
+            single element moving after it lands.
+          */}
           <div className="grid gap-[var(--space-md)] sm:grid-cols-2 xl:grid-cols-4">
-            <StatCell
-              label="Total listening time"
-              value={formatSpan(data.totalListenTimeSec)}
-              detail={
-                data.firstListenedAt === null
-                  ? undefined
-                  : `Since ${formatRelativeTime(data.firstListenedAt, now)}`
-              }
-              icon="clock"
-            />
-            <StatCell
-              label="Sessions"
-              value={formatNumber(data.sessionCount)}
-              detail={streak > 0 ? `${formatNumber(streak)}-day streak` : "Nothing today"}
-              icon="stats"
-            />
-            <StatCell
-              label="Tracks heard"
-              value={formatNumber(data.trackCount)}
-              detail={`of ${formatNumber(tracks.length)} in your library`}
-              icon="player"
-            />
-            <StatCell
-              label="Last listen"
-              value={
-                data.lastListenedAt === null ? "—" : formatRelativeTime(data.lastListenedAt, now)
-              }
-              detail="Based on the end of your last session"
-              icon="history"
-            />
+            {cells.map((cell, index) => (
+              <Reveal key={cell.label} index={index} className="h-full">
+                <StatCell
+                  label={cell.label}
+                  value={cell.value}
+                  detail={cell.detail}
+                  icon={cell.icon}
+                  className="h-full"
+                />
+              </Reveal>
+            ))}
           </div>
 
-          <Card className="p-[var(--space-lg)]">
-            <CardHeading overline="Last 30 days" title="Listening activity" />
-            <div className="mt-[var(--space-lg)]">
-              {sessions.success ? (
-                <>
-                  <ActivityChart buckets={buckets} />
-                  <div className="mt-[var(--space-sm)]">
-                    <ActivitySummary buckets={buckets} />
-                  </div>
-                </>
+          <Reveal index={cells.length}>
+            <Card className="p-[var(--space-lg)]">
+              <CardHeading overline="Last 30 days" title="Listening activity" />
+              <div className="mt-[var(--space-lg)]">
+                {sessions.success ? (
+                  <>
+                    <ActivityChart buckets={buckets} />
+                    <div className="mt-[var(--space-sm)]">
+                      <ActivitySummary buckets={buckets} />
+                    </div>
+                  </>
+                ) : (
+                  <ErrorState failure={sessions.error} retryHref="/" className="px-0 py-[var(--space-lg)]" />
+                )}
+              </div>
+            </Card>
+          </Reveal>
+
+          <Reveal index={cells.length + 1}>
+            <section className="flex flex-col gap-[var(--space-md)]">
+              <CardHeading overline="Most time" title="Top ten tracks" />
+
+              {topRows.length === 0 ? (
+                <Card>
+                  <EmptyState
+                    icon="stats"
+                    title="No stats to show"
+                    description="After a few listening sessions, your most-played tracks appear here."
+                  />
+                </Card>
               ) : (
-                <ErrorState failure={sessions.error} retryHref="/" className="px-0 py-[var(--space-lg)]" />
+                <TopTracksTable rows={topRows} now={now} />
               )}
-            </div>
-          </Card>
-
-          <section className="flex flex-col gap-[var(--space-md)]">
-            <CardHeading overline="Most time" title="Top ten tracks" />
-
-            {topRows.length === 0 ? (
-              <Card>
-                <EmptyState
-                  icon="stats"
-                  title="No stats to show"
-                  description="After a few listening sessions, your most-played tracks appear here."
-                />
-              </Card>
-            ) : (
-              <TopTracksTable rows={topRows} now={now} />
-            )}
-          </section>
+            </section>
+          </Reveal>
         </>
       )}
     </div>

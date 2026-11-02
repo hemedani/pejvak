@@ -8,6 +8,20 @@
  * reports, so the thumb moves at the speed of the voice rather than the speed of
  * `timeupdate`.
  *
+ * ## The wave is the bar
+ *
+ * The played segment is drawn by `WavyProgress` — a sine stroke that travels
+ * while audio is playing and flattens under the finger — and the unplayed segment
+ * is its flat, lower-contrast continuation. Radix still owns the *interaction*:
+ * it is what gives the control a `role="slider"`, a keyboard model, pointer
+ * capture and an accessible value. Only its visuals are switched off, which is
+ * the whole trick — a hand-rolled drag handler would have cost all of that.
+ *
+ * The wave is the app's word for "audio is moving", so the waiting state says the
+ * same thing with the same alphabet: a band travels across the bar, and the thumb
+ * steps aside because a thumb parked at 0:00 on a stream that has not arrived
+ * claims a position nobody has reached.
+ *
  * The fill and the thumb work in reading direction, which is left to right. The
  * slider is told `dir="ltr"` explicitly rather than relying on the document's
  * direction, so a slider embedded in RTL text still fills from the left.
@@ -24,6 +38,14 @@ import { usePlayerStore } from "@/stores/player";
 
 import { AnnotationMarkers, type TimelineMarker } from "./annotation-markers";
 import { useSmoothedPosition } from "./use-player";
+import { WavyProgress } from "./wavy-progress";
+
+/** Half the thumb's diameter: how far the playhead is clamped from either end. */
+const THUMB_RADIUS = 9;
+/** Visible space between the thumb's edge and either segment. */
+const THUMB_GAP = 3;
+/** The wave's reserved height, so the amplitude cannot make the row jump. */
+const BAND_HEIGHT = 18;
 
 export function Scrubber({
   markers,
@@ -35,6 +57,7 @@ export function Scrubber({
   const position = useSmoothedPosition();
   const durationSec = usePlayerStore((state) => state.durationSec);
   const waiting = usePlayerStore((state) => state.waiting !== null);
+  const playing = usePlayerStore((state) => state.status === "playing");
   const isLive = usePlayerStore((state) => state.current?.isLive === true);
   const resumeFromSec = usePlayerStore((state) => state.resumeFromSec);
   const [drag, setDrag] = useState<number | null>(null);
@@ -55,45 +78,35 @@ export function Scrubber({
   const value = Math.max(0, Math.min(durationSec || max, drag ?? position));
   const activeRatio = progressRatio(value, durationSec);
   const resumeRatio = resumeFromSec ? markerOffsetRatio(resumeFromSec, durationSec) : null;
-
-  if (waiting) {
-    return (
-      <div className="relative" data-player-surface>
-        <div
-          className="relative h-[var(--bar-thick)] w-full overflow-hidden rounded-[var(--radius-pill)] bg-track"
-          role="progressbar"
-          aria-label="Loading"
-          aria-valuetext="Loading"
-        >
-          <span className="absolute inset-y-0 -inset-x-1/3 animate-[player-sweep_1.4s_ease-in-out_infinite] bg-accent/45 motion-reduce:animate-none motion-reduce:bg-accent/30" />
-        </div>
-        <p className="type-caption mt-[var(--space-xs)] text-text-tertiary">
-          {formatClock(value)} / {formatClock(durationSec)}
-        </p>
-      </div>
-    );
-  }
+  const scrubbing = drag !== null;
 
   return (
     <div className="relative" data-player-surface>
       <div className="relative py-[var(--space-sm)]">
-        <AnnotationMarkers
-          markers={markers}
-          durationSec={durationSec}
-          onSelect={onSelectMarker}
-        />
-
-        {resumeRatio !== null ? (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-[var(--radius-pill)] bg-outline-strong"
-            style={{ insetInlineStart: `${resumeRatio * 100}%` }}
-          />
-        ) : null}
+        {/*
+          Markers and the resume pin sit above the wave so the played segment
+          cannot swallow them, and so both keep their own press handling.
+        */}
+        <div className="pointer-events-none absolute inset-0 z-10">
+          {resumeRatio !== null ? (
+            <span
+              aria-hidden
+              className="absolute top-1/2 h-4 w-[2px] -translate-x-1/2 -translate-y-1/2 rounded-[var(--radius-pill)] bg-outline-strong"
+              style={{ insetInlineStart: `${resumeRatio * 100}%` }}
+            />
+          ) : null}
+          {waiting ? null : (
+            <AnnotationMarkers
+              markers={markers}
+              durationSec={durationSec}
+              onSelect={onSelectMarker}
+            />
+          )}
+        </div>
 
         <Slider.Root
           dir="ltr"
-          className="relative flex h-6 w-full touch-none select-none items-center"
+          className="relative flex h-9 w-full touch-none select-none items-center"
           min={0}
           max={max}
           step={1}
@@ -146,19 +159,50 @@ export function Scrubber({
             }
           }}
         >
-          <Slider.Track className="relative h-[var(--bar-thick)] w-full grow overflow-hidden rounded-[var(--radius-pill)] bg-track">
-            <Slider.Range className="absolute h-full bg-accent" />
+          <WavyProgress
+            className="absolute inset-x-0 top-1/2 -translate-y-1/2"
+            progress={activeRatio}
+            isPlaying={playing}
+            sweeping={waiting}
+            scrubbing={scrubbing}
+            tint="var(--accent)"
+            trackColor="var(--track)"
+            thickness={6}
+            amplitude={3}
+            wavelength={36}
+            bandHeight={BAND_HEIGHT}
+            inset={0}
+            gap={THUMB_RADIUS + THUMB_GAP}
+          />
+
+          {/* Radix keeps the layout and the hit target; the paint is the wave. */}
+          <Slider.Track className="relative h-[var(--bar-thick)] w-full grow rounded-[var(--radius-pill)] bg-transparent">
+            <Slider.Range className="absolute h-full bg-transparent" />
           </Slider.Track>
           <Slider.Thumb
-            className="block size-4 rounded-full border-2 border-surface bg-accent shadow-[var(--elevation-card)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            className={
+              waiting
+                ? // Hidden rather than parked: while the player is waiting there
+                  // is no position to point at, and a thumb at the left end reads
+                  // as "paused at the start" instead of "not known yet".
+                  "block size-[18px] opacity-0"
+                : "block size-[18px] rounded-full border-[3px] border-accent bg-surface shadow-[var(--elevation-card)] transition-transform duration-150 hover:scale-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+            }
             aria-label="Playback position handle"
           />
         </Slider.Root>
 
-        {drag !== null ? (
+        {/*
+          The bubble is clamped to the bar's own width rather than to the thumb's
+          travel: at 0:00 a centred bubble would hang half outside the row, which
+          is the one place a floating label looks like a bug.
+        */}
+        {scrubbing ? (
           <span
-            className="pointer-events-none absolute -top-2 -translate-y-full translate-x-1/2 rounded-[var(--radius-sm)] bg-surface px-[var(--space-sm)] py-[var(--space-xxs)] type-numeric text-text shadow-[var(--elevation-card)]"
-            style={{ insetInlineStart: `${activeRatio * 100}%` }}
+            className="pointer-events-none absolute -top-2 z-20 -translate-x-1/2 -translate-y-full rounded-[var(--radius-sm)] bg-surface px-[var(--space-sm)] py-[var(--space-xxs)] type-numeric text-text shadow-[var(--elevation-card)]"
+            style={{
+              insetInlineStart: `clamp(2rem, ${activeRatio * 100}%, calc(100% - 2rem))`,
+            }}
           >
             {formatClock(drag)}
           </span>

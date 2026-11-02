@@ -13,6 +13,10 @@
  * sibling of them, never nested inside one. The whole row is a list item, not an
  * anchor, so a tap on the title does not silently open the wrong chapter.
  *
+ * The same rule is why the timeline is a named button at the end of the row
+ * rather than a click anywhere on it: the row already holds two links and two
+ * controls, and a third interactive ancestor would make the tab order a guess.
+ *
  * ## One verdict, in one place
  *
  * `completed`, `interrupted` and `seeked` are the phone's, reported rather than
@@ -27,6 +31,7 @@
 import Link from "next/link";
 
 import { ResumeListenButton } from "@/components/domain/resume-listen-button";
+import { SessionDetailButton } from "@/components/domain/session-detail";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import { isPlayableOnWeb } from "@/lib/domain/track";
@@ -150,8 +155,17 @@ export function HistoryRow({
           ) : null}
         </div>
 
-        <div className="ms-auto flex shrink-0 items-center gap-[var(--space-md)]">
-          <span className="type-numeric text-text-secondary">{formatSpan(stretch.listenedSec)}</span>
+        <div className="ms-auto flex shrink-0 items-center gap-[var(--space-sm)]">
+          <span className="type-numeric me-[var(--space-xs)] text-text-secondary">
+            {formatSpan(stretch.listenedSec)}
+          </span>
+
+          {/*
+            The way into the timeline. A named control rather than a clickable
+            row: the row already holds two links and a button, and nesting those
+            inside another button is invalid HTML and an unpredictable tab order.
+          */}
+          <SessionDetailButton stretch={stretch} playable={playable} live={live} />
 
           <ResumeListenButton
             trackId={resume.trackId}

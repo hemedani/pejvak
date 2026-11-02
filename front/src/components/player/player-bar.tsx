@@ -30,6 +30,7 @@ import { TrackArtwork } from "./track-artwork";
 import { TransportControls } from "./transport-controls";
 import { useBootPlayer, usePlayerKeyboard } from "./use-player";
 import { VolumeControl } from "./volume-control";
+import { WavyProgress } from "./wavy-progress";
 
 export function PlayerBar() {
   useBootPlayer();
@@ -111,16 +112,18 @@ export function PlayerBar() {
   );
 }
 
-/** A hairline of progress. Selects only the two numbers it draws. */
+/** A hairline of progress — drawn as the same wave the player screen uses. */
 function BarProgress() {
   const positionSec = usePlayerStore((state) => state.positionSec);
   const durationSec = usePlayerStore((state) => state.durationSec);
+  const playing = usePlayerStore((state) => state.status === "playing");
+  const waiting = usePlayerStore((state) => state.waiting !== null);
   const isLive = usePlayerStore((state) => state.current?.isLive === true);
   const ratio = isLive ? 1 : progressRatio(positionSec, durationSec);
 
   return (
     <div
-      className="absolute inset-x-0 top-0 h-[2px] bg-track"
+      className="absolute inset-x-0 top-0"
       role="progressbar"
       aria-label="Playback progress"
       aria-valuemin={0}
@@ -130,9 +133,23 @@ function BarProgress() {
         durationSec > 0 ? `${formatClock(positionSec)} of ${formatClock(durationSec)}` : undefined
       }
     >
-      <span
-        className="absolute inset-y-0 bg-accent"
-        style={{ inlineSize: `${ratio * 100}%`, insetInlineStart: 0 }}
+      {/*
+        The same stroke at a quarter of the height. The bar is not a second
+        scrubber — it answers "how far" and nothing else — but it answers in the
+        app's own word for audio moving, so a paused bar is visibly still and a
+        loading one visibly travels.
+      */}
+      <WavyProgress
+        progress={ratio}
+        isPlaying={playing}
+        sweeping={waiting}
+        tint="var(--accent)"
+        trackColor="var(--track)"
+        thickness={2}
+        amplitude={1.4}
+        wavelength={22}
+        bandHeight={8}
+        gap={0}
       />
     </div>
   );

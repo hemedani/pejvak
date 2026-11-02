@@ -24,6 +24,7 @@
  */
 
 import { HistoryRow } from "@/components/domain/history-row";
+import { Reveal } from "@/components/motion/reveal";
 import { Card, CardHeading } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/state";
 import { formatSpan } from "@/lib/format";
@@ -32,33 +33,35 @@ import type { HistorySection } from "@/lib/history";
 export function HistorySections({ sections }: { sections: readonly HistorySection[] }) {
   return (
     <div className="flex flex-col gap-[var(--space-lg)]">
-      {sections.map((section) => (
-        <Card key={section.key}>
-          {/*
-            Rendered only when there is a label. `HistorySection.title` is
-            nullable for a flat list, and inventing a heading for that case would
-            be a caption the data never asked for.
-          */}
-          {section.title ? (
-            <CardHeading
-              title={section.title}
-              className="px-[var(--space-lg)] pt-[var(--space-lg)] pb-[var(--space-xs)]"
-              action={
-                <span className="type-numeric type-caption text-text-tertiary">
-                  {formatSpan(section.listenedSec)}
-                </span>
-              }
-            />
-          ) : null}
+      {sections.map((section, sectionIndex) => (
+        <Reveal key={section.key} index={sectionIndex}>
+          <Card>
+            {/*
+              Rendered only when there is a label. `HistorySection.title` is
+              nullable for a flat list, and inventing a heading for that case
+              would be a caption the data never asked for.
+            */}
+            {section.title ? (
+              <CardHeading
+                title={section.title}
+                className="px-[var(--space-lg)] pt-[var(--space-lg)] pb-[var(--space-xs)]"
+                action={
+                  <span className="type-numeric type-caption text-text-tertiary">
+                    {formatSpan(section.listenedSec)}
+                  </span>
+                }
+              />
+            ) : null}
 
-          <ol className="flex flex-col">
-            {section.data.map((stretch, index) => (
-              // The first row of a day has the heading above it instead of a
-              // hairline; every other row is separated from the one before.
-              <HistoryRow key={stretch.id} stretch={stretch} divided={index > 0} />
-            ))}
-          </ol>
-        </Card>
+            <ol className="flex flex-col">
+              {section.data.map((stretch, rowIndex) => (
+                // The first row of a day has the heading above it instead of a
+                // hairline; every other row is separated from the one before.
+                <HistoryRow key={stretch.id} stretch={stretch} divided={rowIndex > 0} />
+              ))}
+            </ol>
+          </Card>
+        </Reveal>
       ))}
     </div>
   );

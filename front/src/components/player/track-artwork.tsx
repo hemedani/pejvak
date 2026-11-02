@@ -3,24 +3,24 @@
 /**
  * A track's cover, or a stand-in derived from its identity.
  *
- * The fallback is keyed by `contentHash`, so the same track has the same
- * cover on every visit and in the bar after a reload — a random gradient per
- * render would read as a different track each time. It is decoration: the title
- * beside it carries the meaning, so the tile is `aria-hidden`.
+ * The fallback is keyed by `contentHash` through `paletteFor`, so the same track
+ * has the same cover on every visit and in the bar after a reload — a random
+ * gradient per render would read as a different track each time.
+ *
+ * It deliberately shares the *one* palette table with the player's ambient wash.
+ * Before this it computed its own hue from the hash, which meant a track's tile
+ * and the light behind it could be two unrelated colours — the small kind of
+ * disagreement that makes a screen feel assembled rather than designed.
+ *
+ * The tile is decoration: the title beside it carries the meaning, so it is
+ * `aria-hidden`.
  */
 
 import { cn } from "@/lib/cn";
+import { paletteFor, rampGradient } from "@/lib/palette";
 import type { PlayerTrack } from "@/lib/player/types";
 
 import { Icon } from "@/components/ui/icon";
-
-function hueFor(contentHash: string): number {
-  let sum = 0;
-  for (let index = 0; index < contentHash.length; index += 1) {
-    sum = (sum * 31 + contentHash.charCodeAt(index)) % 360;
-  }
-  return sum;
-}
 
 export function TrackArtwork({
   track,
@@ -29,8 +29,6 @@ export function TrackArtwork({
   track: Pick<PlayerTrack, "contentHash" | "title" | "artworkUrl">;
   className?: string;
 }) {
-  const hue = hueFor(track.contentHash);
-
   return (
     <div
       aria-hidden
@@ -38,9 +36,7 @@ export function TrackArtwork({
         "relative shrink-0 overflow-hidden rounded-[var(--radius-sm)] bg-surface-sunken",
         className,
       )}
-      style={{
-        backgroundImage: `linear-gradient(135deg, hsl(${hue} 38% 34%), hsl(${(hue + 48) % 360} 32% 20%))`,
-      }}
+      style={{ backgroundImage: rampGradient(paletteFor(track.contentHash), 135) }}
     >
       {track.artworkUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- a source's cover is an arbitrary remote URL and Next Image would need every source's host configured.

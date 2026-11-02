@@ -81,6 +81,9 @@
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
+      /* Not redundant: with `animation-fill-mode: both` a staggered reveal sits
+         on its opacity-0 `from` frame for the length of the delay. */
+      animation-delay: 0ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
@@ -174,22 +177,60 @@
 }
 
 /**
- * Player motion.
+ * The ambient wash's two tint stops.
  *
- * Three short, named animations, all of them transform/opacity so a busy
- * timeline never triggers layout. `prefers-reduced-motion` in the base layer
- * collapses their duration; the wait band is also switched to a static line in
- * the component, because a frozen sweep still reads as a broken loader.
+ * Registered as `<color>` so they can be *interpolated*. A gradient's
+ * `background-image` does not transition, but a typed custom property does, which
+ * is what lets a change of track cross-fade the light on a single element — no
+ * second layer to stack, no `setState` in an effect, nothing left behind when a
+ * listener skips through a queue. Browsers without `@property` snap instead,
+ * which is exactly what a two-layer cross-fade degrades to.
  */
-@keyframes player-sweep {
-  0% {
-    transform: translateX(60%);
+@property --wash-a {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+
+@property --wash-b {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+
+@layer components {
+  .wash {
+    background-image:
+      radial-gradient(58% 52% at 16% 6%, var(--wash-a), transparent 70%),
+      radial-gradient(52% 48% at 88% 76%, var(--wash-b), transparent 72%);
+    transition:
+      --wash-a 460ms ease-out,
+      --wash-b 460ms ease-out;
   }
-  50% {
-    transform: translateX(-20%);
+}
+
+/**
+ * Motion.
+ *
+ * Named animations, all of them transform/opacity so a busy screen never
+ * triggers layout. `prefers-reduced-motion` in the base layer collapses their
+ * duration *and* their delay — the delay matters: a staggered reveal with
+ * `animation-fill-mode: both` holds its `from` frame (opacity 0) for the whole
+ * delay, so collapsing only the duration would leave a reduced-motion listener
+ * looking at an empty page for a quarter of a second.
+ *
+ * The player's waiting band is not here: it is drawn by `WavyProgress`, in the
+ * same stroke as the wave, because a wait and a play should not be two different
+ * kinds of motion on the same bar.
+ */
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
-  100% {
-    transform: translateX(-90%);
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
