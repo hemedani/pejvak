@@ -6,7 +6,9 @@
     "start": "deno run --allow-all --watch --watch-exclude=declarations --no-clear-screen mod.ts",
     "dev": "deno run --allow-all --watch mod.ts",
     "seed": "deno run --allow-all utils/seed.ts",
-    "test": "hurl --test --variables-file http/vars.env --variable unique=$(uuidgen) http/e2e.hurl"
+    "test": "hurl --test --variables-file http/vars.env --variable unique=$(uuidgen) http/e2e.hurl",
+    "test:admin": "deno task seed && hurl --test --variables-file http/vars.env --variable unique=$(uuidgen) http/admin.hurl",
+    "test:all": "deno task test && deno task test:admin"
   },
   "fmt": {
     "include": ["src/", "models/", "utils/", "mod.ts"],

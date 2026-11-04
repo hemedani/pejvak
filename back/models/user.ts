@@ -56,6 +56,28 @@ export const user_pure = {
    * act stay valid; defaults are applied on read, not written at registration.
    */
   setting: optional(setting_pure),
+  /**
+   * What this account may do.
+   *
+   * `user` is the listener. `support` may read everything the admin panel
+   * shows and change nothing; `admin` may also mutate. The split exists because
+   * the panel's read surface (a listener's history, their payments) is exactly
+   * what a first-line support agent needs, and exactly what should not come
+   * with the power to grant a subscription.
+   *
+   * Defaulted rather than required so the 55 accounts that predate this field
+   * stay valid; every reader treats a missing value as `user`.
+   */
+  role: defaulted(enums(["user", "admin", "support"]), "user"),
+  /**
+   * `suspended` is read-only, not signed-out: a suspended listener can still
+   * open their library and see why, but every write act is refused. `deleted`
+   * is reserved for a soft delete and is rejected at authentication.
+   */
+  status: defaulted(enums(["active", "suspended", "deleted"]), "active"),
+  suspendedAt: optional(number()),
+  /** Shown to the listener, so it must be written as a sentence, not a code. */
+  suspendedReason: optional(string()),
   ...createUpdateAt,
 };
 

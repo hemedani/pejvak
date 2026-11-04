@@ -1,7 +1,11 @@
+import { adminSetup } from "./admin/mod.ts";
+import { aiSetup } from "./ai/mod.ts";
 import { annotationsSetup } from "./annotations/mod.ts";
 import { authSetup } from "./auth/mod.ts";
+import { billingSetup } from "./billing/mod.ts";
 import { contextsSetup } from "./contexts/mod.ts";
 import { onlineSetup } from "./online/mod.ts";
+import { platformSetup } from "./platform/mod.ts";
 import { playlistsSetup } from "./playlists/mod.ts";
 import { sessionsSetup } from "./sessions/mod.ts";
 import { settingsSetup } from "./settings/mod.ts";
@@ -20,4 +24,8 @@ export const functionsSetup = () => {
   contextsSetup();
   onlineSetup();
   settingsSetup();
+  billingSetup();
+  aiSetup();
+  platformSetup();
+  adminSetup();
 };

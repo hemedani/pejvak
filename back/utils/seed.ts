@@ -1,5 +1,11 @@
 import { hash } from "@da/bcrypt";
 import { annotation, playbackSession, playlist, track, user } from "../mod.ts";
+import { bootstrap } from "../src/bootstrap.ts";
+
+// Plans, the platform row and the analytics indexes are idempotent and are what
+// an entitlement read needs to answer at all, so the seed creates them too —
+// `mod.ts` only runs this on a server start, not when this script is the entry.
+await bootstrap();
 
 const email = "demo@pejvak.app";
 const password = "password123";
@@ -15,6 +21,8 @@ if (!demo) {
       email,
       password: await hash(password),
       displayName: "Demo Listener",
+      role: "user",
+      status: "active",
       createdAt: new Date(),
       updatedAt: new Date(),
     },
@@ -26,6 +34,47 @@ if (!demo) {
 }
 
 const userId = demo!._id;
+
+// --- Admin ----------------------------------------------------------------
+//
+// The panel has no public way to create its first admin — by design, since that
+// endpoint would be the whole security model. A seeded account is how a fresh
+// deployment gets one; afterwards, admins promote each other from the panel.
+// Change this password before exposing the server.
+
+const adminEmail = "admin@pejvak.app";
+const adminPassword = "password123";
+
+const existingAdmin = await user.findOne({
+  filters: { email: adminEmail },
+  projection: { _id: 1, role: 1 },
+});
+
+if (!existingAdmin) {
+  await user.insertOne({
+    doc: {
+      username: "admin",
+      email: adminEmail,
+      password: await hash(adminPassword),
+      displayName: "Pejvak Admin",
+      role: "admin",
+      status: "active",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    projection: { _id: 1 },
+  });
+  console.log(`Seeded admin user: ${adminEmail} / ${adminPassword}`);
+} else if (existingAdmin.role !== "admin") {
+  await user.findOneAndUpdate({
+    filter: { _id: existingAdmin._id },
+    update: { $set: { role: "admin", updatedAt: new Date() } },
+    projection: { _id: 1 },
+  });
+  console.log(`Promoted existing account to admin: ${adminEmail}`);
+} else {
+  console.log(`Admin user already exists: ${adminEmail}`);
+}
 
 const seedTracks = [
   {
