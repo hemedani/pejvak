@@ -11,7 +11,9 @@
  */
 
 import {
+  Activity,
   AudioLines,
+  BadgeDollarSign,
   BookOpen,
   ChartLine,
   ChevronDown,
@@ -21,6 +23,7 @@ import {
   CircleAlert,
   CircleCheck,
   Clock,
+  Cloud,
   Disc3,
   Download,
   Ellipsis,
@@ -31,6 +34,7 @@ import {
   Heart,
   History,
   House,
+  LayoutDashboard,
   Library,
   ListMusic,
   ListOrdered,
@@ -42,10 +46,16 @@ import {
   Pencil,
   Play,
   Plus,
+  ReceiptText,
+  Repeat2,
   Rewind,
   FastForward,
+  ScrollText,
   Search,
   Settings,
+  ShieldCheck,
+  SlidersHorizontal,
+  Smartphone,
   SkipBack,
   SkipForward,
   Sparkles,
@@ -53,6 +63,7 @@ import {
   Timer,
   Trash2,
   TriangleAlert,
+  Users,
   Volume2,
   VolumeX,
   WifiOff,
@@ -67,10 +78,15 @@ const ICONS = {
   history: History,
   playlist: ListMusic,
   browse: Globe,
+  /** A track whose audio lives on the listener's phone — "local", not "offline". */
+  device: Smartphone,
+  /** A track streamed from a server — "online", not "browsing". */
+  cloud: Cloud,
   player: Disc3,
   settings: Settings,
   book: BookOpen,
   stats: ChartLine,
+  activity: Activity,
   search: Search,
   /** A note left at a point in a track — an annotation, not an edit affordance. */
   note: Pencil,
@@ -126,6 +142,22 @@ const ICONS = {
    * "saved" is filled is a property of the control, not of the vocabulary.
    */
   favorite: Heart,
+  /** Admin: the landing dashboard. */
+  overview: LayoutDashboard,
+  /** Admin: accounts, the cross-user surface. */
+  users: Users,
+  /** Admin: the plan catalogue. */
+  plan: BadgeDollarSign,
+  /** Admin: subscriptions and renewals. */
+  repeat: Repeat2,
+  /** Admin: the payment ledger. */
+  receipt: ReceiptText,
+  /** Admin: the operator activity log. */
+  audit: ScrollText,
+  /** Admin: global switches and limits. */
+  platform: SlidersHorizontal,
+  /** Admin: read-only operators, distinct from a full admin. */
+  support: ShieldCheck,
 } as const satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

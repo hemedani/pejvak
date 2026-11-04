@@ -8,12 +8,17 @@
 
 import { asRecord, asString } from "../parse";
 
+export type UserRole = "user" | "admin" | "support";
+export type UserStatus = "active" | "suspended" | "deleted";
+
 export type CurrentUser = {
   id: string;
   username: string;
   email: string;
   displayName: string | null;
   avatarUrl: string | null;
+  role: UserRole;
+  status: UserStatus;
 };
 
 export const USER_GET = {
@@ -22,7 +27,24 @@ export const USER_GET = {
   email: 1,
   displayName: 1,
   avatarUrl: 1,
+  role: 1,
+  status: 1,
 } as const;
+
+/**
+ * Fail closed.
+ *
+ * Accounts created before RBAC have neither field. Absence must mean the
+ * least-privileged value, not "unknown, so allow" — an admin check is always
+ * `role === "admin"`, and this is what makes that comparison safe.
+ */
+export function asRole(value: unknown): UserRole {
+  return value === "admin" || value === "support" ? value : "user";
+}
+
+export function asStatus(value: unknown): UserStatus {
+  return value === "suspended" || value === "deleted" ? value : "active";
+}
 
 export function parseUser(raw: unknown): CurrentUser | null {
   const record = asRecord(raw);
@@ -42,6 +64,8 @@ export function parseUser(raw: unknown): CurrentUser | null {
     email: asString(record.email) ?? "",
     displayName: asString(record.displayName),
     avatarUrl: asString(record.avatarUrl),
+    role: asRole(record.role),
+    status: asStatus(record.status),
   };
 }
 

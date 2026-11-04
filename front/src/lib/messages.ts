@@ -35,6 +35,42 @@ const KNOWN_VALIDATION: readonly { pattern: RegExp; text: string }[] = [
   { pattern: /playlist title is required/i, text: "Give the playlist a name." },
   { pattern: /playlist title is too long/i, text: "A playlist name must be 120 characters or fewer." },
   { pattern: /playlist not found/i, text: "That playlist could not be found." },
+
+  /*
+   * Admin refusals. They are already specific English sentences written for an
+   * operator; the table exists so the panel never prints a string it did not
+   * choose, not to paraphrase away the one detail that explains the refusal.
+   */
+  { pattern: /requires an admin account/i, text: "This action requires an admin account." },
+  { pattern: /user not found/i, text: "That account could not be found." },
+  { pattern: /you cannot change your own role/i, text: "You cannot change your own role." },
+  { pattern: /you cannot change the status of your own account/i, text: "You cannot change the status of your own account." },
+  { pattern: /you cannot delete your own account/i, text: "You cannot delete your own account." },
+  { pattern: /at least one active admin/i, text: "There must be at least one active admin." },
+  { pattern: /another account already uses that email/i, text: "Another account already uses that email." },
+  { pattern: /type the account's email address/i, text: "Type the account's email address to confirm the deletion." },
+  { pattern: /could not be deleted/i, text: "The account could not be deleted. Refresh and try again." },
+  { pattern: /no active subscription/i, text: "This account has no active subscription to revoke." },
+  { pattern: /active subscriber/i, text: "This plan still has active subscribers. Move or revoke them before archiving it." },
+  { pattern: /a usage grant needs at least one cap/i, text: "A usage grant needs at least one cap." },
+  { pattern: /a usage grant does not take a duration/i, text: "A usage grant does not take a duration." },
+  { pattern: /caps\..*positive whole number/i, text: "Every usage cap must be zero or a positive whole number." },
+  { pattern: /a duration grant needs a duration/i, text: "A duration grant needs a duration." },
+  { pattern: /duration\.value must be a positive whole number/i, text: "The duration must be a positive whole number." },
+  { pattern: /a duration grant does not take caps/i, text: "A duration grant does not take caps." },
+  { pattern: /a forever grant does not take/i, text: "A forever grant does not take a duration or caps." },
+  { pattern: /choose a grant mode/i, text: "Choose forever, duration or usage for this grant." },
+  { pattern: /that plan does not exist/i, text: "That plan does not exist." },
+  { pattern: /that plan is no longer available/i, text: "That plan is no longer available." },
+  { pattern: /credits must be a positive whole number/i, text: "Credits must be a positive whole number." },
+  { pattern: /transaction not found/i, text: "That transaction could not be found." },
+  { pattern: /only a paid transaction can be refunded/i, text: "Only a paid transaction can be refunded." },
+  { pattern: /this payment was refunded/i, text: "This payment was already refunded." },
+  { pattern: /this payment was canceled/i, text: "This payment was canceled and cannot be completed." },
+  { pattern: /a new plan needs a title/i, text: "A new plan needs a title." },
+  { pattern: /priceCents cannot be negative/i, text: "The price cannot be negative." },
+  { pattern: /mark another plan as the default/i, text: "Mark another plan as the default before unsetting this one." },
+  { pattern: /must be -1 .* unlimited/i, text: "A limit must be -1 (unlimited) or zero and above." },
 ];
 
 const BY_KIND: Record<Exclude<ActFailure["kind"], "validation">, string> = {

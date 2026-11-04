@@ -30,6 +30,30 @@ const VALIDATION_PATTERNS = [
   /does not exist/i,
   /already exists/i,
   /duplicate key/i,
+  /*
+   * Admin refusals are payload problems, not session problems. `callAct`
+   * signs the operator out on `unauthorized`, so a support token calling a
+   * mutation must land here instead. The auth patterns above run first, which
+   * keeps the one genuinely ambiguous string — "User not exist" — on the
+   * unauthorized side.
+   */
+  /requires an admin account/i,
+  /not found/i,
+  /cannot /i,
+  /no active subscription/i,
+  /active subscriber/i,
+  /choose a grant mode/i,
+  /grant (?:needs|does not take|requires)/i,
+  /caps\./i,
+  /credits must be/i,
+  /positive whole number/i,
+  /only a paid transaction/i,
+  /payment was (?:refunded|canceled)/i,
+  /a new plan needs a title/i,
+  /priceCents cannot be negative/i,
+  /mark another plan as the default/i,
+  /must be -1/i,
+  /that plan (?:does not exist|is no longer available)/i,
   /must be/i,
   /required/i,
   /invalid/i,
