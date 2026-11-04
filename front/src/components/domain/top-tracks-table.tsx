@@ -26,8 +26,8 @@ export function TopTracksTable({ rows, now }: { rows: readonly TopTrackRow[]; no
           <tr className="border-b border-outline-variant">
             <Th className="w-10 text-center">#</Th>
             <Th>Title</Th>
-            <Th className="hidden sm:table-cell">Listening time</Th>
-            <Th className="hidden text-center md:table-cell">Plays</Th>
+            <Th className="hidden text-end sm:table-cell">Listening time</Th>
+            <Th className="hidden text-end md:table-cell">Plays</Th>
             <Th className="hidden text-end lg:table-cell">Last played</Th>
           </tr>
         </thead>
@@ -43,7 +43,7 @@ export function TopTracksTable({ rows, now }: { rows: readonly TopTrackRow[]; no
 
               <td className="py-[var(--space-md)] pe-[var(--space-md)]">
                 <div className="flex min-w-0 items-center gap-[var(--space-sm)]">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-sm)] bg-surface-sunken text-text-tertiary">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-2xs)] bg-surface-sunken text-text-tertiary">
                     <Icon name="player" size="sm" />
                   </span>
 
@@ -51,6 +51,7 @@ export function TopTracksTable({ rows, now }: { rows: readonly TopTrackRow[]; no
                     {row.title && row.id ? (
                       <Link
                         href={`/library/${row.id}`}
+                        dir="auto"
                         className="type-label block truncate text-text hover:underline"
                       >
                         {row.title}
@@ -59,7 +60,9 @@ export function TopTracksTable({ rows, now }: { rows: readonly TopTrackRow[]; no
                       // A title with no id means the join found the row but the
                       // library page did not carry it this time. Rare, and the
                       // name is still worth showing without a link to nowhere.
-                      <p className="type-label truncate text-text">{row.title}</p>
+                      <p className="type-label truncate text-text" dir="auto">
+                        {row.title}
+                      </p>
                     ) : (
                       <>
                         <p className="type-label truncate text-text-tertiary">
@@ -74,11 +77,11 @@ export function TopTracksTable({ rows, now }: { rows: readonly TopTrackRow[]; no
                 </div>
               </td>
 
-              <td className="type-numeric hidden py-[var(--space-md)] text-text-secondary sm:table-cell">
+              <td className="type-numeric hidden py-[var(--space-md)] text-end text-text-secondary sm:table-cell">
                 {formatSpan(row.listenTimeSec)}
               </td>
 
-              <td className="type-numeric hidden py-[var(--space-md)] text-center text-text-secondary md:table-cell">
+              <td className="type-numeric hidden py-[var(--space-md)] text-end text-text-secondary md:table-cell">
                 {formatNumber(row.playCount)}
               </td>
 

@@ -180,7 +180,7 @@ export default async function DashboardPage() {
           </div>
 
           <Reveal index={cells.length}>
-            <Card className="p-[var(--space-lg)]">
+            <Card className="p-[var(--space-xl)]">
               <CardHeading overline="Last 30 days" title="Listening activity" />
               <div className="mt-[var(--space-lg)]">
                 {sessions.success ? (

@@ -67,7 +67,7 @@ export function ActivityChart({ buckets }: { buckets: readonly DailyBucket[] }) 
             return (
               <div
                 key={bucket.day}
-                className="group relative flex-1 self-stretch rounded-t-[var(--radius-xs)]"
+                className="group relative flex-1 self-stretch rounded-t-[var(--radius-2xs)]"
                 title={
                   bucket.listenTimeSec > 0
                     ? `${formatDayHeading(bucket.day)} — ${formatSpan(bucket.listenTimeSec)}`
@@ -78,7 +78,7 @@ export function ActivityChart({ buckets }: { buckets: readonly DailyBucket[] }) 
                   <div
                     className={
                       height > 0
-                        ? "w-full rounded-t-[var(--radius-xs)] bg-accent/70 transition-colors group-hover:bg-accent"
+                        ? "w-full rounded-t-[var(--radius-2xs)] bg-accent/70 transition-colors duration-[var(--motion-fast)] group-hover:bg-accent"
                         : "h-px w-full bg-[var(--outline-variant)]"
                     }
                     style={height > 0 ? { height: `${height}%` } : undefined}
