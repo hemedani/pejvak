@@ -12,8 +12,8 @@ export const viewport: Viewport = {
   // The two canvas colours, so the browser chrome does not flash white when the
   // dark theme loads.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#E4E9EF" },
-    { media: "(prefers-color-scheme: dark)", color: "#060910" },
+    { media: "(prefers-color-scheme: light)", color: "#F6F3ED" },
+    { media: "(prefers-color-scheme: dark)", color: "#141311" },
   ],
 };
 

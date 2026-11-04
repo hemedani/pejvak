@@ -1,10 +1,9 @@
 /**
- * Pejvak design tokens, translated from `mobile/src/theme/tokens.ts`.
+ * Pejvak design tokens.
  *
- * That file is the source of truth; this is a transcription, not a second
- * palette. When a colour changes there, it changes here, and the ratios quoted
- * in the comments below travel with it because they are the *reason* the value
- * is what it is.
+ * The web owns this palette. It is no longer a transcription of
+ * `mobile/src/theme/tokens.ts`; the browser console has its own ink-and-paper
+ * identity, and these values are its source of truth.
  *
  * Three things are load-bearing and must not be "cleaned up":
  *
@@ -17,117 +16,124 @@
  */
 
 :root {
-  /* ── Surfaces ─────────────────────────────────────────────────────────── */
-  --canvas: #e4e9ef;
-  --canvas-elevated: #edf1f6;
-  --surface: #ffffff;
-  --surface-sunken: #edf1f6;
+  --canvas: #f6f3ed;
+  --canvas-elevated: #fbf9f4;
+  --surface: #fffdf8;
+  --surface-sunken: #efebe2;
 
-  /* ── Structure ────────────────────────────────────────────────────────── */
-  --outline: #b4c0cc;
-  --outline-strong: #7c8996;
-  --outline-variant: #dce3ea;
+  --outline: #cfc8ba;
+  --outline-strong: #857c6c;
+  --outline-variant: #e4ded2;
 
-  /* ── Floating material ────────────────────────────────────────────────── */
-  --glass: rgba(255, 255, 255, 0.78);
-  --glass-strong: rgba(255, 255, 255, 0.92);
-  /* Dark, not white: a white border on a near-white fill measures 1.00:1
-     against its own fill — literally invisible. */
-  --glass-border: rgba(20, 32, 39, 0.13);
+  --glass: rgba(255, 253, 248, 0.78);
+  --glass-strong: rgba(255, 253, 248, 0.92);
+  --glass-border: rgba(30, 28, 24, 0.14);
   --glass-highlight: rgba(255, 255, 255, 0.95);
-  --shadow: rgba(20, 32, 39, 0.16);
+  --shadow: rgba(30, 28, 24, 0.14);
 
-  /* ── Text tiers ───────────────────────────────────────────────────────── */
-  --text: #0e1720;
-  --text-secondary: #41505a;
-  --text-tertiary: #5b6a75;
+  --text: #1b1a17;
+  --text-secondary: #4a4740;
+  --text-tertiary: #666257;
 
-  /* ── Accent, danger, utility ──────────────────────────────────────────── */
-  --accent: #0a635c;
-  --accent-soft: rgba(10, 99, 92, 0.12);
-  --on-accent: #ffffff;
-  --danger: #b02f45;
-  --danger-soft: rgba(176, 47, 69, 0.1);
-  --scrim: rgba(12, 18, 24, 0.38);
-  --track: rgba(65, 80, 90, 0.18);
-  --icon: #2c3a43;
+  --accent: #2c5a4a;
+  --accent-soft: rgba(44, 90, 74, 0.1);
+  --on-accent: #fffdf8;
+  --danger: #a0343f;
+  --danger-soft: rgba(160, 52, 63, 0.1);
+  --scrim: rgba(20, 18, 14, 0.4);
+  --track: rgba(74, 71, 64, 0.18);
+  --icon: #3a3832;
 
-  /* ── Shape ramp ───────────────────────────────────────────────────────── */
-  --radius-xs: 8px;
-  --radius-sm: 12px;
-  --radius-md: 16px;
-  --radius-lg: 20px;
-  --radius-card: 28px;
-  --radius-xl: 32px;
-  --radius-xxl: 40px;
+  --radius-2xs: 4px;
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-card: 22px;
+  --radius-xl: 28px;
+  --radius-xxl: 36px;
   --radius-pill: 999px;
 
-  /* ── Spacing (4pt rhythm) ─────────────────────────────────────────────── */
   --space-xxs: 2px;
   --space-xs: 4px;
   --space-sm: 8px;
   --space-md: 12px;
   --space-lg: 16px;
-  --space-xl: 20px;
-  --space-xxl: 24px;
-  --space-xxxl: 32px;
-  --space-huge: 44px;
-  --space-giant: 64px;
+  --space-xl: 24px;
+  --space-xxl: 32px;
+  --space-xxxl: 40px;
+  --space-huge: 56px;
+  --space-giant: 80px;
 
-  /* ── Bars ─────────────────────────────────────────────────────────────── */
+  --control-sm: 36px;
+  --control-md: 44px;
+  --control-lg: 52px;
+  --control-thumb: 18px;
+  --tap-min: 44px;
+
+  --layout-sidebar: 264px;
+  --layout-topbar: 64px;
+  --layout-content: 1180px;
+  --layout-player: 760px;
+  --layout-player-bar: 80px;
+  --layout-artwork: 360px;
+  --measure-prose: 68ch;
+  --measure-narrow: 44ch;
+  --measure-form: 420px;
+
   --bar-thin: 4px;
   --bar-thick: 6px;
 
-  /* ── Elevation ────────────────────────────────────────────────────────── */
-  /* An opaque card on a canvas already 1.22:1 above it does not need a deep
-     drop shadow; a heavy one reads as a dialog. */
-  --elevation-card: 0 2px 8px var(--shadow);
-  --elevation-panel: 0 12px 28px var(--shadow);
-  --elevation-float: 0 16px 34px var(--shadow);
+  --elevation-card: 0 1px 3px var(--shadow);
+  --elevation-panel: 0 10px 28px var(--shadow);
+  --elevation-float: 0 18px 44px var(--shadow);
 
-  /* ── Type ─────────────────────────────────────────────────────────────── */
-  /* The UI is English, so the Latin face is the platform's own — the same choice
-     the phone app makes by not setting a font at all. `Vazirmatn` stays in the
-     stack *behind* it for Persian catalogue titles: fallback is per glyph, so
-     English copy renders in the system face and a Persian title still gets a face
-     designed for it.
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 300ms;
+  --motion-reveal: 360ms;
+  --motion-distance: 8px;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --stagger-step: 45ms;
 
-     `Vazirmatn` is declared by `@font-face` in globals.css and served from
-     /public/fonts, so there is no build-time or runtime third-party request. */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     "Vazirmatn", sans-serif;
+  --font-display: "Newsreader", "Vazirmatn", "Iowan Old Style", "Palatino Linotype", Georgia,
+    serif;
 
   color-scheme: light;
 }
 
 .dark {
-  --canvas: #060910;
-  --canvas-elevated: #0e1520;
-  --surface: #1a2330;
-  --surface-sunken: #222d3a;
+  --canvas: #141311;
+  --canvas-elevated: #1c1a17;
+  --surface: #211f1b;
+  --surface-sunken: #2a2722;
 
-  --outline: #4c5b68;
-  --outline-strong: #6b7a87;
-  --outline-variant: #2e3a46;
+  --outline: #4a463e;
+  --outline-strong: #877f71;
+  --outline-variant: #35312a;
 
-  --glass: rgba(28, 37, 50, 0.72);
-  --glass-strong: rgba(30, 40, 54, 0.9);
-  --glass-border: rgba(226, 238, 255, 0.22);
-  --glass-highlight: rgba(255, 255, 255, 0.24);
+  --glass: rgba(33, 31, 27, 0.72);
+  --glass-strong: rgba(35, 33, 28, 0.9);
+  --glass-border: rgba(246, 243, 237, 0.2);
+  --glass-highlight: rgba(255, 255, 255, 0.2);
   --shadow: rgba(0, 0, 0, 0.55);
 
-  --text: #f0f5f4;
-  --text-secondary: #b4c4cb;
-  --text-tertiary: #8b9ea8;
+  --text: #f4f0e8;
+  --text-secondary: #c4bdb0;
+  --text-tertiary: #9a9386;
 
-  --accent: #5fd9c6;
-  --accent-soft: rgba(95, 217, 198, 0.16);
-  --on-accent: #04231f;
-  --danger: #ff8296;
-  --danger-soft: rgba(255, 130, 150, 0.14);
-  --scrim: rgba(0, 0, 0, 0.58);
-  --track: rgba(180, 196, 203, 0.2);
-  --icon: #d6e2e6;
+  --accent: #8fc9b4;
+  --accent-soft: rgba(143, 201, 180, 0.16);
+  --on-accent: #0b211a;
+  --danger: #f0a0a8;
+  --danger-soft: rgba(240, 160, 168, 0.14);
+  --scrim: rgba(0, 0, 0, 0.6);
+  --track: rgba(196, 189, 176, 0.2);
+  --icon: #e4ded2;
 
   color-scheme: dark;
 }
