@@ -9,8 +9,11 @@
 
 **Status:** Phases 0–5 built, plus 3.2–3.6 and 4.1–4.5 — the whole console and the streaming player,
 in English and LTR, with the three shared preferences editable and in effect. Plan authored 2026-10-30,
-reconciled against the code 2026-10-31.
-**Blocking decision:** [D1](#3-decisions) = (a), provisional. It blocks **Phase 6 only**; Phase 7 can proceed.
+reconciled against the code 2026-10-31. **Phase 6 shipped 2026-11-04** — the admin backend and the
+`/admin` UI. See [`ADMIN-PANEL.md`](./ADMIN-PANEL.md).
+**Decision:** [D1](#3-decisions) = **(b), resolved 2026-11-04**. The backend RBAC, entitlements, billing and
+22 admin acts, and the console over them, have shipped. The admin contract lives in
+[`ADMIN-PANEL.md`](./ADMIN-PANEL.md), which supersedes §2 C1 and Phase 6 for admin-specific claims.
 
 ---
 
@@ -56,11 +59,11 @@ what a web client can be, and it is not negotiable by design taste.
 | Browse + stream online sources | ✅ **with ported adapters** | sources are public JSON APIs; URLs are re-resolvable |
 | Play the listener's **own files** | ❌ | the server never receives audio (`§2 C2`) |
 | Download for offline | ❌ | no filesystem; "save" becomes "save to shelf" |
-| Admin: all users, all tracks, delete anything | ❌ **until backend RBAC** (`§2 C1`) | every act filters `user._id` |
+| Admin: users, history, subscriptions, payments, audit, platform switches | ✅ **shipped 2026-11-04** | 22 admin acts behind `requireSupport` / `requireAdmin`; `/admin` UI over them; contract in [`ADMIN-PANEL.md`](./ADMIN-PANEL.md) |
 
-So the product is **"Pejvak Web"**: the listener's second screen, with a streaming player. The word *admin* is
-resolved in [D1](#3-decisions) — either it means "the account owner's console" (buildable now), or it means a real
-cross-user panel (needs [§11](#11-backend-prerequisites-track-b) first).
+So the product is **"Pejvak Web"**: the listener's second screen, with a streaming player, plus a
+cross-user operator console. [D1](#3-decisions) is resolved **(b)**; the backend and the `/admin`
+UI shipped on 2026-11-04.
 
 ### 1.2 What the player will and will not do
 
@@ -75,14 +78,21 @@ cross-user panel (needs [§11](#11-backend-prerequisites-track-b) first).
 
 These are the constraints the plan is built on. Each one is a fact about `back/`, with the file that proves it.
 
-### C1 — There is no RBAC, and no cross-user read
+### C1 — Listener acts are owner-scoped; admin acts are a separate surface
 
-`back/AGENTS.md`: *"There is no RBAC on the backend. Every authenticated act resolves a single `user._id`."*
-Ownership is enforced inside each act's query (`"user._id": userId`). There is no `getUsers`, no `getAllTracks`,
-no role field on `User`, and no act that takes someone else's id.
+> **Corrected 2026-11-04.** This section was written before RBAC. It said there was
+> no role field and no cross-user read. That is no longer true.
 
-**Consequence:** an admin panel that lists other people's data cannot be built against this backend. It is a
-backend project first ([§11](#11-backend-prerequisites-track-b)), a UI project second.
+Every **listener** act still enforces ownership inside its own query
+(`"user._id": userId`). There is no parameter that lets a listener read another
+account. On top of that, the backend now has `user.role` (`user` / `support` /
+`admin`) and **22 admin acts** that read across accounts behind `requireSupport`
+(reads) or `requireAdmin` (mutations).
+
+**Consequence:** the admin panel is buildable. Its contract — schemas, acts, `get`
+shapes, grant modes, analytics definitions and known gaps — is
+[`ADMIN-PANEL.md`](./ADMIN-PANEL.md). The listener acts are unchanged and must not be
+reused for cross-user reads.
 
 ### C2 — The server holds no media
 
@@ -119,14 +129,14 @@ onlineCollection saveOnlineCollection, getMyOnlineCollections, removeOnlineColle
 
 Missing, and each one changes a screen's design:
 
-| Missing act | What it blocks | Workaround until [§11](#11-backend-prerequisites-track-b) |
+| Missing listener act | What it blocks | Workaround |
 |---|---|---|
 | `createAnnotation` | "add a note" | send it through `syncLocalData.annotations[]` with a `clientId` |
 | `createSession` | recording a listen | `syncLocalData.sessions[]` (same shape the phone sends) |
 | `updateTrack` / `deleteTrack` | managing the library | read-only library |
 | `updateMe` | editing the profile (username, email, display name) | settings is read-only. **`updateMySettings` exists and is not this** — it writes `languageCode`, `defaultSpeed` and `historySort`, so preferences are editable today and the profile is not |
 | any upload | artwork upload | `artworkUrl` must already be a URL |
-| any cross-user act | admin panel | [D1](#3-decisions) |
+| any cross-user listener act | — (not needed) | the 22 admin acts are a separate surface behind RBAC; see [`ADMIN-PANEL.md`](./ADMIN-PANEL.md) |
 
 ### C4 — `getMyStats` returns hashes, not titles
 
@@ -157,7 +167,7 @@ join: that would make stats a second source of truth for a track's name.
 
 | # | Decision | Status |
 |---|---|---|
-| D1 | **What "admin panel" means.** (a) Account console — the signed-in listener's own data. (b) Real cross-user admin. | **(a), provisionally — 2026-10-30.** The console is what Phases 0–5 build and it is at the shell root (`/`), which is where §5 already put the dashboard. (b) stays a backend track (§11) and would add `/admin` beside it. Nothing built so far would be thrown away by choosing (b) later; confirm with the user before Phase 6. |
+| D1 | **What "admin panel" means.** (a) Account console — the signed-in listener's own data. (b) Real cross-user admin. | **(b), resolved 2026-11-04.** The backend shipped roles (`user` / `support` / `admin`), 22 admin acts, entitlements, billing and audit. `/admin` is buildable now. See [`ADMIN-PANEL.md`](./ADMIN-PANEL.md). |
 | D2 | **Media strategy:** web plays online sources only; the local library is metadata-only. | Proposed (forced by C2). Confirm in Phase 0. |
 | D3 | **Framework:** Next.js 16 App Router, TypeScript strict, Tailwind v4 — same generation as the reference project. | Accepted |
 | D4 | **Transport:** Server Actions only; no client `fetch` to the backend, no second HTTP library. | Accepted |
@@ -468,7 +478,7 @@ annotations. An unavailable action is a state to design, not an error to apologi
 
 ## 10. Phases
 
-Each phase: **Goal → Tasks → Done when → Gate**. Phases 0–5 are buildable today. Phase 6 is backend-gated.
+Each phase: **Goal → Tasks → Done when → Gate**. Phases 0–6 are built (Phase 6 shipped 2026-11-04).
 
 > **Boxes 0.1–2.6 were ticked on 2026-10-30 without a green `npm run check`** — the dependency
 > install could not complete in the environment where they were built (see the 2026-10-30 entry in
@@ -679,16 +689,24 @@ reload with the same `clientId` it was sent with.
 scrubbing mid-track sets `seeked` and makes `isComplete` false; closing the tab mid-track still syncs on return.
 **Gate:** `npm run check` + the session-math suite + a manual pass against the real backend
 
-### Phase 6 — Admin (backend-gated)
+### Phase 6 — Admin (unblocked 2026-11-04)
 
-**Blocked by [D1](#3-decisions) = (b).** Do not start before [§11](#11-backend-prerequisites-track-b) ships.
+**Backend shipped; build the panel against [`ADMIN-PANEL.md`](./ADMIN-PANEL.md) and
+[`../prompts/06-admin-panel.md`](../prompts/06-admin-panel.md).**
 
-- [ ] **6.1** Backend: `role` on `User`, `setUser` RBAC, admin acts, hurl tests (§11).
-- [ ] **6.2** `middleware` + `requireAdmin()` in every admin action.
-- [ ] **6.3** `/admin/users`, `/admin/users/[id]`, `/admin/tracks`, `/admin/system` (global aggregates).
-- [ ] **6.4** Destructive actions behind a typed confirmation; every one audited.
+- [x] **6.1** Backend: `role` on `User`, `setUser` RBAC, 22 admin acts, entitlement
+      and billing lifecycle, hurl tests.
+- [x] **6.2** Admin layout guard (`notFound()` for `user`, no role logic in
+      `proxy.ts`) + `requireAdmin()` / `requireSupport()` in every admin action.
+- [x] **6.3** `/admin` overview, `/admin/analytics`, `/admin/users`,
+      `/admin/users/[id]`, `/admin/plans`, `/admin/subscriptions`,
+      `/admin/transactions`, `/admin/audit`, `/admin/platform`. (No cross-user
+      track browser: counts and recent sessions only.)
+- [x] **6.4** Destructive actions behind typed confirmation; every mutation awaited,
+      audited by the backend, and never optimistic.
 
-**Done when:** a non-admin gets a clean refusal (not a blank page) and an admin sees another user's data.
+**Done when:** a `user` gets `notFound()`, `support` can read every page but not
+mutate, an `admin` can complete every flow, and `npm run check` is green.
 
 ### Phase 7 — Hardening and release
 
@@ -705,25 +723,26 @@ scrubbing mid-track sets `seeked` and makes `isComplete` false; closing the tab 
 
 ---
 
-## 11. Backend prerequisites (Track B)
+## 11. Backend prerequisites (shipped)
 
-Only needed for a real admin panel. Each item is a small, separable backend change; **none** is needed for
-Phases 0–5.
+> **Shipped 2026-11-04.** Items 1–3 below were the plan for the backend; they are
+> now implemented and tested. The live contract is
+> [`ADMIN-PANEL.md`](./ADMIN-PANEL.md), not this historical list. Items 4–5 are
+> still open and are not blockers for the admin panel.
 
-1. **`role` on `User`** — `defaulted(enums(["listener", "admin"]), "listener")`, excluded from relations like
-   `password`. Migration for existing documents.
-2. **RBAC in `setUser`** — load `role` into `MyContext`; add a `requireAdmin(ctx)` helper. Ownership stays the
-   rule for listener acts; admin acts are the only ones that skip the `user._id` filter, and each must say so in
-   its own file.
-3. **Admin acts** — `getUsers` (paginated, searchable), `getUserDetail`, `getAnyTracks`, `deleteUser`,
-   `deleteTrack`, `getSystemStats` (users, tracks, hours, sessions/day). Each with a validator first, then the
-   implementation, then a hurl assertion — the backend's own rule.
-4. **Listener gaps that also affect the console** (nice to have, not blocking): `updateMe`, `updateTrack`,
-   `deleteTrack`, `createAnnotation`, `createPlaybackSession`.
-5. **Upload** (only if artwork editing is wanted): a `file` model + an upload act + object storage. Explicitly
-   out of scope until asked for.
+1. ~~**`role` on `User`**~~ — shipped as `user` / `support` / `admin`, defaulted
+   and normalised on read.
+2. ~~**RBAC**~~ — `requireSupport` / `requireAdmin` in `back/utils/roles.ts`;
+   `setUser` loads the role and rejects deleted accounts.
+3. ~~**Admin acts**~~ — 22 acts across users, analytics, plans, subscriptions,
+   transactions, audit, platform and AI credits, with hurl coverage.
+4. **Listener gaps that also affect the console** (nice to have, not blocking):
+   `updateMe`, `updateTrack`, `deleteTrack`, `createAnnotation`,
+   `createPlaybackSession`.
+5. **Upload** (only if artwork editing is wanted): a `file` model + an upload act +
+   object storage. Explicitly out of scope until asked for.
 
-**Rule:** every admin act must be written so a mistake fails closed — a missing role is `listener`, never `admin`.
+**Rule:** every admin act fails closed — a missing role is `user`, never `admin`.
 
 ---
 
@@ -749,7 +768,7 @@ sequence, not a fixed value.
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| "Admin panel" is promised but unbuildable (C1) | the project stalls at Phase 6 | resolve D1 **now**; ship the console regardless |
+| Admin panel UI is deferred while the backend ships | Phase 6 stalls after the backend is ready | contract extracted in [`ADMIN-PANEL.md`](./ADMIN-PANEL.md); build against it |
 | A source blocks CORS or changes its API | browse breaks for one source | per-source proxy; adapters are isolated, one failing source must not blank the page |
 | Signed URLs expire mid-session | playback stops with an opaque error | re-resolve on 403/network error, once, then a clear message |
 | Session double-counting | corrupt statistics — the product's whole point | one `clientId` per session; idempotent server; test the retry path |
@@ -1188,8 +1207,52 @@ Measure the viewport before believing the picture.
 optimistic write, its per-field revert and the LWW merge are reasoned from the code, not
 observed. That is the same honest gap Phases 3–5 carry.
 
-**Next action:** **7.1–7.4** (accessibility, performance, Playwright smoke, container + CI) —
-all unblocked and needing no backend decision. Before Phase 6, confirm **D1** with the user.
+**Next action:** **7.1–7.4** (accessibility, performance, Playwright smoke, container + CI),
+then **Phase 6** against the shipped admin backend.
+
+---
+
+### 2026-11-04 — The admin backend shipped; the plan was stale
+
+**Corrected the record, not the code.** The backend now has `role` / `status`,
+`requireSupport` / `requireAdmin`, 22 admin acts, plans/entitlements, the
+manual + Stripe billing lifecycle, audit, platform switches and AI credits. This
+plan still said "there is no RBAC" and Phase 6 was blocked. Both are now wrong.
+
+**What changed here:**
+
+- [D1](#3-decisions) is **resolved (b)**; Phase 6 is unblocked and box 6.1 is
+  ticked (backend, not frontend).
+- §2 C1 now describes the split that actually exists: listener acts are still
+  owner-scoped; admin acts are a separate cross-user surface.
+- §11 is marked shipped, with the still-open listener gaps kept.
+- Phase 6's route list was corrected: no cross-user track browser; the real
+  screens are overview, analytics, users, plans, subscriptions, transactions,
+  audit and platform.
+- The full wire contract lives in [`ADMIN-PANEL.md`](./ADMIN-PANEL.md), and the
+  implementation brief is [`../prompts/06-admin-panel.md`](../prompts/06-admin-panel.md).
+  It supersedes the admin half of `05-entitlements-and-admin.md`.
+
+**Next action:** build Phase 6 from the new brief. The listener-side paywall is
+still a separate, unresolved frontend task; `getMySubscription` is the act it will
+use, not the `getMyEntitlement` the old brief named.
+
+---
+
+### 2026-11-04 — Phase 6 shipped
+
+**The console exists.** `app/(admin)/admin/` now renders all nine routes over the
+22 acts: overview, analytics, users, user detail, plans, subscriptions,
+transactions, audit and platform. Every action guards server-side with
+`requireSupport` (reads) or `requireAdmin` (mutations); the layout is the page
+gate and `proxy.ts` stays out of it. Destructive flows require typed confirmation
+and no mutation is optimistic.
+
+**What is deliberately not here:** a cross-user track browser, an entitlement
+editor (limits are plan rows), and any client-side entitlement math. The listener
+paywall remains separate.
+
+**Gate:** `npm run check` green (declarations → tsc → eslint → vitest → build).
 
 ---
 

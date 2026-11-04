@@ -57,7 +57,7 @@ experimental flags to get a 401 page when `redirect()` already works.
 
 ---
 
-## The act surface (23 acts, re-read out of `back/` on 2026-10-31)
+## The listener act surface (23 acts, re-read out of `back/` on 2026-10-31)
 
 ```
 user             register, login, getMe, getMySettings, updateMySettings
@@ -90,6 +90,29 @@ Four things that bite:
   on `/browse/source/[id]` behind `?language=`, plus a shortcut on `/browse`.
   `updateMySettings` writes those three fields and nothing about the profile, so it is not the
   `updateMe` the plan lists as missing.
+
+### Admin acts (22, separate from the listener surface)
+
+The backend has RBAC and a cross-user operator panel. Those acts are **not** listener acts and
+must never be reached through a `getMy*` query:
+
+- `support` may call the 12 read acts; `admin` may call all 22.
+- Mutations are guarded by `requireAdmin` **inside the backend**, and every admin Server Action
+  must also guard on the server. Hiding a button is not a permission.
+- Admin list acts return `{ rows, total, page, limit }` (the listener lists return bare arrays).
+- The schema is still not the folder: analytics register under `playbackSession`, audit under
+  `adminAuditLog`, platform under `platformSetting`, AI credits under `aiUsage`.
+
+The full contract — every act, schema, `set`/`get`, grant modes, analytics definitions, audit
+vocabulary and known gaps — is [`docs/ADMIN-PANEL.md`](./docs/ADMIN-PANEL.md). Read it before
+touching `/admin`. `docs/PLAN.md` §2 C1 is historical; the panel now exists.
+
+The UI lives behind `app/(admin)/admin/layout.tsx`, not `proxy.ts`: the layout sends a signed-out
+caller to `/login`, renders an error for a failed session read, and calls `notFound()` for a `user`.
+Every admin action guards again on the server (`requireSupport` for reads, `requireAdmin` for
+mutations), so support sees the pages read-only and a hidden button is never the permission. The
+nine routes are overview, analytics, users, user detail, plans, subscriptions, transactions, audit
+and platform.
 
 ### Embedded relations — read the limit *and the sort*
 

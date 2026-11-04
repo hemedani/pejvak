@@ -46,7 +46,7 @@ This file is the **root** and is authoritative. Each major workspace also has it
 | File | Applies to | Brief |
 |---|---|---|
 | [`AGENTS.md`](./AGENTS.md) (root) | Whole repo | Domain model, tech stack, Lesan conventions, coding standards, offline-first sync contract, roadmap, commands, reference specs. Authoritative — read first. |
-| [`back/AGENTS.md`](./back/AGENTS.md) | `back/` — Deno + Lesan + MongoDB backend | Per-model field/index/relation details, the acts reference (`register`, `login`, `getMe`, `registerTrack`, `getMyTracks`, `syncLocalData`), Lesan framework patterns (one-directional relations, embedded single relations, `hardCascade`), idempotent `syncLocalData` behavior, env vars, and backend test/lint commands. |
+| [`back/AGENTS.md`](./back/AGENTS.md) | `back/` — Deno + Lesan + MongoDB backend | Per-model field/index/relation details (including the plan/subscription/ledger models), the acts reference (listener acts, billing acts, the public `getPlatformStatus`, and the 22 admin acts by schema), RBAC and the admin-panel conventions, entitlements and quota enforcement, the billing lifecycle, Lesan framework patterns (one-directional relations, embedded single relations, `hardCascade`), idempotent `syncLocalData` behavior, env vars, and backend test/lint commands. |
 | [`mobile/AGENTS.md`](./mobile/AGENTS.md) | `mobile/` — React Native (Expo) app | Expo SDK 57 platform rule, audio engine rules (`expo-audio`, lock-screen/Expo Go limits, no `setInterval` tracking), `LocalDBService` schema, `SyncService` queue states, Lesan request wire format, screen and annotation UX expectations, and mobile dev commands. |
 | [`front/AGENTS.md`](./front/AGENTS.md) | `front/` — Next.js 16 web client | Next 16 conventions (`proxy.ts`, async `cookies()`/`searchParams`, `error.tsx` takes `retry`), Server-Actions-only transport, `httpOnly` token cookie, the 23-act map with its traps (schema ≠ folder), the English-only LTR UI decision and its content-vs-copy boundary, and the port-don't-reinvent list. |
 
@@ -70,7 +70,7 @@ This file is the **root** and is authoritative. Each major workspace also has it
 | State / server data | Zustand + standard Lesan fetch client (`lesanApi`) |
 | Styling | NativeWind |
 | Validation | Superstruct (Lesan) + Zod on mobile |
-| E2E / API tests | hurl (`deno task test`) |
+| E2E / API tests | hurl (`deno task test`, `deno task test:admin`) |
 | Unit tests | Jest + React Native Testing Library |
 
 Do not swap these without a strong, stated reason.
@@ -88,6 +88,14 @@ One Lesan model per file in `back/models/` (e.g. `track.ts`, `playbackSession.ts
 - **Playlist** — ordered collection of tracks (`items[].order`).
 - **PlaybackContext** — one *run* through a collection: `contextType`, `contextKey`, `contextTitle`, `trackCount`, `startedAt`, `endedAt`, `lastIndex`, `lastPositionSec`, `listenedSec`, `finishedCount`, `completed`, `interrupted`. A run outlives the playlist it names, which is why it stores the key verbatim rather than a relation.
 - **OnlineCollection** — an online collection the listener saved, favourited or downloaded: `sourceId`, `externalId`, `title`, `pageUrl`, `languageCode`, `trackCount`, `isFavorite`, `lastOpenedAt`. **Addresses and user state only — never media.** The audio stays on the source's own CDN and is fetched by the device.
+- **Plan** — a tier, as data: `code`, `priceCents`, `billingInterval`, `isActive`, `isDefault`, and `limits` (`historyEntries`, `crossDeviceSync`, `playlists`, `maxTracks`, `aiCreditsPerMonth`; `-1` = unlimited). Prices and limits are rows, not constants, so an operator can change them without a deploy.
+- **Subscription** — who is on which plan and until when: `planCode`, `status`, `currentPeriodEnd`, `cancelAtPeriodEnd`, `provider`. One row per listener, updated in place; a canceled row is kept, never deleted.
+- **BillingTransaction** — the ledger. **No relation to `User`**: the owner is a string snapshot so a receipt survives deletion, refund or rename.
+- **AiUsage** — the per-month credit meter (`periodKey`, `creditsUsed`, `bonusCredits`), unique per user per month. Shipped before the AI features so an allowance has a history.
+- **AdminAuditLog** — append-only operator activity, with `actorId`/`targetId` as strings for the same reason as the ledger.
+- **PlatformSetting** — a singleton: `signupsEnabled`, `aiEnabled`, `maintenanceMode`, `announcement`. Not a bag of limits — a limit belongs to a plan because it is sold.
+
+`User` also carries `role` (`user` | `support` | `admin`) and `status` (`active` | `suspended` | `deleted`). Both are normalised on read, because accounts predate them.
 
 **Rules:**
 - **All positions and durations are integer seconds.** Never store audio offsets as floats — audiobooks can exceed 20 hours and floating-point drift is unacceptable.
@@ -100,6 +108,21 @@ One Lesan model per file in `back/models/` (e.g. `track.ts`, `playbackSession.ts
 
 ---
 
+## Monetization
+
+History is the product, and the paywall is the cap on it.
+
+- **Free** — 500 synced history entries, 10 playlists, cross-device sync **on**, 0 AI credits.
+- **Pro** — **$3.99/month**, unlimited history and playlists, 100 AI credits/month.
+- The cap is what is sold, **not sync itself**: switching sync off for free listeners would break the promise that history survives a reinstall.
+- **Over the cap, the overflow is skipped, never refused and never deleted.** The device keeps its own rows, the batch still succeeds, and the response carries `historyQuota` so the app can show an upgrade prompt. A rejected sync would be retried forever and would also lose the annotations and runs travelling with it; deleting the oldest server rows to make room would take away history the listener already had.
+- **AI features will be sold the same way** — the credit meter, the per-plan allowance and the `aiEnabled` switch already exist; only the acts that spend credits are missing.
+- Everything is enforced **server-side**. A client-side cap is a suggestion.
+
+See [`back/AGENTS.md` → Entitlements and billing](./back/AGENTS.md#entitlements-and-billing) for the resolution rules and the money lifecycle.
+
+---
+
 ## Lesan Conventions
 
 - Entry point `back/mod.ts` creates `coreApp = lesan()`.
@@ -109,7 +132,8 @@ One Lesan model per file in `back/models/` (e.g. `track.ts`, `playbackSession.ts
 - One act folder per domain under `back/src/` (`auth/`, `tracks/`, `sessions/`, `annotations/`, `playlists/`, `sync/`).
 - Enable `typeGeneration: true` in `runServer()` so `back/declarations/` stays in sync; the mobile client consumes only these generated types.
 - The generated `declarations/selectInp.ts` exports the standard `lesanApi` fetch client plus `ReqType`. The mobile app wraps `lesanApi` (never re-implements transport or adds a second HTTP/query library) and imports its types.
-- Inject `userId` into request context for every authenticated act.
+- Inject `userId` into request context for every authenticated act: `preAct: [setTokens, setUser]`. Every listener **write** also appends `requireActive` (a suspended account is read-only); admin acts use `requireSupport` for reads and `requireAdmin` for mutations, both from `back/utils/roles.ts`.
+- Acts route on `(schema, act)`, so **schema ≠ folder**: admin acts are registered under the real model they operate on (`user`, `plan`, `subscription`, …), never a synthetic `admin` schema.
 - Enable the playground in development.
 
 ---
@@ -172,10 +196,13 @@ Never lose data on app kill; never surface sync errors as blocking UI errors.
 ### Roadmap (build in order)
 
 1. **Bootstrap** — monorepo, Deno + Lesan hello model + playground, Expo app, Docker Compose, generated client types.
-2. **Backend core** — User + auth, Track, PlaybackSession, Annotation, Playlist + CRUD acts.
+2. **Backend core** — User + auth, Track, PlaybackSession, Annotation, Playlist + CRUD acts. ✅
 3. **Mobile skeleton** — auth flow, local library scanner (hash + metadata), player that records sessions locally, session sync.
 4. **Annotations & timeline** — create/edit/delete annotations, markers on the progress bar, jump-to-annotation.
-5. **Polish** — playlists, stats/history dashboard, offline queue robustness, lock-screen/Android Auto, export.
+5. **Monetization + admin panel (backend)** — roles and suspension, plans and entitlements, the 500-entry history cap enforced at sync time, manual + Stripe checkout, the ledger, the AI credit meter, and 22 admin acts covering users, analytics, plans, subscriptions, transactions, the audit trail and the platform switches. ✅ *Backend only — the panel UI is not built yet.*
+6. **Admin panel (front)** — the operator UI over those acts, plus the paywall/upgrade flow in the listener clients.
+7. **AI features** — the acts that spend the credits the meter already tracks.
+8. **Polish** — playlists, stats/history dashboard, offline queue robustness, lock-screen/Android Auto, export.
 
 ---
 
@@ -186,8 +213,10 @@ Never lose data on app kill; never surface sync errors as blocking UI errors.
 cd back
 deno task start        # start Lesan server (default port 1405)
 deno task dev          # hot reload
-deno task seed         # seed database
-deno task test         # run hurl e2e tests
+deno task seed         # seed database (plans, platform row, demo user, first admin)
+deno task test         # listener-facing hurl e2e suite
+deno task test:admin   # admin panel / billing / entitlements hurl suite
+deno task test:all     # both suites
 
 # Mobile
 cd mobile
