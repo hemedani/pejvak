@@ -25,6 +25,7 @@ import {
 } from "./sessionTracking";
 import { playerStorage } from "./storage";
 import { pendingTrackFor } from "./from-track";
+import { isNavigationInFlight } from "./navigation";
 import { sameContext, runFiguresFromSessions } from "./playbackContext";
 import { queueSync, startSyncTriggers } from "./sync";
 import {
@@ -666,7 +667,16 @@ function handleEngineEvent(event: EngineEvent): void {
       break;
     }
     case "timeupdate": {
-      state.setPosition(event.positionSec);
+      /*
+        The only high-frequency write to React state, and the one that collides
+        with an in-flight RSC read (`navigation.ts` explains the upstream bug).
+        Session maths and the media-session position still run — they do not
+        render — and the next tick after the URL commits brings the bar up to
+        date. Deferring this write is cheaper than pausing the audio.
+      */
+      if (!isNavigationInFlight()) {
+        state.setPosition(event.positionSec);
+      }
       onProgress(event.positionSec, event.atMs);
       updateMediaPosition();
       break;

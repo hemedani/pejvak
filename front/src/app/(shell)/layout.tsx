@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getMe } from "@/app/actions/auth/get-me";
 import { Sidebar } from "@/components/layout/sidebar";
 import { DefaultSpeed } from "@/components/player/default-speed";
+import { NavigationSignal } from "@/components/player/navigation-signal";
 import { OnlineStreamBridge } from "@/components/player/online-stream-bridge";
 import { PlayerBar } from "@/components/player/player-bar";
 import { Topbar } from "@/components/layout/topbar";
@@ -55,6 +56,12 @@ export default async function ShellLayout({ children }: { children: React.ReactN
         second one on the critical path. Renders nothing.
       */}
       <DefaultSpeed />
+      {/*
+        Lets the player stop writing `positionSec` to React while a client-side
+        navigation is still reading its RSC stream. Renders nothing; the reason
+        is upstream (`vercel/next.js#92362`) and recorded in the module.
+      */}
+      <NavigationSignal />
 
       <Sidebar />
 
