@@ -139,7 +139,7 @@ export function SessionDetailButton({
                 }
               >
                 <dt className="type-caption shrink-0 text-text-secondary">{fact.label}</dt>
-                <dd className="type-label min-w-0 truncate text-end text-text">{fact.value}</dd>
+                <dd dir="auto" className="type-label min-w-0 truncate text-end text-text">{fact.value}</dd>
               </div>
             ))}
           </dl>

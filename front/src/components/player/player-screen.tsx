@@ -180,15 +180,16 @@ export function PlayerScreen({
       </div>
 
       <section className="flex flex-col gap-[var(--space-xs)] text-center">
-        <p className="type-overline text-text-tertiary">{overline}</p>
-        <h1 className="type-title text-text [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
+        <p className="type-kicker text-text-tertiary">{overline}</p>
+        <h1 dir="auto" className="type-title text-text [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
           {current.title}
         </h1>
-        <p className="type-caption text-text-secondary">
+        <p dir="auto" className="type-caption text-text-secondary">
           {current.artist ?? current.albumTitle ?? "Unknown artist"}
         </p>
         {context ? (
           <Link
+            dir="auto"
             href={context.type === "playlist" ? `/playlists/${context.key}` : "/browse"}
             className="type-caption mx-auto mt-[var(--space-xs)] inline-flex items-center gap-[var(--space-xs)] rounded-[var(--radius-pill)] border border-outline-variant px-[var(--space-md)] py-[var(--space-xxs)] text-text-secondary hover:bg-surface-sunken hover:text-text"
           >

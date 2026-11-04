@@ -150,6 +150,7 @@ function TitleCell({
         <Link
           href={`/library/${track.id}`}
           title={track.title}
+          dir="auto"
           className="type-label block truncate text-text hover:underline"
         >
           <Highlighted text={track.title} ranges={matches?.get(track.id)} />
@@ -157,13 +158,13 @@ function TitleCell({
 
         <div className="mt-[var(--space-xs)] flex flex-wrap items-center gap-[var(--space-xs)]">
           {subtitle ? (
-            <span className="type-caption truncate text-text-tertiary">{subtitle}</span>
+            <span dir="auto" className="type-caption truncate text-text-tertiary">{subtitle}</span>
           ) : null}
 
           <OriginBadge origin={track.origin} />
 
           {track.collectionTitle ? (
-            <span className="type-caption truncate text-text-tertiary">
+            <span dir="auto" className="type-caption truncate text-text-tertiary">
               · {track.collectionTitle}
             </span>
           ) : null}

@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -35,5 +36,18 @@ describe("TrackTable", () => {
     );
     expect(screen.getAllByText(formatRelativeTime(createdAt, NOW)).length).toBeGreaterThan(0);
     expect(screen.queryByText(/7 plays/)).toBeNull();
+  });
+
+  it("marks catalogue text as auto-direction so a Persian title renders RTL", () => {
+    const persian = { ...track, title: "تاریخ شیعه" } as TrackSummary;
+    render(
+      <TrackTable
+        tracks={[persian]}
+        sort={{ field: "createdAt", order: "desc" }}
+        buildSortHref={() => "#"}
+        now={NOW}
+      />,
+    );
+    expect(screen.getAllByText("تاریخ شیعه")[0]).toHaveAttribute("dir", "auto");
   });
 });
