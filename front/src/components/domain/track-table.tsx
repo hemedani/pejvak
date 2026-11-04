@@ -18,9 +18,9 @@ import { Icon } from "@/components/ui/icon";
 import { OriginBadge } from "@/components/domain/origin-badge";
 import type { TrackSummary } from "@/lib/domain/track";
 import { cn } from "@/lib/cn";
-import { formatCount, formatSpan } from "@/lib/format";
+import { formatSpan } from "@/lib/format";
 import { highlight } from "@/lib/search";
-import { formatClock, formatRelativeTime } from "@/lib/time";
+import { formatDateTime, formatRelativeTime } from "@/lib/time";
 import type { TrackSortField } from "@/lib/domain/track-query";
 
 export type SortState = { field: TrackSortField; order: "asc" | "desc" };
@@ -58,7 +58,7 @@ export function TrackTable({ tracks, sort, buildSortHref, now, matches }: TrackR
                 buildHref={buildSortHref}
                 className="hidden lg:table-cell"
               />
-              <th scope="col" className="type-caption px-[var(--space-md)] py-[var(--space-sm)] text-center font-semibold text-text-tertiary">
+              <th scope="col" className="type-caption px-[var(--space-md)] py-[var(--space-sm)] text-end font-semibold text-text-tertiary">
                 Listening time
               </th>
               <SortHeader
@@ -72,10 +72,11 @@ export function TrackTable({ tracks, sort, buildSortHref, now, matches }: TrackR
           </thead>
 
           <tbody>
-            {tracks.map((track) => (
+            {tracks.map((track, index) => (
               <tr
                 key={track.id}
-                className="border-b border-outline-variant last:border-b-0 hover:bg-surface-sunken/60"
+                className="reveal-row border-b border-outline-variant last:border-b-0 hover:bg-surface-sunken/60"
+                style={{ animationDelay: `${Math.min(index, 10) * 45}ms` }}
               >
                 <td className="py-[var(--space-md)] pe-[var(--space-md)] ps-[var(--space-md)]">
                   <TitleCell track={track} matches={matches} />
@@ -85,7 +86,7 @@ export function TrackTable({ tracks, sort, buildSortHref, now, matches }: TrackR
                   {track.lastPlayedAt === null ? "—" : formatRelativeTime(track.lastPlayedAt, now)}
                 </td>
 
-                <td className="type-numeric py-[var(--space-md)] px-[var(--space-md)] text-center text-text-secondary">
+                <td className="type-numeric py-[var(--space-md)] px-[var(--space-md)] text-end text-text-secondary">
                   {track.totalListenTimeSec === 0 ? (
                     <span className="text-text-tertiary">—</span>
                   ) : (
@@ -93,10 +94,11 @@ export function TrackTable({ tracks, sort, buildSortHref, now, matches }: TrackR
                   )}
                 </td>
 
-                <td className="type-caption hidden py-[var(--space-md)] px-[var(--space-md)] text-text-tertiary xl:table-cell">
-                  <span className="type-numeric">
-                    {formatCount(track.totalPlayCount, "play")} · {formatClock(track.durationSec)}
-                  </span>
+                <td
+                  className="type-caption hidden py-[var(--space-md)] px-[var(--space-md)] text-text-tertiary xl:table-cell"
+                  title={track.createdAt === null ? undefined : formatDateTime(track.createdAt)}
+                >
+                  {track.createdAt === null ? "—" : formatRelativeTime(track.createdAt, now)}
                 </td>
               </tr>
             ))}
@@ -106,10 +108,11 @@ export function TrackTable({ tracks, sort, buildSortHref, now, matches }: TrackR
 
       {/* Cards: below md. Same data, stacked. */}
       <ul className="flex flex-col gap-[var(--space-sm)] md:hidden">
-        {tracks.map((track) => (
+        {tracks.map((track, index) => (
           <li
             key={track.id}
-            className="rounded-[var(--radius-lg)] border border-outline-variant bg-surface p-[var(--space-md)]"
+            className="reveal-row rounded-[var(--radius-lg)] border border-outline-variant bg-surface p-[var(--space-md)]"
+            style={{ animationDelay: `${Math.min(index, 10) * 45}ms` }}
           >
             <TitleCell track={track} matches={matches} />
             <div className="mt-[var(--space-sm)] flex items-center justify-between gap-[var(--space-sm)]">
@@ -152,7 +155,7 @@ function TitleCell({
           <Highlighted text={track.title} ranges={matches?.get(track.id)} />
         </Link>
 
-        <div className="mt-[2px] flex flex-wrap items-center gap-[var(--space-xs)]">
+        <div className="mt-[var(--space-xs)] flex flex-wrap items-center gap-[var(--space-xs)]">
           {subtitle ? (
             <span className="type-caption truncate text-text-tertiary">{subtitle}</span>
           ) : null}
@@ -169,7 +172,7 @@ function TitleCell({
         {/* §9.6: a local track is not an error and not a disabled button — it is a
             fact about where the audio is. Stated, not apologised for. */}
         {track.origin === "local" ? (
-          <p className="type-caption mt-[2px] text-text-tertiary">Audio is on your device</p>
+          <p className="type-caption mt-[var(--space-xs)] text-text-tertiary">Audio is on your device</p>
         ) : null}
       </div>
     </div>
@@ -200,7 +203,7 @@ function Highlighted({
         segment.matched ? (
           <mark
             key={index}
-            className="rounded-[2px] bg-accent-soft px-[1px] text-text"
+            className="rounded-[var(--radius-2xs)] bg-accent-soft px-[var(--space-xxs)] text-text"
           >
             {segment.text}
           </mark>
@@ -271,7 +274,7 @@ function SortHeader({
         )}
       >
         {label}
-        <span aria-hidden className={cn("text-[10px]", !active && "opacity-0")}>
+        <span aria-hidden className={cn("type-overline", !active && "opacity-0")}>
           {sort.order === "asc" ? "▲" : "▼"}
         </span>
       </Link>

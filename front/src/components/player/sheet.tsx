@@ -36,7 +36,7 @@ export function Sheet({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-[var(--scrim)] data-[state=open]:animate-[fade-in_160ms_ease-out]" />
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-[var(--scrim)] data-[state=open]:animate-[fade-in_var(--motion-fast)_ease-out] data-[state=closed]:animate-[fade-out_var(--motion-fast)_ease-in]" />
         <Dialog.Content
           dir="ltr"
           className={cn(
@@ -44,7 +44,7 @@ export function Sheet({
             "rounded-t-[var(--radius-xl)] border border-[var(--glass-border)]",
             "bg-[var(--glass)] backdrop-blur-xl",
             "shadow-[var(--elevation-float)]",
-            "data-[state=open]:animate-[sheet-up_200ms_cubic-bezier(0.22,1,0.36,1)]",
+            "data-[state=open]:animate-[sheet-up_var(--motion-base)_var(--ease-out)] data-[state=closed]:animate-[sheet-down_var(--motion-fast)_var(--ease-in)]",
             "sm:inset-x-auto sm:bottom-1/2 sm:start-1/2 sm:w-[min(30rem,calc(100vw-2rem))]",
             "sm:translate-x-1/2 sm:translate-y-1/2 sm:rounded-[var(--radius-xl)]",
             className,
@@ -52,7 +52,9 @@ export function Sheet({
         >
           <header className="flex items-start justify-between gap-[var(--space-md)] px-[var(--space-lg)] pb-[var(--space-md)] pt-[var(--space-lg)]">
             <div className="min-w-0">
-              <Dialog.Title className="type-heading text-text">{title}</Dialog.Title>
+              <Dialog.Title className="type-heading line-clamp-2 text-text" title={title}>
+                {title}
+              </Dialog.Title>
               {description ? (
                 <Dialog.Description className="type-caption mt-[var(--space-xs)] text-text-secondary">
                   {description}

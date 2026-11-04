@@ -26,6 +26,8 @@ export type TrackSummary = {
   totalPlayCount: number;
   totalListenTimeSec: number;
   lastPlayedAt: number | null;
+  /** When the track was added to the library. */
+  createdAt: number | null;
   origin: TrackOrigin;
   sourceId: string | null;
   externalId: string | null;
@@ -46,6 +48,7 @@ export const TRACK_SUMMARY_GET = {
   totalPlayCount: 1,
   totalListenTimeSec: 1,
   lastPlayedAt: 1,
+  createdAt: 1,
   origin: 1,
   sourceId: 1,
   externalId: 1,
@@ -85,6 +88,7 @@ export function parseTrackSummary(raw: unknown): TrackSummary | null {
     totalPlayCount: asInt(record.totalPlayCount) ?? 0,
     totalListenTimeSec: asInt(record.totalListenTimeSec) ?? 0,
     lastPlayedAt: asTimestamp(record.lastPlayedAt),
+    createdAt: asTimestamp(record.createdAt),
     origin: asString(record.origin) ?? "local",
     sourceId: asString(record.sourceId),
     externalId: asString(record.externalId),
@@ -105,7 +109,7 @@ export function parseTrackList(raw: unknown): TrackSummary[] {
  *
  * Everything in `TrackSummary` plus what only a detail screen asks for: the
  * file the phone uploaded (`fileName`, `fileSizeBytes`, `mimeType`), when it was
- * added, and its notes.
+ * last updated, and its notes.
  *
  * ## The notes are an embedded relation, and that is a deliberate bet
  *
@@ -128,7 +132,6 @@ export type TrackDetail = TrackSummary & {
   mimeType: string | null;
   /** When the collection's audio was brought onto a device. Absent for local files. */
   downloadedAt: number | null;
-  createdAt: number | null;
   updatedAt: number | null;
   /** Every note on this track, in the order the relation returns them. */
   annotations: Annotation[];
@@ -147,7 +150,6 @@ export const TRACK_DETAIL_GET = {
   fileSizeBytes: 1,
   mimeType: 1,
   downloadedAt: 1,
-  createdAt: 1,
   updatedAt: 1,
   annotations: ANNOTATION_GET,
 } as const;

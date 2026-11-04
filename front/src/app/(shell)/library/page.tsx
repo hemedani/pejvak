@@ -241,7 +241,7 @@ function LibraryHeader({ query }: { query: string }) {
       description="Tracks synced from the mobile app. Local files cannot be played on the web — only their details are shown."
       actions={
         <div className="w-full min-w-[260px] sm:w-[340px]">
-          <Suspense fallback={<div className="h-11" />}>
+          <Suspense fallback={<div className="h-[var(--control-md)]" />}>
             <LibrarySearch initialQuery={query} />
           </Suspense>
         </div>

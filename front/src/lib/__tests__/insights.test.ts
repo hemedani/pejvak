@@ -41,6 +41,7 @@ function track(contentHash: string, title: string): TrackSummary {
     totalPlayCount: 0,
     totalListenTimeSec: 0,
     lastPlayedAt: null,
+    createdAt: null,
     origin: "online",
     sourceId: null,
     externalId: null,

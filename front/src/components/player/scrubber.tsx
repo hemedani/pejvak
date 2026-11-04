@@ -106,7 +106,7 @@ export function Scrubber({
 
         <Slider.Root
           dir="ltr"
-          className="relative flex h-9 w-full touch-none select-none items-center"
+          className="relative flex h-9 w-full touch-none select-none items-center coarse:h-[var(--tap-min)]"
           min={0}
           max={max}
           step={1}

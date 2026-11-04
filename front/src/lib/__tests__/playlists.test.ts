@@ -47,6 +47,7 @@ function track(overrides: Partial<TrackSummary> = {}): TrackSummary {
     totalPlayCount: 0,
     totalListenTimeSec: 0,
     lastPlayedAt: null,
+    createdAt: null,
     origin: "online",
     sourceId: "manahej",
     externalId: "7101",

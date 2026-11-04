@@ -36,12 +36,11 @@ import { OriginBadge } from "@/components/domain/origin-badge";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import { isPlayableOnWeb } from "@/lib/domain/track";
-import { formatSpeed, formatSpan } from "@/lib/format";
+import { formatSpan } from "@/lib/format";
 import {
   describeStretchTracks,
   describeStretchTitle,
   describeStretchVerdict,
-  formatStretchPositionRange,
   formatStretchTimeRange,
   stretchResumeTarget,
   stretchTitleParts,
@@ -60,7 +59,6 @@ export function HistoryRow({
   const title = stretchTitleParts(stretch);
   const verdict = describeStretchVerdict(stretch);
   const tracks = describeStretchTracks(stretch);
-  const positionRange = formatStretchPositionRange(stretch);
   const first = stretch.members[0] ?? null;
   const last = stretch.members[stretch.members.length - 1] ?? null;
 
@@ -96,6 +94,7 @@ export function HistoryRow({
               the verdict off the screen it belongs on.
             */}
             <p
+              dir="auto"
               className="type-body-strong line-clamp-2 min-w-0 text-text"
               title={describeStretchTitle(stretch)}
             >
@@ -135,7 +134,7 @@ export function HistoryRow({
           </div>
 
           <p className="type-caption mt-[var(--space-xxs)] text-text-tertiary">
-            <span className="type-numeric">{formatStretchTimeRange(stretch)}</span>
+            <span className="type-numeric text-text-secondary">{formatStretchTimeRange(stretch)}</span>
             {tracks ? <span className="type-numeric"> · {tracks}</span> : null}
             {contextTitle ? (
               <>
@@ -146,22 +145,10 @@ export function HistoryRow({
               <PlaylistContext stretch={stretch} />
             )}
           </p>
-
-          {positionRange || stretch.playbackSpeed !== 1 ? (
-            <p className="type-caption mt-[var(--space-xxs)] text-text-tertiary">
-              {positionRange ? <span className="type-numeric">{positionRange}</span> : null}
-              {stretch.playbackSpeed !== 1 ? (
-                <span className="type-numeric">
-                  {positionRange ? " · " : null}
-                  Speed {formatSpeed(stretch.playbackSpeed)}
-                </span>
-              ) : null}
-            </p>
-          ) : null}
         </div>
 
         <div className="ms-auto flex shrink-0 items-center gap-[var(--space-sm)]">
-          <span className="type-numeric me-[var(--space-xs)] text-text-secondary">
+          <span className="type-numeric me-[var(--space-xs)] text-text-tertiary">
             {formatSpan(stretch.listenedSec)}
           </span>
 
@@ -216,11 +203,12 @@ function ContextLink({ stretch, title }: { stretch: ListeningStretch; title: str
       : null;
 
   if (!parsed) {
-    return <span>{title}</span>;
+    return <span dir="auto">{title}</span>;
   }
 
   return (
     <Link
+      dir="auto"
       href={`/browse/collection/${encodeURIComponent(parsed.sourceId)}/${encodeURIComponent(parsed.externalId)}`}
       className="rounded-[var(--radius-xs)] hover:text-text hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
     >
