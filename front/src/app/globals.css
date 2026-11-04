@@ -108,13 +108,13 @@
     color: var(--text);
   }
 
-  /* The shell's `<main>` reserves `76px` at the bottom for the floating player
-     bar — but only when the bar is actually visible. `PlayerBar` sets this
-     attribute on `<body>` at runtime; the default (`hidden`) keeps the player
-     route and the no-track state from carrying dead space where the bar
+  /* The shell's `<main>` reserves the player bar's height at the bottom for the
+     floating bar — but only when the bar is actually visible. `PlayerBar` sets
+     this attribute on `<body>` at runtime; the default (`hidden`) keeps the
+     player route and the no-track state from carrying dead space where the bar
      would have been. */
   body[data-player-bar="visible"] .shell-main {
-    padding-bottom: calc(var(--space-giant) + 76px);
+    padding-bottom: calc(var(--space-giant) + var(--layout-player-bar));
   }
 
   @media (prefers-reduced-motion: reduce) {

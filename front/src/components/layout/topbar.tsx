@@ -20,7 +20,7 @@ import type { CurrentUser } from "@/lib/domain/user";
 export function Topbar({ user }: { user: CurrentUser }) {
   return (
     <header className="sticky top-0 z-30 bg-canvas/85 backdrop-blur-[22px] lg:bg-transparent lg:backdrop-blur-none">
-      <div className="flex h-16 items-center justify-between gap-[var(--space-md)] px-[var(--space-lg)] lg:px-[var(--space-xxl)]">
+      <div className="flex h-[var(--layout-topbar)] items-center justify-between gap-[var(--space-md)] px-[var(--space-lg)] lg:px-[var(--space-xxl)]">
         <Link href="/" className="flex items-center gap-[var(--space-sm)] text-text lg:hidden">
           <span className="type-heading">Pejvak</span>
         </Link>

@@ -55,9 +55,9 @@ export function PlayerBar() {
   const barVisible = current !== null && !onPlayerRoute;
 
   // Toggle a data attribute on `<body>` so the shell's `<main>` can adjust its
-  // bottom padding. The `76px` reserved for the bar is only needed when the bar
-  // is actually shown — without this, the player route has a strip of dead
-  // space where the bar would have been.
+  // bottom padding. The `--layout-player-bar` height reserved for the bar is
+  // only needed when the bar is actually shown — without this, the player route
+  // has a strip of dead space where the bar would have been.
   useEffect(() => {
     document.body.dataset.playerBar = barVisible ? "visible" : "hidden";
     return () => {
@@ -71,10 +71,10 @@ export function PlayerBar() {
 
   return (
     <>
-      <div className="fixed inset-x-0 bottom-0 z-30 lg:ms-[248px]" data-player-surface>
+      <div className="fixed inset-x-0 bottom-0 z-30 lg:ms-[var(--layout-sidebar)]" data-player-surface>
         <div className="border-t border-[var(--glass-border)] bg-[var(--glass)] shadow-[var(--elevation-float)] backdrop-blur-xl">
           <BarProgress />
-          <div className="mx-auto flex min-h-[76px] w-full max-w-[1180px] items-center gap-[var(--space-md)] px-[var(--space-lg)] py-[var(--space-sm)] lg:px-[var(--space-xxl)]">
+          <div className="mx-auto flex min-h-[var(--layout-player-bar)] w-full max-w-[var(--layout-content)] items-center gap-[var(--space-md)] px-[var(--space-lg)] py-[var(--space-sm)] lg:px-[var(--space-xxl)]">
             <Link
               href="/player"
               className="flex min-w-0 flex-1 items-center gap-[var(--space-md)] rounded-[var(--radius-sm)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] sm:flex-none sm:w-64"

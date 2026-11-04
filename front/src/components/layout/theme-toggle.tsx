@@ -60,20 +60,41 @@ function getServerSnapshot(): boolean {
   return false;
 }
 
+/**
+ * Flip the class and persist the choice.
+ *
+ * The store is the DOM, so the change is already visible to CSS. Notifying is
+ * what makes *this* button re-render — and any other subscriber, which is why
+ * the notification goes through the set rather than a local setState.
+ */
+function applyTheme(next: boolean) {
+  document.documentElement.classList.toggle("dark", next);
+  document.cookie = `${COOKIE}=${next ? "dark" : "light"}; path=/; max-age=${ONE_YEAR_SEC}; samesite=lax`;
+
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
 export function ThemeToggle() {
   const dark = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   function toggle() {
     const next = !dark;
-    document.documentElement.classList.toggle("dark", next);
-    document.cookie = `${COOKIE}=${next ? "dark" : "light"}; path=/; max-age=${ONE_YEAR_SEC}; samesite=lax`;
 
-    // The store is the DOM, so the change is already visible to CSS. Notifying
-    // is what makes *this* button re-render — and any other subscriber, which
-    // is why the notification goes through the set rather than a local setState.
-    for (const listener of listeners) {
-      listener();
+    // The cross-fade is a snapshot of the old paint dissolving into the new
+    // one, and it is opt-out: someone who asked for reduced motion gets the
+    // instant swap they asked for. Browsers without the API (and jsdom) take
+    // the same fallback path.
+    if (typeof document.startViewTransition === "function") {
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (!reduced) {
+        document.startViewTransition(() => applyTheme(next));
+        return;
+      }
     }
+
+    applyTheme(next);
   }
 
   return (

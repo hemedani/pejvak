@@ -40,7 +40,7 @@ export function AccountMenu({ user }: { user: CurrentUser }) {
         <DropdownMenu.Content
           align="start"
           sideOffset={8}
-          className="z-50 min-w-[14rem] rounded-[var(--radius-lg)] border border-[var(--glass-border)] bg-[var(--glass-strong)] p-[var(--space-xs)] shadow-[var(--elevation-panel)] backdrop-blur-[38px]"
+          className="z-50 min-w-[16rem] rounded-[var(--radius-lg)] border border-[var(--glass-border)] bg-[var(--glass-strong)] p-[var(--space-xs)] shadow-[var(--elevation-panel)] backdrop-blur-[38px] data-[state=open]:animate-[fade-in_var(--motion-fast)_var(--ease-out)]"
         >
           <div className="px-[var(--space-md)] py-[var(--space-sm)]">
             <p className="type-label truncate text-text">{name}</p>

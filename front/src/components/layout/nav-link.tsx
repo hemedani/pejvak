@@ -28,7 +28,7 @@ export function NavLink({ item }: { item: NavItem }) {
       aria-current={active ? "page" : undefined}
       className={cn(
         "flex items-center gap-[var(--space-md)] rounded-[var(--radius-md)] px-[var(--space-md)]",
-        "h-11 type-label transition-colors",
+        "h-[var(--control-md)] type-label transition-colors duration-[var(--motion-fast)]",
         active
           ? "bg-accent-soft text-text"
           : "text-text-secondary hover:bg-surface-sunken hover:text-text",

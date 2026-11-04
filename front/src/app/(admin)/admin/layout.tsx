@@ -45,7 +45,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="flex min-h-dvh">
-      <aside className="sticky top-0 hidden h-dvh w-[248px] shrink-0 flex-col gap-[var(--space-xl)] border-e border-outline-variant bg-canvas-elevated px-[var(--space-md)] py-[var(--space-xl)] lg:flex">
+      <aside className="sticky top-0 hidden h-dvh w-[var(--layout-sidebar)] shrink-0 flex-col gap-[var(--space-xl)] border-e border-outline-variant bg-canvas-elevated px-[var(--space-md)] py-[var(--space-xl)] lg:flex">
         <Link href="/admin" className="flex items-center gap-[var(--space-sm)] px-[var(--space-sm)] text-text">
           <BrandMark />
           <span className="type-heading">Pejvak</span>
@@ -85,7 +85,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1180px] flex-1 px-[var(--space-lg)] pb-[var(--space-giant)] pt-[var(--space-md)] lg:px-[var(--space-xxl)]">
+        <main className="mx-auto w-full max-w-[var(--layout-content)] flex-1 px-[var(--space-lg)] pb-[var(--space-giant)] pt-[var(--space-md)] lg:px-[var(--space-xxl)]">
           {children}
         </main>
       </div>

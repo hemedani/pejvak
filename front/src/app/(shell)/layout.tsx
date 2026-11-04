@@ -42,7 +42,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
     }
 
     return (
-      <main className="mx-auto flex min-h-dvh max-w-[52ch] items-center px-[var(--space-lg)]">
+      <main className="mx-auto flex min-h-dvh max-w-[var(--measure-narrow)] items-center px-[var(--space-lg)]">
         <ErrorState failure={result.error} className="w-full" />
       </main>
     );
@@ -68,7 +68,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar user={result.body} />
-        <main className="shell-main mx-auto w-full max-w-[1180px] flex-1 px-[var(--space-lg)] pb-[var(--space-giant)] pt-[var(--space-md)] lg:px-[var(--space-xxl)]">
+        <main className="shell-main mx-auto w-full max-w-[var(--layout-content)] flex-1 px-[var(--space-lg)] pb-[var(--space-giant)] pt-[var(--space-md)] lg:px-[var(--space-xxl)]">
           <PageTransition>{children}</PageTransition>
         </main>
       </div>
