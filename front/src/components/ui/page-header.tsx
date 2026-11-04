@@ -29,7 +29,7 @@ export function PageHeader({
         ) : null}
         <h1 className="type-title text-text">{title}</h1>
         {description ? (
-          <p className="type-caption mt-[var(--space-xs)] max-w-[60ch] text-text-tertiary">
+          <p className="type-body mt-[var(--space-sm)] max-w-[var(--measure-prose)] text-text-secondary">
             {description}
           </p>
         ) : null}

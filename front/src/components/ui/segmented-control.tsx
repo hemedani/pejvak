@@ -70,7 +70,7 @@ export function SegmentedControl<T extends string | number>({
 
       <div
         className={cn(
-          "flex w-full gap-[2px] rounded-[var(--radius-md)] p-[3px]",
+          "flex w-full gap-[var(--space-xxs)] rounded-[var(--radius-md)] p-[var(--space-xxs)]",
           "border border-outline-variant bg-surface-sunken",
         )}
       >
@@ -81,9 +81,9 @@ export function SegmentedControl<T extends string | number>({
             <label
               key={String(option.value)}
               className={cn(
-                "relative flex h-9 min-w-0 flex-1 cursor-pointer select-none items-center justify-center",
-                "rounded-[var(--radius-sm)] px-[var(--space-sm)]",
-                "type-label whitespace-nowrap transition-colors",
+                "relative flex h-[var(--control-sm)] min-w-0 flex-1 cursor-pointer select-none items-center justify-center",
+                "rounded-[var(--radius-sm)] px-[var(--space-sm)] coarse:h-[var(--control-md)]",
+                "type-label whitespace-nowrap transition-colors duration-[var(--motion-fast)]",
                 // `has-[:focus-visible]`, not `focus-within`: clicking a radio
                 // focuses it too, and a ring that stays on every mouse click
                 // reads as a stuck focus rather than as a keyboard affordance.

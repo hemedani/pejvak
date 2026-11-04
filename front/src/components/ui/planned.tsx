@@ -43,7 +43,7 @@ export function PlannedSurface({
             <ul className="mt-[var(--space-md)] flex flex-col gap-[var(--space-xs)]">
               {items.map((item) => (
                 <li key={item} className="type-caption flex items-start gap-[var(--space-sm)] text-text-secondary">
-                  <span aria-hidden className="mt-[7px] size-1.5 shrink-0 rounded-full bg-accent" />
+                  <span aria-hidden className="mt-[var(--space-sm)] size-1.5 shrink-0 rounded-full bg-accent" />
                   {item}
                 </li>
               ))}

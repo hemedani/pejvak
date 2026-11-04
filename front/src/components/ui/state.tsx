@@ -21,7 +21,7 @@ export function Skeleton({ className }: { className?: string }) {
     <div
       aria-hidden
       className={cn(
-        "animate-pulse rounded-[var(--radius-sm)] bg-surface-sunken",
+        "skeleton rounded-[var(--radius-sm)] bg-surface-sunken",
         className,
       )}
     />
@@ -33,7 +33,7 @@ export function TableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <div className="flex flex-col gap-[var(--space-sm)]" role="status" aria-label="Loading">
       {Array.from({ length: rows }, (_, index) => (
-        <Skeleton key={index} className="h-14 w-full rounded-[var(--radius-md)]" />
+        <Skeleton key={index} className="h-[var(--control-lg)] w-full rounded-[var(--radius-md)]" />
       ))}
     </div>
   );
@@ -53,7 +53,7 @@ export function EmptyState({ title, description, icon = "empty", action }: Empty
       <span className="grid size-14 place-items-center rounded-[var(--radius-lg)] bg-surface-sunken text-text-tertiary">
         <Icon name={icon} size="xl" />
       </span>
-      <div className="max-w-[42ch]">
+      <div className="max-w-[var(--measure-narrow)]">
         <p className="type-body-strong text-text">{title}</p>
         <p className="type-caption text-text-tertiary mt-[var(--space-xs)]">{description}</p>
       </div>

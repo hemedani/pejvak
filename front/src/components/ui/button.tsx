@@ -28,7 +28,7 @@ const button = cva(
      * reason a tap there feels answered. 0.97 rather than 0.9 — a large press
      * scale on a 36px control reads as a wobble, not as a press.
      */
-    "transition duration-150 ease-out active:scale-[0.97] motion-reduce:transform-none",
+    "transition-[background-color,color,transform] duration-[var(--motion-fast)] ease-[var(--ease-out)] active:scale-[0.97] motion-reduce:transform-none",
     "disabled:pointer-events-none disabled:opacity-50",
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
   ],
@@ -43,13 +43,13 @@ const button = cva(
       },
       size: {
         /** A dense row's control. The hit area is restored by `hit-area`. */
-        sm: "h-9 px-[var(--space-md)] type-label rounded-[var(--radius-sm)]",
-        md: "h-11 px-[var(--space-lg)] type-label rounded-[var(--radius-md)]",
-        lg: "h-[52px] px-[var(--space-xl)] type-body rounded-[var(--radius-md)]",
+        sm: "h-[var(--control-sm)] px-[var(--space-md)] type-label rounded-[var(--radius-sm)] coarse:h-[var(--control-md)]",
+        md: "h-[var(--control-md)] px-[var(--space-lg)] type-label rounded-[var(--radius-md)]",
+        lg: "h-[var(--control-lg)] px-[var(--space-xl)] type-body rounded-[var(--radius-md)]",
         /** Square, for an icon-only transport control. */
-        icon: "size-11 rounded-[var(--radius-md)]",
+        icon: "size-[var(--control-md)] rounded-[var(--radius-md)]",
         /** Square and dense, for a control inside a row that is already a list. */
-        iconSm: "size-9 rounded-[var(--radius-sm)]",
+        iconSm: "size-[var(--control-sm)] rounded-[var(--radius-sm)] coarse:size-[var(--control-md)]",
       },
     },
     defaultVariants: { variant: "secondary", size: "md" },

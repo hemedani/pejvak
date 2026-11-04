@@ -1,13 +1,14 @@
 /**
- * The content surface.
+ * The content surface of the ink-and-paper identity.
  *
  * Opaque, always (plan §7.1). Glass is reserved for what *floats* — the player
  * bar, sheets, menus — because a frosted card on this canvas measured 1.04:1
  * against its own hairline on mobile: the text stayed legible and the card
  * stopped being a shape.
  *
- * There is one radius (`--radius-card`) and one padding (`--space-lg`), so two
- * cards side by side start their content at the same place.
+ * There is one radius (`--radius-card`, the new 22px shape) and one padding
+ * (`--space-lg`), so two cards side by side start their content at the same
+ * place.
  */
 
 import type { ComponentProps } from "react";

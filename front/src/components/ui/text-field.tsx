@@ -36,11 +36,11 @@ type TextFieldProps = Omit<ComponentProps<"input">, "id"> & {
  * with a hand-copied subset would drift the first time this one changed.
  */
 export const fieldTrackClass = cn(
-  "h-[52px] w-full px-[var(--space-lg)]",
+  "h-[var(--control-lg)] w-full px-[var(--space-lg)]",
   "rounded-[var(--radius-md)] bg-surface-sunken text-text type-body",
   "border border-outline-strong",
   "placeholder:text-text-tertiary",
-  "transition-[box-shadow,border-color] duration-150",
+  "transition-[box-shadow,border-color] duration-[var(--motion-fast)]",
   "focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent",
 );
 
