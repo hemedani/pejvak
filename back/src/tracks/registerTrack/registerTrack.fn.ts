@@ -1,6 +1,10 @@
 import { type ActFn, ObjectId } from "lesan";
 import { coreApp, track } from "../../../mod.ts";
 import { type MyContext, throwError } from "@lib";
+import {
+  resolveEntitlement,
+  trackQuotaOf,
+} from "../../entitlements/entitlement.ts";
 
 export const registerTrackFn: ActFn = async (body) => {
   const { set, get } = body.details;
@@ -52,6 +56,19 @@ export const registerTrackFn: ActFn = async (body) => {
       filters: { _id: existing._id },
       projection: get,
     });
+  }
+
+  // A plan may cap how many tracks the server stores. The re-registration path
+  // above already returned, so a device that owns the file can always announce
+  // it again; the cap only refuses *new* rows.
+  const entitlement = await resolveEntitlement(userId);
+  if (entitlement.limits.maxTracks >= 0) {
+    const quota = await trackQuotaOf(userId, entitlement.limits);
+    if (quota.remaining <= 0) {
+      throwError(
+        `Your plan stores up to ${quota.limit} tracks. Upgrade to add more.`,
+      );
+    }
   }
 
   const now = new Date();

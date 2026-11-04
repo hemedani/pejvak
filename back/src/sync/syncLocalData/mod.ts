@@ -1,4 +1,4 @@
-import { setTokens, setUser } from "@lib";
+import { requireActive, setTokens, setUser } from "@lib";
 import { coreApp } from "../../../mod.ts";
 import { syncLocalDataFn } from "./syncLocalData.fn.ts";
 import { syncLocalDataValidator } from "./syncLocalData.val.ts";
@@ -8,7 +8,7 @@ export const syncLocalDataSetup = () =>
     schema: "track",
     fn: syncLocalDataFn,
     actName: "syncLocalData",
-    preAct: [setTokens, setUser],
+    preAct: [setTokens, setUser, requireActive],
     validator: syncLocalDataValidator(),
     validationRunType: "create",
   });

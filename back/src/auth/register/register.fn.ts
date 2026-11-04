@@ -2,12 +2,21 @@ import type { ActFn } from "lesan";
 import { hash } from "@da/bcrypt";
 import { coreApp, user } from "../../../mod.ts";
 import { createToken, throwError } from "@lib";
+import { readPlatformSetting } from "../../platform/setting.ts";
 
 export const registerFn: ActFn = async (body) => {
   const {
     set: { username, email, password, displayName },
     get,
   } = body.details;
+
+  // A switch, not a deploy: closing signups during an incident has to be one
+  // admin click, and the check lives here rather than in a proxy so it cannot
+  // be bypassed by calling the API directly.
+  const platform = await readPlatformSetting();
+  if (!platform.signupsEnabled) {
+    throwError("Registration is temporarily closed. Please try again later.");
+  }
 
   const foundedUser = await user.findOne({ filters: { email } });
 
@@ -22,6 +31,10 @@ export const registerFn: ActFn = async (body) => {
       email,
       password: await hash(password),
       ...(displayName !== undefined ? { displayName } : {}),
+      // Written explicitly rather than left to the schema default: the act's
+      // validator strips unknown keys, so nothing here would be defaulted.
+      role: "user",
+      status: "active",
       createdAt: now,
       updatedAt: now,
     },

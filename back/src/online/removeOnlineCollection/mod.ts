@@ -1,4 +1,4 @@
-import { setTokens, setUser } from "@lib";
+import { requireActive, setTokens, setUser } from "@lib";
 import { coreApp } from "../../../mod.ts";
 import { removeOnlineCollectionFn } from "./removeOnlineCollection.fn.ts";
 import { removeOnlineCollectionValidator } from "./removeOnlineCollection.val.ts";
@@ -8,6 +8,6 @@ export const removeOnlineCollectionSetup = () =>
     schema: "onlineCollection",
     fn: removeOnlineCollectionFn,
     actName: "removeOnlineCollection",
-    preAct: [setTokens, setUser],
+    preAct: [setTokens, setUser, requireActive],
     validator: removeOnlineCollectionValidator(),
   });

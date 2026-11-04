@@ -1,4 +1,4 @@
-import { setTokens, setUser } from "@lib";
+import { requireActive, setTokens, setUser } from "@lib";
 import { coreApp } from "../../../mod.ts";
 import { updatePlaylistFn } from "./updatePlaylist.fn.ts";
 import { updatePlaylistValidator } from "./updatePlaylist.val.ts";
@@ -8,6 +8,6 @@ export const updatePlaylistSetup = () =>
     schema: "playlist",
     fn: updatePlaylistFn,
     actName: "updatePlaylist",
-    preAct: [setTokens, setUser],
+    preAct: [setTokens, setUser, requireActive],
     validator: updatePlaylistValidator(),
   });

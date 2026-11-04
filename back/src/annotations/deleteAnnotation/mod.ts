@@ -1,4 +1,4 @@
-import { setTokens, setUser } from "@lib";
+import { requireActive, setTokens, setUser } from "@lib";
 import { coreApp } from "../../../mod.ts";
 import { deleteAnnotationFn } from "./deleteAnnotation.fn.ts";
 import { deleteAnnotationValidator } from "./deleteAnnotation.val.ts";
@@ -8,6 +8,6 @@ export const deleteAnnotationSetup = () =>
     schema: "annotation",
     fn: deleteAnnotationFn,
     actName: "deleteAnnotation",
-    preAct: [setTokens, setUser],
+    preAct: [setTokens, setUser, requireActive],
     validator: deleteAnnotationValidator(),
   });

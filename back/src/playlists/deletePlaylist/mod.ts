@@ -1,4 +1,4 @@
-import { setTokens, setUser } from "@lib";
+import { requireActive, setTokens, setUser } from "@lib";
 import { coreApp } from "../../../mod.ts";
 import { deletePlaylistFn } from "./deletePlaylist.fn.ts";
 import { deletePlaylistValidator } from "./deletePlaylist.val.ts";
@@ -8,6 +8,6 @@ export const deletePlaylistSetup = () =>
     schema: "playlist",
     fn: deletePlaylistFn,
     actName: "deletePlaylist",
-    preAct: [setTokens, setUser],
+    preAct: [setTokens, setUser, requireActive],
     validator: deletePlaylistValidator(),
   });

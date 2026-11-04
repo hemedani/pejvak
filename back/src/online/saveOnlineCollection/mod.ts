@@ -1,4 +1,4 @@
-import { setTokens, setUser } from "@lib";
+import { requireActive, setTokens, setUser } from "@lib";
 import { coreApp } from "../../../mod.ts";
 import { saveOnlineCollectionFn } from "./saveOnlineCollection.fn.ts";
 import { saveOnlineCollectionValidator } from "./saveOnlineCollection.val.ts";
@@ -8,7 +8,7 @@ export const saveOnlineCollectionSetup = () =>
     schema: "onlineCollection",
     fn: saveOnlineCollectionFn,
     actName: "saveOnlineCollection",
-    preAct: [setTokens, setUser],
+    preAct: [setTokens, setUser, requireActive],
     validator: saveOnlineCollectionValidator(),
     validationRunType: "create",
   });

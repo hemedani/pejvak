@@ -147,6 +147,31 @@ export const syncLocalDataValidator = () =>
         syncedContextPlays: optional(enums([0, 1])),
         syncedOnlineCollections: optional(enums([0, 1])),
         syncedSettings: optional(enums([0, 1])),
+        /**
+         * The quota block. Every leaf is a projection flag (`0 | 1`), not a
+         * value: `get` describes which keys the caller wants back, and these
+         * fields are always computed and always returned, so the flags exist to
+         * keep a client from being rejected for asking for them.
+         */
+        historySkipped: optional(enums([0, 1])),
+        playlistsSkipped: optional(enums([0, 1])),
+        crossDeviceSync: optional(enums([0, 1])),
+        historyQuota: optional(
+          object({
+            limit: optional(enums([0, 1])),
+            used: optional(enums([0, 1])),
+            remaining: optional(enums([0, 1])),
+            unlimited: optional(enums([0, 1])),
+          }),
+        ),
+        playlistsQuota: optional(
+          object({
+            limit: optional(enums([0, 1])),
+            used: optional(enums([0, 1])),
+            remaining: optional(enums([0, 1])),
+            unlimited: optional(enums([0, 1])),
+          }),
+        ),
         settings: optional(
           object({
             languageCode: optional(enums([0, 1])),

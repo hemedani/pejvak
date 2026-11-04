@@ -1,4 +1,4 @@
-import { setTokens, setUser } from "@lib";
+import { requireActive, setTokens, setUser } from "@lib";
 import { coreApp } from "../../../mod.ts";
 import { updateAnnotationFn } from "./updateAnnotation.fn.ts";
 import { updateAnnotationValidator } from "./updateAnnotation.val.ts";
@@ -8,6 +8,6 @@ export const updateAnnotationSetup = () =>
     schema: "annotation",
     fn: updateAnnotationFn,
     actName: "updateAnnotation",
-    preAct: [setTokens, setUser],
+    preAct: [setTokens, setUser, requireActive],
     validator: updateAnnotationValidator(),
   });
