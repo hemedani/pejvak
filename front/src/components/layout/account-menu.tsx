@@ -10,6 +10,7 @@
  */
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import Link from "next/link";
 
 import { logout } from "@/app/actions/auth/logout";
 import { Icon } from "@/components/ui/icon";
@@ -49,6 +50,31 @@ export function AccountMenu({ user }: { user: CurrentUser }) {
           </div>
 
           <DropdownMenu.Separator className="my-[var(--space-xs)] h-px bg-[var(--outline-variant)]" />
+
+          {/*
+            The console is not a listener surface, so it is not in `NAV_ITEMS`:
+            the sidebar is the same on every account. The entry lives here
+            because this menu is the one place that already knows the role.
+            Support and admin both enter; the pages and actions decide what
+            they may do.
+          */}
+          {user.role !== "user" ? (
+            <>
+              <DropdownMenu.Item asChild>
+                <Link
+                  href="/admin"
+                  className="flex w-full items-center gap-[var(--space-sm)] rounded-[var(--radius-sm)] px-[var(--space-md)] py-[var(--space-sm)] type-label text-text outline-none data-[highlighted]:bg-surface-sunken"
+                >
+                  <Icon name="overview" size="sm" />
+                  Operator console
+                  <span className="ms-auto type-caption text-text-tertiary">
+                    {user.role === "admin" ? "Admin" : "Support"}
+                  </span>
+                </Link>
+              </DropdownMenu.Item>
+              <DropdownMenu.Separator className="my-[var(--space-xs)] h-px bg-[var(--outline-variant)]" />
+            </>
+          ) : null}
 
           <form action={logout}>
             <DropdownMenu.Item asChild>
