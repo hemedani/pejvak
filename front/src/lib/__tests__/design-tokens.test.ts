@@ -118,5 +118,6 @@ describe("design tokens", () => {
     expect(sizes).toEqual([44, 36, 30, 22, 16, 14, 13, 11]);
     expect(globalsCss).toContain("@media (prefers-reduced-motion: reduce)");
     expect(globalsCss).toContain('[dir="rtl"]');
+    expect(globalsCss).toContain('[dir="auto"]:dir(rtl)');
   });
 });

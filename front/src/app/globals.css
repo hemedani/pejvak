@@ -73,8 +73,15 @@
 
   /* A Persian catalogue title is the one RTL run in an LTR document. Tracking is
      a Latin typographic device; applied to Arabic script it pulls joined letters
-     apart. Reset it wherever the text declares its own direction. */
-  [dir="rtl"] {
+     apart. Reset it wherever the text declares its own direction.
+
+     Catalogue text is marked `dir="auto"`, so an attribute selector on "rtl"
+     alone never matches it: the attribute's value is "auto". `:dir(rtl)` reads
+     the *computed* direction after the content resolves it, which is what
+     catches those titles. Keep the literal `[dir="rtl"]` selector too, for any
+     text that declares its direction outright. */
+  [dir="rtl"],
+  [dir="auto"]:dir(rtl) {
     letter-spacing: normal;
     word-spacing: normal;
   }
