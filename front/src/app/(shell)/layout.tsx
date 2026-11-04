@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { getMe } from "@/app/actions/auth/get-me";
 import { Sidebar } from "@/components/layout/sidebar";
+import { PageTransition } from "@/components/motion/page-transition";
 import { DefaultSpeed } from "@/components/player/default-speed";
 import { NavigationSignal } from "@/components/player/navigation-signal";
 import { OnlineStreamBridge } from "@/components/player/online-stream-bridge";
@@ -68,7 +69,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar user={result.body} />
         <main className="shell-main mx-auto w-full max-w-[1180px] flex-1 px-[var(--space-lg)] pb-[var(--space-giant)] pt-[var(--space-md)] lg:px-[var(--space-xxl)]">
-          {children}
+          <PageTransition>{children}</PageTransition>
         </main>
       </div>
 

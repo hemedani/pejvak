@@ -42,10 +42,7 @@ export function Reveal({
   const step = Math.min(Math.max(0, index), MAX_STEPS);
   return (
     <div
-      className={cn(
-        "animate-[reveal-up_320ms_cubic-bezier(0.22,1,0.36,1)_backwards]",
-        className,
-      )}
+      className={cn("reveal", className)}
       style={step > 0 ? { animationDelay: `${step * STEP_MS}ms` } : undefined}
     >
       {children}
