@@ -7,6 +7,7 @@ ignore-scripts
 # This also matters for EAS: the upload root is the git root, and EAS filters the
 # working tree by the `.gitignore` files it finds, so anything untracked and not
 # ignored here is shipped to the build servers on every build.
-.workbuddy-ai/memory/
+**/.workbuddy-ai/memory/
+**/.superpowers/
 back/dump.rdb
 ignoreAssets
