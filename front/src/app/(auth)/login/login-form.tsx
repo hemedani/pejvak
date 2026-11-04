@@ -15,7 +15,6 @@
  */
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -34,7 +33,6 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export function LoginForm({ redirectTo }: { redirectTo: string }) {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -55,11 +53,17 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
         return;
       }
 
-      // `refresh()` before `replace()` so the shell's `getMe` runs with the new
-      // cookie. Without it the router can reuse a cached tree rendered while
-      // signed out, and the dashboard arrives empty.
-      router.refresh();
-      router.replace(redirectTo);
+      // One full document request, not `refresh()` + `replace()`.
+      //
+      // Those two calls start two RSC requests at once, and Next 16.4's
+      // Turbopack flight client corrupts its chunk state when that happens
+      // (`chunk.reason.enqueueModel is not a function`). A document navigation
+      // also guarantees the server sees the cookie that was just written, so
+      // no signed-out tree can come out of the router cache.
+      //
+      // `replace`, not `assign`: the login form is not a place Back should
+      // return to once a session exists.
+      window.location.replace(redirectTo);
     });
   }
 

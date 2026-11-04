@@ -323,8 +323,12 @@ export function PlaylistEditor({
       () => {
         // `replace`, not `push`: the deleted playlist's URL is not a place to
         // come back to, and it would 404 on the way in.
+        //
+        // Do not follow it with `router.refresh()`. Two simultaneous RSC
+        // requests corrupt the flight client's chunk state in Next 16.4
+        // (`chunk.reason.enqueueModel is not a function`); the destination is
+        // dynamic and is fetched fresh by this one navigation anyway.
         router.replace("/playlists");
-        router.refresh();
       },
     );
   }
