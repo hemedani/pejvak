@@ -14,6 +14,7 @@
  */
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Icon } from "@/components/ui/icon";
@@ -37,6 +38,7 @@ export function PlayerBar() {
   usePlayerKeyboard();
 
   const current = usePlayerStore((state) => state.current);
+  const pathname = usePathname();
   const [queueOpen, setQueueOpen] = useState(false);
 
   useEffect(() => {
@@ -45,8 +47,26 @@ export function PlayerBar() {
     return () => window.removeEventListener(OPEN_QUEUE_EVENT, open);
   }, []);
 
-  if (!current) {
-    return null;
+  // The full player screen at `/player` is the same store and the same engine;
+  // showing the mini bar there is an unnecessary repetition of what the screen
+  // already shows. The queue sheet stays mounted so the full player can still
+  // request it.
+  const onPlayerRoute = pathname === "/player";
+  const barVisible = current !== null && !onPlayerRoute;
+
+  // Toggle a data attribute on `<body>` so the shell's `<main>` can adjust its
+  // bottom padding. The `76px` reserved for the bar is only needed when the bar
+  // is actually shown — without this, the player route has a strip of dead
+  // space where the bar would have been.
+  useEffect(() => {
+    document.body.dataset.playerBar = barVisible ? "visible" : "hidden";
+    return () => {
+      delete document.body.dataset.playerBar;
+    };
+  }, [barVisible]);
+
+  if (!current || onPlayerRoute) {
+    return <QueueSheet open={queueOpen} onOpenChange={setQueueOpen} />;
   }
 
   return (

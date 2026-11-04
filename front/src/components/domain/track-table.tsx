@@ -14,8 +14,8 @@
 
 import Link from "next/link";
 
-import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
+import { OriginBadge } from "@/components/domain/origin-badge";
 import type { TrackSummary } from "@/lib/domain/track";
 import { cn } from "@/lib/cn";
 import { formatCount, formatSpan } from "@/lib/format";
@@ -157,7 +157,7 @@ function TitleCell({
             <span className="type-caption truncate text-text-tertiary">{subtitle}</span>
           ) : null}
 
-          <OriginBadge track={track} />
+          <OriginBadge origin={track.origin} />
 
           {track.collectionTitle ? (
             <span className="type-caption truncate text-text-tertiary">
@@ -209,22 +209,6 @@ function Highlighted({
         ),
       )}
     </>
-  );
-}
-
-function OriginBadge({ track }: { track: TrackSummary }) {
-  if (track.origin === "local") {
-    return (
-      <Badge tone="muted" size="sm">
-        Local
-      </Badge>
-    );
-  }
-
-  return (
-    <Badge tone="accent" size="sm">
-      Online
-    </Badge>
   );
 }
 

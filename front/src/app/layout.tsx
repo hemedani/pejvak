@@ -43,7 +43,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       {/* The bootstrap runs as the first thing in `<body>`, so it is executed
           before the content below is parsed — no flash, and no hand-written
           `<head>`, which App Router does not want. */}
-      <body className="min-h-dvh bg-canvas text-text antialiased">
+      <body
+        className="min-h-dvh bg-canvas text-text antialiased"
+        // Browser extensions (Grammarly, password managers, etc.) inject
+        // `data-*` attributes onto `<body>` before React hydrates, which
+        // triggers a hydration mismatch. `suppressHydrationWarning` tells
+        // React to ignore attribute differences on this element — the same
+        // approach already used on `<html>` for the theme bootstrap.
+        suppressHydrationWarning
+      >
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
         {children}
       </body>

@@ -32,6 +32,7 @@ import Link from "next/link";
 
 import { ResumeListenButton } from "@/components/domain/resume-listen-button";
 import { SessionDetailButton } from "@/components/domain/session-detail";
+import { OriginBadge } from "@/components/domain/origin-badge";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
 import { isPlayableOnWeb } from "@/lib/domain/track";
@@ -120,6 +121,10 @@ export function HistoryRow({
               <Badge tone={verdict.tone} size="sm">
                 {verdict.label}
               </Badge>
+            ) : null}
+
+            {first?.track ? (
+              <OriginBadge origin={first.track.origin} />
             ) : null}
 
             {stretch.seeked ? (

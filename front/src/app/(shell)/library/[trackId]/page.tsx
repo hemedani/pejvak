@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { getTrackSessions } from "@/app/actions/sessions/get-track-sessions";
 import { getTrackDetail } from "@/app/actions/tracks/get-track-detail";
 import { AnnotationPanel } from "@/components/domain/annotation-list";
+import { OriginBadge } from "@/components/domain/origin-badge";
 import { PlayTrackButton } from "@/components/player/play-track-button";
 import { SessionList, SessionListSummary } from "@/components/domain/session-list";
 import { StatCell } from "@/components/domain/stat-cell";
@@ -119,11 +120,7 @@ export default async function TrackPage({
             ) : null}
 
             <div className="mt-[var(--space-sm)] flex flex-wrap items-center gap-[var(--space-xs)]">
-              {track.origin === "local" ? (
-                <Badge tone="muted">Local</Badge>
-              ) : (
-                <Badge tone="accent">Online</Badge>
-              )}
+              <OriginBadge origin={track.origin} />
 
               {track.collectionTitle ? <Badge tone="neutral">{track.collectionTitle}</Badge> : null}
 
