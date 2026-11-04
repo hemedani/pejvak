@@ -18,4 +18,13 @@ describe("Button", () => {
     render(<Button size="sm">Save</Button>);
     expect(screen.getByRole("button").className).toContain("coarse:h-[var(--control-md)]");
   });
+
+  it("animates both the press scale and the brightness filter", () => {
+    render(<Button>Play</Button>);
+    const classes = screen.getByRole("button").className;
+    const transition = classes.split(" ").find((name) => name.startsWith("transition-["));
+    expect(transition).toBeDefined();
+    expect(transition).toContain("scale");
+    expect(transition).toContain("filter");
+  });
 });

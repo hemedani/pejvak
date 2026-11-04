@@ -28,7 +28,7 @@ const button = cva(
      * reason a tap there feels answered. 0.97 rather than 0.9 — a large press
      * scale on a 36px control reads as a wobble, not as a press.
      */
-    "transition-[background-color,color,transform] duration-[var(--motion-fast)] ease-[var(--ease-out)] active:scale-[0.97] motion-reduce:transform-none",
+    "transition-[background-color,color,transform,scale,filter] duration-[var(--motion-fast)] ease-[var(--ease-out)] active:scale-[0.97] motion-reduce:transform-none",
     "disabled:pointer-events-none disabled:opacity-50",
     "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]",
   ],
