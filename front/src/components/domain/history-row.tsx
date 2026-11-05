@@ -80,7 +80,7 @@ export function HistoryRow({
     <li className="px-[var(--space-lg)]">
       <div
         className={cn(
-          "flex flex-wrap items-start gap-x-[var(--space-lg)] gap-y-[var(--space-sm)] py-[var(--space-md)]",
+          "flex flex-col gap-y-[var(--space-sm)] py-[var(--space-md)] sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-[var(--space-lg)]",
           // The hairline lives inside the card's padding, so it separates two
           // rows instead of tracing the card's own edge.
           divided && "border-t border-outline-variant",
