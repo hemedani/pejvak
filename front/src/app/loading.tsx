@@ -1,24 +1,20 @@
 import { Skeleton } from "@/components/ui/state";
 
 /**
- * The route-level loading state.
+ * The route-level loading state for screens that do not declare their own.
  *
- * It draws the *shape* of a dashboard — four stat cells and a chart block —
- * rather than a centred spinner. A skeleton that matches the layout means the
- * page does not jump when the data lands, and a spinner means it does.
+ * It draws a page header and one content block — the shape almost every screen
+ * shares. The dashboard has its own loader beside its page (`(shell)/(home)`),
+ * because a dashboard-shaped fallback shown while Settings loads is a promise
+ * the next screen breaks: the skeleton must be the shape of what replaces it.
  */
 export default function Loading() {
   return (
     <div className="flex flex-col gap-[var(--space-xl)]" role="status" aria-label="Loading">
       <div className="flex flex-col gap-[var(--space-sm)]">
-        <Skeleton className="h-4 w-24" />
-        <Skeleton className="h-8 w-56" />
-      </div>
-
-      <div className="grid gap-[var(--space-md)] sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, index) => (
-          <Skeleton key={index} className="h-28 rounded-[var(--radius-card)]" />
-        ))}
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-full max-w-[var(--measure-prose)]" />
       </div>
 
       <Skeleton className="h-64 rounded-[var(--radius-card)]" />
