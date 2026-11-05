@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { getBrowseCollections } from "@/app/actions/online/get-browse-collections";
 import { getMySettings } from "@/app/actions/settings/get-my-settings";
 import { CollectionCard } from "@/components/online/collection-card";
+import { Reveal } from "@/components/motion/reveal";
 import { CollectionGrid, CollectionGridSkeleton } from "@/components/online/collection-grid";
 import { SourceProblem } from "@/components/online/source-problem";
 import { Badge } from "@/components/ui/badge";
@@ -274,12 +275,13 @@ async function CollectionPanel({
   return (
     <div className="flex flex-col gap-[var(--space-lg)]">
       <CollectionGrid>
-        {collections.map((collection) => (
-          <CollectionCard
-            key={collection.key}
-            collection={collection}
-            href={`/browse/collection/${encodeURIComponent(collection.sourceId)}/${encodeURIComponent(collection.externalId)}`}
-          />
+        {collections.map((collection, index) => (
+          <Reveal key={collection.key} index={index} className="h-full">
+            <CollectionCard
+              collection={collection}
+              href={`/browse/collection/${encodeURIComponent(collection.sourceId)}/${encodeURIComponent(collection.externalId)}`}
+            />
+          </Reveal>
         ))}
       </CollectionGrid>
 

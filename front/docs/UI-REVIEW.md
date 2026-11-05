@@ -22,6 +22,10 @@ timeline and the motion layer to `front/`._
 > 2026-11-05: §3.6.15 landed. The timeline bar now has a per-segment list under
 > it, so a screen reader (or anyone who wants the detail) gets each track and
 > what was heard of it.
+>
+> 2026-11-05: §3.1.1, §3.1.2, §3.1.3, §3.2.4–6, §3.3.7 and §3.4.11 were already
+> fixed in the phase work; they are marked resolved here. This change added the
+> stagger to the surfaces that were still instant.
 
 The phone app's identity is not its palette (that was already ported, token for
 token). It is three things the browser was missing: **the wave**, **the listen
@@ -137,15 +141,19 @@ pathname — would make the app feel of a piece with its own controls.
    The header sorts by `createdAt` and the cell renders
    `{playCount} · {duration}`. Either the header becomes "Plays · length" and the
    sort link goes, or the cell shows `formatDateTime(createdAt)`. Today the column
-   promises one fact and prints two others.
+   promises one fact and prints two others. _Resolved 2026-11-05_: "Last played"
+   has its own column and "Added" renders the date, with the full timestamp in
+   `title`.
 2. **The dashboard's "of N in your library" was a page, not a total.** `tracks`
    is capped at `JOIN_LIMIT = 200`, so a 900-track library read "of 200". Fixed in
    this change: the phrase only claims a total when the page did not hit the cap.
+   _Resolved 2026-11-05._
 3. **`formatSpan` on the history row's day total and on the row's own figure**
    are both `type-numeric` — correct — but the row's *duration* is
    `text-secondary` while the *time range* beside it is `text-tertiary`. The
    figure people scan (when) is quieter than the figure they don't (how long).
-   Swap them.
+   Swap them. _Resolved 2026-11-05_: the time range is secondary, the summed
+   duration tertiary.
 
 ### 3.2 Hierarchy
 
@@ -155,16 +163,18 @@ pathname — would make the app feel of a piece with its own controls.
    in a card whose entire purpose is the figure, the figure is the label. The
    four numbers on the dashboard should be `text-text` at `type-figure`, with the
    caption above them in `text-secondary`. Right now the eye lands on "Total
-   listening time" and then has to go looking for the number.
+   listening time" and then has to go looking for the number. _Resolved
+   2026-11-05_: `StatCell` gives the figure `type-figure` and `text-text`; the
+   caption sits above it in `text-secondary`.
 5. **The history row is three lines of caption for one listen.** Title +
    verdict, then time/tracks/collection, then position/speed. The third line is
    almost always "from 3:12 to 41:07" — which the timeline sheet now says far
    better. Keep it in the sheet, drop it from the row, and let the row be two
-   lines.
+   lines. _Resolved 2026-11-05_: the position line is gone; the sheet owns it.
 6. **The library table centres its numeric column.** "Listening time" is
    `text-center` while the rest of the row starts at the inline-start edge. With
    tabular figures, numbers should end-align so the decimal positions line up down
-   the column.
+   the column. _Resolved 2026-11-05_: the cell is `text-end`.
 
 ### 3.3 Motion — the rules the new layer should follow
 
@@ -172,7 +182,10 @@ pathname — would make the app feel of a piece with its own controls.
    cards stagger; the library table, the playlists grid, the browse grid and the
    track page do not. Either apply it to every first paint (cheap: the same
    `<Reveal index>` around the rows) or to none — half is the state that reads as
-   a bug when you notice it.
+   a bug when you notice it. _Resolved 2026-11-05_: dashboard, history, library,
+   playlists, both browse shelves and the source grid, the language list and the
+   track page all stagger their first paint; the surfaces left out are forms, not
+   lists.
 8. **Never animate a value that is also a fact.** The wave animates a *stroke*,
    never the number beside it; the reveal animates opacity and 10 px of travel,
    never a layout property. Worth writing down because the next person will want
@@ -193,7 +206,8 @@ pathname — would make the app feel of a piece with its own controls.
 11. **The scrubber's hit band is 36 px.** The phone reserves 44 pt. On a touch
     viewport the extra 8 px is the difference between grabbing the playhead and
     scrubbing by accident. `h-9` → `h-11` on coarse pointers only
-    (`@media (pointer: coarse)`).
+    (`@media (pointer: coarse)`). _Resolved 2026-11-05_: the root carries
+    `coarse:h-[var(--tap-min)]`.
 12. **`Badge` at `h-6` with 13 px text is below the 44 px target when it is
     interactive.** It isn't today — but the moment a chip becomes a filter, it
     needs `hit-area` padding rather than a taller chip.

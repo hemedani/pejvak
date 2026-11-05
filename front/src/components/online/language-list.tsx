@@ -18,6 +18,7 @@
 
 import Link from "next/link";
 
+import { Reveal } from "@/components/motion/reveal";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/state";
@@ -70,9 +71,11 @@ export function LanguageRow({ language }: { language: OnlineLanguage }) {
 export function LanguageList({ languages }: { languages: readonly OnlineLanguage[] }) {
   return (
     <ul className="divide-y divide-outline-variant">
-      {languages.map((language) => (
+      {languages.map((language, index) => (
         <li key={language.code}>
-          <LanguageRow language={language} />
+          <Reveal index={index}>
+            <LanguageRow language={language} />
+          </Reveal>
         </li>
       ))}
     </ul>

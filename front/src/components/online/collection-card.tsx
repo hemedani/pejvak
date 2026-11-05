@@ -55,7 +55,7 @@ export function CollectionCard({
   return (
     <Card
       className={cn(
-        "flex flex-col p-[var(--space-md)] transition-shadow duration-150 hover:shadow-[var(--elevation-panel)]",
+        "flex h-full flex-col p-[var(--space-md)] transition-shadow duration-150 hover:shadow-[var(--elevation-panel)]",
         className,
       )}
     >

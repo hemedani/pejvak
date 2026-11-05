@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 
 import { getMyPlaylists } from "@/app/actions/playlists/get-my-playlists";
+import { Reveal } from "@/components/motion/reveal";
 import { PlaylistCard } from "@/components/domain/playlist-card";
 import { PlaylistCreateForm } from "@/components/domain/playlist-create-form";
 import { Card } from "@/components/ui/card";
@@ -112,9 +113,11 @@ async function PlaylistList({ page, now }: { page: number; now: number }) {
   return (
     <>
       <ul className="flex flex-col gap-[var(--space-md)]">
-        {playlists.map((playlist) => (
+        {playlists.map((playlist, index) => (
           <li key={playlist.id}>
-            <PlaylistCard playlist={playlist} now={now} />
+            <Reveal index={index}>
+              <PlaylistCard playlist={playlist} now={now} />
+            </Reveal>
           </li>
         ))}
       </ul>

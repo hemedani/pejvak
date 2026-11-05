@@ -8,6 +8,7 @@
  * instead of disappearing under the cursor.
  */
 
+import { Reveal } from "@/components/motion/reveal";
 import { CollectionCard } from "@/components/online/collection-card";
 import { CollectionGrid } from "@/components/online/collection-grid";
 import type { OnlineCollectionRow } from "@/lib/online/types";
@@ -15,12 +16,13 @@ import type { OnlineCollectionRow } from "@/lib/online/types";
 export function FavoriteShelf({ collections }: { collections: readonly OnlineCollectionRow[] }) {
   return (
     <CollectionGrid>
-      {collections.map((collection) => (
-        <CollectionCard
-          key={collection.key}
-          collection={collection}
-          href={`/browse/collection/${encodeURIComponent(collection.sourceId)}/${encodeURIComponent(collection.externalId)}`}
-        />
+      {collections.map((collection, index) => (
+        <Reveal key={collection.key} index={index} className="h-full">
+          <CollectionCard
+            collection={collection}
+            href={`/browse/collection/${encodeURIComponent(collection.sourceId)}/${encodeURIComponent(collection.externalId)}`}
+          />
+        </Reveal>
       ))}
     </CollectionGrid>
   );

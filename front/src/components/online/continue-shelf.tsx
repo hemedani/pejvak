@@ -11,6 +11,7 @@
  * has no position to return to, so it always starts at the top of its list.
  */
 
+import { Reveal } from "@/components/motion/reveal";
 import { CollectionCard } from "@/components/online/collection-card";
 import { CollectionGrid } from "@/components/online/collection-grid";
 import { PlayCollectionButton } from "@/components/online/play-collection-button";
@@ -20,7 +21,7 @@ import { collectionForContinueItem, type ContinueItem } from "@/lib/online/conti
 export function ContinueShelf({ items }: { items: readonly ContinueItem[] }) {
   return (
     <CollectionGrid>
-      {items.map((item) => {
+      {items.map((item, index) => {
         const collection = collectionForContinueItem(item);
         const live = isLiveSource(collection.sourceId);
         const playable = {
@@ -34,22 +35,23 @@ export function ContinueShelf({ items }: { items: readonly ContinueItem[] }) {
         };
 
         return (
-          <CollectionCard
-            key={item.key}
-            collection={collection}
-            href={`/browse/collection/${encodeURIComponent(item.sourceId)}/${encodeURIComponent(item.externalId)}`}
-            run={item.run}
-            action={
-              <PlayCollectionButton
-                collection={playable}
-                index={live ? 0 : item.lastIndex}
-                startPositionSec={live ? 0 : item.resumeTargetSec}
-                label={live ? "Live" : "Continue"}
-                variant="secondary"
-                size="sm"
-              />
-            }
-          />
+          <Reveal key={item.key} index={index} className="h-full">
+            <CollectionCard
+              collection={collection}
+              href={`/browse/collection/${encodeURIComponent(item.sourceId)}/${encodeURIComponent(item.externalId)}`}
+              run={item.run}
+              action={
+                <PlayCollectionButton
+                  collection={playable}
+                  index={live ? 0 : item.lastIndex}
+                  startPositionSec={live ? 0 : item.resumeTargetSec}
+                  label={live ? "Live" : "Continue"}
+                  variant="secondary"
+                  size="sm"
+                />
+              }
+            />
+          </Reveal>
         );
       })}
     </CollectionGrid>

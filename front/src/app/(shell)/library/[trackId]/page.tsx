@@ -8,6 +8,7 @@ import { getTrackDetail } from "@/app/actions/tracks/get-track-detail";
 import { AnnotationPanel } from "@/components/domain/annotation-list";
 import { OriginBadge } from "@/components/domain/origin-badge";
 import { PlayTrackButton } from "@/components/player/play-track-button";
+import { Reveal } from "@/components/motion/reveal";
 import { SessionList, SessionListSummary } from "@/components/domain/session-list";
 import { StatCell } from "@/components/domain/stat-cell";
 import { Badge } from "@/components/ui/badge";
@@ -104,7 +105,8 @@ export default async function TrackPage({
         Library
       </Link>
 
-      <Card className="p-[var(--space-lg)]">
+      <Reveal index={0}>
+        <Card className="p-[var(--space-lg)]">
         <div className="flex flex-col gap-[var(--space-lg)] sm:flex-row sm:items-start">
           <Artwork track={track} />
 
@@ -130,9 +132,11 @@ export default async function TrackPage({
             </div>
           </div>
         </div>
-      </Card>
+        </Card>
+      </Reveal>
 
-      <div className="grid gap-[var(--space-md)] sm:grid-cols-2 xl:grid-cols-4">
+      <Reveal index={1}>
+        <div className="grid gap-[var(--space-md)] sm:grid-cols-2 xl:grid-cols-4">
         <StatCell
           label="Listening time"
           value={formatSpan(track.totalListenTimeSec)}
@@ -163,12 +167,16 @@ export default async function TrackPage({
           }
           icon="note"
         />
-      </div>
+        </div>
+      </Reveal>
 
-      <PlaybackNote track={track} />
+      <Reveal index={2}>
+        <PlaybackNote track={track} />
+      </Reveal>
 
-      <section className="flex flex-col gap-[var(--space-md)]">
-        <CardHeading overline="History" title="Listening sessions" />
+      <Reveal index={3}>
+        <section className="flex flex-col gap-[var(--space-md)]">
+          <CardHeading overline="History" title="Listening sessions" />
 
         {!sessions.success ? (
           <Card>
@@ -210,20 +218,25 @@ export default async function TrackPage({
             />
           </>
         )}
-      </section>
+        </section>
+      </Reveal>
 
-      <section className="flex flex-col gap-[var(--space-md)]">
-        <CardHeading
-          overline="Notes"
+      <Reveal index={4}>
+        <section className="flex flex-col gap-[var(--space-md)]">
+          <CardHeading
+            overline="Notes"
           title={track.annotations.length > 0 ? `${formatNumber(track.annotations.length)} notes` : "Note"}
         />
 
         <Card className="p-[var(--space-lg)]">
           <AnnotationPanel annotations={track.annotations} durationSec={track.durationSec} />
         </Card>
-      </section>
+        </section>
+      </Reveal>
 
-      <FileFacts track={track} />
+      <Reveal index={5}>
+        <FileFacts track={track} />
+      </Reveal>
     </div>
   );
 }
