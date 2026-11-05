@@ -26,6 +26,11 @@ timeline and the motion layer to `front/`._
 > 2026-11-05: §3.1.1, §3.1.2, §3.1.3, §3.2.4–6, §3.3.7 and §3.4.11 were already
 > fixed in the phase work; they are marked resolved here. This change added the
 > stagger to the surfaces that were still instant.
+>
+> 2026-11-05: §2.3 was also already in place — `PageTransition` wraps the shell
+> and re-keys on pathname. §3.5.14's hatch remains an optional experiment, not a
+> defect; §3.4.12 is a note for the day a badge becomes a filter. With those
+> two documented, every actionable finding in this review is resolved.
 
 The phone app's identity is not its palette (that was already ported, token for
 token). It is three things the browser was missing: **the wave**, **the listen
@@ -121,7 +126,9 @@ opening the same `Sheet` the history row now uses.
 There is no `template.tsx` and no transition on `<main>`, so a navigation is an
 instant swap. Everything else in the app now eases; the page itself does not. A
 160 ms fade with a 4 px rise on the route's own content — CSS only, `key`ed by
-pathname — would make the app feel of a piece with its own controls.
+pathname — would make the app feel of a piece with its own controls. _Resolved
+2026-11-05_: `PageTransition` keys the shell's content by pathname and applies
+the existing `.page-enter` animation.
 
 ### 2.4 Smaller things the phone has and the web does not
 
