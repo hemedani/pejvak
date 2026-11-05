@@ -19,6 +19,10 @@ the installed Chrome) for visual QA.
 
 **Spec:** `docs/superpowers/specs/2026-11-04-pejvak-rebrand-design.md`
 
+**Status:** Complete (2026-11-05). All ten tasks landed; the task-by-task record is
+`.superpowers/sdd/2026-11-04-pejvak-rebrand-foundation/progress.md`. The unchecked
+boxes below are the original step list, not an open checklist.
+
 ---
 
 ## Global Constraints
