@@ -68,7 +68,7 @@ export default async function ShellLayout({ children }: { children: React.ReactN
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar user={result.body} />
-        <main className="shell-main mx-auto w-full max-w-[var(--layout-content)] flex-1 px-[var(--space-lg)] pb-[var(--space-giant)] pt-[var(--space-md)] lg:px-[var(--space-xxl)]">
+        <main className="shell-main mx-auto w-full max-w-[var(--layout-content)] flex-1 px-[var(--space-lg)] pb-[var(--space-giant)] pt-[var(--space-md)] lg:px-[var(--space-xxl)] print:max-w-none print:px-0 print:pb-0 print:pt-0">
           <PageTransition>{children}</PageTransition>
         </main>
       </div>

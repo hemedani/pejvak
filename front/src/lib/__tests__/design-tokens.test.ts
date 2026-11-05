@@ -143,6 +143,34 @@ describe("design tokens", () => {
     expect(reduced).toMatch(/::view-transition-new\(root\)[^}]*animation:\s*none/);
   });
 
+  it("resolves both themes to the light palette when printing", () => {
+    const print = nestedBlock(tokensCss, "@media print");
+    expect(print).toContain(":root.dark");
+    expect(print).toMatch(/--canvas:\s*#ffffff/);
+    expect(print).toMatch(/--surface:\s*#ffffff/);
+    expect(print).toMatch(/--text:\s*#1b1a17/);
+    expect(print).toMatch(/--shadow:\s*transparent/);
+  });
+
+  it("keeps the two meaning-bearing states in forced colours", () => {
+    const forced = nestedBlock(globalsCss, "@media (forced-colors: active)");
+    expect(forced).toMatch(/:focus-visible\s*\{[^}]*outline-color:\s*Highlight/);
+    expect(forced).toMatch(/\[aria-current="page"\][^}]*outline:\s*2px solid Highlight/);
+    expect(forced).toContain("CanvasText");
+    expect(forced).toMatch(/\.wash\s*\{\s*background-image:\s*none/);
+  });
+
+  it("takes the shell chrome off paper", () => {
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+    const chrome = [
+      "../../components/layout/sidebar.tsx",
+      "../../components/layout/topbar.tsx",
+      "../../components/player/player-bar.tsx",
+      "../../app/(admin)/admin/layout.tsx",
+    ];
+    for (const path of chrome) expect(read(path)).toContain("print:hidden");
+  });
+
   it("lets catalogue data set its own direction", () => {
     const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
     const surfaces: Array<[string, string[]]> = [

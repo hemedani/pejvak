@@ -15,7 +15,7 @@ import { NAV_ITEMS } from "./nav-items";
  */
 export function Sidebar() {
   return (
-    <aside className="sticky top-0 hidden h-dvh w-[var(--layout-sidebar)] shrink-0 flex-col gap-[var(--space-xl)] border-e border-outline-variant bg-canvas-elevated px-[var(--space-md)] py-[var(--space-xl)] lg:flex">
+    <aside className="sticky top-0 hidden h-dvh w-[var(--layout-sidebar)] shrink-0 flex-col gap-[var(--space-xl)] border-e border-outline-variant bg-canvas-elevated px-[var(--space-md)] py-[var(--space-xl)] lg:flex print:hidden">
       <Link
         href="/"
         className="flex items-center gap-[var(--space-sm)] px-[var(--space-sm)] text-text"

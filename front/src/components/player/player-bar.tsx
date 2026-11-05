@@ -71,7 +71,7 @@ export function PlayerBar() {
 
   return (
     <>
-      <div className="fixed inset-x-0 bottom-0 z-30 lg:ms-[var(--layout-sidebar)]" data-player-surface>
+      <div className="fixed inset-x-0 bottom-0 z-30 lg:ms-[var(--layout-sidebar)] print:hidden" data-player-surface>
         <div className="border-t border-[var(--glass-border)] bg-[var(--glass)] shadow-[var(--elevation-float)] backdrop-blur-xl">
           <BarProgress />
           <div className="mx-auto flex min-h-[var(--layout-player-bar)] w-full max-w-[var(--layout-content)] items-center gap-[var(--space-md)] px-[var(--space-lg)] py-[var(--space-sm)] lg:px-[var(--space-xxl)]">

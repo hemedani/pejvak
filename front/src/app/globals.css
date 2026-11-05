@@ -153,6 +153,68 @@
  * on one screen that disagree by 1px are what make a page look assembled rather
  * than designed.
  */
+/**
+ * Print.
+ *
+ * The shell is chrome around the content; paper should carry the content only.
+ * The chrome itself is hidden with `print:hidden` at the element, and this block
+ * removes the motion that would otherwise be captured mid-frame.
+ */
+@media print {
+  body {
+    background: var(--canvas);
+    color: var(--text);
+  }
+
+  .reveal,
+  .reveal-row,
+  .page-enter,
+  .skeleton {
+    animation: none !important;
+  }
+
+  .skeleton {
+    background: var(--surface-sunken);
+  }
+
+  a {
+    text-decoration: underline;
+  }
+
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+}
+
+/**
+ * Forced colours.
+ *
+ * The system palette replaces every custom colour, which is the point — but a
+ * focus ring drawn with `--accent` and an active nav drawn with a wash both
+ * disappear. Use the system keywords so the two states that carry meaning keep
+ * one.
+ */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline-color: Highlight;
+  }
+
+  [aria-current="page"] {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  .skeleton {
+    animation: none !important;
+    background: Canvas;
+    border: 1px solid CanvasText;
+  }
+
+  .wash {
+    background-image: none;
+  }
+}
+
 @layer components {
   .type-hero {
     font-family: var(--font-display);

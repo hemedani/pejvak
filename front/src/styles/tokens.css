@@ -174,3 +174,30 @@
   --color-danger-soft: var(--danger-soft);
   --color-icon: var(--icon);
 }
+
+/**
+ * Print palette.
+ *
+ * A page printed from the dark theme must not be white text on white paper, and
+ * a shadow is a smudge on a laser printer. Both themes therefore resolve to the
+ * light palette for print; the accent survives so state and action still read.
+ */
+@media print {
+  :root,
+  :root.dark {
+    color-scheme: light;
+    --canvas: #ffffff;
+    --canvas-elevated: #ffffff;
+    --surface: #ffffff;
+    --surface-sunken: #f4f1ea;
+    --outline: #c8c2b5;
+    --outline-strong: #857c6c;
+    --outline-variant: #ded8cc;
+    --glass: #ffffff;
+    --glass-strong: #ffffff;
+    --text: #1b1a17;
+    --text-secondary: #4a4740;
+    --text-tertiary: #666257;
+    --shadow: transparent;
+  }
+}
