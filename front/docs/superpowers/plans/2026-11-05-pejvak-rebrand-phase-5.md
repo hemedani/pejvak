@@ -1,8 +1,7 @@
-# Phase 5 — polish, source-only
+# Phase 5 — polish
 
 _The rebrand spec's final phase: forced colours, print, reduced-motion audit and
-visual snapshots. Snapshots need a browser and are not claimable from this
-session; everything that can be settled in source is settled here._
+visual snapshots. The source work and the snapshot pass are both here._
 
 ## Audited
 
@@ -29,14 +28,19 @@ session; everything that can be settled in source is settled here._
 
 ## Found in the screenshots
 
+Captured with `npm run capture` against a production server
+(`BACKEND_URL=http://localhost:1405 npm run start`): 33 shots covering the eight
+routes at desktop and mobile, light and dark, plus a reduced-motion pass.
+
 - The narrow users table forced itself wider than the viewport for a long email,
   clipping the row instead of the text. The email cell now breaks on small
   screens and truncates only from `md` up; the table's scroll width equals its
   client width at 390 and 360 px.
+- The page requested `/favicon.ico` and got a 404 on every route. `src/app/icon.svg`
+  now serves the brand mark, so the shell is complete in the browser chrome.
 
 ## Not done here
 
-- Screenshot capture for dark/light/narrow/coarse/reduced-motion.
 - Print pagination of very long tables (browser default; no `@page` rules until
   a real printed artefact is asked for).
 
