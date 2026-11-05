@@ -27,6 +27,13 @@ session; everything that can be settled in source is settled here._
 - `lib/__tests__/design-tokens.test.ts` — guards the print palette, the
   forced-colours states and the chrome on paper.
 
+## Found in the screenshots
+
+- The narrow users table forced itself wider than the viewport for a long email,
+  clipping the row instead of the text. The email cell now breaks on small
+  screens and truncates only from `md` up; the table's scroll width equals its
+  client width at 390 and 360 px.
+
 ## Not done here
 
 - Screenshot capture for dark/light/narrow/coarse/reduced-motion.

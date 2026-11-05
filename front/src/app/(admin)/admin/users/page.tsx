@@ -121,10 +121,16 @@ function UserRow({ user }: { user: AdminUser }) {
   return (
     <tr className="border-b border-outline-variant last:border-b-0 hover:bg-surface-sunken/60">
       <td className="py-[var(--space-md)] pe-[var(--space-md)] ps-[var(--space-md)]">
-        <Link dir="auto" href={`/admin/users/${user.id}`} className="type-label block truncate text-text hover:underline">
+        {/*
+          The email is the row's identity and the narrow table has no width to
+          spare: `truncate` on a single long address forces the table wider than
+          the viewport, which clips the row instead of the text. Let it break on
+          small screens and truncate only where there is room.
+        */}
+        <Link dir="auto" href={`/admin/users/${user.id}`} className="type-label block break-all text-text hover:underline md:truncate">
           {user.email || "No email"}
         </Link>
-        <p dir="auto" className="type-caption truncate text-text-tertiary md:hidden">{user.username || "—"}</p>
+        <p dir="auto" className="type-caption break-all text-text-tertiary md:hidden">{user.username || "—"}</p>
       </td>
       <td dir="auto" className="type-caption hidden py-[var(--space-md)] pe-[var(--space-md)] text-text-secondary md:table-cell">
         {user.username || "—"}
