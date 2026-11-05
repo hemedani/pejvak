@@ -55,7 +55,7 @@ export function AdminNav({ orientation = "column" }: { orientation?: "column" | 
               className={cn(
                 "flex items-center gap-[var(--space-md)] rounded-[var(--radius-md)] px-[var(--space-md)]",
                 "type-label transition-colors",
-                orientation === "column" ? "h-11" : "h-10",
+                orientation === "column" ? "h-11" : "h-10 coarse:h-[var(--tap-min)]",
                 active
                   ? "bg-accent-soft text-text"
                   : "text-text-secondary hover:bg-surface-sunken hover:text-text",

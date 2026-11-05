@@ -415,7 +415,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="type-overline text-text-tertiary">{label}</dt>
-      <dd className="type-caption mt-[2px] break-words text-text">{value}</dd>
+      <dd dir="auto" className="type-caption mt-[2px] break-words text-text">{value}</dd>
     </div>
   );
 }

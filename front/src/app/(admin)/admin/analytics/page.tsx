@@ -109,8 +109,8 @@ async function TopTracksSection() {
                       {index + 1}
                     </td>
                     <td className="py-[var(--space-md)] pe-[var(--space-md)]">
-                      <p className="type-label truncate text-text">{row.title}</p>
-                      <p className="type-caption truncate text-text-tertiary">
+                      <p dir="auto" className="type-label truncate text-text">{row.title}</p>
+                      <p dir="auto" className="type-caption truncate text-text-tertiary">
                         {row.author ?? "Unknown author"}
                         {row.isAudiobook ? " · Audiobook" : ""}
                       </p>

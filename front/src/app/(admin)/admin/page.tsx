@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 
 import { adminGetOverview } from "@/app/actions/admin/analytics/get-overview";
-import { StatCard } from "@/components/admin/stat-card";
+import { StatCell } from "@/components/domain/stat-cell";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeading } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
@@ -47,17 +47,12 @@ function OverviewContent({ overview }: { overview: AdminOverview }) {
           Accounts
         </h2>
         <div className="grid gap-[var(--space-md)] sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Total accounts" value={formatNumber(users.total)} />
-          <StatCard label="Active" value={formatNumber(users.active)} note="not suspended or deleted" />
-          <StatCard label="Suspended" value={formatNumber(users.suspended)} />
-          <StatCard
+          <StatCell label="Total accounts" value={formatNumber(users.total)} />
+          <StatCell label="Active" value={formatNumber(users.active)} detail="not suspended or deleted" />
+          <StatCell label="Suspended" value={formatNumber(users.suspended)} />
+          <StatCell
             label="New (24h / 7d / 30d)"
-            value={
-              <span className="type-numeric">
-                {formatNumber(users.newLast24h)} / {formatNumber(users.newLast7d)} /{" "}
-                {formatNumber(users.newLast30d)}
-              </span>
-            }
+            value={`${formatNumber(users.newLast24h)} / ${formatNumber(users.newLast7d)} / ${formatNumber(users.newLast30d)}`}
           />
         </div>
       </section>
@@ -67,19 +62,14 @@ function OverviewContent({ overview }: { overview: AdminOverview }) {
           Engagement
         </h2>
         <div className="grid gap-[var(--space-md)] sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard
+          <StatCell
             label="Active listeners"
-            value={
-              <span className="type-numeric">
-                {formatNumber(activity.activeLast24h)} / {formatNumber(activity.activeLast7d)} /{" "}
-                {formatNumber(activity.activeLast30d)}
-              </span>
-            }
-            note="24 hours / 7 days / 30 days"
+            value={`${formatNumber(activity.activeLast24h)} / ${formatNumber(activity.activeLast7d)} / ${formatNumber(activity.activeLast30d)}`}
+            detail="24 hours / 7 days / 30 days"
           />
-          <StatCard label="Sessions" value={formatNumber(content.sessions)} />
-          <StatCard label="Listening time" value={formatSpan(content.listenTimeSec)} />
-          <StatCard
+          <StatCell label="Sessions" value={formatNumber(content.sessions)} />
+          <StatCell label="Listening time" value={formatSpan(content.listenTimeSec)} />
+          <StatCell
             label="Last session"
             value={content.lastSessionAt === null ? "—" : formatDateTime(content.lastSessionAt)}
           />
@@ -119,7 +109,7 @@ function OverviewContent({ overview }: { overview: AdminOverview }) {
                 {revenue.planDistribution.map((row) => (
                   <li key={row.planCode} className="flex items-center justify-between gap-[var(--space-md)]">
                     <span className="type-caption flex min-w-0 items-center gap-[var(--space-xs)] text-text-secondary">
-                      <span className="truncate">{row.title ?? row.planCode}</span>
+                      <span dir="auto" className="truncate">{row.title ?? row.planCode}</span>
                       {!row.isActive ? <Badge tone="muted">Archived</Badge> : null}
                     </span>
                     <span className="type-numeric text-text">{formatNumber(row.users)}</span>

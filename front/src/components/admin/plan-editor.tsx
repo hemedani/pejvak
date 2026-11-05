@@ -116,13 +116,13 @@ function PlanSummary({ plan }: { plan: AdminPlan }) {
     <div className="flex flex-wrap items-start justify-between gap-[var(--space-md)]">
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-[var(--space-sm)]">
-          <h2 className="type-heading text-text">{plan.title}</h2>
+          <h2 dir="auto" className="type-heading text-text">{plan.title}</h2>
           <Badge tone="neutral">{plan.code}</Badge>
           {!plan.isActive ? <Badge tone="muted">Archived</Badge> : null}
           {plan.isDefault ? <Badge tone="accent">Default</Badge> : null}
         </div>
         {plan.description ? (
-          <p className="type-caption mt-[var(--space-xs)] max-w-[70ch] text-text-tertiary">
+          <p dir="auto" className="type-caption mt-[var(--space-xs)] max-w-[70ch] text-text-tertiary">
             {plan.description}
           </p>
         ) : null}

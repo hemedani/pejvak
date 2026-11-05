@@ -121,15 +121,15 @@ function UserRow({ user }: { user: AdminUser }) {
   return (
     <tr className="border-b border-outline-variant last:border-b-0 hover:bg-surface-sunken/60">
       <td className="py-[var(--space-md)] pe-[var(--space-md)] ps-[var(--space-md)]">
-        <Link href={`/admin/users/${user.id}`} className="type-label block truncate text-text hover:underline">
+        <Link dir="auto" href={`/admin/users/${user.id}`} className="type-label block truncate text-text hover:underline">
           {user.email || "No email"}
         </Link>
-        <p className="type-caption truncate text-text-tertiary md:hidden">{user.username || "—"}</p>
+        <p dir="auto" className="type-caption truncate text-text-tertiary md:hidden">{user.username || "—"}</p>
       </td>
-      <td className="type-caption hidden py-[var(--space-md)] pe-[var(--space-md)] text-text-secondary md:table-cell">
+      <td dir="auto" className="type-caption hidden py-[var(--space-md)] pe-[var(--space-md)] text-text-secondary md:table-cell">
         {user.username || "—"}
       </td>
-      <td className="type-caption hidden py-[var(--space-md)] pe-[var(--space-md)] text-text-secondary lg:table-cell">
+      <td dir="auto" className="type-caption hidden py-[var(--space-md)] pe-[var(--space-md)] text-text-secondary lg:table-cell">
         {user.displayName ?? "—"}
       </td>
       <td className="py-[var(--space-md)] pe-[var(--space-md)]">

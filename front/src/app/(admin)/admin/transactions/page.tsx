@@ -205,7 +205,7 @@ function Row({ row, canMutate }: { row: AdminTransaction; canMutate: boolean }) 
             {row.userEmail ?? row.userId}
           </Link>
         ) : (
-          <p className="type-label text-text-secondary">{row.userEmail ?? "—"}</p>
+          <p dir="auto" className="type-label text-text-secondary">{row.userEmail ?? "—"}</p>
         )}
         <p className="type-caption text-text-tertiary">
           {row.paidAt ? `Paid ${formatDateTime(row.paidAt)}` : "Not paid"}
@@ -220,7 +220,7 @@ function Row({ row, canMutate }: { row: AdminTransaction; canMutate: boolean }) 
         <span className="type-numeric block truncate text-text-secondary" title={row.reference} dir="ltr">
           {row.reference}
         </span>
-        {row.note ? <span className="type-caption block truncate text-text-tertiary">{row.note}</span> : null}
+        {row.note ? <span dir="auto" className="type-caption block truncate text-text-tertiary">{row.note}</span> : null}
       </td>
       <td className="py-[var(--space-md)] pe-[var(--space-md)]">
         <Badge
