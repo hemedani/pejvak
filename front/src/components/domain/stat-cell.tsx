@@ -3,7 +3,7 @@
  *
  * The card exists to show the figure, so the figure is the label. It owns the
  * loudest tier — `type-figure` in `text` — while the caption above it steps
- * back to `textSecondary` and the detail below to `textTertiary`. That is plan
+ * back to `text-text-secondary` and the detail below to `text-text-tertiary`. That is plan
  * §7.2's tier table applied to a card whose subject is the number rather than
  * to a row whose subject is its label: reading it the other way round makes the
  * eye land on "Total listening time" and then go looking for the value it

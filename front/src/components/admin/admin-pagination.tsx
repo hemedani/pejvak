@@ -62,7 +62,7 @@ function PageLink({
   children: React.ReactNode;
 }) {
   const base =
-    "inline-flex h-10 items-center gap-[var(--space-xs)] rounded-[var(--radius-md)] border border-outline-strong px-[var(--space-md)] type-label transition-colors coarse:h-[var(--tap-min)]";
+    "inline-flex h-10 items-center gap-[var(--space-xs)] rounded-[var(--radius-md)] border border-outline-strong px-[var(--space-md)] type-label transition-colors duration-[var(--motion-fast)] coarse:h-[var(--tap-min)]";
 
   if (disabled) {
     return (

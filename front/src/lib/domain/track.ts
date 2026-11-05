@@ -173,7 +173,6 @@ export function parseTrackDetail(raw: unknown): TrackDetail | null {
     fileSizeBytes: asInt(record.fileSizeBytes) ?? 0,
     mimeType: asString(record.mimeType),
     downloadedAt: asTimestamp(record.downloadedAt),
-    createdAt: asTimestamp(record.createdAt),
     updatedAt: asTimestamp(record.updatedAt),
     annotations: parseAnnotationList(record.annotations),
   };

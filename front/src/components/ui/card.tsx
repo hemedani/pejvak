@@ -6,7 +6,7 @@
  * against its own hairline on mobile: the text stayed legible and the card
  * stopped being a shape.
  *
- * There is one radius (`--radius-card`, the new 22px shape) and one padding
+ * There is one radius (`--radius-card`) and one padding
  * (`--space-lg`), so two cards side by side start their content at the same
  * place.
  */
