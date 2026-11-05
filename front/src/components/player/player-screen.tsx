@@ -184,7 +184,7 @@ export function PlayerScreen({
       </div>
 
       <section className="flex flex-col gap-[var(--space-xs)] text-center">
-        <p className="type-kicker text-text-tertiary">{overline}</p>
+        <p dir="auto" className="type-kicker text-text-tertiary">{overline}</p>
         <h1 dir="auto" className="type-title text-text [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] overflow-hidden">
           {current.title}
         </h1>

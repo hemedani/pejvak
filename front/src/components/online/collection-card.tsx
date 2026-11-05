@@ -72,7 +72,7 @@ export function CollectionCard({
         />
 
         <div className="min-w-0">
-          <p dir="auto" className="type-overline truncate text-text-tertiary">{sourceName}</p>
+          <p dir="auto" className="type-kicker truncate text-text-tertiary">{sourceName}</p>
           <p
             dir="auto"
             className="type-body-strong mt-[var(--space-xxs)] line-clamp-2 text-text"

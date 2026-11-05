@@ -170,7 +170,7 @@ export default async function CollectionPage({ params }: { params: Promise<Param
           />
 
           <div className="min-w-0 flex-1">
-            <p className="type-overline text-text-tertiary">{source.nativeName}</p>
+            <p dir="auto" className="type-kicker text-text-tertiary">{source.nativeName}</p>
             <h1
               className="type-title mt-[var(--space-xs)] text-text"
               dir={isRtlText(collection.title) ? "rtl" : "ltr"}
