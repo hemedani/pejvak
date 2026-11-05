@@ -22,6 +22,13 @@ semantics (§3.6.15) already landed in Phase 1 or are history-surface work.
   hidden below `md`; sleep label computed once.
 - Test: opening the menu calls the right handler; Jump is disabled on live.
 
+## Task — palette tile in the tables (resolved)
+
+- `track-table.tsx` and `top-tracks-table.tsx` render `TrackArtwork` instead of
+  a grey glyph, so a coverless track keeps its identity and the two tables
+  cannot disagree with the player about its colour.
+- Tests: both tables assert a `linear-gradient` tile for a row with no cover.
+
 ## Done when
 
 `npm run check` is green and a narrow player shows transport + speed, Note and

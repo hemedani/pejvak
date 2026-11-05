@@ -14,8 +14,8 @@
 
 import Link from "next/link";
 
-import { Icon } from "@/components/ui/icon";
 import { OriginBadge } from "@/components/domain/origin-badge";
+import { TrackArtwork } from "@/components/player/track-artwork";
 import type { TrackSummary } from "@/lib/domain/track";
 import { cn } from "@/lib/cn";
 import { formatSpan } from "@/lib/format";
@@ -216,34 +216,16 @@ function Highlighted({
   );
 }
 
+/**
+ * The row's cover.
+ *
+ * The fallback is the same palette tile the player draws, not a grey glyph: a
+ * track without a cover still has an identity, and `paletteFor` is the one
+ * function that turns it into a colour. Reusing `TrackArtwork` means the row and
+ * the player cannot disagree about which track is which.
+ */
 function Artwork({ track }: { track: TrackSummary }) {
-  if (track.artworkUrl) {
-    return (
-      // A remote URL from an arbitrary host: `next/image` would need every source
-      // allow-listed at build time, and a broken image must not break the row.
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={track.artworkUrl}
-        alt=""
-        width={40}
-        height={40}
-        loading="lazy"
-        className="size-10 shrink-0 rounded-[var(--radius-sm)] object-cover"
-      />
-    );
-  }
-
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "grid size-10 shrink-0 place-items-center rounded-[var(--radius-sm)]",
-        "bg-surface-sunken text-text-tertiary",
-      )}
-    >
-      <Icon name={track.isAudiobook ? "book" : "player"} size="md" />
-    </span>
-  );
+  return <TrackArtwork track={track} className="size-10" />;
 }
 
 function SortHeader({

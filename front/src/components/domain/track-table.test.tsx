@@ -40,6 +40,18 @@ describe("TrackTable", () => {
     expect(screen.queryByText(/7 plays/)).toBeNull();
   });
 
+  it("gives a coverless track the palette tile, not a grey glyph", () => {
+    const { container } = render(
+      <TrackTable
+        tracks={[track]}
+        sort={{ field: "createdAt", order: "desc" }}
+        buildSortHref={() => "#"}
+        now={NOW}
+      />,
+    );
+    expect(container.querySelector('[style*="linear-gradient"]')).not.toBeNull();
+  });
+
   it("marks catalogue text as auto-direction so a Persian title renders RTL", () => {
     const persian = { ...track, title: "تاریخ شیعه" } as TrackSummary;
     render(

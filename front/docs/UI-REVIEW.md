@@ -15,6 +15,9 @@ timeline and the motion layer to `front/`._
 >
 > 2026-11-05: §3.4.10 landed. Speed sits beside the transport; Jump and Sleep
 > collapse into a More menu below `md`, and the volume slider hides there.
+>
+> 2026-11-05: §2.4 landed. The library and top-tracks tables draw the same
+> palette tile as the player instead of a grey glyph.
 
 The phone app's identity is not its palette (that was already ported, token for
 token). It is three things the browser was missing: **the wave**, **the listen
@@ -115,8 +118,8 @@ pathname — would make the app feel of a piece with its own controls.
 ### 2.4 Smaller things the phone has and the web does not
 
 - **A palette tile** wherever a track appears without artwork (`PaletteTile` on
-  the phone). `TrackArtwork` covers the player; the library table and the
-  top-tracks table still show a grey glyph.
+  the phone) — _resolved 2026-11-05_. `TrackArtwork` now covers the player, the
+  library table and the top-tracks table.
 - **A buffering ring** — covered by the wave's sweep; no work needed.
 - **Haptics** — not applicable.
 

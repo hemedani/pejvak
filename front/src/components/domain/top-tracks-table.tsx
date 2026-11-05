@@ -12,7 +12,7 @@
 
 import Link from "next/link";
 
-import { Icon } from "@/components/ui/icon";
+import { TrackArtwork } from "@/components/player/track-artwork";
 import type { TopTrackRow } from "@/lib/insights";
 import { formatNumber, formatSpan } from "@/lib/format";
 import { formatRelativeTime } from "@/lib/time";
@@ -43,9 +43,10 @@ export function TopTracksTable({ rows, now }: { rows: readonly TopTrackRow[]; no
 
               <td className="py-[var(--space-md)] pe-[var(--space-md)]">
                 <div className="flex min-w-0 items-center gap-[var(--space-sm)]">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-[var(--radius-2xs)] bg-surface-sunken text-text-tertiary">
-                    <Icon name="player" size="sm" />
-                  </span>
+                  <TrackArtwork
+                    track={{ contentHash: row.contentHash, title: row.title ?? "", artworkUrl: null }}
+                    className="size-8 rounded-[var(--radius-2xs)]"
+                  />
 
                   <div className="min-w-0">
                     {row.title && row.id ? (
