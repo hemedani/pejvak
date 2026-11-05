@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { Reveal } from "./reveal";
+
+afterEach(cleanup);
 
 describe("Reveal", () => {
   it("caps the stagger delay at ten steps", () => {

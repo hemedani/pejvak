@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -12,6 +12,8 @@ vi.mock("next/link", () => ({
 import { TrackTable } from "./track-table";
 import type { TrackSummary } from "@/lib/domain/track";
 import { formatRelativeTime } from "@/lib/time";
+
+afterEach(cleanup);
 
 const NOW = Date.UTC(2026, 10, 4);
 const createdAt = NOW - 2 * 86_400_000;

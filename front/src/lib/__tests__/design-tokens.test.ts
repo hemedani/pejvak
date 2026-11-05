@@ -16,6 +16,19 @@ function block(css: string, selector: string): Record<string, string> {
   );
 }
 
+function nestedBlock(css: string, marker: string): string {
+  const start = css.indexOf(marker);
+  if (start === -1) throw new Error(`missing ${marker}`);
+  const open = css.indexOf("{", start);
+  let depth = 0;
+  for (let i = open; i < css.length; i += 1) {
+    if (css[i] === "{") depth += 1;
+    if (css[i] === "}") depth -= 1;
+    if (depth === 0) return css.slice(open + 1, i);
+  }
+  throw new Error(`unclosed ${marker}`);
+}
+
 function channels(hex: string): [number, number, number] {
   const clean = hex.replace("#", "");
   const full = clean.length === 3 ? clean.split("").map((c) => c + c).join("") : clean;
@@ -119,5 +132,29 @@ describe("design tokens", () => {
     expect(globalsCss).toContain("@media (prefers-reduced-motion: reduce)");
     expect(globalsCss).toContain('[dir="rtl"]');
     expect(globalsCss).toContain('[dir="auto"]:dir(rtl)');
+  });
+
+  it("collapses both duration and delay under reduced motion", () => {
+    const reduced = nestedBlock(globalsCss, "@media (prefers-reduced-motion: reduce)");
+    expect(reduced).toMatch(/animation-duration:\s*0\.01ms\s*!important/);
+    expect(reduced).toMatch(/animation-delay:\s*0ms\s*!important/);
+    expect(reduced).toMatch(/transition-duration:\s*0\.01ms\s*!important/);
+    expect(reduced).toMatch(/transition-delay:\s*0ms\s*!important/);
+    expect(reduced).toMatch(/::view-transition-new\(root\)[^}]*animation:\s*none/);
+  });
+
+  it("lets catalogue data set its own direction", () => {
+    const read = (path: string) => readFileSync(new URL(path, import.meta.url), "utf8");
+    const surfaces: Array<[string, string[]]> = [
+      ["../../app/(shell)/library/[trackId]/page.tsx", [
+        '<h1 dir="auto"', '<p dir="auto"', '<Badge dir="auto"',
+      ]],
+      ["../../components/domain/annotation-list.tsx", ['<p dir="auto"']],
+      ["../../components/player/player-bar.tsx", ['<span dir="auto"']],
+    ];
+    for (const [path, needles] of surfaces) {
+      const source = read(path);
+      for (const needle of needles) expect(source).toContain(needle);
+    }
   });
 });

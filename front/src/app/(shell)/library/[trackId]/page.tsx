@@ -113,16 +113,16 @@ export default async function TrackPage({
               {track.isAudiobook ? "Audiobook" : "Track"}
             </p>
 
-            <h1 className="type-title text-text">{track.title}</h1>
+            <h1 dir="auto" className="type-title text-text">{track.title}</h1>
 
             {subtitle ? (
-              <p className="type-body mt-[var(--space-xs)] text-text-secondary">{subtitle}</p>
+              <p dir="auto" className="type-body mt-[var(--space-xs)] text-text-secondary">{subtitle}</p>
             ) : null}
 
             <div className="mt-[var(--space-sm)] flex flex-wrap items-center gap-[var(--space-xs)]">
               <OriginBadge origin={track.origin} />
 
-              {track.collectionTitle ? <Badge tone="neutral">{track.collectionTitle}</Badge> : null}
+              {track.collectionTitle ? <Badge dir="auto" tone="neutral">{track.collectionTitle}</Badge> : null}
 
               <Badge tone="neutral">
                 <span className="type-numeric">{formatClock(track.durationSec)}</span>

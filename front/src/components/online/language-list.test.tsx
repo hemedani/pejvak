@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
@@ -11,6 +11,8 @@ vi.mock("next/link", () => ({
 
 import { LanguageRow } from "./language-list";
 import type { OnlineLanguage } from "@/lib/online/types";
+
+afterEach(cleanup);
 
 const persian: OnlineLanguage = {
   code: "fa",

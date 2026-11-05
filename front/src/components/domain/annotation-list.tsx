@@ -116,7 +116,7 @@ function AnnotationList({ annotations }: { annotations: readonly Annotation[] })
 
           <div className="min-w-0 flex-1">
             {annotation.text.length > 0 ? (
-              <p className="type-body whitespace-pre-wrap break-words text-text">{annotation.text}</p>
+              <p dir="auto" className="type-body whitespace-pre-wrap break-words text-text">{annotation.text}</p>
             ) : (
               <p className="type-caption text-text-tertiary">No text — marker only</p>
             )}

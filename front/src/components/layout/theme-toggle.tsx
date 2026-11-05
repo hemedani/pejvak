@@ -89,7 +89,9 @@ export function ThemeToggle() {
     if (typeof document.startViewTransition === "function") {
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (!reduced) {
-        document.startViewTransition(() => applyTheme(next));
+        const transition = document.startViewTransition(() => applyTheme(next));
+        // An interrupted transition rejects; the theme is already applied.
+        void transition.finished.catch(() => {});
         return;
       }
     }

@@ -81,8 +81,8 @@ export function PlayerBar() {
             >
               <TrackArtwork track={current} className="size-12" />
               <span className="min-w-0">
-                <span className="type-label block truncate text-text">{current.title}</span>
-                <span className="type-caption block truncate text-text-secondary">
+                <span dir="auto" className="type-label block truncate text-text">{current.title}</span>
+                <span dir="auto" className="type-caption block truncate text-text-secondary">
                   {current.artist ?? (current.origin === "local" ? "On your device" : "Unknown artist")}
                 </span>
               </span>

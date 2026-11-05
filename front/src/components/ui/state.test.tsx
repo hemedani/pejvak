@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { render } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { Skeleton } from "./state";
+
+afterEach(cleanup);
 
 describe("Skeleton", () => {
   it("uses the shimmer utility instead of an opacity pulse", () => {

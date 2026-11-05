@@ -61,7 +61,7 @@ function PageLink({
   children: React.ReactNode;
 }) {
   const base =
-    "inline-flex h-[var(--control-md)] items-center gap-[var(--space-xs)] rounded-[var(--radius-md)] border border-outline-strong px-[var(--space-md)] type-label transition-colors";
+    "inline-flex h-[var(--control-md)] items-center gap-[var(--space-xs)] rounded-[var(--radius-md)] border border-outline-strong px-[var(--space-md)] type-label transition-colors duration-[var(--motion-fast)]";
 
   if (disabled) {
     // Rendered as a disabled control rather than removed: a control that appears
@@ -110,7 +110,7 @@ export function CursorPagination({
   className?: string;
 }) {
   const base =
-    "inline-flex h-[var(--control-md)] items-center gap-[var(--space-xs)] rounded-[var(--radius-md)] border border-outline-strong px-[var(--space-md)] type-label transition-colors";
+    "inline-flex h-[var(--control-md)] items-center gap-[var(--space-xs)] rounded-[var(--radius-md)] border border-outline-strong px-[var(--space-md)] type-label transition-colors duration-[var(--motion-fast)]";
 
   return (
     <nav aria-label="Pagination" className={cn("flex items-center justify-center", className)}>
