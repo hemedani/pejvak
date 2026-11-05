@@ -27,8 +27,8 @@ export function LanguageRow({ language }: { language: OnlineLanguage }) {
   const content = (
     <>
       <div className="min-w-0 flex-1">
-        <p className="type-label truncate text-text" dir={language.direction}>
-          {language.nativeName}
+        <p className="type-label truncate text-text" dir="ltr">
+          <span dir={language.direction}>{language.nativeName}</span>
         </p>
         <p className="type-caption truncate text-text-tertiary">{language.name}</p>
       </div>
