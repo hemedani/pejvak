@@ -55,6 +55,16 @@ experimental flags to get a 401 page when `redirect()` already works.
 8. **No second source of truth.** Derived counts are computed, never stored; a title in
    the stats payload would be one, which is why the top-tracks join happens on the page.
 
+### The web's visual identity
+
+The web has its own visual identity (2026-11 rebrand). `src/styles/tokens.css` is the web
+source of truth; it is no longer a transcription of `mobile/src/theme/tokens.ts`. Product
+rules — English/LTR, two materials, four states, token-first, reduced motion, AA — still
+match the phone. Do not "sync" a visual token back to mobile without a product decision.
+
+[`docs/DESIGN.md`](./docs/DESIGN.md) is the durable map of the palette, type, space, shape
+and motion, and the "where to change what" table. Read it before changing a surface.
+
 ---
 
 ## The listener act surface (23 acts, re-read out of `back/` on 2026-10-31)
@@ -185,7 +195,9 @@ is why the gate ends with `next build` and not with `tsc`.
 ## Port, don't reinvent
 
 These are pure TypeScript in `mobile/src/lib/` and were copied with their tests, not
-rewritten. Keep the comments: they encode the reasons.
+rewritten. Keep the comments: they encode the reasons. This is behaviour and logic only —
+the visual language is not ported; the web owns its tokens, type and motion
+([`docs/DESIGN.md`](./docs/DESIGN.md)).
 
 `search.ts` · `time.ts` · `format.ts` · `librarySearch.ts` ·
 `sessionTracking.ts` · `playbackContext.ts` · `listeningStretch.ts` · `online/*` ·

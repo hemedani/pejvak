@@ -9,8 +9,10 @@
  *
  *   1. **Two materials.** `--surface` / `--surface-sunken` are opaque and carry
  *      everything the reader reads. Glass is only for what floats.
- *   2. **The three content tiers.** `--text` (label) → `--text-secondary`
- *      (value) → `--text-tertiary` (detail). Never inverted.
+ *   2. **The three content tiers.** `--text` is the reading tier (the value or
+ *      title the surface exists to show) → `--text-secondary` (its label and
+ *      supporting copy) → `--text-tertiary` (detail). Never inverted: a label
+ *      must not outshout the value it introduces.
  *   3. **The radius ramp.** One strictly-increasing even ramp. A component asks
  *      for a step, never for pixels.
  */

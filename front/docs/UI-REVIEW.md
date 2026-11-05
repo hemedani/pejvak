@@ -3,6 +3,10 @@
 _Written 2026-11-02, alongside the commit that ported the wave, the listening
 timeline and the motion layer to `front/`._
 
+> 2026-11-04: Phase 1 of the rebrand resolved §3.1.1, §3.1.3, §3.2.4, §3.2.5, §3.2.6, §3.3.7,
+> §3.4.11, §3.6.16 and added the route transition from §2.3. The remaining §3 items are
+> Phase 2–5 work; the token values in this document are superseded by `docs/DESIGN.md`.
+
 The phone app's identity is not its palette (that was already ported, token for
 token). It is three things the browser was missing: **the wave**, **the listen
 drawn as a bar**, and **the sense that a screen belongs to the track that is
