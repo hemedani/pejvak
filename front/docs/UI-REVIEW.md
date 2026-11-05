@@ -6,6 +6,9 @@ timeline and the motion layer to `front/`._
 > 2026-11-04: Phase 1 of the rebrand resolved §3.1.1, §3.1.3, §3.2.4, §3.2.5, §3.2.6, §3.3.7,
 > §3.4.11, §3.6.16 and added the route transition from §2.3. The remaining §3 items are
 > Phase 2–5 work; the token values in this document are superseded by `docs/DESIGN.md`.
+>
+> 2026-11-05: §2.1 landed. Home opens on a Continue shelf built from
+> `getMyPlaybackContexts`, above the four totals, with the same card Browse uses.
 
 The phone app's identity is not its palette (that was already ported, token for
 token). It is three things the browser was missing: **the wave**, **the listen
@@ -75,7 +78,7 @@ row one 36 px slot and is reachable, named and honest.
 
 Ranked by what a returning listener notices first.
 
-### 2.1 There is no "continue listening" — the biggest gap
+### 2.1 There is no "continue listening" — the biggest gap — _resolved 2026-11-05_
 
 The dashboard opens on four totals and a bar chart. Those answer *what have I
 done*; nothing on the web answers *what was I doing*. The phone's dock player and

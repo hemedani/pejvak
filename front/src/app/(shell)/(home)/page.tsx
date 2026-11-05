@@ -1,8 +1,11 @@
+import { getMyContexts } from "@/app/actions/online/get-my-contexts";
+import { getMyOnlineCollections } from "@/app/actions/online/get-my-online-collections";
 import { getSessionsInWindow } from "@/app/actions/sessions/get-sessions-in-window";
 import { getMyStats } from "@/app/actions/stats/get-my-stats";
 import { getMyTracks } from "@/app/actions/tracks/get-my-tracks";
 import { ActivityChart, ActivitySummary } from "@/components/domain/activity-chart";
 import { StatCell } from "@/components/domain/stat-cell";
+import { ContinueSection } from "@/components/online/continue-section";
 import { TopTracksTable } from "@/components/domain/top-tracks-table";
 import { Reveal } from "@/components/motion/reveal";
 import { Button } from "@/components/ui/button";
@@ -11,6 +14,7 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { PageHeader } from "@/components/ui/page-header";
 import { EmptyState, ErrorState, OfflineBanner } from "@/components/ui/state";
 import { bucketByDay, currentStreak, joinTopTracks } from "@/lib/insights";
+import { buildContinueItems } from "@/lib/online/continue";
 import { formatNumber, formatSpan } from "@/lib/format";
 import { now as clock } from "@/lib/now";
 import { formatRelativeTime } from "@/lib/time";
@@ -47,10 +51,14 @@ export default async function DashboardPage() {
   const now = clock();
   const windowStart = now - CHART_DAYS * 24 * 60 * 60 * 1000;
 
-  const [stats, library, sessions] = await Promise.all([
+  const [stats, library, sessions, runs, saved] = await Promise.all([
     getMyStats(),
     getMyTracks({ page: 1, limit: JOIN_LIMIT, sortBy: "lastPlayedAt", sortOrder: "desc" }),
     getSessionsInWindow({ from: windowStart }),
+    // Continue is the only read whose failure does not remove anything else:
+    // the totals and the chart are still true, so it is allowed to fail alone.
+    getMyContexts({ contextType: "online", limit: 12 }),
+    getMyOnlineCollections({ sortBy: "lastOpenedAt", limit: 36 }),
   ]);
 
   if (!stats.success) {
@@ -68,6 +76,12 @@ export default async function DashboardPage() {
   const streak = currentStreak(buckets);
 
   const hasHistory = data.sessionCount > 0;
+
+  // One row, newest run per collection. The saved shelf only supplies artwork;
+  // a run outlives the row it names, so it renders even when the shelf is gone.
+  const continueItems = runs.success
+    ? buildContinueItems(runs.body, saved.success ? saved.body.collections : [], 4)
+    : [];
 
   /**
    * The denominator on "Tracks heard", or nothing.
@@ -161,13 +175,24 @@ export default async function DashboardPage() {
       ) : (
         <>
           {/*
+            "What was I doing" before "what have I done". It is the first thing
+            a returning listener wants, and it is the same shelf Browse draws.
+          */}
+          <Reveal index={0}>
+            <ContinueSection
+              items={continueItems}
+              failure={runs.success ? undefined : runs.error}
+            />
+          </Reveal>
+
+          {/*
             Four numbers, arriving one after the other. The stagger is the only
             motion on this page: it says "this was assembled for you" without a
             single element moving after it lands.
           */}
           <div className="grid gap-[var(--space-md)] sm:grid-cols-2 xl:grid-cols-4">
             {cells.map((cell, index) => (
-              <Reveal key={cell.label} index={index} className="h-full">
+              <Reveal key={cell.label} index={index + 1} className="h-full">
                 <StatCell
                   label={cell.label}
                   value={cell.value}
@@ -179,7 +204,7 @@ export default async function DashboardPage() {
             ))}
           </div>
 
-          <Reveal index={cells.length}>
+          <Reveal index={cells.length + 1}>
             <Card className="p-[var(--space-xl)]">
               <CardHeading overline="Last 30 days" title="Listening activity" />
               <div className="mt-[var(--space-lg)]">
@@ -197,7 +222,7 @@ export default async function DashboardPage() {
             </Card>
           </Reveal>
 
-          <Reveal index={cells.length + 1}>
+          <Reveal index={cells.length + 2}>
             <section className="flex flex-col gap-[var(--space-md)]">
               <CardHeading overline="Most time" title="Top ten tracks" />
 
