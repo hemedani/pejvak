@@ -29,3 +29,6 @@ yarn-error.log*
 # testing
 /coverage
 .superpowers/
+
+# visual QA output
+/artifacts
