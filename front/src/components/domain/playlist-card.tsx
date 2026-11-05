@@ -45,15 +45,15 @@ export function PlaylistCard({ playlist, now }: { playlist: Playlist; now: numbe
     >
       <Card className="flex items-start justify-between gap-[var(--space-lg)] p-[var(--space-lg)] transition-colors hover:bg-surface-sunken">
         <div className="min-w-0">
-          <h2 className="type-heading truncate text-text">{playlist.title}</h2>
+          <h2 dir="auto" className="type-heading truncate text-text">{playlist.title}</h2>
 
           {playlist.description ? (
-            <p className="type-caption mt-[var(--space-xs)] line-clamp-1 text-text-tertiary">
+            <p dir="auto" className="type-caption mt-[var(--space-xs)] line-clamp-1 text-text-tertiary">
               {playlist.description}
             </p>
           ) : null}
 
-          <p className="type-caption type-numeric mt-[var(--space-sm)] text-text-tertiary">{meta}</p>
+          <p className="type-caption mt-[var(--space-sm)] text-text-tertiary">{meta}</p>
         </div>
 
         <span className="type-label inline-flex shrink-0 items-center gap-[var(--space-xs)] text-text-secondary">

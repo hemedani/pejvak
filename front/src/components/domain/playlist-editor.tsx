@@ -351,6 +351,7 @@ export function PlaylistEditor({
             >
               <div className="min-w-0 flex-1">
                 <TextField
+                  dir="auto"
                   label="Playlist name"
                   value={draftTitle}
                   onChange={(event) => setDraftTitle(event.target.value)}
@@ -382,10 +383,10 @@ export function PlaylistEditor({
               </div>
             </form>
           ) : (
-            <h1 className="type-title mt-[var(--space-xs)] text-text">{playlist.title}</h1>
+            <h1 dir="auto" className="type-title mt-[var(--space-xs)] text-text">{playlist.title}</h1>
           )}
 
-          <p className="type-caption type-numeric mt-[var(--space-sm)] text-text-tertiary">{meta}</p>
+          <p className="type-caption mt-[var(--space-sm)] text-text-tertiary">{meta}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-[var(--space-sm)]">
@@ -480,7 +481,7 @@ export function PlaylistEditor({
               aria-labelledby={confirmLabelId}
               className="rounded-[var(--radius-md)] border border-danger/40 bg-danger-soft p-[var(--space-md)]"
             >
-              <p id={confirmLabelId} className="type-body-strong text-danger">
+              <p id={confirmLabelId} dir="auto" className="type-body-strong text-danger">
                 Delete “{playlist.title}”?
               </p>
 
@@ -574,6 +575,7 @@ function PlaylistRow({
 
         <div className="min-w-0 flex-1">
           <p
+            dir="auto"
             className={cn(
               "type-body-strong truncate",
               track === null ? "text-text-tertiary" : "text-text",
@@ -584,7 +586,7 @@ function PlaylistRow({
           </p>
 
           {meta ? (
-            <p className="type-caption type-numeric mt-[var(--space-xxs)] text-text-tertiary">
+            <p className="type-caption mt-[var(--space-xxs)] text-text-tertiary">
               {meta}
             </p>
           ) : null}
