@@ -29,6 +29,14 @@ semantics (§3.6.15) already landed in Phase 1 or are history-surface work.
   cannot disagree with the player about its colour.
 - Tests: both tables assert a `linear-gradient` tile for a row with no cover.
 
+## Task — timeline transcript (resolved)
+
+- `listening-timeline.tsx` opens a `<details>` under the strip listing each
+  segment: title (`dir="auto"`), span and state — heard through, jumped, or
+  still listening. `role="img"` stays for the glance; the list is the same
+  information as text.
+- Tests: `listening-timeline.test.tsx`.
+
 ## Done when
 
 `npm run check` is green and a narrow player shows transport + speed, Note and

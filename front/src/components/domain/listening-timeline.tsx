@@ -25,7 +25,7 @@
  */
 
 import { formatSpan } from "@/lib/format";
-import type { ListeningTimeline } from "@/lib/listeningTimeline";
+import type { ListeningTimeline, TimelineSegment } from "@/lib/listeningTimeline";
 import { withAlpha } from "@/lib/palette";
 import { formatClock } from "@/lib/time";
 
@@ -115,6 +115,48 @@ export function ListeningTimelineBar({
       </div>
 
       <p className="type-caption text-text-secondary">{caption}</p>
+
+      {/*
+        The strip is one `role="img"` with a sentence for a label, which is the
+        right answer for a glance and a dead end for a screen reader: "4 tracks"
+        does not say which four, or which parts were heard. This is the same
+        information as text, opened on request so it costs the sighted layout
+        nothing.
+      */}
+      {!empty ? (
+        <details className="border-t border-outline-variant pt-[var(--space-sm)]">
+          <summary className="type-caption cursor-pointer select-none text-text-secondary">
+            Tracks in this listen
+          </summary>
+          <ol className="mt-[var(--space-sm)] flex flex-col divide-y divide-outline-variant">
+            {segments.map((segment) => (
+              <li
+                key={segment.key}
+                className="flex items-baseline justify-between gap-[var(--space-md)] py-[var(--space-xs)]"
+              >
+                <span dir="auto" className="type-caption min-w-0 truncate text-text">
+                  {segment.title}
+                </span>
+                <span className="type-caption shrink-0 text-text-tertiary">
+                  {describeSegment(segment)}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </details>
+      ) : null}
     </div>
   );
+}
+
+/** One row of the transcript under the bar: what was heard, and how much of it. */
+function describeSegment(segment: TimelineSegment): string {
+  if (segment.toSec === null) {
+    return "Still listening";
+  }
+  const range = `${formatClock(segment.fromSec)} to ${formatClock(segment.toSec)}`;
+  if (segment.completed) {
+    return `${range}, heard through`;
+  }
+  return segment.seeked ? `${range}, jumped` : `${range}, heard`;
 }

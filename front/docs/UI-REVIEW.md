@@ -18,6 +18,10 @@ timeline and the motion layer to `front/`._
 >
 > 2026-11-05: §2.4 landed. The library and top-tracks tables draw the same
 > palette tile as the player instead of a grey glyph.
+>
+> 2026-11-05: §3.6.15 landed. The timeline bar now has a per-segment list under
+> it, so a screen reader (or anyone who wants the detail) gets each track and
+> what was heard of it.
 
 The phone app's identity is not its palette (that was already ported, token for
 token). It is three things the browser was missing: **the wave**, **the listen
@@ -212,10 +216,14 @@ pathname — would make the app feel of a piece with its own controls.
     missing is **the timeline's per-segment information for a screen reader**:
     the caption says "3 tracks" but not which. A `<details>` under the bar
     listing "Chapter one — 0:00 to 10:00, heard" would cost nothing and make the
-    best thing on the page reachable.
+    best thing on the page reachable. _Resolved 2026-11-05_: the bar now carries
+    an expandable per-segment list — title, span and whether it was heard
+    through, jumped or is still open.
 16. **The history detail sheet's title can be two chapters long** and
     `Dialog.Title` does not clamp. Two lines is fine; five is not. `line-clamp-2`
-    on the title, full string in `title`.
+    on the title, full string in `title`. _Resolved 2026-11-05_: `player/sheet.tsx`
+    already clamps to two lines and sets `title` to the full string, so both
+    sheets inherit it.
 
 ---
 
