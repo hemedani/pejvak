@@ -14,6 +14,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { ContextHistoryButton } from "@/components/domain/context-history-sheet";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { playQueueAt, seek } from "@/lib/player/controller";
@@ -188,14 +189,17 @@ export function PlayerScreen({
           {current.artist ?? current.albumTitle ?? "Unknown artist"}
         </p>
         {context ? (
-          <Link
-            dir="auto"
-            href={context.type === "playlist" ? `/playlists/${context.key}` : "/browse"}
-            className="type-caption mx-auto mt-[var(--space-xs)] inline-flex items-center gap-[var(--space-xs)] rounded-[var(--radius-pill)] border border-outline-variant px-[var(--space-md)] py-[var(--space-xxs)] text-text-secondary hover:bg-surface-sunken hover:text-text"
-          >
-            {context.title}
-            <Icon name="external" size="xs" />
-          </Link>
+          <div className="mt-[var(--space-xs)] flex flex-wrap items-center justify-center gap-[var(--space-sm)]">
+            <Link
+              dir="auto"
+              href={context.type === "playlist" ? `/playlists/${context.key}` : "/browse"}
+              className="type-caption inline-flex items-center gap-[var(--space-xs)] rounded-[var(--radius-pill)] border border-outline-variant px-[var(--space-md)] py-[var(--space-xxs)] text-text-secondary hover:bg-surface-sunken hover:text-text"
+            >
+              {context.title}
+              <Icon name="external" size="xs" />
+            </Link>
+            <ContextHistoryButton contextKey={context.key} contextTitle={context.title} />
+          </div>
         ) : null}
       </section>
 

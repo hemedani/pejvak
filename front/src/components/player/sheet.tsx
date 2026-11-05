@@ -52,7 +52,7 @@ export function Sheet({
         >
           <header className="flex items-start justify-between gap-[var(--space-md)] px-[var(--space-lg)] pb-[var(--space-md)] pt-[var(--space-lg)]">
             <div className="min-w-0">
-              <Dialog.Title className="type-heading line-clamp-2 text-text" title={title}>
+              <Dialog.Title dir="auto" className="type-heading line-clamp-2 text-text" title={title}>
                 {title}
               </Dialog.Title>
               {description ? (

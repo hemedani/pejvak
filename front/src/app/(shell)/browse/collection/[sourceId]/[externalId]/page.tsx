@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getMyContexts } from "@/app/actions/online/get-my-contexts";
 import { getMyOnlineCollections } from "@/app/actions/online/get-my-online-collections";
 import { getOnlineCollection } from "@/app/actions/online/get-online-collection";
+import { ContextHistoryButton } from "@/components/domain/context-history-sheet";
 import { OnlineArtwork } from "@/components/online/artwork";
 import { FavoriteButton } from "@/components/online/favorite-button";
 import { PlayCollectionButton } from "@/components/online/play-collection-button";
@@ -226,6 +227,8 @@ export default async function CollectionPage({ params }: { params: Promise<Param
                   size="md"
                 />
               ) : null}
+
+              <ContextHistoryButton contextKey={key} contextTitle={collection.title} />
 
               <FavoriteButton collection={playable} initialFavorite={savedRow?.isFavorite ?? false} />
 

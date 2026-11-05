@@ -9,6 +9,9 @@ timeline and the motion layer to `front/`._
 >
 > 2026-11-05: §2.1 landed. Home opens on a Continue shelf built from
 > `getMyPlaybackContexts`, above the four totals, with the same card Browse uses.
+>
+> 2026-11-05: §2.2 landed. A collection page and the player's context chip open a
+> sheet listing every play-through of that collection, newest first.
 
 The phone app's identity is not its palette (that was already ported, token for
 token). It is three things the browser was missing: **the wave**, **the listen
@@ -91,7 +94,7 @@ The act already exists and is **unused**: `actions/online/get-my-contexts.ts`
 and tested. So this is a card, not a feature: one read, one `ResumeListenButton`
 reused from the history row, and it should sit **above** the four stat cells.
 
-### 2.2 A collection's own history (the phone's `ContextHistorySheet`)
+### 2.2 A collection's own history (the phone's `ContextHistorySheet`) — _resolved 2026-11-05_
 
 "Every play-through of this folder or playlist, newest first, including the one in
 progress." The same unused act returns exactly that when filtered by
