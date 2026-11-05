@@ -12,6 +12,9 @@ timeline and the motion layer to `front/`._
 >
 > 2026-11-05: §2.2 landed. A collection page and the player's context chip open a
 > sheet listing every play-through of that collection, newest first.
+>
+> 2026-11-05: §3.4.10 landed. Speed sits beside the transport; Jump and Sleep
+> collapse into a More menu below `md`, and the volume slider hides there.
 
 The phone app's identity is not its palette (that was already ported, token for
 token). It is three things the browser was missing: **the wave**, **the listen
@@ -174,7 +177,7 @@ pathname — would make the app feel of a piece with its own controls.
 
 ### 3.4 Density and touch
 
-10. **The player's control row is five ghost buttons in a line** (speed, jump,
+10. **The player's control row is five ghost buttons in a line — _resolved 2026-11-05_** (speed, jump,
     sleep, note, volume). On the phone they are split: transport-adjacent
     controls beside the transport, utilities behind a menu. On the web, `Speed`
     belongs next to the transport; `Jump to time` and `Sleep timer` are a

@@ -31,6 +31,7 @@ import { AnnotationList } from "./annotation-list";
 import type { TimelineMarker } from "./annotation-markers";
 import { JumpToTimeSheet } from "./jump-to-time-sheet";
 import { PlaybackStatusLine } from "./playback-status-line";
+import { PlayerMoreMenu } from "./player-more-menu";
 import { requestOpenNote, requestOpenQueue } from "./queue-events";
 import { Scrubber } from "./scrubber";
 import { SleepTimerSheet, useSleepTimer } from "./sleep-timer-sheet";
@@ -131,6 +132,8 @@ export function PlayerScreen({
 
   const local = current.origin === "local";
   const overline = describeOverline(context, current, queueIndex, queueLength);
+  const sleepLabel =
+    sleep.deadline !== null ? `Sleep ${formatRemaining(sleep.remainingMs)}` : "Sleep timer";
 
   return (
     <div className="relative isolate mx-auto flex w-full max-w-[760px] flex-col gap-[var(--space-xxl)]">
@@ -228,7 +231,10 @@ export function PlayerScreen({
             }}
           />
           <PlaybackStatusLine />
-          <TransportControls />
+          <div className="flex flex-wrap items-center justify-center gap-[var(--space-sm)]">
+            <TransportControls />
+            <SpeedMenu />
+          </div>
         </>
       ) : (
         <div className="flex flex-col gap-[var(--space-md)]">
@@ -238,10 +244,9 @@ export function PlayerScreen({
       )}
 
       <section aria-label="More controls" className="flex flex-wrap items-center justify-center gap-[var(--space-sm)]">
-        <SpeedMenu />
         <button
           type="button"
-          className="inline-flex h-11 items-center gap-[var(--space-xs)] rounded-[var(--radius-sm)] px-[var(--space-md)] type-label text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+          className="hidden h-11 items-center gap-[var(--space-xs)] rounded-[var(--radius-sm)] px-[var(--space-md)] type-label text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] md:inline-flex"
           onClick={() => setJumpOpen(true)}
           disabled={current.isLive}
         >
@@ -250,11 +255,11 @@ export function PlayerScreen({
         </button>
         <button
           type="button"
-          className="inline-flex h-11 items-center gap-[var(--space-xs)] rounded-[var(--radius-sm)] px-[var(--space-md)] type-label text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+          className="hidden h-11 items-center gap-[var(--space-xs)] rounded-[var(--radius-sm)] px-[var(--space-md)] type-label text-text-secondary hover:bg-surface-sunken hover:text-text focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)] md:inline-flex"
           onClick={() => setSleepOpen(true)}
         >
           <Icon name="sleep" size="sm" />
-          {sleep.deadline !== null ? `Sleep ${formatRemaining(sleep.remainingMs)}` : "Sleep timer"}
+          {sleepLabel}
         </button>
         {!local ? (
           <button
@@ -266,7 +271,16 @@ export function PlayerScreen({
             Note
           </button>
         ) : null}
-        <VolumeControl withSlider />
+        <div className="hidden md:block">
+          <VolumeControl withSlider />
+        </div>
+        <PlayerMoreMenu
+          className="md:hidden"
+          jumpDisabled={current.isLive}
+          sleepLabel={sleepLabel}
+          onJump={() => setJumpOpen(true)}
+          onSleep={() => setSleepOpen(true)}
+        />
       </section>
 
       {!local ? (
