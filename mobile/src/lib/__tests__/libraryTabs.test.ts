@@ -18,7 +18,19 @@ describe("libraryTabs", () => {
       "playlists",
       "recent",
     ]);
-    expect(libraryTabs(true)[0]?.label).toBe("Language");
+  });
+
+  it("calls the online shelf Online, not Language", () => {
+    // The tab is the shelf of online sources, not the language setting; the
+    // language is named on the button that chooses it.
+    expect(libraryTabs(true)[0]?.label).toBe("Online");
+    expect(libraryTabs(false).map((tab) => tab.label)).not.toContain("Online");
+  });
+
+  it("gives every tab its own glyph", () => {
+    const icons = libraryTabs(true).map((tab) => tab.icon);
+    expect(icons.every((icon) => icon.length > 0)).toBe(true);
+    expect(new Set(icons).size).toBe(icons.length);
   });
 
   it("keeps Playlists between Folders and Recent", () => {

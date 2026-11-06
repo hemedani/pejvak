@@ -5,10 +5,20 @@
  * listener who has chosen a language owns a fourth tab, and that tab is first
  * and is where the app opens. The screen renders this list; it does not decide
  * its order.
+ *
+ * ## The tab says "Online", not "Language"
+ *
+ * The view is not a language setting — it is the shelf of *online* sources in
+ * the language the listener chose, standing beside the tracks and folders that
+ * live on the device. Naming it after the language made it read as a filter on
+ * the library rather than as the one tab whose content comes from the network.
+ * The language itself is still named on the button that chooses it.
  */
 
+import type { IconName } from "@/components/ui/icon";
+
 export const LIBRARY_VIEW_LABELS = {
-  language: "Language",
+  language: "Online",
   tracks: "Tracks",
   folders: "Folders",
   playlists: "Playlists",
@@ -23,6 +33,12 @@ export type SearchableLibraryView = Exclude<LibraryView, "language">;
 export type LibraryTab = {
   value: LibraryView;
   label: string;
+  /**
+   * The chip's glyph. Every view has one now: five chips of bare words read as
+   * a row of settings, and the glyph is what says *folders* or *playlists*
+   * before the label is read.
+   */
+  icon: IconName;
 };
 
 /**
@@ -33,10 +49,10 @@ export type LibraryTab = {
  * container on the device, which it is not.
  */
 const LIBRARY_TABS: readonly LibraryTab[] = [
-  { value: "tracks", label: LIBRARY_VIEW_LABELS.tracks },
-  { value: "folders", label: LIBRARY_VIEW_LABELS.folders },
-  { value: "playlists", label: LIBRARY_VIEW_LABELS.playlists },
-  { value: "recent", label: LIBRARY_VIEW_LABELS.recent },
+  { value: "tracks", label: LIBRARY_VIEW_LABELS.tracks, icon: "music" },
+  { value: "folders", label: LIBRARY_VIEW_LABELS.folders, icon: "folder" },
+  { value: "playlists", label: LIBRARY_VIEW_LABELS.playlists, icon: "playlists" },
+  { value: "recent", label: LIBRARY_VIEW_LABELS.recent, icon: "clock" },
 ];
 
 /**
@@ -48,7 +64,14 @@ const LIBRARY_TABS: readonly LibraryTab[] = [
  */
 export function libraryTabs(hasLanguage: boolean): readonly LibraryTab[] {
   return hasLanguage
-    ? [{ value: "language", label: LIBRARY_VIEW_LABELS.language }, ...LIBRARY_TABS]
+    ? [
+        {
+          value: "language",
+          label: LIBRARY_VIEW_LABELS.language,
+          icon: "globe",
+        },
+        ...LIBRARY_TABS,
+      ]
     : LIBRARY_TABS;
 }
 
