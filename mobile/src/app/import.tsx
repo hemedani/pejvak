@@ -163,13 +163,19 @@ export default function ImportScreen() {
             setProgress({ done: count, total: estimated }),
           );
         } else {
+          // Named per source: a folder is walked, not indexed, and telling the
+          // listener it is reading the media index while it reads their folder
+          // is the kind of small lie that makes a slow scan feel broken.
+          setBusyLabel("Reading the folder…");
           const grant = await requestFolderAccess();
           if (!grant) {
             setPhase("choose");
             return;
           }
           granted = [grant];
-          found = await enumerateFolder(grant);
+          found = await enumerateFolder(grant, (count) =>
+            setProgress({ done: count, total: 0 }),
+          );
         }
 
         if (cancelled.current) {
@@ -287,7 +293,11 @@ export default function ImportScreen() {
             <ThemedText type="caption" themeColor="textSecondary">
               {progress.total > 0
                 ? `${progress.done} of ${progress.total}`
-                : "This can take a moment on a large library."}
+                : progress.done > 0
+                  ? // A folder has no known total until it has been walked, so
+                    // this is a running count rather than a fraction.
+                    `${progress.done} file${progress.done === 1 ? "" : "s"} found…`
+                  : "This can take a moment on a large library."}
             </ThemedText>
             <GlassProgress
               progress={progress.total > 0 ? progress.done / progress.total : 0}

@@ -1,5 +1,5 @@
 import Constants, { ExecutionEnvironment } from "expo-constants";
-import { getInfoAsync, readDirectoryAsync, StorageAccessFramework } from "expo-file-system/legacy";
+import { getInfoAsync, StorageAccessFramework } from "expo-file-system/legacy";
 import * as MediaLibrary from "expo-media-library/legacy";
 import { Platform } from "react-native";
 
@@ -10,6 +10,7 @@ import {
   deriveFolderKeyFromTreeUri,
   folderNameFromKey,
   safDocumentName,
+  safTreeUriForDocument,
 } from "@/lib/mediaFolders";
 import { toEpochMillis, type DiscoveredFile } from "@/lib/scanPlan";
 import { computeFileContentHash } from "@/services/ContentHashService";
@@ -313,59 +314,132 @@ export async function requestFolderAccess(): Promise<FolderGrant | null> {
   };
 }
 
-async function walkFolder(
-  directoryUri: string,
+/**
+ * Lists one SAF directory.
+ *
+ * This has to be `StorageAccessFramework.readDirectoryAsync`, not the
+ * `readDirectoryAsync` imported from the module root. They are different
+ * functions with the same name: the plain one only understands `file://` and
+ * *throws* `FileSystemUnsupportedSchemeException` for a `content://` URI. The
+ * walk below used to call it and swallow the throw as "an unreadable
+ * subdirectory" — which is why choosing a folder full of audio found nothing at
+ * all, with no error to explain it.
+ */
+async function listSafDirectory(directoryUri: string): Promise<string[]> {
+  return StorageAccessFramework.readDirectoryAsync(directoryUri);
+}
+
+/**
+ * Whether a SAF document URI can be listed, which is the only reliable way to
+ * ask "is this a directory?".
+ *
+ * `getInfoAsync` cannot answer: it resolves a `content://` URI by opening a
+ * stream, and an open stream means `exists: true, isDirectory: false` for a
+ * folder exactly as for a file. Listing is decisive — a directory lists (an
+ * empty one lists nothing) and a file throws — and it is one native call rather
+ * than a stat plus a guess.
+ *
+ * Null means "not a directory we can read", which covers both a file and a
+ * subfolder whose grant did not come with the parent's.
+ */
+async function listSafSubdirectory(uri: string): Promise<string[] | null> {
+  const treeUri = safTreeUriForDocument(uri);
+  if (treeUri === null) {
+    return null;
+  }
+  try {
+    return await listSafDirectory(treeUri);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Walks one directory's children, recursing into subfolders.
+ *
+ * A name that ends in an audio extension is taken as a file without asking the
+ * provider anything — one native call per audio file instead of two. Everything
+ * else is probed as a directory, which is also what skips artwork and subtitles.
+ */
+async function walkSafChildren(
+  children: string[],
   folderKey: string,
   out: DiscoveredFile[],
+  onFound?: (found: number) => void,
 ): Promise<void> {
-  let children: string[];
-  try {
-    children = await readDirectoryAsync(directoryUri);
-  } catch {
-    // A revoked or unreadable subdirectory must not abort the whole walk.
-    return;
-  }
-
   for (const child of children) {
     const name = safDocumentName(child);
     if (name === null) {
       continue;
     }
 
-    const info = await getInfoAsync(child).catch(() => null);
-    if (!info || !info.exists) {
+    if (isAudioFileName(name)) {
+      const info = await getInfoAsync(child).catch(() => null);
+      if (!info || !info.exists) {
+        continue;
+      }
+      out.push({
+        sourceId: child,
+        uri: child,
+        // SAF gives no filesystem path; the folder key is carried explicitly instead.
+        path: null,
+        fileName: name,
+        // `available()` on a document stream is the provider's own answer for
+        // the size. Zero or a missing value is not a size — it is a provider
+        // that would not say, and the identification pass will ask again.
+        sizeBytes:
+          typeof info.size === "number" && info.size > 0 ? info.size : null,
+        modifiedAt: toEpochMillis(info.modificationTime),
+        durationSec: 0,
+        source: "saf",
+        folderKey,
+        folderName: folderNameFromKey(folderKey),
+      });
+      onFound?.(out.length);
       continue;
     }
 
-    if (info.isDirectory) {
-      await walkFolder(child, folderKey.length > 0 ? `${folderKey}/${name}` : name, out);
+    const grandChildren = await listSafSubdirectory(child);
+    if (grandChildren === null) {
       continue;
     }
-
-    if (!isAudioFileName(name)) {
-      continue;
-    }
-
-    out.push({
-      sourceId: child,
-      uri: child,
-      // SAF gives no filesystem path; the folder key is carried explicitly instead.
-      path: null,
-      fileName: name,
-      sizeBytes: info.size ?? null,
-      modifiedAt: toEpochMillis(info.modificationTime),
-      durationSec: 0,
-      source: "saf",
-      folderKey,
-      folderName: folderNameFromKey(folderKey),
-    });
+    await walkSafChildren(
+      grandChildren,
+      folderKey.length > 0 ? `${folderKey}/${name}` : name,
+      out,
+      onFound,
+    );
   }
 }
 
-/** Recursively lists the audio files inside a granted folder. */
-export async function enumerateFolder(grant: FolderGrant): Promise<DiscoveredFile[]> {
+/**
+ * Recursively lists the audio files inside a granted folder.
+ *
+ * The root is the one directory whose failure cannot be shrugged off: an
+ * unreadable *subfolder* costs a branch, but an unreadable root means the answer
+ * to "what is in this folder?" is unknown, and reporting that as "no audio files
+ * found" would be a lie the listener has no way to act on. So the root read is
+ * allowed to throw, and the import screen turns that into a message.
+ *
+ * A folder is walked without knowing how many files it holds, so progress is a
+ * running count rather than a fraction — the screen says how much it has found
+ * instead of how far along it is.
+ */
+export async function enumerateFolder(
+  grant: FolderGrant,
+  onFound?: (found: number) => void,
+): Promise<DiscoveredFile[]> {
+  let children: string[];
+  try {
+    children = await listSafDirectory(grant.treeUri);
+  } catch {
+    throw new Error(
+      "This folder could not be read. Choose it again — Android grants access to the folder you pick, and a folder that lives in a cloud provider has to be downloaded first.",
+    );
+  }
+
   const found: DiscoveredFile[] = [];
-  await walkFolder(grant.treeUri, grant.folderKey, found);
+  await walkSafChildren(children, grant.folderKey, found, onFound);
   return found;
 }
 

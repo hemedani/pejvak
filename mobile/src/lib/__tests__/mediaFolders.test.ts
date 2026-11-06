@@ -9,6 +9,8 @@ import {
   naturalCompare,
   orderFolderTracks,
   pickFolderStartIndex,
+  safDocumentName,
+  safTreeUriForDocument,
 } from "@/lib/mediaFolders";
 
 describe("deriveFolderKey", () => {
@@ -111,6 +113,73 @@ describe("deriveFolderKeyFromTreeUri", () => {
 
   it("returns null for a uri that is not a SAF grant", () => {
     expect(deriveFolderKeyFromTreeUri("content://media/external/audio/media/1")).toBeNull();
+  });
+});
+
+describe("safTreeUriForDocument", () => {
+  it("rebuilds the tree form around a child directory's own id", () => {
+    expect(
+      safTreeUriForDocument(
+        "content://com.android.externalstorage.documents/tree/primary%3AMusic/document/primary%3AMusic%2FLectures",
+      ),
+    ).toBe("content://com.android.externalstorage.documents/tree/primary%3AMusic%2FLectures");
+  });
+
+  it("keeps the id percent-encoded, because the provider parses the path segment", () => {
+    const tree = safTreeUriForDocument(
+      "content://com.android.externalstorage.documents/tree/primary%3AMusic/document/primary%3AMusic%2FCh%201%20Intro",
+    );
+    expect(tree).toBe(
+      "content://com.android.externalstorage.documents/tree/primary%3AMusic%2FCh%201%20Intro",
+    );
+  });
+
+  it("returns null for a uri with no document segment", () => {
+    expect(
+      safTreeUriForDocument(
+        "content://com.android.externalstorage.documents/tree/primary%3AMusic",
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null when the document segment precedes the tree one", () => {
+    expect(
+      safTreeUriForDocument("content://authority/document/primary%3AMusic/tree/primary"),
+    ).toBeNull();
+  });
+
+  it("returns null for a document id that is empty", () => {
+    expect(
+      safTreeUriForDocument(
+        "content://com.android.externalstorage.documents/tree/primary%3AMusic/document/",
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("safDocumentName", () => {
+  it("takes the last segment of the document id", () => {
+    expect(
+      safDocumentName(
+        "content://com.android.externalstorage.documents/tree/primary%3AMusic/document/primary%3AMusic%2FLectures%2F03.mp3",
+      ),
+    ).toBe("03.mp3");
+  });
+
+  it("decodes spaces in a file name", () => {
+    expect(
+      safDocumentName(
+        "content://com.android.externalstorage.documents/tree/primary%3AMusic/document/primary%3AMusic%2F03%20-%20Intro.mp3",
+      ),
+    ).toBe("03 - Intro.mp3");
+  });
+
+  it("returns null when the last segment is empty", () => {
+    expect(
+      safDocumentName(
+        "content://com.android.externalstorage.documents/tree/primary%3AMusic/document/primary%3AMusic%2F",
+      ),
+    ).toBeNull();
   });
 });
 

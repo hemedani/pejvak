@@ -123,6 +123,38 @@ export function deriveFolderKeyFromTreeUri(treeUri: string): string | null {
 }
 
 /**
+ * The *tree* form of a SAF document URI.
+ *
+ * The folder picker hands back a tree URI — `content://…/tree/<folderId>` — and
+ * that is the only shape `StorageAccessFramework.readDirectoryAsync` accepts.
+ * But listing a directory returns its children as *document* URIs, which carry
+ * the parent's tree as well as their own id:
+ *
+ *     …/tree/primary%3AMusic/document/primary%3AMusic%2FLectures
+ *
+ * A child directory can be listed by rebuilding the tree form around its own id,
+ * which is exactly what Android's `DocumentsContract.buildTreeDocumentUri` does:
+ * everything before `/tree/`, then `/tree/`, then the document id — still
+ * percent-encoded, because the provider parses the id out of the path segment.
+ *
+ * Null when the URI is not a document URI at all, or when the `/document/`
+ * segment precedes the `/tree/` one (a provider-specific shape this does not
+ * claim to understand).
+ */
+export function safTreeUriForDocument(uri: string): string | null {
+  const treeMarker = "/tree/";
+  const documentMarker = "/document/";
+  const treeIndex = uri.indexOf(treeMarker);
+  const documentIndex = uri.indexOf(documentMarker);
+  if (treeIndex < 0 || documentIndex < 0 || documentIndex < treeIndex) {
+    return null;
+  }
+  const authority = uri.slice(0, treeIndex);
+  const documentId = uri.slice(documentIndex + documentMarker.length);
+  return documentId.length === 0 ? null : `${authority}${treeMarker}${documentId}`;
+}
+
+/**
  * The file or directory name inside a SAF document URI.
  *
  * `…/tree/primary%3AMusic/document/primary%3AMusic%2FLectures%2F03.mp3` decodes
