@@ -96,6 +96,22 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+
+    /* How much room the bottom of the window has already given away to the
+       dock. A floating panel has to *stop* here rather than at `bottom: 0`,
+       or it covers the one control a listener keeps while a dialog is open.
+
+       `--dock-height` is written by `PlayerBar` from a `ResizeObserver`, not
+       guessed from `--layout-player-bar`: the dock's height is the sum of a
+       min-height, two paddings, a progress bar and a responsive breakpoint,
+       and a duplicate of that arithmetic in CSS is a second source of truth
+       that drifts the first time the dock changes.
+
+       Declared on `body`, where the measurement lands. A custom property is
+       substituted at the element that declares it, so a copy on `:root` would
+       resolve against a root that never sees `--dock-height` and inherit the
+       wrong number to everything below. */
+    --sheet-clearance: calc(var(--dock-height, 0px) + var(--space-md));
   }
 
   /* The focus ring is a ring, not a colour change: it has to survive a
@@ -121,7 +137,12 @@
      player route and the no-track state from carrying dead space where the bar
      would have been. */
   body[data-player-bar="visible"] .shell-main {
-    padding-bottom: calc(var(--space-giant) + var(--layout-player-bar));
+    /* The dock's own height, plus the gap it floats above the window edge, plus
+       the shell's resting bottom air — otherwise the last row of a table sits
+       under a slab of glass. */
+    padding-bottom: calc(
+      var(--space-giant) + var(--layout-player-bar) + var(--space-lg)
+    );
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -212,6 +233,31 @@
 
   .wash {
     background-image: none;
+  }
+
+  /* A forced palette replaces every custom colour, and a translucent slab over
+     an opaque page becomes an unreadable box. The float keeps its *shape* — it
+     is still a raised object — and loses the material. */
+  .glass-dock,
+  .glass-sheet,
+  .glass-medallion {
+    background-color: Canvas;
+    border: 1px solid CanvasText;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+
+  .glass-dock::before,
+  .glass-sheet::before,
+  .dock-glow {
+    display: none;
+  }
+
+  /* The cover keeps its pixels — it is the track's identity — but loses the
+     glow, which a forced palette would render as an opaque blob. */
+  .dock-art {
+    box-shadow: none;
   }
 }
 
@@ -343,6 +389,168 @@
 }
 
 /**
+ * Liquid glass — the floating material.
+ *
+ * Three parts, and all three are load-bearing:
+ *
+ *   1. **Refraction.** `backdrop-filter` blurs *and* saturates what is behind
+ *      the slab, so the page's own colour comes through it rather than a grey
+ *      veil. Blur alone reads as fog; saturation is what reads as glass.
+ *   2. **Thickness.** A single translucent fill is a smudge. Two opposed 1px
+ *      inner shadows — a bright top edge, a dark bottom edge — say the slab has
+ *      a surface and a base, which is the whole "liquid glass" illusion.
+ *   3. **A sheen across the upper face**, painted *behind* the content
+ *      (`z-index: -1` inside an isolated stacking context) so it can never
+ *      wash out a title.
+ *
+ * `--float-blur` is registered as a `<length>` for the same reason `--wash-a` is
+ * registered as a `<color>`: `backdrop-filter` does not transition, but a typed
+ * custom property interpolates, so the blur can intensify on hover without a
+ * second layer, a second element, or a frame of React state. The initial value
+ * is a literal because a registered property's `initial-value` must be
+ * computationally independent — it cannot be a `var()`.
+ *
+ * It is named for the *material*, not for one of its two consumers: the dock and
+ * the sheet are the same slab at different sizes, and a register called
+ * `--dock-blur` that a dialog also reads is a name that lies.
+ */
+@property --float-blur {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 20px;
+}
+
+@layer components {
+  .glass-dock,
+  .glass-sheet {
+    --float-blur: var(--glass-blur);
+
+    position: relative;
+    isolation: isolate;
+    background-color: var(--glass);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-edge), var(--elevation-float);
+    -webkit-backdrop-filter: blur(var(--float-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--float-blur)) saturate(var(--glass-saturate));
+    transition:
+      --float-blur var(--motion-base) var(--ease-out),
+      transform var(--motion-base) var(--ease-out),
+      box-shadow var(--motion-base) var(--ease-out);
+  }
+
+  .glass-dock::before,
+  .glass-sheet::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background-image: var(--glass-sheen);
+    pointer-events: none;
+  }
+
+  /* The lift. Hovering the dock — or tabbing into any control inside it — makes
+     it thicker and raises it by a quarter of the motion distance. Transform and
+     a custom property only: nothing here touches layout.
+
+     Deliberately not on the sheet. A dialog that rises to meet the pointer is a
+     card pretending to be furniture; it is already the nearest thing on screen
+     and it does not need to say so. */
+  .glass-dock:hover,
+  .glass-dock:focus-within {
+    --float-blur: var(--glass-blur-raised);
+    transform: translateY(calc(var(--motion-distance) / -4));
+    box-shadow: var(--glass-edge), var(--elevation-float), var(--elevation-panel);
+  }
+
+  /* The track's own colour, bleeding out from under the dock.
+     This is the ambient wash reaching a floating surface: the colour is per
+     track and comes from `lib/palette.ts` via `--dock-glow`, while how loud it
+     is stays a theme decision (`--glass-glow-alpha`).
+
+     The alpha is the layer's `opacity`, not a `color-mix` — and that is not
+     laziness. `color-mix` with a `var()` inside it compiles to a *fallback
+     declaration plus an `@supports` block*, and the fallback would be this
+     gradient at full strength: a solid neon blob in any browser without
+     `color-mix`. Opacity is understood everywhere and says the same thing. */
+  .dock-glow {
+    background-image: radial-gradient(
+      72% 130% at 50% 100%,
+      var(--dock-glow, transparent),
+      transparent 72%
+    );
+    opacity: var(--glass-glow-alpha);
+  }
+
+  /* Artwork on the dock: a hairline of light along its edge and a shadow in the
+     track's own colour, so the cover looks lit from inside the glass. The soft
+     variant is pre-mixed in JavaScript (`withAlpha`) because a `box-shadow`
+     colour cannot carry an `opacity` of its own. */
+  .dock-art {
+    box-shadow:
+      0 0 0 1px var(--glass-highlight),
+      0 8px 22px -10px var(--dock-glow-soft, transparent);
+  }
+
+  /* A small lens for an object sitting *on* a surface rather than floating over
+     it — the empty state's medallion. Deliberately not blurred: there is nothing
+     behind it worth refracting, so it is drawn with the edge and the highlight
+     instead, which costs one paint and no compositor layer. */
+  .glass-medallion {
+    background-color: var(--surface-sunken);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-edge);
+  }
+
+  /**
+   * An inline disclosure: the panel grows out of the row that opened it.
+   *
+   * `grid-template-rows: 0fr → 1fr` is the only way to animate to an *unknown*
+   * height without measuring it in JavaScript, and it needs no `max-height`
+   * guess. A guess is the usual shortcut and it fails silently: the transcript
+   * inside this panel grows when a reader opens it, and a guessed ceiling clips
+   * the last rows with nothing on screen to say so.
+   *
+   * The track will not shrink below its content unless the item is allowed to
+   * (`min-height: 0`) and something clips the overflow, which is why this is
+   * three elements and not one.
+   */
+  .disclosure {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows var(--motion-slow) var(--ease-out);
+  }
+
+  .disclosure[data-open="true"] {
+    grid-template-rows: 1fr;
+  }
+
+  .disclosure-clip {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* The copy fades a beat behind the box, so the panel reads as unfolding
+     rather than as a box that was always there. On close it leaves first:
+     text lingering inside a collapsing box looks stuck, not slow. */
+  .disclosure-body {
+    opacity: 0;
+    transform: translateY(calc(var(--motion-distance) / -2));
+    transition:
+      opacity var(--motion-fast) var(--ease-in),
+      transform var(--motion-fast) var(--ease-in);
+  }
+
+  .disclosure[data-open="true"] .disclosure-body {
+    opacity: 1;
+    transform: none;
+    transition:
+      opacity var(--motion-base) var(--ease-out) 60ms,
+      transform var(--motion-base) var(--ease-out) 60ms;
+  }
+}
+
+/**
  * Motion.
  *
  * Named animations, all of them transform/opacity so a busy screen never
@@ -396,10 +604,14 @@
   }
 }
 
+/* A sheet rises to its place from the direction of the dock it sits on, so the
+   motion agrees with where the panel came from. The travel is one space step,
+   not the panel's full height: a tall sheet that slides its whole body in reads
+   as slow no matter how short the duration is. */
 @keyframes sheet-up {
   from {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(var(--space-xl));
   }
   to {
     opacity: 1;
@@ -414,7 +626,7 @@
   }
   to {
     opacity: 0;
-    transform: translateY(12px);
+    transform: translateY(var(--space-xl));
   }
 }
 
@@ -469,26 +681,30 @@
   animation-timing-function: var(--ease-in-out);
 }
 
+/* On a wide screen the panel is centred in the space the dock leaves rather than
+   in the window, so it keeps its distance from the dock at every height. The
+   `50%` here is half of the panel's own height — the horizontal half is handled
+   by `mx-auto`, which is why there is no `translateX` left to get wrong. */
 @media (min-width: 640px) {
   @keyframes sheet-up {
     from {
       opacity: 0;
-      transform: translate(50%, calc(50% + 12px));
+      transform: translateY(calc(50% + var(--space-md)));
     }
     to {
       opacity: 1;
-      transform: translate(50%, 50%);
+      transform: translateY(50%);
     }
   }
 
   @keyframes sheet-down {
     from {
       opacity: 1;
-      transform: translate(50%, 50%);
+      transform: translateY(50%);
     }
     to {
       opacity: 0;
-      transform: translate(50%, calc(50% + 12px));
+      transform: translateY(calc(50% + var(--space-md)));
     }
   }
 }

@@ -33,6 +33,34 @@
   --glass-highlight: rgba(255, 255, 255, 0.95);
   --shadow: rgba(30, 28, 24, 0.14);
 
+  /* Liquid glass — the *floating* material, in four parts.
+
+     Glass here is a lens laid on paper, not frosted plastic: it carries the
+     page's own colour through it (`--glass-blur` + `--glass-saturate`), it has
+     a hairline edge where the light catches the thickness (`--glass-edge`), and
+     it has a sheen across its upper face (`--glass-sheen`). Thickness is the
+     point — a single translucent fill reads as a smudge, two opposed 1px inner
+     shadows read as a slab with a top and a bottom.
+
+     Only floats may use these (DESIGN.md, rule 1). A frosted content card is
+     still the mistake the split exists to prevent. */
+  --glass-blur: 20px;
+  --glass-blur-raised: 28px;
+  --glass-saturate: 140%;
+  --glass-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(255, 255, 255, 0) 44%
+  );
+  --glass-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 0 rgba(30, 28, 24, 0.06);
+  /* How loud a track's own colour is when it bleeds out from under a float. The
+     colour is per track (`lib/palette.ts`); this is only the volume, applied as
+     the glow layer's `opacity` — lower on paper than on ink, because a bright
+     glow on a warm canvas shouts. */
+  --glass-glow-alpha: 16%;
+
   --text: #1b1a17;
   --text-secondary: #4a4740;
   --text-tertiary: #666257;
@@ -42,6 +70,12 @@
   --on-accent: #fffdf8;
   --danger: #a0343f;
   --danger-soft: rgba(160, 52, 63, 0.1);
+  /* Warning is its own channel, not a paler danger. "You are offline" is a
+     condition the listener can wait out; "this failed" is a thing that broke.
+     Painting both red teaches the listener that red means "maybe nothing". */
+  --warning: #8a5a12;
+  --warning-soft: rgba(138, 90, 18, 0.12);
+  --on-warning: #fffdf8;
   --scrim: rgba(20, 18, 14, 0.4);
   --track: rgba(74, 71, 64, 0.18);
   --icon: #3a3832;
@@ -78,6 +112,14 @@
   --layout-content: 1180px;
   --layout-player: 760px;
   --layout-player-bar: 80px;
+  /* The dock is a float, not a strip: it is narrower than the content column
+     and inset from every edge, so it reads as an object lying on the page
+     rather than as the bottom of the window. */
+  --layout-dock: 800px;
+  /* A sheet is a dialog, not a page: wide enough for a timeline and a
+     definition list to sit side by side without either wrapping, narrow enough
+     that the line length never becomes the reason it feels like a document. */
+  --layout-sheet: 32rem;
   --layout-artwork: 360px;
   --measure-prose: 68ch;
   --measure-narrow: 44ch;
@@ -124,6 +166,23 @@
   --glass-highlight: rgba(255, 255, 255, 0.2);
   --shadow: rgba(0, 0, 0, 0.55);
 
+  /* On ink the glass is a darker, deeper slab: more blur so the page behind it
+     reads as *through* something, a weaker sheen (a bright top edge on black
+     reads as a border, not a highlight), and a louder glow because a colour
+     needs more of itself to survive a dark surround. */
+  --glass-blur: 22px;
+  --glass-blur-raised: 30px;
+  --glass-saturate: 160%;
+  --glass-sheen: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0) 46%
+  );
+  --glass-edge:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+  --glass-glow-alpha: 30%;
+
   --text: #f4f0e8;
   --text-secondary: #c4bdb0;
   --text-tertiary: #9a9386;
@@ -133,6 +192,9 @@
   --on-accent: #0b211a;
   --danger: #f0a0a8;
   --danger-soft: rgba(240, 160, 168, 0.14);
+  --warning: #e8b464;
+  --warning-soft: rgba(232, 180, 100, 0.16);
+  --on-warning: #241a08;
   --scrim: rgba(0, 0, 0, 0.6);
   --track: rgba(196, 189, 176, 0.2);
   --icon: #e4ded2;
@@ -172,6 +234,9 @@
   --color-on-accent: var(--on-accent);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-on-warning: var(--on-warning);
   --color-icon: var(--icon);
 }
 
@@ -199,5 +264,15 @@
     --text-secondary: #4a4740;
     --text-tertiary: #666257;
     --shadow: transparent;
+
+    /* Glass is a screen material. On paper it is either invisible or a grey
+       smudge over the content it floats above, so the float becomes a flat
+       white box with a drawn border — which is what a printed callout is. */
+    --glass-blur: 0px;
+    --glass-blur-raised: 0px;
+    --glass-saturate: 100%;
+    --glass-sheen: none;
+    --glass-edge: none;
+    --glass-glow-alpha: 0%;
   }
 }

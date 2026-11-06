@@ -46,6 +46,9 @@ component. Contrast ratios are measured against the canvas or surface named in t
 | `--on-accent` | `#fffdf8` | `#0b211a` | text on accent (AA) |
 | `--danger` | `#a0343f` | `#f0a0a8` | destructive / error (AA) |
 | `--danger-soft` | `rgba(160,52,63,.10)` | `rgba(240,160,168,.14)` | danger wash |
+| `--warning` | `#8a5a12` | `#e8b464` | offline / recoverable condition (AA) |
+| `--warning-soft` | `rgba(138,90,18,.12)` | `rgba(232,180,100,.16)` | warning wash |
+| `--on-warning` | `#fffdf8` | `#241a08` | text on warning (AA) |
 | `--scrim` | `rgba(20,18,14,.40)` | `rgba(0,0,0,.60)` | overlay |
 | `--track` | `rgba(74,71,64,.18)` | `rgba(196,189,176,.20)` | slider track |
 | `--icon` | `#3a3832` | `#e4ded2` | icon stroke |
@@ -131,6 +134,67 @@ radius.
 
 ---
 
+## Materials
+
+Two, and the split is a product rule: **opaque `surface` for anything read, glass
+only for what floats.** The player dock, menus, sheets and overlays are the whole
+glass list.
+
+Glass is a **lens laid on paper**, not frosted plastic. Three parts, all load-bearing:
+
+| Token | Light | Dark | Role |
+|---|---|---|---|
+| `--glass-blur` | `20px` | `22px` | refraction; more on ink, where the page behind must read as *through* something |
+| `--glass-blur-raised` | `28px` | `30px` | the hover/focus state of a float |
+| `--glass-saturate` | `140%` | `160%` | **blur alone is fog; saturation is what reads as glass** |
+| `--glass-sheen` | white 50% → 0 by 44% | white 12% → 0 by 46% | the face of the slab, painted *behind* the content |
+| `--glass-edge` | inset light top, dark bottom | inset light top, black bottom | the thickness — two opposed 1px shadows |
+| `--glass-glow-alpha` | `16%` | `30%` | how loud a track's own colour is under a float |
+
+`.glass-dock` and `.glass-sheet` are the two utilities (`globals.css`), and they are
+**one declaration block**: a dialog and the player are both objects floating over the
+page, and two materials for them would be two ideas. Only the dock owns the **lift** —
+hover or focus-within raises it by `--motion-distance / 4` and intensifies the blur. A
+dialog that rises to meet the pointer is a card pretending to be furniture.
+
+The blur intensifies through `--float-blur`, a registered `<length>` — `backdrop-filter`
+does not transition, a typed custom property does, so this needs no second layer. It is
+named for the material rather than for the dock because the sheet reads it too.
+
+`.dock-glow` is the track's colour bleeding out from under the dock, from
+`lib/palette.ts` via `--dock-glow`. Its alpha is the layer's `opacity`, not a
+`color-mix`: `color-mix` with a `var()` compiles to a full-strength fallback plus an
+`@supports` block, and a full-strength neon blob is not a graceful degradation.
+
+**Glass has three ways out**, and all three are required: `forced-colors` drops the
+material and keeps the shape (Canvas + CanvasText); `print` resolves the blur, sheen
+and glow to nothing; `prefers-reduced-motion` collapses the lift to instant.
+
+### Where a sheet sits
+
+**Detail about a row that is already on screen is not a sheet.** The session
+timeline on History expands *inside* its row (`.disclosure`), because a dialog
+there would hide the rows around it, dim the page, trap focus and squeeze the
+timeline into a narrow column — all to show one strip and five facts.
+
+For the panels that genuinely float:
+
+A sheet **never covers the dock**: the listener keeps the player while reading a
+session's timeline. `--sheet-clearance` is the dock's *measured* height plus one space
+step — `PlayerBar` publishes `--dock-height` from a `ResizeObserver`, because the dock's
+height is a min-height plus two paddings plus a progress bar plus a responsive
+breakpoint, and duplicating that arithmetic in CSS would be a second source of truth.
+
+- **Phone:** bottom-anchored at `--sheet-clearance`, inset by `--space-md` so its edges
+  line up with the dock's.
+- **Wide screen:** `--layout-sheet` wide, centred in the free area above the dock.
+  Centring is `inset-x-0` + `mx-auto`. Do **not** reach for `start-1/2` +
+  `translate-x-1/2`: the positive translate pushes the panel a full panel-width to the
+  right, which put every dialog flush against the window edge and made them read as
+  drawers that had lost their width.
+
+---
+
 ## Controls, layout and measures
 
 | Token | Value |
@@ -145,6 +209,8 @@ radius.
 | `--layout-content` | 1180 px |
 | `--layout-player` | 760 px |
 | `--layout-player-bar` | 80 px |
+| `--layout-dock` | 800 px |
+| `--layout-sheet` | 512 px |
 | `--layout-artwork` | 360 px |
 | `--measure-prose` | 68 ch |
 | `--measure-narrow` | 44 ch |
@@ -166,6 +232,12 @@ height (`coarse:h-[var(--tap-min)]`).
 - **Route change:** 180 ms fade + 6 px rise, keyed by pathname (`PageTransition`).
 - **First paint:** staggered reveal, max 10 steps, opacity + 8 px rise (`Reveal`).
 - **Floating surfaces:** sheet up/down, menu fade, overlay fade. Open *and* close animate.
+  A sheet rises one space step **from the direction of the dock it sits on** — the travel
+  is a space step, not the panel's own height, because a tall sheet sliding its whole body
+  in reads as slow no matter how short the duration is.
+- **Disclosure:** a panel grows out of its row with `grid-template-rows: 0fr → 1fr`, and the
+  copy fades 60 ms behind the box. Never a `max-height` guess — a guess clips silently the
+  first time the content inside gets longer than it. See `.disclosure` in `globals.css`.
 - **Interaction:** press scale 0.97; colour transitions at 120 ms.
 - **Theme switch:** View Transitions cross-fade when available; instant fallback.
 - **Loading:** a shimmer that moves by background-position; no layout property animates.
