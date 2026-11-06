@@ -9,6 +9,7 @@ import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
 import { SegmentedControl } from "@/components/ui/card/segmented-control";
 import { GlassChip } from "@/components/ui/glass";
+import { OriginBadge } from "@/components/ui/origin-badge";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import {
   addToPlaylistAction,
@@ -20,6 +21,7 @@ import {
 import { useSmartPlaylist } from "@/hooks/use-smart-playlist";
 import { formatDuration } from "@/lib/history";
 import { paletteFor } from "@/lib/palette";
+import { trackOrigin, tracksOrigin } from "@/lib/origin";
 import {
   COMMUTE_BUDGETS_SEC,
   DEFAULT_COMMUTE_BUDGET_SEC,
@@ -95,6 +97,11 @@ export default function SmartPlaylistScreen() {
         <ScreenHeader
           onBack={() => router.back()}
           overline="SMART"
+          badge={
+            picks.length > 0 ? (
+              <OriginBadge origin={tracksOrigin(picks.map((pick) => pick.track.origin))} />
+            ) : null
+          }
           title={rule?.title ?? "Smart playlist"}
           subtitle={
             data
@@ -200,6 +207,7 @@ export default function SmartPlaylistScreen() {
                       />
                     }
                     leadingWidth={tile.md}
+                    origin={trackOrigin(pick.track)}
                     onPress={() => void onPlayFrom(index)}
                     accessibilityLabel={`Play ${pick.track.title}, ${pick.reason}`}
                     trailing={

@@ -11,6 +11,7 @@ import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
 import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
+import { OriginBadge } from "@/components/ui/origin-badge";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import {
   EmptyState,
@@ -25,6 +26,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { usePlaylistDetail } from "@/hooks/use-playlist-detail";
 import type { LocalTrack } from "@/lib/db/types";
 import { paletteFor } from "@/lib/palette";
+import { playlistOrigin, trackOrigin } from "@/lib/origin";
 import { describeContextStats } from "@/lib/playbackContext";
 import { PlaylistService } from "@/services/PlaylistService";
 import { card as cardTokens, control, iconSize, miniPlayerInset, radius as radii, spacing, tile, tileRadius } from "@/theme/tokens";
@@ -96,6 +98,16 @@ export default function PlaylistDetailScreen() {
   const addable = (data?.library ?? []).filter((track: LocalTrack) => !addedIds.has(track.id));
   const ramp = paletteFor(data?.playlist.title ?? playlistId);
 
+  /**
+   * A playlist is the one container whose rows can disagree about provenance —
+   * a local file added next to a streamed one. The header answers for the whole
+   * list, and each row answers for itself.
+   */
+  const originById = new Map(tracks.map((track) => [track.id, track.origin]));
+  const containerOrigin = data
+    ? playlistOrigin(data.playlist, (trackId) => originById.get(trackId) ?? null)
+    : "local";
+
   return (
     <Screen wash={ramp[1]}>
       <KeyboardScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -138,6 +150,7 @@ export default function PlaylistDetailScreen() {
               <ScreenHeader
                 onBack={() => router.back()}
                 overline="PLAYLIST"
+                badge={<OriginBadge origin={containerOrigin} />}
                 title={data.playlist.title}
                 subtitle={[
                   `${tracks.length} track${tracks.length === 1 ? "" : "s"}`,
@@ -223,6 +236,7 @@ export default function PlaylistDetailScreen() {
                         />
                       }
                       leadingWidth={tile.md}
+                      origin={containerOrigin === "mixed" ? trackOrigin(track) : null}
                       onPress={() => play(index)}
                       accessibilityLabel={`Play ${track.title}`}
                       actions={[
@@ -346,6 +360,7 @@ export default function PlaylistDetailScreen() {
                           />
                         }
                         leadingWidth={tile.md}
+                        origin={trackOrigin(track)}
                         accessibilityLabel={`Add ${track.title}`}
                         trailing={
                           <BouncyIconButton

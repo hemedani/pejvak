@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/row";
 import { TextField } from "@/components/ui/text-field";
 import { usePlaylists } from "@/hooks/use-playlists";
+import { usePlaylistOrigins } from "@/hooks/use-playlist-origins";
 import { useSmartPlaylists } from "@/hooks/use-smart-playlists";
 import { useTheme } from "@/hooks/use-theme";
 import type { LocalPlaylist } from "@/lib/db/types";
@@ -45,6 +46,7 @@ export default function PlaylistsScreen() {
   const router = useRouter();
   const theme = useTheme();
   const { playlists, loading, refresh } = usePlaylists();
+  const origins = usePlaylistOrigins(playlists);
   const { playlists: smart, refresh: refreshSmart } = useSmartPlaylists();
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
@@ -189,6 +191,7 @@ export default function PlaylistsScreen() {
               <MediaCard
                 title={item.title}
                 meta={trackCount(item)}
+                origin={origins[item.id]}
                 paletteKey={item.title}
                 onPress={() => router.push(`/playlist/${item.id}`)}
                 accessibilityLabel={`Open playlist ${item.title}`}

@@ -11,6 +11,7 @@ import { memo, useCallback, useMemo } from "react";
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
 import { addToPlaylistAction, historyAction, playPlaylistAction } from "@/components/ui/row";
 import type { LocalPlaylist } from "@/lib/db/types";
+import type { ItemOrigin } from "@/lib/origin";
 import { paletteFor } from "@/lib/palette";
 import { describeRecentWhen } from "@/lib/recentPlays";
 import type { Range } from "@/lib/search";
@@ -20,6 +21,8 @@ export type LibraryPlaylistCardProps = {
   playlist: LocalPlaylist;
   lastPlayedAt: number;
   matched?: string | null;
+  /** Resolved by the screen: a playlist has no origin of its own. */
+  origin?: ItemOrigin | null;
   titleRanges?: readonly Range[];
   cardWidth: number;
   onOpen: (playlistId: string) => void;
@@ -30,6 +33,7 @@ export const LibraryPlaylistCard = memo(function LibraryPlaylistCard({
   playlist,
   lastPlayedAt,
   matched,
+  origin,
   titleRanges,
   cardWidth,
   onOpen,
@@ -84,6 +88,7 @@ export const LibraryPlaylistCard = memo(function LibraryPlaylistCard({
       title={playlist.title}
       titleRanges={titleRanges}
       meta={meta}
+      origin={origin}
       paletteKey={playlist.title}
       cardWidth={cardWidth}
       onPress={handlePress}

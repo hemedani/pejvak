@@ -31,6 +31,7 @@ import {
 import { useMissingTracks } from "@/hooks/use-missing-tracks";
 import { useTheme } from "@/hooks/use-theme";
 import { paletteFor } from "@/lib/palette";
+import { trackOrigin } from "@/lib/origin";
 import { describeStake, groupByFolder, summariseMissing } from "@/services/RelinkService";
 import { iconSize, miniPlayerInset, spacing, tile, tileRadius } from "@/theme/tokens";
 
@@ -120,6 +121,7 @@ export default function MissingFilesScreen() {
                           />
                         }
                         leadingWidth={tile.md}
+                        origin={trackOrigin(item.track)}
                         trailing={
                           <Icon name="chevronRight" size={iconSize.sm} color={theme.textTertiary} />
                         }

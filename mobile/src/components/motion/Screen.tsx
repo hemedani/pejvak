@@ -65,6 +65,12 @@ export type ScreenHeaderProps = {
   action?: ReactNode;
   /** Renders a back control on the leading edge. */
   onBack?: () => void;
+  /**
+   * Sits beside the overline. A container's provenance belongs to the whole
+   * screen, so it is stated once here instead of on every row below — where a
+   * folder's twelve tracks would repeat the same word twelve times.
+   */
+  badge?: ReactNode;
   index?: number;
 };
 
@@ -74,6 +80,7 @@ export function ScreenHeader({
   subtitle,
   action,
   onBack,
+  badge,
   index = 0,
 }: ScreenHeaderProps) {
   return (
@@ -90,10 +97,15 @@ export function ScreenHeader({
         />
       ) : null}
       <View style={styles.headerCopy}>
-        {overline ? (
-          <ThemedText type="overline" themeColor="textTertiary">
-            {overline}
-          </ThemedText>
+        {overline || badge ? (
+          <View style={styles.overlineRow}>
+            {overline ? (
+              <ThemedText type="overline" themeColor="textTertiary" style={styles.overline}>
+                {overline}
+              </ThemedText>
+            ) : null}
+            {badge}
+          </View>
         ) : null}
         <ThemedText type="display" numberOfLines={2}>
           {title}
@@ -135,6 +147,15 @@ const styles = StyleSheet.create({
   headerCopy: {
     flex: 1,
     gap: spacing.xxs,
+  },
+  overlineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  overline: {
+    // The badge beside it is fixed-width; the label is what gives way.
+    flexShrink: 1,
   },
   back: {
     marginBottom: spacing.xxs,

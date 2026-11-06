@@ -9,6 +9,7 @@ import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
 import { GlassChip } from "@/components/ui/glass";
+import { OriginBadge } from "@/components/ui/origin-badge";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import {
   addToPlaylistAction,
@@ -27,6 +28,7 @@ import {
 } from "@/lib/folderPlay";
 import { formatDuration } from "@/lib/history";
 import { folderKeyFromRouteSegment } from "@/lib/mediaFolders";
+import { folderOrigin } from "@/lib/origin";
 import { describeContextStats } from "@/lib/playbackContext";
 import { paletteFor } from "@/lib/palette";
 import { formatClock } from "@/lib/time";
@@ -146,6 +148,7 @@ export default function FolderDetailScreen() {
         <ScreenHeader
           onBack={() => router.back()}
           overline="FOLDER"
+          badge={<OriginBadge origin={folderOrigin({ key: folderKey ?? "" })} />}
           title={data?.name ?? "Folder"}
           subtitle={subtitle ?? (loading ? "Loading…" : undefined)}
           action={

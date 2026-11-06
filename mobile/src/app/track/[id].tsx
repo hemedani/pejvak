@@ -36,6 +36,7 @@ import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
 
 import { Icon } from "@/components/ui/icon";
+import { OriginBadge } from "@/components/ui/origin-badge";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { EmptyState, ListGroup, SkeletonRows } from "@/components/ui/row";
 import { useAudioInspection } from "@/hooks/use-audio-inspection";
@@ -44,6 +45,7 @@ import { useTrackDetail } from "@/hooks/use-track-detail";
 import { annotationsToMarkdown } from "@/lib/exportAnnotations";
 import { formatDuration, type HistoryItem } from "@/lib/history";
 import { paletteFor } from "@/lib/palette";
+import { trackOrigin } from "@/lib/origin";
 import { confirmRemoveSession } from "@/lib/sessionActions";
 import { buildTrackFactSections } from "@/lib/trackFacts";
 import { computeTrackStats, summariseSessions } from "@/lib/trackStats";
@@ -153,6 +155,7 @@ export default function TrackDetailScreen() {
         <ScreenHeader
           onBack={() => router.back()}
           overline={track?.isAudiobook ? "AUDIOBOOK" : "TRACK"}
+          badge={track ? <OriginBadge origin={trackOrigin(track)} /> : null}
           title={track?.title ?? "Track"}
           subtitle={track?.author ?? undefined}
           action={
@@ -287,6 +290,7 @@ export default function TrackDetailScreen() {
                   contentHash: track?.contentHash ?? "",
                   isAudiobook: track?.isAudiobook ?? false,
                   artworkUrl: track?.artworkUrl ?? null,
+                  origin: track?.origin ?? "local",
                   // The sheet draws its timeline across the whole track, so the
                   // projection has to carry the whole of it, not just the span
                   // this session covered.

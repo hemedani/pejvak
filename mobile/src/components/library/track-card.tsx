@@ -15,6 +15,7 @@ import { memo, useCallback, useMemo } from "react";
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
 import { addToPlaylistAction, detailsAction } from "@/components/ui/row";
 import type { LocalTrack } from "@/lib/db/types";
+import { trackOrigin } from "@/lib/origin";
 import { paletteFor } from "@/lib/palette";
 import type { Range } from "@/lib/search";
 import { describeTrackStatus } from "@/lib/trackStatus";
@@ -67,6 +68,7 @@ export const LibraryTrackCard = memo(function LibraryTrackCard({
       meta={meta}
       detail={detail}
       status={status}
+      origin={trackOrigin(track)}
       artworkUrl={track.artworkUrl}
       paletteKey={track.contentHash}
       cardWidth={cardWidth}

@@ -81,6 +81,8 @@ export const ICON_GLYPHS = {
   heartFilled: "heart",
   /** Streaming vs. on the device. */
   stream: "cloud-outline",
+  /** A file that lives on this phone — the other half of `stream`. */
+  device: "cellphone",
   cloudDownload: "cloud-download-outline",
   cloudOffline: "cloud-off-outline",
   cloudDone: "cloud-check-outline",

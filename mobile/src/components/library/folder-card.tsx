@@ -14,6 +14,7 @@ import { addToPlaylistAction, historyAction, playFolderAction } from "@/componen
 import type { FolderSummary } from "@/lib/db/types";
 import { describeFolderProgress, folderProgressRatio } from "@/lib/folderPlay";
 import { formatDuration } from "@/lib/history";
+import { folderOrigin } from "@/lib/origin";
 import { paletteFor } from "@/lib/palette";
 import { formatPlayCount } from "@/lib/playbackContext";
 import type { Range } from "@/lib/search";
@@ -100,6 +101,7 @@ export const LibraryFolderCard = memo(function LibraryFolderCard({
       title={folder.name}
       titleRanges={titleRanges}
       meta={meta}
+      origin={folderOrigin(folder)}
       artworkUrl={folder.artworkUrl}
       paletteKey={folder.key}
       progressRatio={folderProgressRatio(folder.finishedCount, folder.trackCount)}

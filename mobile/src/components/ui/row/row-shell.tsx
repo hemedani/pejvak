@@ -27,11 +27,13 @@ import { Dimensions, StyleSheet, View } from "react-native";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
 import { Icon } from "@/components/ui/icon";
+import { OriginBadge } from "@/components/ui/origin-badge";
 import { RowActionMenu, type RowAction } from "@/components/ui/row/row-actions";
 import { StatusLine } from "@/components/ui/row/status-line";
 import { UserText } from "@/components/ui/row/user-text";
 import { useTheme } from "@/hooks/use-theme";
 import { cardWidthFor, planRowLayout, type RowActionSlot } from "@/lib/cardLayout";
+import type { ItemOrigin } from "@/lib/origin";
 import type { StatusSpec } from "@/lib/rowStatus";
 import type { Range } from "@/lib/search";
 import { control, layout, list as listTokens, spacing } from "@/theme/tokens";
@@ -51,6 +53,12 @@ export type RowShellProps = {
   meta?: string | null;
   detail?: string | null;
   status?: StatusSpec | null;
+  /**
+   * Where the audio comes from. Drawn on the meta line rather than as a status:
+   * provenance is a property of the item, not a state it reached, and a row is
+   * allowed only one status.
+   */
+  origin?: ItemOrigin | null;
   trailing?: ReactNode;
   actions?: readonly RowAction[];
   onPress?: () => void;
@@ -75,6 +83,7 @@ export function RowShell({
   meta,
   detail,
   status,
+  origin,
   trailing,
   actions,
   onPress,
@@ -141,10 +150,19 @@ export function RowShell({
           ranges={titleRanges}
           align={titleAlign}
         />
-        {meta ? (
-          <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
-            {meta}
-          </ThemedText>
+        {meta || origin ? (
+          <View style={styles.metaLine}>
+            <OriginBadge origin={origin} />
+            {meta ? (
+              <ThemedText
+                type="caption"
+                themeColor="textSecondary"
+                numberOfLines={1}
+                style={styles.metaText}>
+                {meta}
+              </ThemedText>
+            ) : null}
+          </View>
         ) : null}
         {detail ? (
           <ThemedText type="caption" themeColor="textTertiary" numberOfLines={1}>
@@ -259,6 +277,15 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xxs,
     minWidth: 0,
+  },
+  metaLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    minWidth: 0,
+  },
+  metaText: {
+    flexShrink: 1,
   },
   trailing: {
     alignItems: "flex-end",

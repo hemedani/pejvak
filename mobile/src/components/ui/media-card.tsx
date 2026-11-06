@@ -58,6 +58,7 @@ import type { RowAction } from "@/components/ui/row/row-actions";
 import { useScheme, useTheme } from "@/hooks/use-theme";
 import { cardWidthFor } from "@/lib/cardLayout";
 import { paletteFor, withAlpha } from "@/lib/palette";
+import type { ItemOrigin } from "@/lib/origin";
 import type { StatusSpec } from "@/lib/rowStatus";
 import type { Range } from "@/lib/search";
 import {
@@ -84,6 +85,8 @@ export type MediaCardProps = {
   detail?: string | null;
   /** At most one state, e.g. "File missing" or "Streams". */
   status?: StatusSpec | null;
+  /** Where the audio comes from — the local/online badge on the meta line. */
+  origin?: ItemOrigin | null;
   artworkUrl?: string | null;
   /** Seeds the aurora ramp, and is the fallback tile's letter. */
   paletteKey: string;
@@ -113,6 +116,7 @@ export const MediaCard = memo(function MediaCard({
   meta,
   detail,
   status,
+  origin,
   artworkUrl,
   paletteKey,
   tileSize = tile.lg,
@@ -205,6 +209,7 @@ export const MediaCard = memo(function MediaCard({
         meta={meta}
         detail={detail}
         status={status}
+        origin={origin}
         actions={actions}
         onPress={onPress}
         accessibilityLabel={accessibilityLabel}
