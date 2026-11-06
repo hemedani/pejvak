@@ -7,6 +7,7 @@ import { DateRangeSheet } from "@/components/history/date-range-sheet";
 import { StatsPanel } from "@/components/history/stats-panel";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
+import { SwipePager } from "@/components/motion/SwipePager";
 import { StretchCard } from "@/components/stretch-card";
 import { ThemedText } from "@/components/themed-text";
 import { SegmentedControl } from "@/components/ui/card/segmented-control";
@@ -72,6 +73,20 @@ const HISTORY_PANELS: { value: HistoryPanel; label: string; icon: IconName }[] =
   { value: "history", label: "History", icon: "history" },
   { value: "stats", label: "Stats", icon: "stats" },
 ];
+
+/**
+ * Where a panel sits in the strip.
+ *
+ * Derived from the chip list rather than written out beside it, so the chips and
+ * the pager cannot end up disagreeing about which page a chip belongs to.
+ */
+function panelIndexFor(panel: HistoryPanel): number {
+  const index = HISTORY_PANELS.findIndex((option) => option.value === panel);
+  return index < 0 ? 0 : index;
+}
+
+/** The Stats page, which the pager's `renderPage` has to recognise by number. */
+const PANEL_STATS = panelIndexFor("stats");
 
 /**
  * Which half of the history is showing.
@@ -151,6 +166,22 @@ export default function HistoryScreen() {
   const setSort = useSettingsStore((state) => state.setHistorySort);
 
   const [view, setView] = useState<HistoryView>("sessions");
+
+  const panelIndex = panelIndexFor(panel);
+
+  /**
+   * A page chosen by swiping.
+   *
+   * The strip commits the page on release, so this lands while the page is
+   * still travelling — the chips light up as the finger lifts, which is what
+   * makes the gesture feel like it was performed rather than observed.
+   */
+  const selectPanelIndex = useCallback((next: number) => {
+    const option = HISTORY_PANELS[next];
+    if (option) {
+      setPanel(option.value);
+    }
+  }, []);
 
   const refreshAll = useCallback(async () => {
     // Both halves in one pass: the two lists are read on the same screen, and
@@ -358,16 +389,25 @@ export default function HistoryScreen() {
     }
   };
 
+  /**
+   * The header keeps one line on both pages.
+   *
+   * Not decoration: the strip's height is the screen's height minus this
+   * header's, so a subtitle that came and went with the page would resize the
+   * viewport while a page was still travelling — a visible jolt in the middle of
+   * the swipe. "All time" is also the one thing worth saying about the stats
+   * page: it totals everything, and the date filter above it does not apply.
+   */
   const subtitle =
     panel === "stats"
-      ? undefined
+      ? "All time"
       : showing > 0
         ? view === "sessions"
           ? `${showing}${hasMore ? "+" : ""} session${showing === 1 ? "" : "s"}`
           : `${showing} collection${showing === 1 ? "" : "s"}`
         : filtering
           ? "No matches"
-          : undefined;
+          : "Nothing yet";
 
   return (
     <Screen wash={theme.accent}>
@@ -410,152 +450,163 @@ export default function HistoryScreen() {
         </View>
       </View>
 
-      {panel === "stats" ? (
-        <StatsPanel />
-      ) : (
-        <FlatList
-          {...listPerformance}
-          data={groups}
-          keyExtractor={(group) => group.key}
-          renderItem={({ item: group }) => {
-            const last = group.rows.length - 1;
-            return (
-              <View style={styles.group}>
-                {group.title ? (
-                  <View style={styles.sectionHeader}>
-                    <ThemedText type="overline" themeColor="textTertiary">
-                      {group.title}
-                    </ThemedText>
+      {/* Two readings of one record, swiped between like the Library's
+          views. The header and the chips stay put: navigation that slid
+          away with the page would be a second tab strip crossing the
+          screen on every swipe. */}
+      <SwipePager
+        index={panelIndex}
+        count={HISTORY_PANELS.length}
+        onIndexChange={selectPanelIndex}
+        renderPage={(pageIndex) =>
+          pageIndex === PANEL_STATS ? (
+            <StatsPanel />
+          ) : (
+            <FlatList
+              {...listPerformance}
+              data={groups}
+              keyExtractor={(group) => group.key}
+              renderItem={({ item: group }) => {
+                const last = group.rows.length - 1;
+                return (
+                  <View style={styles.group}>
+                    {group.title ? (
+                      <View style={styles.sectionHeader}>
+                        <ThemedText type="overline" themeColor="textTertiary">
+                          {group.title}
+                        </ThemedText>
+                      </View>
+                    ) : null}
+                    <ListGroup>
+                      {group.rows.map((row, index) => {
+                        const position: ListRowPosition =
+                          group.rows.length === 1
+                            ? "only"
+                            : index === 0
+                              ? "first"
+                              : index === last
+                                ? "last"
+                                : "middle";
+                        return row.kind === "stretch" ? (
+                          <StretchCard
+                            key={`s-${row.entry.stretch.id}`}
+                            entry={row.entry}
+                            position={position}
+                            matched={stretchMatches.get(row.entry.stretch.id) ?? null}
+                            onOpen={openStretch}
+                            // A stretch that has not been finalised is still being
+                            // written by the tracker, so there is nothing sensible to
+                            // tombstone yet.
+                            onDelete={
+                              row.entry.stretch.endedAt === null ? undefined : deleteStretch
+                            }
+                          />
+                        ) : (
+                          <ContextPlayCard
+                            key={`r-${row.run.id}`}
+                            run={row.run}
+                            position={position}
+                            matched={runMatches.get(row.run.id) ?? null}
+                            onPress={resumeRun}
+                            onOpen={openRun}
+                            onDelete={deleteRun}
+                          />
+                        );
+                      })}
+                    </ListGroup>
                   </View>
-                ) : null}
-                <ListGroup>
-                  {group.rows.map((row, index) => {
-                    const position: ListRowPosition =
-                      group.rows.length === 1
-                        ? "only"
-                        : index === 0
-                          ? "first"
-                          : index === last
-                            ? "last"
-                            : "middle";
-                    return row.kind === "stretch" ? (
-                      <StretchCard
-                        key={`s-${row.entry.stretch.id}`}
-                        entry={row.entry}
-                        position={position}
-                        matched={stretchMatches.get(row.entry.stretch.id) ?? null}
-                        onOpen={openStretch}
-                        // A stretch that has not been finalised is still being
-                        // written by the tracker, so there is nothing sensible to
-                        // tombstone yet.
-                        onDelete={
-                          row.entry.stretch.endedAt === null ? undefined : deleteStretch
-                        }
-                      />
-                    ) : (
-                      <ContextPlayCard
-                        key={`r-${row.run.id}`}
-                        run={row.run}
-                        position={position}
-                        matched={runMatches.get(row.run.id) ?? null}
-                        onPress={resumeRun}
-                        onOpen={openRun}
-                        onDelete={deleteRun}
-                      />
-                    );
-                  })}
-                </ListGroup>
-              </View>
-            );
-          }}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.list}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          onEndReached={() => {
-            // A search already holds everything it can see; paging it would
-            // append rows the filter then has to throw away.
-            if (view === "sessions" && !searching) {
-              void loadMore();
-            }
-          }}
-          onEndReachedThreshold={0.4}
-          ListFooterComponent={
-            view === "sessions" && loadingMore ? (
-              <ThemedText type="caption" themeColor="textTertiary" style={styles.footer}>
-                Loading older listens…
-              </ThemedText>
-            ) : null
-          }
-          ListHeaderComponent={
-            <View style={styles.headerBlock}>
-              <SearchField
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search tracks, collections…"
-                accessibilityLabel="Search listening history"
-                hint={
-                  searching
-                    ? `${showing} of ${total} ${view === "sessions" ? "listens" : "collections"}`
-                    : null
+                );
+              }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.list}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              onEndReached={() => {
+                // A search already holds everything it can see; paging it would
+                // append rows the filter then has to throw away.
+                if (view === "sessions" && !searching) {
+                  void loadMore();
                 }
-              />
-              <View style={styles.filterRow}>
-                <GlassChip
-                  label={describeDateRange(range)}
-                  icon="clock"
-                  selected={isRangeActive(range)}
-                  accessibilityLabel={`Date filter: ${describeDateRange(range)}`}
-                  onPress={() => setDateOpen(true)}
+              }}
+              onEndReachedThreshold={0.4}
+              ListFooterComponent={
+                view === "sessions" && loadingMore ? (
+                  <ThemedText type="caption" themeColor="textTertiary" style={styles.footer}>
+                    Loading older listens…
+                  </ThemedText>
+                ) : null
+              }
+              ListHeaderComponent={
+                <View style={styles.headerBlock}>
+                  <SearchField
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Search tracks, collections…"
+                    accessibilityLabel="Search listening history"
+                    hint={
+                      searching
+                        ? `${showing} of ${total} ${view === "sessions" ? "listens" : "collections"}`
+                        : null
+                    }
+                  />
+                  <View style={styles.filterRow}>
+                    <GlassChip
+                      label={describeDateRange(range)}
+                      icon="clock"
+                      selected={isRangeActive(range)}
+                      accessibilityLabel={`Date filter: ${describeDateRange(range)}`}
+                      onPress={() => setDateOpen(true)}
+                    />
+                  </View>
+                  <SegmentedControl
+                    options={HISTORY_VIEWS}
+                    value={view}
+                    onChange={setView}
+                    accessibilityLabel="History view"
+                  />
+                  {showing > 0 ? (
+                    <SegmentedControl
+                      options={HISTORY_SORT_OPTIONS}
+                      value={sort}
+                      onChange={(next) => void setSort(next)}
+                      accessibilityLabel="Sort history"
+                    />
+                  ) : null}
+                </View>
+              }
+              refreshControl={
+                <RefreshControl
+                  refreshing={view === "sessions" ? loading : runsLoading}
+                  onRefresh={() => void refreshAll()}
                 />
-              </View>
-              <SegmentedControl
-                options={HISTORY_VIEWS}
-                value={view}
-                onChange={setView}
-                accessibilityLabel="History view"
-              />
-              {showing > 0 ? (
-                <SegmentedControl
-                  options={HISTORY_SORT_OPTIONS}
-                  value={sort}
-                  onChange={(next) => void setSort(next)}
-                  accessibilityLabel="Sort history"
-                />
-              ) : null}
-            </View>
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={view === "sessions" ? loading : runsLoading}
-              onRefresh={() => void refreshAll()}
+              }
+              ListEmptyComponent={
+                (view === "sessions" ? loading : runsLoading) ? null : (
+                  <EmptyState
+                    icon={filtering ? "search" : view === "sessions" ? "history" : "folder"}
+                    title={
+                      filtering
+                        ? view === "sessions"
+                          ? "No listens match"
+                          : "No collections match"
+                        : view === "sessions"
+                          ? "No listening yet"
+                          : "No collections played yet"
+                    }
+                    message={
+                      filtering
+                        ? "Try another spelling or a wider date range — Persian variants are matched automatically."
+                        : view === "sessions"
+                          ? "Play a track and your sessions will show up here."
+                          : "Start a folder or a playlist and its play-through will show up here."
+                    }
+                  />
+                )
+              }
             />
-          }
-          ListEmptyComponent={
-            (view === "sessions" ? loading : runsLoading) ? null : (
-              <EmptyState
-                icon={filtering ? "search" : view === "sessions" ? "history" : "folder"}
-                title={
-                  filtering
-                    ? view === "sessions"
-                      ? "No listens match"
-                      : "No collections match"
-                    : view === "sessions"
-                      ? "No listening yet"
-                      : "No collections played yet"
-                }
-                message={
-                  filtering
-                    ? "Try another spelling or a wider date range — Persian variants are matched automatically."
-                    : view === "sessions"
-                      ? "Play a track and your sessions will show up here."
-                      : "Start a folder or a playlist and its play-through will show up here."
-                }
-              />
-            )
-          }
-        />
-      )}
+          )
+        }
+      />
 
       {dateOpen ? (
         <DateRangeSheet

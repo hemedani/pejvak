@@ -32,7 +32,7 @@
  */
 
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
 import { FactList } from "@/components/fact-list";
@@ -77,7 +77,14 @@ function days(count: number): string {
   return `${count} day${count === 1 ? "" : "s"}`;
 }
 
-export function StatsPanel() {
+/**
+ * Memoised with no props, which is not a micro-optimisation here: the panel
+ * lives in the History strip now, so it is mounted while the listener is typing
+ * in the History search field — and every one of those keystrokes would
+ * otherwise recompute every total on a page that is off screen. Nothing it draws
+ * depends on the screen's state, so nothing the screen does should redraw it.
+ */
+export const StatsPanel = memo(function StatsPanel() {
   const router = useRouter();
   const theme = useTheme();
   const { items, loading, refresh } = useHistory();
@@ -394,7 +401,7 @@ export function StatsPanel() {
       </View>
     </ScrollView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   content: {
