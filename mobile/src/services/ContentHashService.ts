@@ -51,14 +51,27 @@ export async function computeFileContentHash(
   uri: string,
   sizeBytes?: number,
 ): Promise<FileHashResult> {
-  const fileSizeBytes = sizeBytes ?? new File(uri).size;
-  const readLength = Math.min(Math.max(fileSizeBytes, 0), CONTENT_HASH_CHUNK_BYTES);
+  const declared = sizeBytes ?? new File(uri).size;
+  /**
+   * A size of zero is not a size.
+   *
+   * Both ways of asking can come back empty: `File.size` does not understand a
+   * `content://` URI, and a documents provider may decline to report a length.
+   * Trusting a zero would read a zero-length window — and every such file would
+   * then hash to the same value and be imported as a duplicate of the first one.
+   * So an unknown size reads the whole window and takes the length of what
+   * actually arrived, which is exact for anything under 1 MB and at worst
+   * under-reports the size of a larger file (the hash still identifies it).
+   */
+  const known = Number.isFinite(declared) && declared > 0 ? declared : null;
+  const readLength = Math.min(known ?? CONTENT_HASH_CHUNK_BYTES, CONTENT_HASH_CHUNK_BYTES);
   const base64 = await readAsStringAsync(uri, {
     position: 0,
     length: readLength,
     encoding: "base64",
   });
   const chunk = decodeBase64(base64);
+  const fileSizeBytes = known ?? chunk.length;
   const contentHash = await computeContentHashFromChunk(chunk, fileSizeBytes, sha256);
   const bundle = readAudioTagBundle(chunk);
   return { contentHash, fileSizeBytes, tags: bundle.tags, bundle };
