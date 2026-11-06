@@ -3,7 +3,7 @@
 /**
  * Reopening the track a stretch stopped on.
  *
- * The only client state on the History page. Three rules it exists to keep:
+ * The page's one write. Three rules it exists to keep:
  *
  *   · **A local track is a fact, not a failure.** Its bytes live on the phone
  *     and the server never saw them, so the control is disabled from the first

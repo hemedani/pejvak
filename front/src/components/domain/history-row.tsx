@@ -16,6 +16,8 @@
  * The same rule is why the timeline is a named button at the end of the row
  * rather than a click anywhere on it: the row already holds two links and two
  * controls, and a third interactive ancestor would make the tab order a guess.
+ * It opens a panel *inside* the row rather than a dialog over the page, so the
+ * list stays where the reader left it and focus never has to be handed back.
  *
  * ## One verdict, in one place
  *
@@ -31,7 +33,11 @@
 import Link from "next/link";
 
 import { ResumeListenButton } from "@/components/domain/resume-listen-button";
-import { SessionDetailButton } from "@/components/domain/session-detail";
+import {
+  SessionDetailPanel,
+  SessionDetailTrigger,
+  SessionDisclosure,
+} from "@/components/domain/session-detail";
 import { OriginBadge } from "@/components/domain/origin-badge";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/cn";
@@ -78,97 +84,109 @@ export function HistoryRow({
 
   return (
     <li className="px-[var(--space-lg)]">
-      <div
-        className={cn(
-          "flex flex-col gap-y-[var(--space-sm)] py-[var(--space-md)] sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-[var(--space-lg)]",
-          // The hairline lives inside the card's padding, so it separates two
-          // rows instead of tracing the card's own edge.
-          divided && "border-t border-outline-variant",
-        )}
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-[var(--space-sm)] gap-y-[var(--space-xxs)]">
-            {/*
-              Two lines, and the full run in `title`: a chapter title can be a
-              sentence, and one row growing to five lines would push the time and
-              the verdict off the screen it belongs on.
-            */}
-            <p
-              dir="auto"
-              className="type-body-strong line-clamp-2 min-w-0 text-text"
-              title={describeStretchTitle(stretch)}
-            >
-              <TrackTitle part={title.start} />
-              {title.end ? (
-                <>
-                  {/*
-                    The arrow is isolated, not the titles. A Persian title carries
-                    its own direction, and an arrow between two of them is
-                    punctuation with no strong direction of its own — isolating it
-                    keeps it between the names instead of letting bidi reorder it
-                    into one of them.
-                  */}
-                  <span dir="ltr" aria-hidden className="mx-[var(--space-xs)] text-text-tertiary">
-                    →
-                  </span>
-                  <TrackTitle part={title.end} />
-                </>
+      {/*
+        The disclosure wraps the row and the panel it opens, so the trigger can
+        live in the row's action cluster and the panel can sit below it without
+        either of them owning the other. `HistoryRow` itself stays a Server
+        Component — see `session-detail.tsx`.
+      */}
+      <SessionDisclosure>
+        <div
+          className={cn(
+            "flex flex-col gap-y-[var(--space-sm)] py-[var(--space-md)] sm:flex-row sm:flex-wrap sm:items-start sm:gap-x-[var(--space-lg)]",
+            // The hairline lives inside the card's padding, so it separates two
+            // rows instead of tracing the card's own edge.
+            divided && "border-t border-outline-variant",
+          )}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-[var(--space-sm)] gap-y-[var(--space-xxs)]">
+              {/*
+                Two lines, and the full run in `title`: a chapter title can be a
+                sentence, and one row growing to five lines would push the time
+                and the verdict off the screen it belongs on.
+              */}
+              <p
+                dir="auto"
+                className="type-body-strong line-clamp-2 min-w-0 text-text"
+                title={describeStretchTitle(stretch)}
+              >
+                <TrackTitle part={title.start} />
+                {title.end ? (
+                  <>
+                    {/*
+                      The arrow is isolated, not the titles. A Persian title
+                      carries its own direction, and an arrow between two of them
+                      is punctuation with no strong direction of its own —
+                      isolating it keeps it between the names instead of letting
+                      bidi reorder it into one of them.
+                    */}
+                    <span dir="ltr" aria-hidden className="mx-[var(--space-xs)] text-text-tertiary">
+                      →
+                    </span>
+                    <TrackTitle part={title.end} />
+                  </>
+                ) : null}
+              </p>
+
+              {verdict ? (
+                <Badge tone={verdict.tone} size="sm">
+                  {verdict.label}
+                </Badge>
               ) : null}
+
+              {first?.track ? <OriginBadge origin={first.track.origin} /> : null}
+
+              {stretch.seeked ? (
+                <Badge tone="muted" size="sm">
+                  Seek
+                </Badge>
+              ) : null}
+            </div>
+
+            <p className="type-caption mt-[var(--space-xxs)] text-text-tertiary">
+              <span className="type-numeric text-text-secondary">
+                {formatStretchTimeRange(stretch)}
+              </span>
+              {tracks ? <span className="type-numeric"> · {tracks}</span> : null}
+              {contextTitle ? (
+                <>
+                  {" · "}
+                  <ContextLink stretch={stretch} title={contextTitle} />
+                </>
+              ) : (
+                <PlaylistContext stretch={stretch} />
+              )}
             </p>
-
-            {verdict ? (
-              <Badge tone={verdict.tone} size="sm">
-                {verdict.label}
-              </Badge>
-            ) : null}
-
-            {first?.track ? (
-              <OriginBadge origin={first.track.origin} />
-            ) : null}
-
-            {stretch.seeked ? (
-              <Badge tone="muted" size="sm">
-                Seek
-              </Badge>
-            ) : null}
           </div>
 
-          <p className="type-caption mt-[var(--space-xxs)] text-text-tertiary">
-            <span className="type-numeric text-text-secondary">{formatStretchTimeRange(stretch)}</span>
-            {tracks ? <span className="type-numeric"> · {tracks}</span> : null}
-            {contextTitle ? (
-              <>
-                {" · "}
-                <ContextLink stretch={stretch} title={contextTitle} />
-              </>
-            ) : (
-              <PlaylistContext stretch={stretch} />
-            )}
-          </p>
+          <div className="ms-auto flex shrink-0 items-center gap-[var(--space-sm)]">
+            <span className="type-numeric me-[var(--space-xs)] text-text-tertiary">
+              {formatSpan(stretch.listenedSec)}
+            </span>
+
+            {/*
+              The way into the timeline. A named control rather than a clickable
+              row: the row already holds two links and a button, and nesting
+              those inside another button is invalid HTML and an unpredictable
+              tab order. It toggles the panel below rather than covering the
+              page, so the rows around it stay where the reader left them.
+            */}
+            <SessionDetailTrigger title={describeStretchTitle(stretch)} />
+
+            <ResumeListenButton
+              trackId={resume.trackId}
+              positionSec={resume.positionSec}
+              title={resumeTitle}
+              kind={kind}
+              playable={playable}
+              live={live}
+            />
+          </div>
         </div>
 
-        <div className="ms-auto flex shrink-0 items-center gap-[var(--space-sm)]">
-          <span className="type-numeric me-[var(--space-xs)] text-text-tertiary">
-            {formatSpan(stretch.listenedSec)}
-          </span>
-
-          {/*
-            The way into the timeline. A named control rather than a clickable
-            row: the row already holds two links and a button, and nesting those
-            inside another button is invalid HTML and an unpredictable tab order.
-          */}
-          <SessionDetailButton stretch={stretch} playable={playable} live={live} />
-
-          <ResumeListenButton
-            trackId={resume.trackId}
-            positionSec={resume.positionSec}
-            title={resumeTitle}
-            kind={kind}
-            playable={playable}
-            live={live}
-          />
-        </div>
-      </div>
+        <SessionDetailPanel stretch={stretch} />
+      </SessionDisclosure>
     </li>
   );
 }
