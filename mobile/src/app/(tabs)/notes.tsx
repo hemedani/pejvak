@@ -5,7 +5,9 @@
  * time, which made them nearly unfindable: the thing you remember writing is a
  * sentence, not the file it was written in. This screen is the index — searched
  * by the note itself, by its tags, by the track it is in and by the folder that
- * track sits in, and one tap from playing the moment it describes.
+ * track sits in — and narrowed to a date range, the same control and the same
+ * sheet the History screen uses, because "the notes I wrote last week" is as
+ * ordinary a question as "the notes about this lecture".
  *
  * It is a dock destination rather than a pushed screen: notes are something the
  * listener *returns to*, not something they drill into from one track, and the
@@ -20,14 +22,23 @@ import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 
+import { DateRangeSheet } from "@/components/history/date-range-sheet";
 import { NoteRow } from "@/components/note-row";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { ThemedText } from "@/components/themed-text";
+import { GlassChip } from "@/components/ui/glass";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
 import { EmptyState, ListSurface, SkeletonRows } from "@/components/ui/row";
 import { SearchField } from "@/components/ui/search-field";
 import { useAllNotes } from "@/hooks/use-all-notes";
 import { useTheme } from "@/hooks/use-theme";
+import {
+  ANY_DATE,
+  describeDateRange,
+  isRangeActive,
+  rangeContains,
+  type DateRange,
+} from "@/lib/dateRange";
 import type { AnnotationWithTrack } from "@/lib/db/types";
 import { listPerformance } from "@/lib/listPerformance";
 import { rowPositionFor } from "@/lib/listSurface";
@@ -46,9 +57,30 @@ export default function NotesScreen() {
   const theme = useTheme();
   const { notes, loading, remove } = useAllNotes();
   const [query, setQuery] = useState("");
+  const [range, setRange] = useState<DateRange>(ANY_DATE);
+  const [dateOpen, setDateOpen] = useState(false);
 
   const terms = useMemo(() => foldQuery(query), [query]);
   const searching = terms.length > 0;
+  const rangeActive = isRangeActive(range);
+  const filtering = searching || rangeActive;
+
+  /**
+   * The date comes first, and the search reads what it leaves.
+   *
+   * Both are filters on the same list, so composing them in one order is the
+   * whole of the behaviour: a note outside the range is not a note this screen
+   * is about, and "no match" while a range is on must mean *inside the range*.
+   * The index is therefore built over the date-filtered notes rather than over
+   * everything, which also keeps the folded copy in step with what is shown.
+   */
+  const dated = useMemo(
+    () =>
+      rangeActive
+        ? notes.filter((note) => rangeContains(range, note.annotation.createdAt))
+        : notes,
+    [notes, range, rangeActive],
+  );
 
   /**
    * Folded once per data load. The note text is the title field, so a hit in it
@@ -57,8 +89,8 @@ export default function NotesScreen() {
    * a wrong result.
    */
   const index = useMemo(
-    () => createSearchIndex(notes, noteSearchFields, NOTE_TITLE_FIELD),
-    [notes],
+    () => createSearchIndex(dated, noteSearchFields, NOTE_TITLE_FIELD),
+    [dated],
   );
   const hits = useMemo(() => searchIndex(index, terms), [index, terms]);
 
@@ -70,7 +102,7 @@ export default function NotesScreen() {
     }[]
   >(() => {
     if (!searching) {
-      return notes.map((note) => ({ note, ranges: undefined, matched: null }));
+      return dated.map((note) => ({ note, ranges: undefined, matched: null }));
     }
     return hits.map((hit) => ({
       note: hit.item,
@@ -80,7 +112,7 @@ export default function NotesScreen() {
           ? null
           : `${describeField(hit.field)} · ${hit.value}`,
     }));
-  }, [hits, notes, searching]);
+  }, [dated, hits, searching]);
 
   /** Play the moment the note describes — the only thing a note can do. */
   const open = useCallback(
@@ -121,9 +153,9 @@ export default function NotesScreen() {
         title="Notes"
         subtitle={
           searching
-            ? `${rows.length} of ${notes.length} notes`
-            : notes.length > 0
-              ? `${notes.length} note${notes.length === 1 ? "" : "s"}`
+            ? `${rows.length} of ${dated.length} notes`
+            : dated.length > 0
+              ? `${dated.length} note${dated.length === 1 ? "" : "s"}${rangeActive ? " in range" : ""}`
               : undefined
         }
       />
@@ -133,6 +165,15 @@ export default function NotesScreen() {
         placeholder="Search notes, tracks, tags…"
         accessibilityLabel="Search your notes"
       />
+      <View style={styles.filterRow}>
+        <GlassChip
+          label={describeDateRange(range)}
+          icon="clock"
+          selected={rangeActive}
+          accessibilityLabel={`Date filter: ${describeDateRange(range)}`}
+          onPress={() => setDateOpen(true)}
+        />
+      </View>
       {searching ? (
         <ThemedText type="caption" themeColor="textTertiary">
           Persian spellings are matched automatically.
@@ -166,11 +207,21 @@ export default function NotesScreen() {
         ListEmptyComponent={
           loading ? (
             <SkeletonRows count={4} />
-          ) : searching ? (
+          ) : filtering ? (
             <EmptyState
               icon="search"
-              title={`No note matches “${query.trim()}”`}
-              message="Try another word, the track it was in, or one of its tags."
+              title={
+                searching
+                  ? `No note matches “${query.trim()}”`
+                  : "No notes in this range"
+              }
+              message={
+                searching
+                  ? rangeActive
+                    ? "Try another word, or widen the date range — Persian variants are matched automatically."
+                    : "Try another word, the track it was in, or one of its tags."
+                  : "Try a wider date range."
+              }
             />
           ) : (
             <EmptyState
@@ -181,6 +232,14 @@ export default function NotesScreen() {
           )
         }
       />
+      {dateOpen ? (
+        <DateRangeSheet
+          range={range}
+          subject="notes"
+          onApply={setRange}
+          onClose={() => setDateOpen(false)}
+        />
+      ) : null}
     </Screen>
   );
 }
@@ -196,5 +255,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     // The header is a cell of its own, so the space under it is its own too.
     paddingBottom: spacing.xl,
+  },
+  filterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
 });
