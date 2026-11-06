@@ -9,7 +9,12 @@
 import { memo, useCallback, useMemo } from "react";
 
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
-import { addToPlaylistAction, historyAction, playPlaylistAction } from "@/components/ui/row";
+import {
+  addToPlaylistAction,
+  deleteAction,
+  historyAction,
+  playPlaylistAction,
+} from "@/components/ui/row";
 import type { LocalPlaylist } from "@/lib/db/types";
 import type { ItemOrigin } from "@/lib/origin";
 import { paletteFor } from "@/lib/palette";
@@ -19,7 +24,12 @@ import { PlaylistService } from "@/services/PlaylistService";
 
 export type LibraryPlaylistCardProps = {
   playlist: LocalPlaylist;
-  lastPlayedAt: number;
+  /**
+   * When it was last played, or `null` on the Playlists tab, which lists every
+   * playlist rather than the ones recently opened. `null` drops the clause
+   * instead of inventing a date.
+   */
+  lastPlayedAt?: number | null;
   matched?: string | null;
   /** Resolved by the screen: a playlist has no origin of its own. */
   origin?: ItemOrigin | null;
@@ -27,21 +37,27 @@ export type LibraryPlaylistCardProps = {
   cardWidth: number;
   onOpen: (playlistId: string) => void;
   onPlay: (playlistId: string) => void;
+  /** Offered only where a playlist can be removed — the Playlists tab. */
+  onDelete?: (playlist: LocalPlaylist) => void;
 };
 
 export const LibraryPlaylistCard = memo(function LibraryPlaylistCard({
   playlist,
-  lastPlayedAt,
+  lastPlayedAt = null,
   matched,
   origin,
   titleRanges,
   cardWidth,
   onOpen,
   onPlay,
+  onDelete,
 }: LibraryPlaylistCardProps) {
   const ramp = useMemo(() => paletteFor(playlist.title), [playlist.title]);
   const handlePress = useCallback(() => onOpen(playlist.id), [onOpen, playlist.id]);
   const play = useCallback(() => onPlay(playlist.id), [onPlay, playlist.id]);
+  const remove = useCallback(() => {
+    onDelete?.(playlist);
+  }, [onDelete, playlist]);
 
   const resolveTrackIds = useCallback(async () => {
     const detail = await PlaylistService.loadDetail(playlist.id);
@@ -50,8 +66,8 @@ export const LibraryPlaylistCard = memo(function LibraryPlaylistCard({
       .map((track) => track.id);
   }, [playlist.id]);
 
-  const actions = useMemo<MediaCardAction[]>(
-    () => [
+  const actions = useMemo<MediaCardAction[]>(() => {
+    const list: MediaCardAction[] = [
       playPlaylistAction({
         title: playlist.title,
         onPress: play,
@@ -70,15 +86,18 @@ export const LibraryPlaylistCard = memo(function LibraryPlaylistCard({
         title: playlist.title,
         tone: "glass",
       }),
-    ],
-    [play, playlist.id, playlist.title, ramp, resolveTrackIds],
-  );
+    ];
+    if (onDelete) {
+      list.push(deleteAction({ title: playlist.title, onPress: remove }));
+    }
+    return list;
+  }, [onDelete, play, playlist.id, playlist.title, ramp, remove, resolveTrackIds]);
 
   const count = playlist.items.length;
   const meta = [
     matched,
     `${count} track${count === 1 ? "" : "s"}`,
-    describeRecentWhen(lastPlayedAt),
+    lastPlayedAt === null ? null : describeRecentWhen(lastPlayedAt),
   ]
     .filter((part): part is string => part !== null)
     .join(" · ");

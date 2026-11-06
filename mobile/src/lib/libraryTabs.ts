@@ -11,6 +11,7 @@ export const LIBRARY_VIEW_LABELS = {
   language: "Language",
   tracks: "Tracks",
   folders: "Folders",
+  playlists: "Playlists",
   recent: "Recent",
 } as const;
 
@@ -24,9 +25,17 @@ export type LibraryTab = {
   label: string;
 };
 
+/**
+ * The order is the shape of the library, widest first: everything, then the
+ * folders it sits in, then the playlists made out of it, then what you touched
+ * last. A playlist belongs *after* folders because it is a second way of
+ * grouping the same files — putting it before would say a playlist is a kind of
+ * container on the device, which it is not.
+ */
 const LIBRARY_TABS: readonly LibraryTab[] = [
   { value: "tracks", label: LIBRARY_VIEW_LABELS.tracks },
   { value: "folders", label: LIBRARY_VIEW_LABELS.folders },
+  { value: "playlists", label: LIBRARY_VIEW_LABELS.playlists },
   { value: "recent", label: LIBRARY_VIEW_LABELS.recent },
 ];
 

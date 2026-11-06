@@ -1,10 +1,11 @@
 import { libraryTabs, resolveLibraryView } from "@/lib/libraryTabs";
 
 describe("libraryTabs", () => {
-  it("keeps the three library tabs when no language is chosen", () => {
+  it("keeps the four library tabs when no language is chosen", () => {
     expect(libraryTabs(false).map((tab) => tab.value)).toEqual([
       "tracks",
       "folders",
+      "playlists",
       "recent",
     ]);
   });
@@ -14,9 +15,19 @@ describe("libraryTabs", () => {
       "language",
       "tracks",
       "folders",
+      "playlists",
       "recent",
     ]);
     expect(libraryTabs(true)[0]?.label).toBe("Language");
+  });
+
+  it("keeps Playlists between Folders and Recent", () => {
+    // A playlist groups the same files a folder does, so it sits after the
+    // folders and before the recency list — never before the folders, which
+    // would say it is a kind of container on the device.
+    const order = libraryTabs(false).map((tab) => tab.value);
+    expect(order.indexOf("playlists")).toBe(order.indexOf("folders") + 1);
+    expect(order.indexOf("playlists")).toBe(order.indexOf("recent") - 1);
   });
 });
 
@@ -31,6 +42,7 @@ describe("resolveLibraryView", () => {
 
   it("keeps a view the listener picked", () => {
     expect(resolveLibraryView("recent", true)).toBe("recent");
+    expect(resolveLibraryView("playlists", true)).toBe("playlists");
   });
 
   it("falls back to tracks when the language is cleared while its tab is open", () => {
