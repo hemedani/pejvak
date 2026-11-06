@@ -7,6 +7,10 @@
  * by the note itself, by its tags, by the track it is in and by the folder that
  * track sits in, and one tap from playing the moment it describes.
  *
+ * It is a dock destination rather than a pushed screen: notes are something the
+ * listener *returns to*, not something they drill into from one track, and the
+ * dock is the app's answer to "where does this live?".
+ *
  * Tapping does not open a detail view. A note *is* the detail; the useful action
  * is to hear what it was about, so the row goes straight to the player at that
  * second.
@@ -35,7 +39,7 @@ import {
   searchIndex,
   type Range,
 } from "@/lib/search";
-import { miniPlayerInset, spacing } from "@/theme/tokens";
+import { dockInset, spacing } from "@/theme/tokens";
 
 export default function NotesScreen() {
   const router = useRouter();
@@ -113,7 +117,6 @@ export default function NotesScreen() {
   const header = (
     <View style={styles.headerBlock}>
       <ScreenHeader
-        onBack={() => router.back()}
         overline="WHAT YOU NOTICED"
         title="Notes"
         subtitle={
@@ -187,7 +190,7 @@ const styles = StyleSheet.create({
   // break the side hairlines into disconnected segments.
   list: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.giant + miniPlayerInset,
+    paddingBottom: spacing.giant + dockInset,
   },
   headerBlock: {
     gap: spacing.md,

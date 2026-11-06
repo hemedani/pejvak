@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
 
 import type { AnnotationWithTrack } from "@/lib/db/types";
 import { AnnotationService } from "@/services/AnnotationService";
@@ -17,6 +18,12 @@ export type UseAllNotesResult = {
  * database and are not mirrored into a store. Deleting re-reads rather than
  * splicing the array, because the same write also queues a tombstone for sync
  * and a second copy could arrive from the server later.
+ *
+ * **Read on focus, not on mount.** The screen that uses this is a dock
+ * destination, so it stays mounted for the life of the app — and notes are
+ * written in the player, which is a modal over that tab rather than a screen it
+ * pushed. A one-time read would mean a note written after the first visit never
+ * appeared.
  */
 export function useAllNotes(): UseAllNotesResult {
   const [notes, setNotes] = useState<AnnotationWithTrack[]>([]);
@@ -27,22 +34,11 @@ export function useAllNotes(): UseAllNotesResult {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    // Read in the effect body and set state from the callback, so the first
-    // paint is not blocked by the query and a screen that unmounts mid-read
-    // never writes to a dead component.
-    let cancelled = false;
-    void AnnotationService.getAllNotes().then((rows) => {
-      if (cancelled) {
-        return;
-      }
-      setNotes(rows);
-      setLoading(false);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
 
   const remove = useCallback(
     async (note: AnnotationWithTrack) => {

@@ -112,13 +112,13 @@ export const TABS: readonly TabDefinition[] = [
     icon: "compassOutline",
     iconActive: "compass",
   },
-  { name: "stats", label: "Stats", icon: "stats", iconActive: "statsFilled" },
   {
-    name: "playlists",
-    label: "Playlists",
-    icon: "playlists",
-    iconActive: "playlistsFilled",
+    name: "notes",
+    label: "Notes",
+    icon: "notes",
+    iconActive: "notesFilled",
   },
+  { name: "stats", label: "Stats", icon: "stats", iconActive: "statsFilled" },
 ];
 
 export type AppDockProps = {

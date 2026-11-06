@@ -1,9 +1,17 @@
+/**
+ * The dock's five destinations, as routes.
+ *
+ * Playlists is deliberately absent. It is a *library view* now — a chip beside
+ * Tracks, Folders and Recent — because a playlist is a way of arranging the
+ * library you already have rather than a separate place to go. The dock's five
+ * slots belong to the five things a listener opens on their own terms.
+ */
 export const TAB_NAMES = [
   "index",
   "history",
   "discover",
+  "notes",
   "stats",
-  "playlists",
 ] as const;
 
 export type TabName = (typeof TAB_NAMES)[number];
@@ -12,8 +20,8 @@ const TAB_HREFS = {
   index: "/",
   history: "/history",
   discover: "/discover",
+  notes: "/notes",
   stats: "/stats",
-  playlists: "/playlists",
 } as const satisfies Record<TabName, string>;
 
 function firstPathSegment(pathname: string): string | null {

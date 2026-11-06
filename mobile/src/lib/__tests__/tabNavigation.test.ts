@@ -5,8 +5,8 @@ describe("tabNameForPathname", () => {
     ["/", "index"],
     ["/history", "history"],
     ["/discover", "discover"],
+    ["/notes", "notes"],
     ["/stats", "stats"],
-    ["/playlists", "playlists"],
   ])("maps %s to %s", (pathname, expected) => {
     expect(tabNameForPathname(pathname)).toBe(expected);
   });
@@ -24,10 +24,16 @@ describe("tabNameForPathname", () => {
     expect(tabNameForPathname("/online/archive-fa/foo")).toBe("index");
     expect(tabNameForPathname("")).toBe("index");
   });
+
+  it("does not treat the old Playlists route as a destination", () => {
+    // Playlists is a Library view now; a stale link must land on the library
+    // rather than light up a dock slot that no longer exists.
+    expect(tabNameForPathname("/playlists")).toBe("index");
+  });
 });
 
 describe("isTabPathname", () => {
-  it.each(["/", "/history", "/discover", "/stats", "/playlists", "/(tabs)/discover"])(
+  it.each(["/", "/history", "/discover", "/notes", "/stats", "/(tabs)/discover"])(
     "treats %s as a tab",
     (pathname) => {
       expect(isTabPathname(pathname)).toBe(true);
@@ -45,6 +51,6 @@ describe("tabHref", () => {
   it("uses the root href for the library and a named href for the rest", () => {
     expect(tabHref("index")).toBe("/");
     expect(tabHref("history")).toBe("/history");
-    expect(tabHref("playlists")).toBe("/playlists");
+    expect(tabHref("notes")).toBe("/notes");
   });
 });

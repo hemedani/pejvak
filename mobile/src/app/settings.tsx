@@ -225,13 +225,15 @@ export default function SettingsScreen() {
 
         {/* 4 — The library's own index. Notes live in the player, so the way to
             see all of them belongs somewhere a listener would look for "things
-            I have collected", not inside a track. */}
+            I have collected", not inside a track. It is a dock destination too,
+            which is why this is `navigate` rather than `push`: opening it from
+            here should *be* the tab, not a copy of it on the stack. */}
         <CardSection title="LIBRARY" index={libraryIndex}>
           <CardRow
             icon="notes"
             label="All notes"
             detail="Every note you have written, with the track it belongs to."
-            onPress={() => router.push("/notes")}
+            onPress={() => router.navigate("/notes")}
           />
         </CardSection>
 

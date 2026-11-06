@@ -67,6 +67,7 @@ export const ICON_GLYPHS = {
   playlistsFilled: "playlist-music",
   settings: "cog-outline",
   notes: "note-text-outline",
+  notesFilled: "note-text",
 
   compass: "compass",
   compassOutline: "compass-outline",

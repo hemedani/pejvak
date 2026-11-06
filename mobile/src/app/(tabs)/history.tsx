@@ -430,29 +430,21 @@ export default function HistoryScreen() {
                     : undefined
               }
               action={
-                <View style={styles.headerActions}>
+                /* Export writes the track-by-track log; the Collections tab has
+                   no writer yet, so the control is not offered there rather
+                   than silently exporting something else. Notes used to sit
+                   beside it; they are a dock destination now, and a second way
+                   into the same screen from here was only ever a shortcut. */
+                view === "sessions" && showing > 0 ? (
                   <BouncyIconButton
-                    name="notes"
-                    accessibilityLabel="All notes"
+                    name="share"
+                    accessibilityLabel="Export listening history"
                     size={control.lg}
                     iconSize={iconSize.md}
                     tone="glass"
-                    onPress={() => router.push("/notes")}
+                    onPress={() => void exportHistory()}
                   />
-                  {/* Export writes the track-by-track log; the Collections tab
-                      has no writer yet, so the control is not offered there
-                      rather than silently exporting something else. */}
-                  {view === "sessions" && showing > 0 ? (
-                    <BouncyIconButton
-                      name="share"
-                      accessibilityLabel="Export listening history"
-                      size={control.lg}
-                      iconSize={iconSize.md}
-                      tone="glass"
-                      onPress={() => void exportHistory()}
-                    />
-                  ) : null}
-                </View>
+                ) : undefined
               }
             />
             <SearchField
@@ -541,11 +533,6 @@ const styles = StyleSheet.create({
   headerBlock: {
     gap: spacing.md,
     paddingBottom: spacing.xs,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
   },
   filterRow: {
     flexDirection: "row",
