@@ -17,7 +17,10 @@ import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { SwipePager } from "@/components/motion/SwipePager";
-import { LanguageButton } from "@/components/online/language-button";
+import {
+  LanguageButton,
+  LanguagePrompt,
+} from "@/components/online/language-button";
 import { LanguagePickerSheet } from "@/components/online/language-picker-sheet";
 import { SourceRow } from "@/components/online/source-row";
 import { SmartPlaylistRow } from "@/components/smart-playlist-row";
@@ -63,6 +66,7 @@ import {
   createSearchIndex,
   describeField,
   foldQuery,
+  foldText,
   searchIndex,
   type Hit,
   type Range,
@@ -84,14 +88,14 @@ import {
 } from "@/theme/tokens";
 
 /**
- * The header block occupies reveal indices 1–5 (search field, view toggle,
- * continue card, missing-files alert, add-audio button), so list rows start at
- * 6. Only the opening screenful staggers in — recycled rows past this limit
- * render immediately instead of replaying a 320 ms-delayed fade. See `Reveal`'s
- * `limit`.
+ * The header block occupies reveal indices 1–6 (language prompt, search field,
+ * view toggle, continue card, missing-files alert, add-audio button), so list
+ * rows start at 7. Only the opening screenful staggers in — recycled rows past
+ * this limit render immediately instead of replaying a 320 ms-delayed fade. See
+ * `Reveal`'s `limit`.
  */
-const ROW_REVEAL_LIMIT = 12;
-const FIRST_ROW_REVEAL_INDEX = 6;
+const ROW_REVEAL_LIMIT = 13;
+const FIRST_ROW_REVEAL_INDEX = 7;
 
 /**
  * How many files one Library visit examines for cover art. Small on purpose:
@@ -626,16 +630,14 @@ export default function LibraryScreen() {
    * Switching view from anywhere — a chip or a swipe.
    *
    * One function rather than two so the swipe and the tap cannot disagree about
-   * what changing view means: the language shelf is a directory, so a query
-   * cannot survive the move to it, and leaving it has to be as harmless as
-   * arriving.
+   * what changing view means. The query deliberately survives the move: every
+   * tab answers it now, the language shelf included, and clearing it on arrival
+   * would make the same swipe mean two different things depending on how it was
+   * made.
    */
   const goToView = useCallback((next: LibraryView) => {
     setChosenView(next);
-    if (next === "language") {
-      setQuery("");
-    }
-  }, [setQuery]);
+  }, []);
 
   const tabsIndex = tabs.findIndex((tab) => tab.value === view);
   const viewIndex = tabsIndex < 0 ? 0 : tabsIndex;
@@ -685,8 +687,15 @@ export default function LibraryScreen() {
     />
   ) : null;
 
-  const header = (
-    <View style={styles.headerBlock}>
+  /**
+   * Everything that must not move when the strip does.
+   *
+   * The title, the search field and the chips are navigation, and navigation
+   * that slid away with the page would put two tab strips on screen at once
+   * during a swipe. They sit above the pager and stay put; only the pages move.
+   */
+  const chrome = (
+    <View style={styles.chrome}>
       <ScreenHeader
         overline="YOUR LISTENING SPACE"
         title="Library"
@@ -701,7 +710,12 @@ export default function LibraryScreen() {
         }
         action={
           <View style={styles.headerActions}>
-            <LanguageButton language={language} onPress={() => setPickingLanguage(true)} />
+            {/* The pill states the language once there is one. With none, the
+                choice is the full-width prompt below the header instead — a
+                sentence does not fit a 150pt pill. */}
+            {language ? (
+              <LanguageButton language={language} onPress={() => setPickingLanguage(true)} />
+            ) : null}
             <BouncyIconButton
               name="settings"
               accessibilityLabel="Settings"
@@ -714,47 +728,59 @@ export default function LibraryScreen() {
         }
       />
 
-      {/* The field sits above the chips, not inside a tab, because it belongs
+      {/* Why a language at all, asked before anything else. It goes away the
+          moment one is chosen, which is also when the Online tab appears. */}
+      {language === null ? (
+        <Reveal index={1}>
+          <LanguagePrompt onPress={() => setPickingLanguage(true)} />
+        </Reveal>
+      ) : null}
+
+      {/* The field sits above the chips, not inside a page, because it belongs
           to the screen: it searches all four lists at once and the chips'
           counts are how it reports that. See `describeElsewhere` for the empty
           case.
+
+          It is here even over the online shelf, which is why the shelf filters
+          its sources: a control that came and went with the strip would resize
+          the pager under the finger, and a page that jumped 70pt on arrival
+          looks like a bug.
 
           Note this is an *element*, not a component function — a header defined
           as `() => <View/>` gets a fresh component type on every render, which
           remounts the `TextInput` and drops the keyboard on the first
           keystroke. */}
-      {/* Search belongs to the library's four lists. The language tab is a
-          directory of sources, short enough to read whole, and the field would
-          otherwise promise to filter providers it does not search. */}
-      {view !== "language" ? (
-        <Reveal index={1}>
-          <SearchField
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search titles, folders, playlists…"
-            hint={hint}
-            accessibilityLabel="Search your library"
-          />
-        </Reveal>
-      ) : null}
-
       <Reveal index={2}>
-        {/* Five chips do not fit with glyphs on a small phone, so the labels
-            carry the whole meaning. The row *wraps* rather than shrinks: a chip
-            whose label is clipped is worse than a chip on a second line, and the
-            match counts that appear during a search make the row wider than any
-            phone can hold. Chips grow to share a line while they fit, so four
-            of them still read as one strip.
+        <SearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search titles, folders, playlists…"
+          hint={hint}
+          accessibilityLabel="Search your library"
+        />
+      </Reveal>
 
-            While a query is active each library chip carries its match count,
-            which is what stops a search for a folder name being trapped in the
-            Tracks tab — "Folders 1" says where to look. The language chip has
-            no count because it is not searched. */}
+      <Reveal index={3}>
+        {/* Every chip carries its view's glyph, and the row *wraps* rather than
+            shrinks: five chips with glyphs do not fit across a small phone, and
+            a chip whose label is clipped is worse than a chip on a second line.
+            The match counts that appear during a search widen the row again.
+            Chips grow to share a line while they fit, so four of them still
+            read as one strip.
+
+            While a query is active each library chip carries its match count
+            *instead of* its glyph — the count is information and the glyph is
+            decoration, and they occupy the same slot, so the row cannot start
+            clipping the moment a query is typed. "Online" has no count: its tab
+            is a short directory of providers, not a list of library items, and
+            counting them would make "N matches" in the subtitle a total of two
+            different things. */}
         <View style={styles.viewToggle}>
           {tabs.map((tab) => (
             <GlassChip
               key={tab.value}
               label={tab.label}
+              icon={tab.icon}
               selected={view === tab.value}
               count={
                 searching && tab.value !== "language" ? counts[tab.value] : null
@@ -765,15 +791,33 @@ export default function LibraryScreen() {
           ))}
         </View>
       </Reveal>
+    </View>
+  );
 
-      {/* Playlists is the one view with standing furniture of its own: a way to
-          make one, and the smart lists derived from listening history. Both sit
-          with the chips rather than in the list, and both step aside while a
-          query is active — a search replaces the list, and a "create" field
-          above results nobody asked for is furniture in the way. */}
-      {view === "playlists" && !searching ? (
-        <>
-          <Reveal index={3} style={styles.createRow}>
+  /**
+   * The standing furniture of one view, as that view's list header.
+   *
+   * Per page rather than part of the chrome, because it is *content*: a
+   * playlist form belongs above the playlists and nowhere else. The chrome is
+   * the opposite — it is navigation, and navigation that slid away with the
+   * page would be two tab strips crossing the screen on every swipe.
+   *
+   * It is a function of the page's own view, not of `view`. A neighbour is
+   * built before it is on screen, and handing it the active view would give it
+   * the wrong furniture for the frame it is first seen in.
+   */
+  const furniture = (pageView: LibraryView) => {
+    if (pageView === "language") {
+      return null;
+    }
+
+    if (pageView === "playlists") {
+      if (searching) {
+        return null;
+      }
+      return (
+        <View style={styles.furniture}>
+          <Reveal index={4} style={styles.createRow}>
             <TextField
               label="New playlist"
               value={newPlaylistTitle}
@@ -796,7 +840,7 @@ export default function LibraryScreen() {
           </Reveal>
 
           {smartPlaylists.length > 0 ? (
-            <Reveal index={4} style={styles.smartSection}>
+            <Reveal index={5} style={styles.smartSection}>
               <ThemedText type="overline" themeColor="textTertiary">
                 SMART
               </ThemedText>
@@ -816,83 +860,85 @@ export default function LibraryScreen() {
               </ListGroup>
             </Reveal>
           ) : null}
-        </>
-      ) : null}
+        </View>
+      );
+    }
 
-      {/* The continue card, the missing-files alert and the Add button all step
-          aside while searching or looking at the language shelf. They are the
-          library's standing furniture, and neither of those is the library. The
-          continue card also stands aside on Playlists: it is about one track,
-          and that tab is about the collections made out of them. */}
-      {continueTrack && !searching && view !== "language" && view !== "playlists" ? (
-        <Reveal index={3}>
-          <Card style={styles.continueCard}>
+    // Tracks, Folders and Recent share the library's standing furniture. The
+    // continue card stands aside while searching — it is about one track, and a
+    // search result is about the query.
+    return (
+      <View style={styles.furniture}>
+        {continueTrack && !searching ? (
+          <Reveal index={4}>
+            <Card style={styles.continueCard}>
+              <ElasticPressable
+                accessibilityRole="button"
+                accessibilityLabel={`Continue listening to ${continueTrack.title}`}
+                onPress={() => playAt(continueTrack.id)}
+                style={styles.continueMain}>
+                <PaletteTile
+                  ramp={paletteFor(continueTrack.contentHash)}
+                  label={continueTrack.title}
+                  source={continueTrack.artworkUrl}
+                  size={tile.xl}
+                  radius={tileRadius(tile.xl)}
+                />
+                <View style={styles.continueCopy}>
+                  <ThemedText type="overline" themeColor="textTertiary">
+                    CONTINUE LISTENING
+                  </ThemedText>
+                  <ThemedText type="bodyStrong" numberOfLines={2}>
+                    {continueTrack.title}
+                  </ThemedText>
+                  <ThemedText type="caption" themeColor="textSecondary">
+                    {continueTrack.totalPlayCount} play
+                    {continueTrack.totalPlayCount === 1 ? "" : "s"}
+                  </ThemedText>
+                </View>
+              </ElasticPressable>
+
+              <BouncyIconButton
+                name="play"
+                accessibilityLabel={`Play ${continueTrack.title}`}
+                size={52}
+                iconSize={22}
+                tone="accent"
+                style={{ backgroundColor: paletteFor(continueTrack.contentHash)[1] }}
+                onPress={() => playAt(continueTrack.id)}
+              />
+            </Card>
+          </Reveal>
+        ) : null}
+
+        {/* Only when something is actually broken. A standing "0 files missing"
+            banner would just train the listener to ignore it. */}
+        {missing.length > 0 && !searching ? (
+          <Reveal index={5}>
             <ElasticPressable
               accessibilityRole="button"
-              accessibilityLabel={`Continue listening to ${continueTrack.title}`}
-              onPress={() => playAt(continueTrack.id)}
-              style={styles.continueMain}>
-              <PaletteTile
-                ramp={paletteFor(continueTrack.contentHash)}
-                label={continueTrack.title}
-                source={continueTrack.artworkUrl}
-                size={tile.xl}
-                radius={tileRadius(tile.xl)}
+              accessibilityLabel={`${missing.length} file${missing.length === 1 ? "" : "s"} missing. Find them again.`}
+              scaleTo={0.985}
+              overshootTo={1.004}
+              haptic="tap"
+              onPress={() => router.push("/missing")}>
+              <InlineNotice
+                tone="danger"
+                title={`${missing.length} file${missing.length === 1 ? "" : "s"} missing`}
+                message="Your history is still here — find them again"
               />
-              <View style={styles.continueCopy}>
-                <ThemedText type="overline" themeColor="textTertiary">
-                  CONTINUE LISTENING
-                </ThemedText>
-                <ThemedText type="bodyStrong" numberOfLines={2}>
-                  {continueTrack.title}
-                </ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  {continueTrack.totalPlayCount} play
-                  {continueTrack.totalPlayCount === 1 ? "" : "s"}
-                </ThemedText>
-              </View>
             </ElasticPressable>
+          </Reveal>
+        ) : null}
 
-            <BouncyIconButton
-              name="play"
-              accessibilityLabel={`Play ${continueTrack.title}`}
-              size={52}
-              iconSize={22}
-              tone="accent"
-              style={{ backgroundColor: paletteFor(continueTrack.contentHash)[1] }}
-              onPress={() => playAt(continueTrack.id)}
-            />
-          </Card>
-        </Reveal>
-      ) : null}
-
-      {/* Only when something is actually broken. A standing "0 files missing"
-          banner would just train the listener to ignore it. */}
-      {missing.length > 0 && !searching && view !== "language" ? (
-        <Reveal index={4}>
-          <ElasticPressable
-            accessibilityRole="button"
-            accessibilityLabel={`${missing.length} file${missing.length === 1 ? "" : "s"} missing. Find them again.`}
-            scaleTo={0.985}
-            overshootTo={1.004}
-            haptic="tap"
-            onPress={() => router.push("/missing")}>
-            <InlineNotice
-              tone="danger"
-              title={`${missing.length} file${missing.length === 1 ? "" : "s"} missing`}
-              message="Your history is still here — find them again"
-            />
-          </ElasticPressable>
-        </Reveal>
-      ) : null}
-
-      {searching || view === "language" || view === "playlists" ? null : (
-        <Reveal index={5}>
-          <PrimaryButton label="Add audio" onPress={onImport} />
-        </Reveal>
-      )}
-    </View>
-  );
+        {searching ? null : (
+          <Reveal index={6}>
+            <PrimaryButton label="Add audio" onPress={onImport} />
+          </Reveal>
+        )}
+      </View>
+    );
+  };
 
   /**
    * A folder card, shared by the Folders tab and the Recent tab.
@@ -1010,10 +1056,12 @@ export default function LibraryScreen() {
   };
 
   /**
-   * One list, three datasets. The lists are all `FlatList`s over the same row
-   * shape so the keyboard behaviour below is stated once per list rather than
-   * per branch — `keyboardShouldPersistTaps` is what makes a result tappable on
-   * the first tap while the keyboard is up.
+   * What every page's list shares. The header is *not* here: each page carries
+   * its own furniture, and the chrome that used to live in it is now above the
+   * pager where a swipe cannot move it.
+   *
+   * `keyboardShouldPersistTaps` is what makes a result tappable on the first tap
+   * while the keyboard is up.
    */
   const onScrollBegin = useCallback(() => {
     scrollingRef.current = true;
@@ -1024,7 +1072,6 @@ export default function LibraryScreen() {
 
   const listProps = {
     ...listPerformance,
-    ListHeaderComponent: header,
     contentContainerStyle: styles.list,
     showsVerticalScrollIndicator: false,
     keyboardShouldPersistTaps: "handled" as const,
@@ -1049,6 +1096,27 @@ export default function LibraryScreen() {
   );
 
   /**
+   * The shelf's own answer to the query.
+   *
+   * The search field lives in the chrome, so it is visible over the shelf too —
+   * hiding it there would resize the pager the instant the strip arrived. That
+   * makes it a field that promises to filter the shelf, so the shelf filters.
+   * There are a handful of providers, so a folded substring test is the whole
+   * index it needs.
+   */
+  const visibleSources = useMemo(() => {
+    if (!searching) {
+      return sources;
+    }
+    return sources.filter((source) => {
+      const haystack = foldText(
+        `${source.name} ${source.nativeName} ${source.description}`,
+      );
+      return terms.every((term) => haystack.includes(term));
+    });
+  }, [searching, sources, terms]);
+
+  /**
    * The language shelf. A provider directory rather than a track list: the
    * listener asked for a language, and the next question they have is which
    * source to open — so the answer stays one tap away instead of a network
@@ -1056,14 +1124,13 @@ export default function LibraryScreen() {
    */
   const shelf = (
     <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
-      {header}
-      {sources.length > 0 ? (
+      {visibleSources.length > 0 ? (
         <View style={styles.languageSection}>
           <ThemedText type="overline" themeColor="textTertiary">
             SOURCES
           </ThemedText>
           <ListGroup>
-            {sources.map((source) => (
+            {visibleSources.map((source) => (
               <SourceRow
                 key={source.id}
                 source={source}
@@ -1075,28 +1142,43 @@ export default function LibraryScreen() {
       ) : (
         <EmptyState
           icon="globe"
-          title={`No sources for ${language?.name ?? "this language"} yet`}
-          message="We add them as we find them, and the rest of the app is unaffected."
+          title={
+            searching
+              ? `No source matches “${query.trim()}”`
+              : `No sources for ${language?.name ?? "this language"} yet`
+          }
+          message={
+            searching
+              ? "Try another spelling — Persian variants are matched automatically."
+              : "We add them as we find them, and the rest of the app is unaffected."
+          }
         />
       )}
     </ScrollView>
   );
 
   /**
-   * Which list is on screen. One expression rather than five early returns,
-   * because the swipe needs all five to live inside the same pager — a branch
-   * that returned its own `<Screen>` would be a page the gesture could not
-   * reach. `resolveLibraryView` already guarantees a "language" view has a
-   * language behind it; the fall-through to Tracks is what makes that a
-   * guarantee here too rather than an assumption.
+   * One page of the strip.
+   *
+   * A function of the *page's* view rather than of `view`, because the pager
+   * builds its neighbours before they are on screen: handing the Tracks page
+   * the Folders tab's furniture would show the wrong header for the frame it
+   * first slides in. `resolveLibraryView` already guarantees an active
+   * "language" view has a language behind it; the fall-through to Tracks is
+   * what makes that a guarantee here too rather than an assumption.
    */
-  const content =
-    view === "language" && language
-      ? shelf
-      : view === "folders"
-        ? (
+  const pageFor = (pageView: LibraryView) => {
+    const header = furniture(pageView);
+
+    switch (pageView) {
+      case "language":
+        return shelf;
+
+      case "folders":
+        return (
           <KeyboardAwareFlatList
             {...listProps}
+            ListHeaderComponent={header}
             data={folderRows}
             keyExtractor={(item) => item.folder.key || "root"}
             ListEmptyComponent={
@@ -1118,118 +1200,132 @@ export default function LibraryScreen() {
               renderFolder(item.folder, index, undefined, item.hit)
             }
           />
-        )
-        : view === "playlists"
-          ? (
-            <KeyboardAwareFlatList
-              {...listProps}
-              data={playlistRows}
-              keyExtractor={(item) => item.playlist.id}
-              ListEmptyComponent={
-                searching ? (
-                  <EmptyState
-                    icon="search"
-                    title={`No playlist matches “${query.trim()}”`}
-                    message="Try another spelling — Persian variants are matched automatically."
+        );
+
+      case "playlists":
+        return (
+          <KeyboardAwareFlatList
+            {...listProps}
+            ListHeaderComponent={header}
+            data={playlistRows}
+            keyExtractor={(item) => item.playlist.id}
+            ListEmptyComponent={
+              searching ? (
+                <EmptyState
+                  icon="search"
+                  title={`No playlist matches “${query.trim()}”`}
+                  message="Try another spelling — Persian variants are matched automatically."
+                />
+              ) : (
+                <EmptyState
+                  icon="playlists"
+                  title="No playlists yet"
+                  message="Create one above, then add tracks to it."
+                />
+              )
+            }
+            renderItem={({ item, index }) =>
+              renderPlaylistRow(item.playlist, index, item.hit)
+            }
+          />
+        );
+
+      case "recent":
+        return (
+          <KeyboardAwareFlatList
+            {...listProps}
+            ListHeaderComponent={header}
+            data={recentRows}
+            keyExtractor={(item) => recentPlayKey(item.play)}
+            ListEmptyComponent={
+              searching ? (
+                <EmptyState
+                  icon="search"
+                  title={`Nothing recent matches “${query.trim()}”`}
+                  message="Try another spelling — Persian variants are matched automatically."
+                />
+              ) : (
+                <EmptyState
+                  icon="history"
+                  title="Nothing played yet"
+                  message="Whatever you listen to next — a track, a playlist, or a whole folder — shows up here."
+                />
+              )
+            }
+            renderItem={({ item, index }) => renderRecent(item.play, index, item.hit)}
+          />
+        );
+
+      default:
+        return (
+          <KeyboardAwareFlatList
+            {...listProps}
+            ListHeaderComponent={header}
+            data={trackRows}
+            keyExtractor={(item) => item.track.id}
+            ListEmptyComponent={
+              searching ? (
+                <EmptyState
+                  icon="search"
+                  title={`No track matches “${query.trim()}”`}
+                  message="Try another spelling — Persian variants are matched automatically."
+                />
+              ) : (
+                <EmptyState
+                  icon="music"
+                  title="No tracks yet"
+                  message="Add an audio file to start listening."
+                />
+              )
+            }
+            renderItem={({ item, index }) => {
+              const { track, hit } = item;
+              const notes = annotationCounts[track.id] ?? 0;
+              const matched = describeHit(hit);
+              return (
+                <Reveal
+                  index={FIRST_ROW_REVEAL_INDEX + index}
+                  from="below"
+                  limit={ROW_REVEAL_LIMIT}>
+                  <LibraryTrackCard
+                    track={track}
+                    titleRanges={hit?.ranges}
+                    meta={`${track.totalPlayCount} play${track.totalPlayCount === 1 ? "" : "s"} · ${notes} note${notes === 1 ? "" : "s"}`}
+                    // While searching, the least important fact on the card
+                    // gives way to the most useful one: why this card is a
+                    // result. With no query it is the last-played stamp.
+                    detail={matched ?? formatLastPlayed(track.lastPlayedAt)}
+                    cardWidth={cardWidth}
+                    onPlay={playAt}
+                    accessibilityHint="Plays this track, and continues through the library"
                   />
-                ) : (
-                  <EmptyState
-                    icon="playlists"
-                    title="No playlists yet"
-                    message="Create one above, then add tracks to it."
-                  />
-                )
-              }
-              renderItem={({ item, index }) =>
-                renderPlaylistRow(item.playlist, index, item.hit)
-              }
-            />
-          )
-          : view === "recent"
-            ? (
-              <KeyboardAwareFlatList
-                {...listProps}
-                data={recentRows}
-                keyExtractor={(item) => recentPlayKey(item.play)}
-                ListEmptyComponent={
-                  searching ? (
-                    <EmptyState
-                      icon="search"
-                      title={`Nothing recent matches “${query.trim()}”`}
-                      message="Try another spelling — Persian variants are matched automatically."
-                    />
-                  ) : (
-                    <EmptyState
-                      icon="history"
-                      title="Nothing played yet"
-                      message="Whatever you listen to next — a track, a playlist, or a whole folder — shows up here."
-                    />
-                  )
-                }
-                renderItem={({ item, index }) => renderRecent(item.play, index, item.hit)}
-              />
-            )
-            : (
-              <KeyboardAwareFlatList
-                {...listProps}
-                data={trackRows}
-                keyExtractor={(item) => item.track.id}
-                ListEmptyComponent={
-                  searching ? (
-                    <EmptyState
-                      icon="search"
-                      title={`No track matches “${query.trim()}”`}
-                      message="Try another spelling — Persian variants are matched automatically."
-                    />
-                  ) : (
-                    <EmptyState
-                      icon="music"
-                      title="No tracks yet"
-                      message="Add an audio file to start listening."
-                    />
-                  )
-                }
-                renderItem={({ item, index }) => {
-                  const { track, hit } = item;
-                  const notes = annotationCounts[track.id] ?? 0;
-                  const matched = describeHit(hit);
-                  return (
-                    <Reveal
-                      index={FIRST_ROW_REVEAL_INDEX + index}
-                      from="below"
-                      limit={ROW_REVEAL_LIMIT}>
-                      <LibraryTrackCard
-                        track={track}
-                        titleRanges={hit?.ranges}
-                        meta={`${track.totalPlayCount} play${track.totalPlayCount === 1 ? "" : "s"} · ${notes} note${notes === 1 ? "" : "s"}`}
-                        // While searching, the least important fact on the card
-                        // gives way to the most useful one: why this card is a
-                        // result. With no query it is the last-played stamp.
-                        detail={matched ?? formatLastPlayed(track.lastPlayedAt)}
-                        cardWidth={cardWidth}
-                        onPlay={playAt}
-                        accessibilityHint="Plays this track, and continues through the library"
-                      />
-                    </Reveal>
-                  );
-                }}
-              />
-            );
+                </Reveal>
+              );
+            }}
+          />
+        );
+    }
+  };
+
+  const renderPage = (pageIndex: number) => {
+    const tab = tabs[pageIndex];
+    return tab ? pageFor(tab.value) : null;
+  };
 
   return (
     <Screen wash={wash}>
-      {/* The swipe is over the whole page, header included, because the header
-          is the list's own header — and a gesture that stopped at the first row
-          would be unreachable on a short list. The chip strip above is a plain
-          row rather than a horizontal scroller precisely so it cannot swallow
-          this gesture: two horizontal drag targets a few points apart is a
-          coin toss the listener would feel as unreliability. */}
+      {chrome}
+      {/* The gesture covers the pages, not the chrome: a drag that started on
+          the chip strip would be a drag on a control. The strip is a plain
+          wrapping row rather than a horizontal scroller for the same reason —
+          a second horizontal gesture a few points away is a coin toss the
+          listener would feel as unreliability. */}
       <SwipePager
         index={viewIndex}
         count={tabs.length}
-        onIndexChange={goToViewIndex}>
-        {content}
-      </SwipePager>
+        onIndexChange={goToViewIndex}
+        renderPage={renderPage}
+      />
       {languagePicker}
     </Screen>
   );
@@ -1241,9 +1337,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.giant + dockInset,
   },
-  headerBlock: {
+  /**
+   * The part of the screen a swipe cannot move.
+   *
+   * It carries the horizontal inset the list used to supply, because it is now
+   * the list's sibling rather than its header — and it stops one gap short of
+   * the pager so the first row is not flush against the chips.
+   */
+  chrome: {
     gap: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.md,
+  },
+  /** The standing furniture of one view, above that view's rows. */
+  furniture: {
+    gap: spacing.lg,
   },
   headerActions: {
     flexDirection: "row",

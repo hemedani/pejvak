@@ -75,6 +75,16 @@ export const spring = {
   marker: springSpec(0.78, 520, 0.8),
   /** Dock surface resize: firm, no overshoot on a panel edge. */
   dock: springSpec(0.9, 300, 0.9),
+  /**
+   * A pager settling after a swipe. Firm enough that a page arrives when the
+   * finger lets go rather than drifting into place, and barely damped past
+   * critical so a full-width travel does not visibly bounce at the end — the
+   * bounce belongs to the *edges*, where there is nowhere to go.
+   *
+   * It also carries the release velocity, which is what makes the page continue
+   * with the finger's momentum instead of starting to move on its own.
+   */
+  page: springSpec(0.92, 340, 0.9),
 } as const satisfies Record<string, WithSpringConfig>;
 
 /** Bezier curves. Names describe the shape, not the numbers. */

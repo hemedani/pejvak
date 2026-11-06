@@ -1,72 +1,127 @@
 /**
- * When a horizontal drag should change tab, and which way.
+ * Where a swipe lands, and how far the page follows the finger on the way.
  *
- * Pulled out of the gesture handler because the rule is the part that can be
- * wrong in ways a screenshot never shows: a swipe that needs to travel half the
- * screen feels broken, and one that fires on a 3pt wobble turns every attempt
- * to scroll sideways into a tab change. The gesture code below it should only
- * have to say *where the finger is*; deciding what that means lives here, where
- * a test can assert it.
+ * Pulled out of the gesture handler because these numbers are the whole
+ * difference between a pager that feels native and one that feels broken, and
+ * they are wrong in ways a screenshot never shows: a page that needs half the
+ * screen of travel to commit feels stuck, and one that commits on a 20pt drift
+ * turns every attempt to scroll sideways into a tab change. The gesture code
+ * only has to say *where the finger is*; deciding what that means lives here,
+ * where a test can assert it.
+ *
+ * Both functions carry a `"worklet"` directive. They are called from the UI
+ * thread — the finger's travel has to become a page offset in the same frame it
+ * happened, or the content visibly lags behind the thumb — and Reanimated only
+ * moves a function off the JS thread when it is marked as one.
  */
 
-/** How far the finger must travel before the drag means "next tab". */
-export const SWIPE_DISTANCE = 56;
-
 /**
- * How fast a flick must be to count without travelling the distance.
+ * How fast a flick has to be to move a page on its own.
  *
- * A flick is the gesture people actually make on a phone — a short, quick push
- * that covers 30pt — so velocity has to be able to stand in for distance. The
- * number is comfortably above the ~200 pt/s of a slow drag, and below the
- * 800–1500 pt/s of a deliberate flick.
+ * A flick is the gesture people actually make: a short, quick push that covers
+ * 30pt. Comfortably above the ~200 pt/s of a slow drag, and below the
+ * 800–1500 pt/s of a deliberate one.
  */
 export const SWIPE_VELOCITY = 520;
 
 /**
- * How far the page follows the finger, in points.
+ * How far the finger must travel before a drag is read as horizontal at all.
  *
- * Deliberately short. This is a *hint* that a drag is being read as a page
- * change, not a full paging surface: the content underneath is a scrolling list,
- * and a page that travelled the full width would have to hide a second list
- * behind it to avoid showing the background. A nudge says the same thing.
+ * Past the wobble of a tap and inside the shortest deliberate swipe. Below it a
+ * slightly shaky vertical drag would steal the list's scroll, which is the one
+ * thing this gesture must never do.
  */
-export const SWIPE_TRAVEL = 72;
+export const SWIPE_ACTIVATION = 16;
 
-/** The fraction of the finger's travel the page copies. */
-export const SWIPE_RESISTANCE = 0.45;
+/**
+ * How much of an over-drag past either end the page shows.
+ *
+ * The strip cannot move past its last page, but a page that refuses to move at
+ * all reads as frozen. A third of the finger's travel says "pushed, and this is
+ * as far as it goes" without letting the content leave the screen.
+ */
+export const EDGE_RESISTANCE = 0.35;
 
-export type SwipeInput = {
-  /** Horizontal travel of the finger, in points. Right is positive. */
-  dx: number;
-  /** Horizontal speed at release, in points per second. Right is positive. */
-  velocityX: number;
-  /** Whether there is a tab to the left. */
-  canPrev: boolean;
-  /** Whether there is a tab to the right. */
-  canNext: boolean;
+export type DragInput = {
+  /** Page position the gesture started from, in pages. */
+  start: number;
+  /** Finger travel since then, in points. Right is positive. */
+  translationX: number;
+  /** Width of one page, in points. */
+  width: number;
+  /** How many pages there are. */
+  count: number;
 };
 
 /**
- * `-1` for the previous tab, `1` for the next, `0` for "stay where you are".
+ * The page position a drag has reached, in pages.
  *
- * Distance is checked before velocity on purpose: a listener who has dragged
- * past the threshold and then flicked back has still *shown* where they wanted
- * to go, and honouring the flick would undo the gesture they just made.
+ * Fractional on purpose: `1.4` is "between the second and third page", which is
+ * exactly what the strip has to be able to draw. Nothing is committed until the
+ * finger lifts, so the position is the only state a drag produces.
  *
- * At either end of the strip the answer is always `0`, so an over-drag bounces
- * back instead of doing nothing at all — a page that cannot move still has to
- * acknowledge that it was pushed.
+ * Dragging *left* reveals the page to the right, so the finger and the position
+ * move in opposite directions — hence the minus.
  */
-export function swipeCommit({ dx, velocityX, canPrev, canNext }: SwipeInput): -1 | 0 | 1 {
-  const byDistance = Math.abs(dx) >= SWIPE_DISTANCE;
-  const byVelocity = Math.abs(velocityX) >= SWIPE_VELOCITY;
-  if (!byDistance && !byVelocity) {
-    return 0;
+export function pageDragPosition({
+  start,
+  translationX,
+  width,
+  count,
+}: DragInput): number {
+  "worklet";
+  if (width <= 0) {
+    return start;
   }
+  const last = Math.max(0, count - 1);
+  const raw = start - translationX / width;
+  if (raw < 0) {
+    return raw * EDGE_RESISTANCE;
+  }
+  if (raw > last) {
+    return last + (raw - last) * EDGE_RESISTANCE;
+  }
+  return raw;
+}
 
-  const direction = (byDistance ? dx : velocityX) < 0 ? 1 : -1;
-  if (direction === 1) {
-    return canNext ? 1 : 0;
+export type ReleaseInput = {
+  /** Continuous page position at release, in pages. */
+  position: number;
+  /** Horizontal speed at release, in points per second. Right is positive. */
+  velocityX: number;
+  /** How many pages there are. */
+  count: number;
+};
+
+/**
+ * The page the strip should settle on, as a whole index.
+ *
+ * Nearest page, unless the finger was still moving fast: on a real pager the
+ * flick decides, so a quick push from 1.1 lands on 2 even though the rounding
+ * alone would have gone back to 1. The reverse is true too — dragging most of
+ * the way and then flicking back is a decision to stay, and honouring the drag
+ * distance instead would undo the gesture the listener just made.
+ *
+ * The result is always a real page, so a drag past either end resolves to the
+ * end and the spring becomes the bounce.
+ */
+export function pageTargetFor({
+  position,
+  velocityX,
+  count,
+}: ReleaseInput): number {
+  "worklet";
+  const last = Math.max(0, count - 1);
+  const base = Math.min(Math.max(position, 0), last);
+  const nearest = Math.round(base);
+
+  if (Math.abs(velocityX) < SWIPE_VELOCITY) {
+    return nearest;
   }
-  return canPrev ? -1 : 0;
+  if (velocityX < 0) {
+    // A flick to the left asks for the next page even from a position the
+    // rounding would have sent back.
+    return Math.min(last, Math.max(nearest, Math.floor(base) + 1));
+  }
+  return Math.max(0, Math.min(nearest, Math.ceil(base) - 1));
 }
