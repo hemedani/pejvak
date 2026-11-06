@@ -8,13 +8,15 @@
  * empty canvas, and that is what makes the announcement read as "this will sit
  * on top of your library" rather than as a placeholder.
  *
- * ## Why the backdrop is illegible on purpose
+ * ## Why the backdrop is blurred but visible
  *
- * A frosted panel that you can still read through competes with its own text.
- * The blur here is strong and the scrim under it is real, so the list reads as
- * *texture*: enough to say "your audio is down there", never enough to read a
- * title. That is also why the backdrop is sample content rather than the
- * listener's own library — a title half-visible under a panel is a puzzle, and
+ * The panel has to be the thing you read, so the list behind it is out of focus
+ * and dimmed. It must not be *erased*, though: the backdrop is the whole reason
+ * the panel reads as glass rather than as a card on a flat screen, and a blur
+ * strong enough to remove it leaves a wash with no depth in it. So the frost is
+ * gentle, the dim is light, and the panel's own fill is translucent enough to
+ * carry the list's colour through. The backdrop is still sample content rather
+ * than the listener's library — a half-visible real title would be a puzzle, and
  * the panel is the only thing that should be read.
  *
  * ## The glass is the app's own
@@ -65,6 +67,23 @@ const BACKDROP: readonly { title: string; meta: string; length: string }[] = [
   { title: "On Keeping a Notebook", meta: "Essay · 24 min", length: "24m" },
 ];
 
+/**
+ * How hard the screen blurs the list behind the panel.
+ *
+ * Low on purpose. `GlassSurface` blurs again inside the card, so the list is
+ * softened twice over by the time it is seen through the panel; a heavy frost
+ * here would only flatten the parts of the screen the panel does not cover.
+ */
+const FROST = 28;
+
+/**
+ * The dim between the frost and the panel, as a fraction of the theme's scrim.
+ *
+ * The scrim exists so a modal can hide the screen behind it. This panel is not
+ * hiding anything — it is sitting on the list — so it takes a fraction of it.
+ */
+const DIM = 0.45;
+
 /** One row of the backdrop. Nothing here is interactive. */
 function BackdropRow({ item }: { item: (typeof BACKDROP)[number] }) {
   return (
@@ -95,10 +114,12 @@ function BackdropRow({ item }: { item: (typeof BACKDROP)[number] }) {
  * The frost over the whole backdrop.
  *
  * A panel only blurs what is behind *it*, so the card alone would leave the
- * strip of list around its edges sharp — dimmed, but readable, which is the one
- * thing this screen must not be. The frost is therefore full-bleed and the card
- * is frosted on top of it: the background is illegible everywhere, and the panel
- * still reads as a separate pane because it is a step more opaque.
+ * strip of list around its edges sharp — which is why the frost is full-bleed.
+ * But it is a *light* frost: enough to put the list out of focus and behind
+ * glass, not enough to erase it. The list is the reason this screen is not an
+ * empty canvas with a card on it, and a blur heavy enough to hide it turns the
+ * backdrop into a flat wash — which is what this used to be, and what it looked
+ * like.
  *
  * On Android the blur needs the target view the backdrop was rendered into; on
  * iOS a `BlurView` blurs whatever is behind it and ignores the ref. Same rule as
@@ -114,7 +135,7 @@ function ScreenFrost() {
 
   return (
     <BlurView
-      intensity={78}
+      intensity={FROST}
       tint={scheme === "dark" ? "dark" : "light"}
       blurMethod="dimezisBlurViewSdk31Plus"
       blurTarget={target ?? undefined}
@@ -130,14 +151,14 @@ export default function AiScreen() {
   return (
     <Screen wash={theme.accent} edges={[]} constrain={false}>
       {/* The backdrop is the layer the panel blurs. It carries its own canvas
-          colour so the blur has something solid to work with on Android — a
-          transparent target blurs to nothing, and the wash behind it would stay
-          sharp and give the game away. */}
+          colour so the blur has something solid to work with on Android: a
+          transparent target blurs to nothing, and the list would then sit on
+          whatever the screen wash happened to be rather than on a page. */}
       <GlassBlurTarget
         style={StyleSheet.absoluteFill}
         background={
           <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.canvas }]}>
-            <AmbientWash color={theme.accent} intensity={0.7} />
+            <AmbientWash color={theme.accent} intensity={0.55} />
             <View style={styles.backdrop} pointerEvents="none">
               {BACKDROP.map((item) => (
                 <BackdropRow key={item.title} item={item} />
@@ -147,12 +168,12 @@ export default function AiScreen() {
         }>
         <ScreenFrost />
 
-        {/* The scrim sits between the frost and the panel: blur alone still lets
-            a shape or two through on a bright palette, and the panel has to be
-            the only thing on this screen that is legible. */}
+        {/* The dim sits between the frost and the panel: it settles the list
+            back a step so the panel has something to sit in front of, without
+            taking the colour out of it. */}
         <View
           pointerEvents="none"
-          style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim, opacity: DIM }]}
         />
 
         <View
@@ -166,7 +187,8 @@ export default function AiScreen() {
           <GlassSurface
             tone="surfaceStrong"
             radius={radii.xxl}
-            intensity={92}
+            intensity={46}
+            fillOpacity={0.5}
             elevated
             clip
             style={styles.card}>

@@ -41,6 +41,15 @@ export type GlassSurfaceProps = ViewProps & {
   radius?: keyof typeof GlassRadius | number;
   /** Blur strength (1–100). Defaults per tone. Ignored when `flat`. */
   intensity?: number;
+  /**
+   * How much of the tone's fill to lay over the blur, 0–1. Defaults to 1.
+   *
+   * The tones are tuned for panels that have to hold text over artwork, so
+   * `surfaceStrong` is nearly opaque — right for a sheet, wrong for a panel whose
+   * whole point is that you can see the thing behind it. Lowering this keeps the
+   * blur and the sheen and lets the fill become a tint rather than a lid.
+   */
+  fillOpacity?: number;
   /** Cast a panel shadow. Ignored on the liquid-glass path, which has its own. */
   elevated?: boolean;
   /** Clip children to the corner radius. */
@@ -71,6 +80,7 @@ export function GlassSurface({
   tone = "surface",
   radius = "card",
   intensity,
+  fillOpacity = 1,
   elevated = true,
   clip = false,
   flat = false,
@@ -124,7 +134,7 @@ export function GlassSurface({
             style={StyleSheet.absoluteFill}
           />
         ) : null}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: fill }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: fill, opacity: fillOpacity }]} />
         <LinearGradient
           colors={[palette.glassHighlight, "transparent"]}
           start={{ x: 0, y: 0 }}
