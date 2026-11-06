@@ -1,5 +1,5 @@
 import { pickAnnotationColor } from "@/lib/annotations";
-import type { LocalAnnotation, LocalTrack } from "@/lib/db/types";
+import type { AnnotationWithTrack, LocalAnnotation, LocalTrack } from "@/lib/db/types";
 import { LocalDBService } from "@/services/LocalDBService";
 import { syncPending } from "@/services/SyncService";
 
@@ -26,6 +26,11 @@ export type UpdateAnnotationArgs = {
 export const AnnotationService = {
   getTrackAnnotations(trackId: string): Promise<LocalAnnotation[]> {
     return LocalDBService.getAnnotationsByTrack(trackId);
+  },
+
+  /** Every live note with its track, for the Notes screen. */
+  getAllNotes(): Promise<AnnotationWithTrack[]> {
+    return LocalDBService.getAllAnnotationsWithTrack();
   },
 
   async createAnnotation({

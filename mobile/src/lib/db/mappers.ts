@@ -133,6 +133,23 @@ export type AnnotationRow = {
   updated_at: number;
 };
 
+/**
+ * An annotation row joined with the track columns the Notes list needs.
+ *
+ * A note is anchored to a position inside a track, so a list of every note has
+ * to name that track: the note's own text says what was noted, not what it was
+ * noted *in*.
+ */
+export type AnnotationWithTrackRow = AnnotationRow & {
+  track_title: string;
+  track_author: string | null;
+  track_content_hash: string;
+  track_artwork_url: string | null;
+  track_origin: TrackOrigin;
+  track_folder_name: string | null;
+  track_collection_title: string | null;
+};
+
 /** A session row joined with the track columns the history card needs. */
 export type HistoryRow = SessionRow & {
   track_title: string;

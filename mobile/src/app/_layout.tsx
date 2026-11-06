@@ -89,6 +89,7 @@ export default function RootLayout() {
                   <Stack.Screen name="online/source/[id]" />
                   <Stack.Screen name="online/[key]" />
                   <Stack.Screen name="smart/[rule]" />
+                  <Stack.Screen name="notes" />
                   <Stack.Screen name="missing" />
                   <Stack.Screen name="import" />
                   <Stack.Screen name="settings" />

@@ -258,6 +258,30 @@ export type LocalAnnotation = {
   updatedAt: number;
 };
 
+/**
+ * One note, with the track it is anchored to.
+ *
+ * The Notes screen lists notes across the whole library, and a note is only
+ * meaningful with the thing it is a note *about*: the row's second line is the
+ * track title and its clock is a position inside that track. Joined in one
+ * query rather than looked up per row, because that list is every note the
+ * listener ever wrote.
+ */
+export type AnnotationWithTrack = {
+  annotation: LocalAnnotation;
+  track: Pick<
+    LocalTrack,
+    | "id"
+    | "title"
+    | "author"
+    | "contentHash"
+    | "artworkUrl"
+    | "origin"
+    | "folderName"
+    | "collectionTitle"
+  >;
+};
+
 export type LocalPlaylist = {
   /** Local id; doubles as the `clientId` used for idempotent sync. */
   id: string;

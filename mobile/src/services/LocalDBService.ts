@@ -15,6 +15,7 @@ import {
   mapSession,
   mapTrack,
   type AnnotationRow,
+  type AnnotationWithTrackRow,
   type CheckpointRow,
   type ContextPlayRow,
   type DownloadFileRow,
@@ -28,6 +29,7 @@ import {
   type TrackRow,
 } from "@/lib/db/mappers";
 import type {
+  AnnotationWithTrack,
   ContextRunProgress,
   ContextStats,
   ContextType,
@@ -1082,6 +1084,42 @@ async function getAllAnnotations(): Promise<LocalAnnotation[]> {
   const db = await getDatabase();
   const rows = await db.getAllAsync<AnnotationRow>("SELECT * FROM annotations");
   return rows.map(mapAnnotation);
+}
+
+/**
+ * Every live note, with the track it belongs to, newest first.
+ *
+ * One join rather than a lookup per row: the Notes screen shows the whole
+ * library's notes at once, and "which track is this note in?" is a line on
+ * every one of them. Tombstones are excluded — a note the listener deleted is
+ * not a note — and the order is by `updated_at`, because a note edited five
+ * minutes ago is the one they are most likely looking for.
+ */
+async function getAllAnnotationsWithTrack(): Promise<AnnotationWithTrack[]> {
+  const db = await getDatabase();
+  const rows = await db.getAllAsync<AnnotationWithTrackRow>(
+    `SELECT a.*, t.title AS track_title, t.author AS track_author,
+            t.content_hash AS track_content_hash, t.artwork_url AS track_artwork_url,
+            t.origin AS track_origin, t.folder_name AS track_folder_name,
+            t.collection_title AS track_collection_title
+     FROM annotations a
+     JOIN tracks t ON t.id = a.track_id
+     WHERE a.deleted_at IS NULL
+     ORDER BY a.updated_at DESC`,
+  );
+  return rows.map((row) => ({
+    annotation: mapAnnotation(row),
+    track: {
+      id: row.track_id,
+      title: row.track_title,
+      author: row.track_author,
+      contentHash: row.track_content_hash,
+      artworkUrl: row.track_artwork_url,
+      origin: row.track_origin,
+      folderName: row.track_folder_name,
+      collectionTitle: row.track_collection_title,
+    },
+  }));
 }
 
 /** Inserts an annotation pulled from the server, preserving `updatedAt` for LWW. */
@@ -3074,6 +3112,7 @@ export const LocalDBService = {
   getAnnotationById,
   getPendingAnnotations,
   getAllAnnotations,
+  getAllAnnotationsWithTrack,
   insertRemoteAnnotation,
   applyRemoteAnnotationUpdate,
   updateAnnotation,

@@ -107,6 +107,7 @@ export default function SettingsScreen() {
   const appearanceIndex = revealIndex++;
   const motionIndex = revealIndex++;
   const storageIndex = revealIndex++;
+  const libraryIndex = revealIndex++;
   const developerIndex = revealIndex++;
   const signOutIndex = revealIndex;
 
@@ -222,6 +223,18 @@ export default function SettingsScreen() {
           </View>
         </CardSection>
 
+        {/* 4 — The library's own index. Notes live in the player, so the way to
+            see all of them belongs somewhere a listener would look for "things
+            I have collected", not inside a track. */}
+        <CardSection title="LIBRARY" index={libraryIndex}>
+          <CardRow
+            icon="notes"
+            label="All notes"
+            detail="Every note you have written, with the track it belongs to."
+            onPress={() => router.push("/notes")}
+          />
+        </CardSection>
+
         {__DEV__ ? (
           <CardSection title="DEVELOPER" index={developerIndex}>
             <CardRow
@@ -233,7 +246,7 @@ export default function SettingsScreen() {
           </CardSection>
         ) : null}
 
-        {/* 4 — Sign out, alone, in danger. The one control on the screen that
+        {/* 5 — Sign out, alone, in danger. The one control on the screen that
             ends a session, so it does not share a card with anything. */}
         <Reveal index={signOutIndex}>
           <ElasticPressable
