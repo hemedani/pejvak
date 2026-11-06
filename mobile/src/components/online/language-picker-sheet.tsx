@@ -11,14 +11,7 @@
  */
 
 import { useMemo, useState } from "react";
-import {
-  Modal,
-  ScrollView,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Modal, ScrollView, StyleSheet, View, useWindowDimensions } from "react-native";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
@@ -28,6 +21,7 @@ import { GlassSurface } from "@/components/ui/glass";
 import { EmptyState } from "@/components/ui/row";
 import { ListGroup } from "@/components/ui/row/list-group";
 import { SearchField } from "@/components/ui/search-field";
+import { useSheetKeyboard } from "@/hooks/use-sheet-keyboard";
 import { useTheme } from "@/hooks/use-theme";
 import {
   AVAILABLE_LANGUAGES,
@@ -35,11 +29,20 @@ import {
   sourcesForLanguage,
 } from "@/lib/online";
 import { createSearchIndex, foldQuery, searchIndex } from "@/lib/search";
+import { sheetHeightFor, sheetLiftFor } from "@/lib/sheetLayout";
 import { useMotionEnabled } from "@/theme/motion";
 import { spacing } from "@/theme/tokens";
 
-/** Share of the screen height the language list may occupy before it scrolls. */
-const LIST_HEIGHT_RATIO = 0.55;
+/**
+ * Share of the window the sheet takes when nothing is in its way.
+ *
+ * A fixed share rather than a content ceiling: the list has forty-six rows, so
+ * a content-sized sheet would open at nearly full height and a `maxHeight`
+ * would collapse to nothing the moment the keyboard shrank the window. One
+ * number that the panel always fills keeps its shape, and the list inside it is
+ * what scrolls.
+ */
+const SHEET_HEIGHT_RATIO = 0.7;
 
 export type LanguagePickerSheetProps = {
   currentCode: string | null;
@@ -55,10 +58,24 @@ export function LanguagePickerSheet({
   onClose,
 }: LanguagePickerSheetProps) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const motionEnabled = useMotionEnabled();
   const { height: windowHeight } = useWindowDimensions();
+  const { insets, overlap, viewportHeight, onLayout } = useSheetKeyboard();
   const [query, setQuery] = useState("");
+
+  /**
+   * The panel's height, in the space the keyboard left.
+   *
+   * `viewportHeight` is what the modal window actually is right now; falling
+   * back to the window's own height covers the first frame, before the root has
+   * been measured.
+   */
+  const sheetHeight = sheetHeightFor({
+    windowHeight: viewportHeight || windowHeight,
+    keyboardHeight: overlap,
+    topInset: insets.top,
+    ratio: SHEET_HEIGHT_RATIO,
+  });
 
   const index = useMemo(
     () => createSearchIndex(AVAILABLE_LANGUAGES, languageSearchFields, "title"),
@@ -95,7 +112,14 @@ export function LanguagePickerSheet({
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}>
-      <View style={styles.root}>
+      <View
+        style={[
+          styles.root,
+          // The panel is lifted clear of the keyboard rather than left behind
+          // it: the window may not have resized at all on Android 15+.
+          { paddingBottom: sheetLiftFor({ keyboardHeight: overlap, bottomInset: insets.bottom }) },
+        ]}
+        onLayout={onLayout}>
         <ElasticPressable
           accessibilityRole="button"
           accessibilityLabel="Close language picker"
@@ -106,7 +130,12 @@ export function LanguagePickerSheet({
           style={[StyleSheet.absoluteFill, { backgroundColor: theme.scrim }]}
         />
 
-        <GlassSurface tone="surfaceStrong" radius={34} clip elevated style={styles.sheet}>
+        <GlassSurface
+          tone="surfaceStrong"
+          radius={34}
+          clip
+          elevated
+          style={[styles.sheet, { height: sheetHeight }]}>
           <View style={styles.header}>
             <View style={styles.headerCopy}>
               <ThemedText type="overline" themeColor="textTertiary">
@@ -146,8 +175,10 @@ export function LanguagePickerSheet({
           </View>
 
           <ScrollView
-            style={{ maxHeight: Math.round(windowHeight * LIST_HEIGHT_RATIO) }}
-            contentContainerStyle={styles.list}
+            // The list takes the room the header and the search field leave,
+            // and scrolls inside it. The sheet itself never resizes.
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
             showsVerticalScrollIndicator={false}>
@@ -171,8 +202,6 @@ export function LanguagePickerSheet({
             )}
           </ScrollView>
         </GlassSurface>
-
-        <View style={{ height: insets.bottom + spacing.md }} />
       </View>
     </Modal>
   );
@@ -204,6 +233,9 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   list: {
+    flex: 1,
+  },
+  listContent: {
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.lg,
   },

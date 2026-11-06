@@ -15,6 +15,8 @@ import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
+import { LanguageButton } from "@/components/online/language-button";
+import { LanguagePickerSheet } from "@/components/online/language-picker-sheet";
 import { SourceRow } from "@/components/online/source-row";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
@@ -26,6 +28,7 @@ import { SearchField } from "@/components/ui/search-field";
 import { useArtworkBackfill } from "@/hooks/use-artwork-backfill";
 import { useFolders } from "@/hooks/use-folders";
 import { useMissingTracks } from "@/hooks/use-missing-tracks";
+import { usePlaylistOrigins } from "@/hooks/use-playlist-origins";
 import { useRecentPlays } from "@/hooks/use-recent-plays";
 import { useTheme } from "@/hooks/use-theme";
 import { cardWidthFor } from "@/lib/cardLayout";
@@ -206,7 +209,9 @@ export default function LibraryScreen() {
     maxContentWidth: layout.maxContentWidth,
   });
   const languageCode = useSettingsStore((state) => state.languageCode);
+  const setLanguage = useSettingsStore((state) => state.setLanguage);
   const language = languageCode ? findLanguage(languageCode) : null;
+  const [pickingLanguage, setPickingLanguage] = useState(false);
   const [chosenView, setChosenView] = useState<LibraryView | null>(null);
   const view = resolveLibraryView(chosenView, language !== null);
   const tabs = useMemo(() => libraryTabs(language !== null), [language]);
@@ -229,6 +234,17 @@ export default function LibraryScreen() {
   const idleTask = useRef<{ cancel: () => void } | null>(null);
 
   const { recent, refresh: refreshRecent } = useRecentPlays(RECENT_READ_LIMIT);
+
+  /**
+   * The playlist half of Recent needs its members' origins, which the playlist
+   * row does not carry — one batched read for the handful of playlists the tab
+   * can show, rather than a query per card.
+   */
+  const recentPlaylists = useMemo(
+    () => recent.flatMap((play) => (play.kind === "playlist" ? [play.playlist] : [])),
+    [recent],
+  );
+  const playlistOrigins = usePlaylistOrigins(recentPlaylists);
 
   const continueTrack = useMemo(
     () =>
@@ -532,6 +548,32 @@ export default function LibraryScreen() {
     router.push("/import");
   }, [router]);
 
+  /**
+   * The language the listener picked, chosen here as well as on Discover.
+   *
+   * It is the same control and the same sheet: the Library's first tab is that
+   * language's shelf, so hiding the choice two tabs away made the shelf look
+   * like something the app had decided rather than something they had set. The
+   * current view is kept on selection — choosing a language is not a request to
+   * leave the tracks being browsed.
+   */
+  const pickLanguage = useCallback(
+    (code: string | null) => {
+      void setLanguage(code);
+      setChosenView((current) => (current === "language" ? "language" : view));
+    },
+    [setLanguage, view],
+  );
+
+  const languagePicker = pickingLanguage ? (
+    <LanguagePickerSheet
+      currentCode={language?.code ?? null}
+      onSelect={pickLanguage}
+      onClear={() => pickLanguage(null)}
+      onClose={() => setPickingLanguage(false)}
+    />
+  ) : null;
+
   const header = (
     <View style={styles.headerBlock}>
       <ScreenHeader
@@ -547,14 +589,17 @@ export default function LibraryScreen() {
                 : undefined
         }
         action={
-          <BouncyIconButton
-            name="settings"
-            accessibilityLabel="Settings"
-            size={control.lg}
-            iconSize={iconSize.lg}
-            tone="glass"
-            onPress={() => router.push("/settings")}
-          />
+          <View style={styles.headerActions}>
+            <LanguageButton language={language} onPress={() => setPickingLanguage(true)} />
+            <BouncyIconButton
+              name="settings"
+              accessibilityLabel="Settings"
+              size={control.lg}
+              iconSize={iconSize.lg}
+              tone="glass"
+              onPress={() => router.push("/settings")}
+            />
+          </View>
         }
       />
 
@@ -724,6 +769,7 @@ export default function LibraryScreen() {
           playlist={play.playlist}
           lastPlayedAt={play.lastPlayedAt}
           matched={describeHit(hit)}
+          origin={playlistOrigins[play.playlist.id]}
           titleRanges={hit?.ranges}
           cardWidth={cardWidth}
           onOpen={openPlaylist}
@@ -845,6 +891,7 @@ export default function LibraryScreen() {
             />
           )}
         </ScrollView>
+        {languagePicker}
       </Screen>
     );
   }
@@ -943,6 +990,7 @@ export default function LibraryScreen() {
           renderItem={({ item, index }) => renderRecent(item.play, index, item.hit)}
         />
       )}
+      {languagePicker}
     </Screen>
   );
 }
@@ -956,6 +1004,11 @@ const styles = StyleSheet.create({
   headerBlock: {
     gap: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
   viewToggle: {
     flexDirection: "row",
