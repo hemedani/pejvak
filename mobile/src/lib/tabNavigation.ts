@@ -5,13 +5,17 @@
  * Tracks, Folders and Recent — because a playlist is a way of arranging the
  * library you already have rather than a separate place to go. The dock's five
  * slots belong to the five things a listener opens on their own terms.
+ *
+ * Stats is absent for the mirror-image reason: it is the other reading of the
+ * History records rather than a place of its own, so it sits behind a chip
+ * beside them. The slot it vacated belongs to AI.
  */
 export const TAB_NAMES = [
   "index",
   "history",
   "discover",
   "notes",
-  "stats",
+  "ai",
 ] as const;
 
 export type TabName = (typeof TAB_NAMES)[number];
@@ -21,7 +25,7 @@ const TAB_HREFS = {
   history: "/history",
   discover: "/discover",
   notes: "/notes",
-  stats: "/stats",
+  ai: "/ai",
 } as const satisfies Record<TabName, string>;
 
 function firstPathSegment(pathname: string): string | null {

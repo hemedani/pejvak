@@ -15,13 +15,7 @@ describe("ICON_GLYPHS", () => {
   });
 
   it("has a filled pair for every dock destination", () => {
-    for (const base of [
-      "library",
-      "history",
-      "stats",
-      "playlists",
-      "compass",
-    ]) {
+    for (const base of ["library", "history", "ai", "notes", "compass"]) {
       expect(ICON_GLYPHS[base as keyof typeof ICON_GLYPHS]).toBeDefined();
     }
   });

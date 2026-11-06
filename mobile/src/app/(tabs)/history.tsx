@@ -4,12 +4,14 @@ import { FlatList, RefreshControl, Share, StyleSheet, View } from "react-native"
 
 import { ContextPlayCard } from "@/components/context-play-card";
 import { DateRangeSheet } from "@/components/history/date-range-sheet";
+import { StatsPanel } from "@/components/history/stats-panel";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
 import { StretchCard } from "@/components/stretch-card";
 import { ThemedText } from "@/components/themed-text";
 import { SegmentedControl } from "@/components/ui/card/segmented-control";
 import { GlassChip } from "@/components/ui/glass";
+import type { IconName } from "@/components/ui/icon";
 import {
   EmptyState,
   ListGroup,
@@ -54,6 +56,22 @@ import { openSessionDetail } from "@/store/sessionDetailStore";
 import { useSettingsStore } from "@/store/settingsStore";
 import { control, dockInset, iconSize, spacing } from "@/theme/tokens";
 import { listPerformance } from "@/lib/listPerformance";
+
+/**
+ * The two readings of the same records.
+ *
+ * `history` is the rows — what was played, when, and how much of it. `stats` is
+ * the same sessions totalled. They are chips rather than two screens because
+ * they are two answers to one question, and because the dock's slots belong to
+ * places the listener goes rather than to views of one place. This is the
+ * Library's shape: a chip row that never moves, and the content beneath it.
+ */
+type HistoryPanel = "history" | "stats";
+
+const HISTORY_PANELS: { value: HistoryPanel; label: string; icon: IconName }[] = [
+  { value: "history", label: "History", icon: "history" },
+  { value: "stats", label: "Stats", icon: "stats" },
+];
 
 /**
  * Which half of the history is showing.
@@ -102,6 +120,7 @@ function describeMatch(
 export default function HistoryScreen() {
   const router = useRouter();
   const theme = useTheme();
+  const [panel, setPanel] = useState<HistoryPanel>("history");
   const [query, setQuery] = useState("");
   const [range, setRange] = useState<DateRange>(ANY_DATE);
   const [dateOpen, setDateOpen] = useState(false);
@@ -339,180 +358,205 @@ export default function HistoryScreen() {
     }
   };
 
+  const subtitle =
+    panel === "stats"
+      ? undefined
+      : showing > 0
+        ? view === "sessions"
+          ? `${showing}${hasMore ? "+" : ""} session${showing === 1 ? "" : "s"}`
+          : `${showing} collection${showing === 1 ? "" : "s"}`
+        : filtering
+          ? "No matches"
+          : undefined;
+
   return (
     <Screen wash={theme.accent}>
-      <FlatList
-        {...listPerformance}
-        data={groups}
-        keyExtractor={(group) => group.key}
-        renderItem={({ item: group }) => {
-          const last = group.rows.length - 1;
-          return (
-            <View style={styles.group}>
-              {group.title ? (
-                <View style={styles.sectionHeader}>
-                  <ThemedText type="overline" themeColor="textTertiary">
-                    {group.title}
-                  </ThemedText>
-                </View>
-              ) : null}
-              <ListGroup>
-                {group.rows.map((row, index) => {
-                  const position: ListRowPosition =
-                    group.rows.length === 1
-                      ? "only"
-                      : index === 0
-                        ? "first"
-                        : index === last
-                          ? "last"
-                          : "middle";
-                  return row.kind === "stretch" ? (
-                    <StretchCard
-                      key={`s-${row.entry.stretch.id}`}
-                      entry={row.entry}
-                      position={position}
-                      matched={stretchMatches.get(row.entry.stretch.id) ?? null}
-                      onOpen={openStretch}
-                      // A stretch that has not been finalised is still being
-                      // written by the tracker, so there is nothing sensible to
-                      // tombstone yet.
-                      onDelete={
-                        row.entry.stretch.endedAt === null ? undefined : deleteStretch
-                      }
-                    />
-                  ) : (
-                    <ContextPlayCard
-                      key={`r-${row.run.id}`}
-                      run={row.run}
-                      position={position}
-                      matched={runMatches.get(row.run.id) ?? null}
-                      onPress={resumeRun}
-                      onOpen={openRun}
-                      onDelete={deleteRun}
-                    />
-                  );
-                })}
-              </ListGroup>
-            </View>
-          );
-        }}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.list}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        onEndReached={() => {
-          // A search already holds everything it can see; paging it would
-          // append rows the filter then has to throw away.
-          if (view === "sessions" && !searching) {
-            void loadMore();
+      {/* The header and the chips are navigation and never move; the search
+          field and the two filters below belong to the History list alone and
+          scroll with it, so the Stats panel is not wearing controls that do not
+          apply to it. */}
+      <View style={styles.chrome}>
+        <ScreenHeader
+          overline="EVERY SESSION, KEPT"
+          title="History"
+          subtitle={subtitle}
+          action={
+            /* Export writes the track-by-track log; the Stats panel has no
+               writer, so the control is not offered there rather than silently
+               exporting something else. */
+            panel === "history" && view === "sessions" && showing > 0 ? (
+              <BouncyIconButton
+                name="share"
+                accessibilityLabel="Export listening history"
+                size={control.lg}
+                iconSize={iconSize.md}
+                tone="glass"
+                onPress={() => void exportHistory()}
+              />
+            ) : undefined
           }
-        }}
-        onEndReachedThreshold={0.4}
-        ListFooterComponent={
-          view === "sessions" && loadingMore ? (
-            <ThemedText type="caption" themeColor="textTertiary" style={styles.footer}>
-              Loading older listens…
-            </ThemedText>
-          ) : null
-        }
-        ListHeaderComponent={
-          <View style={styles.headerBlock}>
-            <ScreenHeader
-              overline="EVERY SESSION, KEPT"
-              title="History"
-              subtitle={
-                showing > 0
-                  ? view === "sessions"
-                    ? `${showing}${hasMore ? "+" : ""} session${showing === 1 ? "" : "s"}`
-                    : `${showing} collection${showing === 1 ? "" : "s"}`
-                  : filtering
-                    ? "No matches"
-                    : undefined
-              }
-              action={
-                /* Export writes the track-by-track log; the Collections tab has
-                   no writer yet, so the control is not offered there rather
-                   than silently exporting something else. Notes used to sit
-                   beside it; they are a dock destination now, and a second way
-                   into the same screen from here was only ever a shortcut. */
-                view === "sessions" && showing > 0 ? (
-                  <BouncyIconButton
-                    name="share"
-                    accessibilityLabel="Export listening history"
-                    size={control.lg}
-                    iconSize={iconSize.md}
-                    tone="glass"
-                    onPress={() => void exportHistory()}
-                  />
-                ) : undefined
-              }
+        />
+        <View style={styles.panelToggle}>
+          {HISTORY_PANELS.map((option) => (
+            <GlassChip
+              key={option.value}
+              label={option.label}
+              icon={option.icon}
+              selected={panel === option.value}
+              onPress={() => setPanel(option.value)}
+              style={styles.panelChip}
             />
-            <SearchField
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search tracks, collections…"
-              accessibilityLabel="Search listening history"
-              hint={
-                searching
-                  ? `${showing} of ${total} ${view === "sessions" ? "listens" : "collections"}`
-                  : null
-              }
-            />
-            <View style={styles.filterRow}>
-              <GlassChip
-                label={describeDateRange(range)}
-                icon="clock"
-                selected={isRangeActive(range)}
-                accessibilityLabel={`Date filter: ${describeDateRange(range)}`}
-                onPress={() => setDateOpen(true)}
+          ))}
+        </View>
+      </View>
+
+      {panel === "stats" ? (
+        <StatsPanel />
+      ) : (
+        <FlatList
+          {...listPerformance}
+          data={groups}
+          keyExtractor={(group) => group.key}
+          renderItem={({ item: group }) => {
+            const last = group.rows.length - 1;
+            return (
+              <View style={styles.group}>
+                {group.title ? (
+                  <View style={styles.sectionHeader}>
+                    <ThemedText type="overline" themeColor="textTertiary">
+                      {group.title}
+                    </ThemedText>
+                  </View>
+                ) : null}
+                <ListGroup>
+                  {group.rows.map((row, index) => {
+                    const position: ListRowPosition =
+                      group.rows.length === 1
+                        ? "only"
+                        : index === 0
+                          ? "first"
+                          : index === last
+                            ? "last"
+                            : "middle";
+                    return row.kind === "stretch" ? (
+                      <StretchCard
+                        key={`s-${row.entry.stretch.id}`}
+                        entry={row.entry}
+                        position={position}
+                        matched={stretchMatches.get(row.entry.stretch.id) ?? null}
+                        onOpen={openStretch}
+                        // A stretch that has not been finalised is still being
+                        // written by the tracker, so there is nothing sensible to
+                        // tombstone yet.
+                        onDelete={
+                          row.entry.stretch.endedAt === null ? undefined : deleteStretch
+                        }
+                      />
+                    ) : (
+                      <ContextPlayCard
+                        key={`r-${row.run.id}`}
+                        run={row.run}
+                        position={position}
+                        matched={runMatches.get(row.run.id) ?? null}
+                        onPress={resumeRun}
+                        onOpen={openRun}
+                        onDelete={deleteRun}
+                      />
+                    );
+                  })}
+                </ListGroup>
+              </View>
+            );
+          }}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.list}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          onEndReached={() => {
+            // A search already holds everything it can see; paging it would
+            // append rows the filter then has to throw away.
+            if (view === "sessions" && !searching) {
+              void loadMore();
+            }
+          }}
+          onEndReachedThreshold={0.4}
+          ListFooterComponent={
+            view === "sessions" && loadingMore ? (
+              <ThemedText type="caption" themeColor="textTertiary" style={styles.footer}>
+                Loading older listens…
+              </ThemedText>
+            ) : null
+          }
+          ListHeaderComponent={
+            <View style={styles.headerBlock}>
+              <SearchField
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search tracks, collections…"
+                accessibilityLabel="Search listening history"
+                hint={
+                  searching
+                    ? `${showing} of ${total} ${view === "sessions" ? "listens" : "collections"}`
+                    : null
+                }
               />
-            </View>
-            <SegmentedControl
-              options={HISTORY_VIEWS}
-              value={view}
-              onChange={setView}
-              accessibilityLabel="History view"
-            />
-            {showing > 0 ? (
+              <View style={styles.filterRow}>
+                <GlassChip
+                  label={describeDateRange(range)}
+                  icon="clock"
+                  selected={isRangeActive(range)}
+                  accessibilityLabel={`Date filter: ${describeDateRange(range)}`}
+                  onPress={() => setDateOpen(true)}
+                />
+              </View>
               <SegmentedControl
-                options={HISTORY_SORT_OPTIONS}
-                value={sort}
-                onChange={(next) => void setSort(next)}
-                accessibilityLabel="Sort history"
+                options={HISTORY_VIEWS}
+                value={view}
+                onChange={setView}
+                accessibilityLabel="History view"
               />
-            ) : null}
-          </View>
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={view === "sessions" ? loading : runsLoading}
-            onRefresh={() => void refreshAll()}
-          />
-        }
-        ListEmptyComponent={
-          (view === "sessions" ? loading : runsLoading) ? null : (
-            <EmptyState
-              icon={filtering ? "search" : view === "sessions" ? "history" : "folder"}
-              title={
-                filtering
-                  ? view === "sessions"
-                    ? "No listens match"
-                    : "No collections match"
-                  : view === "sessions"
-                    ? "No listening yet"
-                    : "No collections played yet"
-              }
-              message={
-                filtering
-                  ? "Try another spelling or a wider date range — Persian variants are matched automatically."
-                  : view === "sessions"
-                    ? "Play a track and your sessions will show up here."
-                    : "Start a folder or a playlist and its play-through will show up here."
-              }
+              {showing > 0 ? (
+                <SegmentedControl
+                  options={HISTORY_SORT_OPTIONS}
+                  value={sort}
+                  onChange={(next) => void setSort(next)}
+                  accessibilityLabel="Sort history"
+                />
+              ) : null}
+            </View>
+          }
+          refreshControl={
+            <RefreshControl
+              refreshing={view === "sessions" ? loading : runsLoading}
+              onRefresh={() => void refreshAll()}
             />
-          )
-        }
-      />
+          }
+          ListEmptyComponent={
+            (view === "sessions" ? loading : runsLoading) ? null : (
+              <EmptyState
+                icon={filtering ? "search" : view === "sessions" ? "history" : "folder"}
+                title={
+                  filtering
+                    ? view === "sessions"
+                      ? "No listens match"
+                      : "No collections match"
+                    : view === "sessions"
+                      ? "No listening yet"
+                      : "No collections played yet"
+                }
+                message={
+                  filtering
+                    ? "Try another spelling or a wider date range — Persian variants are matched automatically."
+                    : view === "sessions"
+                      ? "Play a track and your sessions will show up here."
+                      : "Start a folder or a playlist and its play-through will show up here."
+                }
+              />
+            )
+          }
+        />
+      )}
+
       {dateOpen ? (
         <DateRangeSheet
           range={range}
@@ -525,6 +569,18 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
+  chrome: {
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.sm,
+  },
+  panelToggle: {
+    flexDirection: "row",
+    gap: spacing.xs,
+  },
+  panelChip: {
+    flexGrow: 1,
+  },
   list: {
     gap: spacing.lg,
     paddingHorizontal: spacing.xl,

@@ -6,7 +6,7 @@ describe("tabNameForPathname", () => {
     ["/history", "history"],
     ["/discover", "discover"],
     ["/notes", "notes"],
-    ["/stats", "stats"],
+    ["/ai", "ai"],
   ])("maps %s to %s", (pathname, expected) => {
     expect(tabNameForPathname(pathname)).toBe(expected);
   });
@@ -30,10 +30,16 @@ describe("tabNameForPathname", () => {
     // rather than light up a dock slot that no longer exists.
     expect(tabNameForPathname("/playlists")).toBe("index");
   });
+
+  it("does not treat the old Stats route as a destination", () => {
+    // Stats is the second chip of History now, not a screen of its own.
+    expect(tabNameForPathname("/stats")).toBe("index");
+    expect(isTabPathname("/stats")).toBe(false);
+  });
 });
 
 describe("isTabPathname", () => {
-  it.each(["/", "/history", "/discover", "/notes", "/stats", "/(tabs)/discover"])(
+  it.each(["/", "/history", "/discover", "/notes", "/ai", "/(tabs)/discover"])(
     "treats %s as a tab",
     (pathname) => {
       expect(isTabPathname(pathname)).toBe(true);
@@ -52,5 +58,6 @@ describe("tabHref", () => {
     expect(tabHref("index")).toBe("/");
     expect(tabHref("history")).toBe("/history");
     expect(tabHref("notes")).toBe("/notes");
+    expect(tabHref("ai")).toBe("/ai");
   });
 });

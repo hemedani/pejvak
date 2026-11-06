@@ -61,13 +61,19 @@ export const ICON_GLYPHS = {
   /** MCI's `history` has no filled partner; the clock carries the pair. */
   history: "clock-outline",
   historyFilled: "clock",
+  /** A figure, not a destination: the Stats chip and the stat cells. */
   stats: "chart-box-outline",
-  statsFilled: "chart-box",
+  /** The AI page's destination: a wand, not a robot — it is about what the app
+   * will *do* with a recording, not about who is doing it. */
+  ai: "creation-outline",
+  aiFilled: "creation",
   playlists: "playlist-music-outline",
   playlistsFilled: "playlist-music",
   settings: "cog-outline",
   notes: "note-text-outline",
   notesFilled: "note-text",
+  /** Opens a native calendar. A date field is a control, not a text input. */
+  calendar: "calendar-blank-outline",
 
   compass: "compass",
   compassOutline: "compass-outline",
