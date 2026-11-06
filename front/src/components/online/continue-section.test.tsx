@@ -63,7 +63,9 @@ describe("ContinueSection", () => {
   it("states a failed read without taking the page down", () => {
     render(<ContinueSection items={[]} failure={{ kind: "offline", message: "" }} />);
 
-    expect(screen.getByText("Could not connect")).toBeInTheDocument();
+    // A lost connection is a condition, not a broken section: it says so in the
+    // warning channel and keeps the retry (see `ui/state.tsx`).
+    expect(screen.getByText("No connection")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Try again" })).toHaveAttribute("href", "/");
   });
 });
