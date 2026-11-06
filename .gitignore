@@ -11,3 +11,4 @@ ignore-scripts
 **/.superpowers/
 back/dump.rdb
 ignoreAssets
+.DS_Store
