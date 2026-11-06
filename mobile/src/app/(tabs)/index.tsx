@@ -26,7 +26,7 @@ import { SourceRow } from "@/components/online/source-row";
 import { SmartPlaylistRow } from "@/components/smart-playlist-row";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
-import { GlassChip } from "@/components/ui/glass";
+import { ExpandingChip } from "@/components/ui/glass";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { EmptyState, InlineNotice, ListGroup } from "@/components/ui/row";
@@ -761,23 +761,21 @@ export default function LibraryScreen() {
       </Reveal>
 
       <Reveal index={3}>
-        {/* Every chip carries its view's glyph, and the row *wraps* rather than
-            shrinks: five chips with glyphs do not fit across a small phone, and
-            a chip whose label is clipped is worse than a chip on a second line.
-            The match counts that appear during a search widen the row again.
-            Chips grow to share a line while they fit, so four of them still
-            read as one strip.
+        {/* The strip never wraps, because it can no longer overflow: an
+            unselected chip is a 44pt circle around its glyph, and only the
+            selected one opens to show its name. Five labelled chips do not fit
+            across a small phone — the fifth landed on a second row, which reads
+            as two strips rather than one — while five glyphs with one name do.
 
-            While a query is active each library chip carries its match count
-            *instead of* its glyph — the count is information and the glyph is
-            decoration, and they occupy the same slot, so the row cannot start
-            clipping the moment a query is typed. "Online" has no count: its tab
-            is a short directory of providers, not a list of library items, and
-            counting them would make "N matches" in the subtitle a total of two
-            different things. */}
+            While a query is active each chip carries its match count *instead
+            of* its glyph — the count is information and the glyph is
+            decoration, and they occupy the same slot. "Online" has no count: its
+            tab is a short directory of providers, not a list of library items,
+            and counting them would make "N matches" in the subtitle a total of
+            two different things. */}
         <View style={styles.viewToggle}>
           {tabs.map((tab) => (
-            <GlassChip
+            <ExpandingChip
               key={tab.value}
               label={tab.label}
               icon={tab.icon}
@@ -786,7 +784,6 @@ export default function LibraryScreen() {
                 searching && tab.value !== "language" ? counts[tab.value] : null
               }
               onPress={() => goToView(tab.value)}
-              style={styles.viewChip}
             />
           ))}
         </View>
@@ -1358,20 +1355,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
+  /**
+   * One line, always.
+   *
+   * The chips no longer grow to share it: an unselected chip is a fixed circle
+   * and the selected one is as wide as its own name, so the strip's width is
+   * decided by which view is open rather than by how much room is left. `wrap`
+   * stays as the safety valve for a text size large enough to overrun a 320pt
+   * phone, but nothing in the ordinary case reaches it.
+   */
   viewToggle: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.xxs,
-  },
-  /**
-   * `flexGrow` rather than `flex: 1`. Equal shares truncate "Playlists" on a
-   * narrow phone, and the count badges that appear during a search widen four
-   * chips at once. Growing from the label's own width keeps every label whole
-   * and lets the row wrap when it genuinely runs out of room.
-   */
-  viewChip: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.xxs,
+    alignItems: "center",
+    gap: spacing.sm,
   },
   languageSection: {
     gap: spacing.sm,
