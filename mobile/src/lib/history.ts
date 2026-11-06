@@ -20,7 +20,14 @@ export type HistoryItem = {
    */
   track: Pick<
     LocalTrack,
-    "id" | "title" | "author" | "contentHash" | "isAudiobook" | "artworkUrl" | "durationSec"
+    | "id"
+    | "title"
+    | "author"
+    | "contentHash"
+    | "isAudiobook"
+    | "artworkUrl"
+    | "durationSec"
+    | "origin"
   >;
   /**
    * The collection this session was part of, if it was part of one. Resolved in

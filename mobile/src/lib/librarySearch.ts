@@ -12,7 +12,8 @@
  * and a test asserts the answers.
  */
 
-import type { FolderSummary, LocalPlaylist, LocalTrack } from "@/lib/db/types";
+import type { LocalContextPlay, FolderSummary, LocalPlaylist, LocalTrack } from "@/lib/db/types";
+import { describeStretchTitle, type HistoryStretch } from "@/lib/history";
 import type { RecentPlay } from "@/lib/recentPlays";
 import type { SearchFieldName } from "@/lib/search";
 
@@ -96,4 +97,40 @@ export function recentSearchFields(play: RecentPlay): SearchableField[] {
     case "track":
       return trackSearchFields(play.track);
   }
+}
+
+/**
+ * One listen in the History list, by the names a listener would search for.
+ *
+ * The row's headline is the composed "start → end" title, which is what the
+ * highlight can be drawn against. But a stretch can cover a dozen tracks and
+ * the listener remembers the fourth one, so **every member title is indexed
+ * too**, under their own field — a hit on one of those cannot highlight the
+ * headline (the text is not in it), and reporting the field and the track it
+ * matched is what stops that result looking like a mistake.
+ *
+ * The collection title is indexed under `folder` because that is the slot it
+ * occupies on the card's detail line, and the author under `author`.
+ */
+export function stretchSearchFields(entry: HistoryStretch): SearchableField[] {
+  const fields: SearchableField[] = [
+    { field: "title", value: describeStretchTitle(entry) },
+    { field: "folder", value: entry.start.contextTitle },
+    { field: "author", value: entry.start.track.author },
+  ];
+  for (const item of entry.items) {
+    fields.push({ field: "track", value: item.track.title });
+  }
+  return fields;
+}
+
+/**
+ * One collection run, by the name it was recorded under.
+ *
+ * The run carries a snapshot of the collection's title, deliberately captured at
+ * play time so a later rename cannot rewrite history — which also makes it the
+ * right thing to search: it is the name the listener saw when they listened.
+ */
+export function runSearchFields(run: LocalContextPlay): SearchableField[] {
+  return [{ field: "title", value: run.contextTitle }];
 }

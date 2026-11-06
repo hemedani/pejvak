@@ -55,6 +55,7 @@ function item(
       isAudiobook,
       artworkUrl: null,
       durationSec: 600,
+      origin: "local",
     },
     contextTitle: null,
   };

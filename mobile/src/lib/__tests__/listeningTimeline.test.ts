@@ -58,6 +58,7 @@ function item(overrides: Partial<LocalSession> = {}, durationSec = 600): History
       isAudiobook: false,
       artworkUrl: null,
       durationSec,
+      origin: "local",
     },
     contextTitle: null,
   };

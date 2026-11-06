@@ -44,6 +44,7 @@ import {
   type HistoryStretch,
 } from "@/lib/history";
 import { describeStretchTracks } from "@/lib/listeningStretch";
+import { tracksOrigin } from "@/lib/origin";
 import { paletteFor } from "@/lib/palette";
 import { formatClock } from "@/lib/time";
 import { control, spacing } from "@/theme/tokens";
@@ -61,6 +62,11 @@ export type StretchCardProps = {
   /** Omit to hide the remove button — a stretch still in progress has no
    *  tombstone to write, since the tracker is still finalising it. */
   onDelete?: (entry: HistoryStretch) => void;
+  /**
+   * Why this row is a search result, when the match was not in the headline —
+   * "track · Chapter 4" for a listen found by one of its middle tracks.
+   */
+  matched?: string | null;
   /** Set by `ListGroup`; a row outside a group is its own whole card. */
   position?: ListRowPosition;
 };
@@ -69,6 +75,7 @@ export const StretchCard = memo(function StretchCard({
   entry,
   onOpen,
   onDelete,
+  matched,
   position,
 }: StretchCardProps) {
   const theme = useTheme();
@@ -76,6 +83,10 @@ export const StretchCard = memo(function StretchCard({
   const { stretch } = entry;
   const target = stretchResumeTarget(entry);
   const title = describeStretchTitle(entry);
+  // A stretch can cross tracks, so its badge is the members' verdict: all local,
+  // all online, or both. The rows it was read from already carry each track's
+  // origin, so this needs no second query.
+  const origin = tracksOrigin(entry.items.map((item) => item.track.origin));
 
   const openPlaylistPicker = () =>
     void addToPlaylist({
@@ -139,12 +150,16 @@ export const StretchCard = memo(function StretchCard({
         stretch.trackCount > 1 ? describeStretchTracks(stretch) : null,
       ])}
       detail={joinMeta([
+        // The reason it matched outranks the span it covered: a result whose
+        // reason is invisible reads as a wrong result.
+        matched,
         // First second of the first track, to the second the last one stopped
         // at — the span the stretch actually covered.
         formatPositionRange(stretch.startPositionSec, stretch.endPositionSec),
         entry.start.contextTitle,
       ])}
       status={describeStretchStatus(stretch)}
+      origin={origin}
       trailing={
         <View style={styles.meta}>
           <ThemedText type="numeric" style={{ color: theme.accent }}>

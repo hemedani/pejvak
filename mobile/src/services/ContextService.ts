@@ -10,6 +10,7 @@
  */
 
 import type { ContextStats, ContextType, LocalContextPlay } from "@/lib/db/types";
+import type { DateRange } from "@/lib/dateRange";
 import {
   contextRouteTarget,
   runResumeTargetSec,
@@ -151,8 +152,8 @@ function stats(contextType: ContextType, contextKey: string): Promise<ContextSta
 }
 
 /** Closed runs across every collection, newest first. */
-function history(limit = 200) {
-  return LocalDBService.getContextPlaysForHistory(limit);
+function history(limit = 200, range?: DateRange) {
+  return LocalDBService.getContextPlaysForHistory(limit, range);
 }
 
 export const ContextService = {

@@ -1,6 +1,7 @@
 import * as Crypto from "expo-crypto";
 
 import { getDatabase } from "@/lib/db/database";
+import { ANY_DATE, type DateRange } from "@/lib/dateRange";
 import {
   mapAnnotation,
   mapCheckpoint,
@@ -412,22 +413,38 @@ async function getSessionsByTrack(trackId: string): Promise<LocalSession[]> {
 async function getSessionsForHistory(
   limit = 200,
   before?: HistoryCursor,
+  range: DateRange = ANY_DATE,
 ): Promise<HistoryItem[]> {
   const db = await getDatabase();
   // Keyset, not `OFFSET`: a session written between two reads would shift an
   // offset boundary and repeat or skip a row. The boundary is the group's
   // newest `started_at` plus its id, which cannot be moved by a newer row.
-  // Only the fixed clause below is interpolated; the values stay parameters.
-  const boundary = before
-    ? "HAVING MAX(started_at) < ? OR (MAX(started_at) = ? AND stretch_id < ?)"
-    : "";
-  const params = before
-    ? [before.startedAt, before.startedAt, before.stretchId, limit]
-    : [limit];
+  // Only the fixed clauses below are interpolated; the values stay parameters.
+  //
+  // The date bounds are `HAVING`s on the stretch's own start, not `WHERE`s on
+  // its members: a WHERE would drop the rows of a listen that ran past the
+  // boundary and hand back a stretch missing its last track.
+  const having: string[] = [];
+  const bounds: (number | string)[] = [];
+  if (range.from !== null) {
+    having.push("MIN(started_at) >= ?");
+    bounds.push(range.from);
+  }
+  if (range.to !== null) {
+    having.push("MIN(started_at) <= ?");
+    bounds.push(range.to);
+  }
+  if (before) {
+    having.push("(MAX(started_at) < ? OR (MAX(started_at) = ? AND stretch_id < ?))");
+    bounds.push(before.startedAt, before.startedAt, before.stretchId);
+  }
+  const havingClause = having.length > 0 ? `HAVING ${having.join(" AND ")}` : "";
+  const params = [...bounds, limit];
   const rows = await db.getAllAsync<HistoryRow>(
     `SELECT s.*, t.title AS track_title, t.author AS track_author,
             t.content_hash AS track_content_hash, t.is_audiobook AS track_is_audiobook,
             t.artwork_url AS track_artwork_url, t.duration_sec AS track_duration_sec,
+            t.origin AS track_origin,
             cp.context_title AS context_title
      FROM sessions s
      JOIN tracks t ON t.id = s.track_id
@@ -437,7 +454,7 @@ async function getSessionsForHistory(
          SELECT stretch_id FROM sessions
          WHERE deleted_at IS NULL
          GROUP BY stretch_id
-         ${boundary}
+         ${havingClause}
          ORDER BY MAX(started_at) DESC, stretch_id DESC
          LIMIT ?
        )
@@ -454,6 +471,7 @@ async function getSessionsForHistory(
       isAudiobook: row.track_is_audiobook === 1,
       artworkUrl: row.track_artwork_url,
       durationSec: row.track_duration_sec,
+      origin: row.track_origin,
     },
     contextTitle: row.context_title,
   }));
@@ -796,14 +814,28 @@ async function getContextRunProgress(id: string): Promise<ContextRunProgress> {
 }
 
 /** Closed runs, newest first — the collection half of the History screen. */
-async function getContextPlaysForHistory(limit = 200): Promise<LocalContextPlay[]> {
+async function getContextPlaysForHistory(
+  limit = 200,
+  range: DateRange = ANY_DATE,
+): Promise<LocalContextPlay[]> {
   const db = await getDatabase();
+  const where: string[] = [];
+  const params: number[] = [];
+  if (range.from !== null) {
+    where.push("started_at >= ?");
+    params.push(range.from);
+  }
+  if (range.to !== null) {
+    where.push("started_at <= ?");
+    params.push(range.to);
+  }
+  const rangeClause = where.length > 0 ? ` AND ${where.join(" AND ")}` : "";
   const rows = await db.getAllAsync<ContextPlayRow>(
     `SELECT * FROM context_plays
-     WHERE deleted_at IS NULL AND ended_at IS NOT NULL
+     WHERE deleted_at IS NULL AND ended_at IS NOT NULL${rangeClause}
      ORDER BY started_at DESC
      LIMIT ?`,
-    [limit],
+    [...params, limit],
   );
   return rows.map(mapContextPlay);
 }

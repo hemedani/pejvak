@@ -239,7 +239,8 @@ export type SearchFieldName =
   | "fileName"
   | "folder"
   | "path"
-  | "description";
+  | "description"
+  | "track";
 
 export function describeField(field: SearchFieldName): string {
   switch (field) {
@@ -257,6 +258,8 @@ export function describeField(field: SearchFieldName): string {
       return "path";
     case "description":
       return "description";
+    case "track":
+      return "track";
     default:
       return "title";
   }

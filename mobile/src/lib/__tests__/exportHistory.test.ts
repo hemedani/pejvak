@@ -46,6 +46,7 @@ function row(title: string, overrides: Partial<LocalSession> = {}): HistoryItem 
       isAudiobook: true,
       artworkUrl: null,
       durationSec: 600,
+      origin: "local",
     },
     contextTitle: null,
   };

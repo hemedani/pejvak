@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { type DateRange } from "@/lib/dateRange";
 import {
   historyCursorFor,
   mergeHistoryPages,
@@ -9,6 +10,29 @@ import { LocalDBService } from "@/services/LocalDBService";
 
 /** How many stretches one page holds. Sessions per page can be larger. */
 const DEFAULT_PAGE_SIZE = 50;
+
+/**
+ * How much history a *search* reads.
+ *
+ * A query is filtered in JavaScript, because folding Persian spellings is not
+ * something SQL can do — so searching only the page the list happens to hold
+ * would answer "nothing found" for a listen three screens down, which is
+ * indistinguishable from a broken search. The read is bounded anyway: a few
+ * hundred stretches is more than anyone scans in one query, and an unbounded
+ * read of a decade of listening on every keystroke is not.
+ */
+const SEARCH_READ_LIMIT = 500;
+
+export type HistoryReadOptions = {
+  /** Only reads listens that started inside these bounds. */
+  range?: DateRange;
+  /**
+   * Read deep enough for a text search rather than a page. Pagination is off:
+   * the list is showing everything the search could have matched, so "load
+   * more" has nothing left to load.
+   */
+  deep?: boolean;
+};
 
 export type UseHistoryResult = {
   items: HistoryItem[];
@@ -36,7 +60,10 @@ function stretchCount(items: readonly HistoryItem[]): number {
  * never show. A page is a page of *stretches*; the query decides the boundary in
  * SQL so a stretch is never split across two pages.
  */
-export function useHistory(pageSize = DEFAULT_PAGE_SIZE): UseHistoryResult {
+export function useHistory(
+  pageSize = DEFAULT_PAGE_SIZE,
+  options: HistoryReadOptions = {},
+): UseHistoryResult {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -44,29 +71,43 @@ export function useHistory(pageSize = DEFAULT_PAGE_SIZE): UseHistoryResult {
   /** Flips synchronously; `onEndReached` can fire twice before a render. */
   const inFlight = useRef(false);
 
+  // Primitives, not the range object: a caller that builds `{from, to}` inline
+  // would otherwise re-read the table on every render.
+  const from = options.range?.from ?? null;
+  const to = options.range?.to ?? null;
+  const deep = options.deep === true;
+  const limit = deep ? SEARCH_READ_LIMIT : pageSize;
+
   useEffect(() => {
     let cancelled = false;
-    void LocalDBService.getSessionsForHistory(pageSize).then((rows) => {
+    void LocalDBService.getSessionsForHistory(limit, undefined, {
+      from,
+      to,
+    }).then((rows) => {
       if (!cancelled) {
         setItems(rows);
-        setHasMore(stretchCount(rows) === pageSize);
+        setHasMore(!deep && stretchCount(rows) === limit);
         setLoading(false);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [pageSize]);
+  }, [deep, from, limit, to]);
 
   const refresh = useCallback(async () => {
-    const rows = await LocalDBService.getSessionsForHistory(pageSize);
+    const rows = await LocalDBService.getSessionsForHistory(limit, undefined, {
+      from,
+      to,
+    });
     setItems(rows);
-    setHasMore(stretchCount(rows) === pageSize);
+    setHasMore(!deep && stretchCount(rows) === limit);
     setLoading(false);
-  }, [pageSize]);
+  }, [deep, from, limit, to]);
 
   const loadMore = useCallback(async () => {
-    if (inFlight.current || loading || !hasMore) {
+    // A deep read already holds every listen the search can see.
+    if (deep || inFlight.current || loading || !hasMore) {
       return;
     }
     const cursor = historyCursorFor(items);
@@ -76,14 +117,17 @@ export function useHistory(pageSize = DEFAULT_PAGE_SIZE): UseHistoryResult {
     inFlight.current = true;
     setLoadingMore(true);
     try {
-      const rows = await LocalDBService.getSessionsForHistory(pageSize, cursor);
+      const rows = await LocalDBService.getSessionsForHistory(pageSize, cursor, {
+        from,
+        to,
+      });
       setItems((previous) => mergeHistoryPages(previous, rows));
       setHasMore(stretchCount(rows) === pageSize);
     } finally {
       inFlight.current = false;
       setLoadingMore(false);
     }
-  }, [hasMore, items, loading, pageSize]);
+  }, [deep, from, hasMore, items, loading, pageSize, to]);
 
   return { items, loading, loadingMore, hasMore, refresh, loadMore };
 }

@@ -142,6 +142,11 @@ export type HistoryRow = SessionRow & {
   track_is_audiobook: number;
   track_artwork_url: string | null;
   /**
+   * Where the track came from, so a History row can carry the same local/online
+   * badge its Library card does. A listen does not change provenance.
+   */
+  track_origin: TrackOrigin;
+  /**
    * The track's whole length, so a session's timeline can draw the part that
    * was *not* heard as well as the part that was.
    */

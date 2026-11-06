@@ -46,6 +46,7 @@ function item(id: string): HistoryItem {
       isAudiobook: true,
       artworkUrl: null,
       durationSec: 600,
+      origin: "local",
     },
     contextTitle: null,
   };
@@ -79,10 +80,17 @@ describe("useHistory", () => {
       await result.current.loadMore();
     });
 
-    expect(getSessionsForHistory).toHaveBeenLastCalledWith(2, {
-      startedAt: 100,
-      stretchId: "b",
-    });
+    // The third argument is the date range: with no filter chosen the hook
+    // still passes it, so one code path builds the query and a page loaded
+    // while filtered cannot quietly read the unfiltered range.
+    expect(getSessionsForHistory).toHaveBeenLastCalledWith(
+      2,
+      {
+        startedAt: 100,
+        stretchId: "b",
+      },
+      { from: null, to: null },
+    );
     expect(result.current.items.map((row) => row.session.id)).toEqual(["a", "b", "c"]);
     expect(result.current.hasMore).toBe(false);
     expect(result.current.loadingMore).toBe(false);

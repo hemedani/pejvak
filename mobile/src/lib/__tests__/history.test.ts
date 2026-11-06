@@ -59,6 +59,7 @@ function track(overrides: Partial<HistoryItem["track"]> = {}): HistoryItem["trac
     // satisfy the projection the type declares.
     artworkUrl: overrides.artworkUrl ?? null,
     durationSec: overrides.durationSec ?? 600,
+    origin: overrides.origin ?? "local",
   };
 }
 

@@ -136,6 +136,7 @@ function item({
       isAudiobook: true,
       artworkUrl: null,
       durationSec: 600,
+      origin: "local",
     },
     contextTitle: contextType ? contextKey : null,
   };

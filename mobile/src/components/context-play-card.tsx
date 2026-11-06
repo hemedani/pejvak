@@ -26,6 +26,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { joinMeta } from "@/lib/cardMeta";
 import type { LocalContextPlay } from "@/lib/db/types";
 import { formatDuration, formatTimeRange } from "@/lib/history";
+import { runOrigin } from "@/lib/origin";
 import {
   describeContextType,
   describeRunScope,
@@ -41,6 +42,8 @@ export type ContextPlayCardProps = {
   onOpen?: (run: LocalContextPlay) => void;
   /** Omit to hide the remove button. */
   onDelete?: (run: LocalContextPlay) => void;
+  /** Why this run is a search result, when the match needs explaining. */
+  matched?: string | null;
   /** Set by `ListGroup`; a row outside a group is its own whole card. */
   position?: ListRowPosition;
 };
@@ -50,6 +53,7 @@ export const ContextPlayCard = memo(function ContextPlayCard({
   onPress,
   onOpen,
   onDelete,
+  matched,
   position,
 }: ContextPlayCardProps) {
   const theme = useTheme();
@@ -114,8 +118,9 @@ export const ContextPlayCard = memo(function ContextPlayCard({
       position={position}
       title={run.contextTitle}
       meta={joinMeta([typeLabel, formatTimeRange(run.startedAt, run.endedAt)])}
-      detail={describeRunScope(run)}
+      detail={joinMeta([matched, describeRunScope(run)])}
       status={status}
+      origin={runOrigin(run)}
       trailing={
         <View style={styles.meta}>
           <ThemedText type="numeric" style={{ color: theme.accent }}>
