@@ -1,23 +1,19 @@
 /**
- * A date range, as the History screen understands it.
+ * A date range, as the History and Notes screens understand it.
  *
- * The screen asks one question — "when did this listen happen?" — and it is
- * asked with timestamps, not dates: a session starts at 23:58 and ends after
- * midnight, and a range that compared dates as strings would put it on the
- * wrong side of a boundary. So every range is a pair of inclusive millisecond
- * bounds, with `from` at the first millisecond of its day and `to` at the last.
+ * The screen asks one question — "when did this happen?" — and it is asked with
+ * timestamps, not dates: a session starts at 23:58 and ends after midnight, and
+ * a range that compared dates as strings would put it on the wrong side of a
+ * boundary. So every range is a pair of inclusive millisecond bounds, with
+ * `from` at the first millisecond of its day and `to` at the last.
  *
  * A bound may be absent. "Since March" is a real thing to ask for, and so is
  * "before I moved house", and neither needs the other end invented.
  *
- * Parsing is deliberately forgiving about *spelling* and strict about *meaning*:
- * `۱۴۰۳-۰۵-۱۲` and `1403/05/12` are the same day, and `2026-02-31` is not a day
- * at all. The digits go through the same fold the search uses, because a date
- * typed on a Persian keyboard arrives with Persian digits and a parser that only
- * accepts ASCII would call it invalid.
+ * Nothing here parses a typed date any more — the screens choose days from the
+ * system calendar (see `components/ui/date-field`) — so this module is now only
+ * about what a range *means*.
  */
-
-import { foldText } from "@/lib/search";
 
 export type DateRange = {
   /** First millisecond of the earliest day, or null for no lower bound. */
@@ -132,49 +128,10 @@ function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
 
-/** `2026-03-09` — the form the field accepts and the form it shows back. */
+/** `2026-03-09` — the form the field shows. */
 export function formatDateInput(timestamp: number): string {
   const date = new Date(timestamp);
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
-
-/**
- * Writes a date back as it is typed: `20260309` becomes `2026-03-09`.
- *
- * The field asks for a numeric keypad, because a date is eight digits and the
- * pad is the fastest way to give them — but that keypad has no dash key, so the
- * separator has to be supplied. `previous` is what makes backspace behave: a
- * keypress that only removed a separator would be undone by the very next
- * reformat, and the key would look dead.
- */
-export function formatDateTyping(next: string, previous = ""): string {
-  let digits = foldText(next).replace(/\D/g, "").slice(0, 8);
-  if (removedSeparatorIndex(previous, next) >= 0) {
-    // The keypress only deleted a dash. Re-inserting it unchanged would make
-    // the key look dead, so the date shortens by one digit instead — the same
-    // thing a backspace at the end of the field does.
-    digits = digits.slice(0, -1);
-  }
-  if (digits.length <= 4) {
-    return digits;
-  }
-  if (digits.length <= 6) {
-    return `${digits.slice(0, 4)}-${digits.slice(4)}`;
-  }
-  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
-}
-
-/** Where a one-character deletion happened, when that character was `-` or `/`. */
-function removedSeparatorIndex(previous: string, next: string): number {
-  if (next.length !== previous.length - 1) {
-    return -1;
-  }
-  let index = 0;
-  while (index < next.length && previous[index] === next[index]) {
-    index += 1;
-  }
-  const removed = previous[index];
-  return removed === "-" || removed === "/" ? index : -1;
 }
 
 function shortDate(timestamp: number, now: number): string {
@@ -207,77 +164,4 @@ export function describeDateRange(range: DateRange, now: number = Date.now()): s
     return `Since ${shortDate(range.from, now)}`;
   }
   return `Until ${shortDate(range.to as number, now)}`;
-}
-
-export type ParsedDate = {
-  /** Start of the day named, or null when the field is empty. */
-  value: number | null;
-  /** What is wrong with it, or null. An empty field is not an error. */
-  error: string | null;
-};
-
-/**
- * Reads a typed date as the start of that day.
- *
- * Accepts `YYYY-MM-DD`, `YYYY/MM/DD` and the eight bare digits the numeric
- * keypad produces, with ASCII, Persian or Arabic-Indic digits. A day that does
- * not exist is rejected rather than rolled over: `new Date("2026-02-31")` would
- * silently become 3 March, and a range that quietly moved is worse than one
- * that says it could not read the date.
- */
-export function parseDateInput(text: string): ParsedDate {
-  const trimmed = foldText(text).trim();
-  if (trimmed.length === 0) {
-    return { value: null, error: null };
-  }
-  const match =
-    /^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/.exec(trimmed) ??
-    /^(\d{4})(\d{2})(\d{2})$/.exec(trimmed);
-  if (!match) {
-    return { value: null, error: "Use a date like 2026-03-09" };
-  }
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  if (month < 1 || month > 12 || day < 1 || day > 31) {
-    return { value: null, error: "That date does not exist" };
-  }
-  const date = new Date(year, month - 1, day);
-  if (
-    date.getFullYear() !== year ||
-    date.getMonth() !== month - 1 ||
-    date.getDate() !== day
-  ) {
-    return { value: null, error: "That date does not exist" };
-  }
-  return { value: startOfDay(date.getTime()), error: null };
-}
-
-/**
- * A range built from two typed dates, with the end inclusive.
- *
- * Returns the error to show rather than a half-built range: a start after the
- * end would filter everything out and look like "no history", which is a much
- * worse message than "the start date is after the end date".
- */
-export function rangeFromInputs(
-  fromText: string,
-  toText: string,
-): { range: DateRange; error: string | null } {
-  const from = parseDateInput(fromText);
-  const to = parseDateInput(toText);
-  const error = from.error ?? to.error;
-  if (error) {
-    return { range: ANY_DATE, error };
-  }
-  if (from.value !== null && to.value !== null && from.value > to.value) {
-    return { range: ANY_DATE, error: "The start date is after the end date" };
-  }
-  return {
-    range: {
-      from: from.value,
-      to: to.value === null ? null : endOfDay(to.value),
-    },
-    error: null,
-  };
 }

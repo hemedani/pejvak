@@ -1,35 +1,40 @@
 /**
- * Choosing a date range for the History list.
+ * Choosing a date range for a list.
  *
  * A sheet rather than inline chips: the quick answers are one tap, but "the two
  * weeks I was travelling" needs two dates, and a row of chips in the header
  * would either hide that or push the list down permanently. Choosing a preset
  * applies it and closes — there is nothing to confirm about "last 7 days" —
- * while `Custom` reveals the two fields and waits for Apply.
+ * while `Custom` reveals the two date fields and waits for Apply.
  *
- * The panel has a fixed height and is lifted above the keyboard, so typing a
- * date never shrinks the sheet or hides the field behind the keypad.
+ * The two custom dates are **native calendars**, not text fields. See
+ * `DateField` for why: the system picker cannot produce an invalid date, and an
+ * inverted range is prevented by handing each field the other's bound rather
+ * than validated afterwards.
+ *
+ * Nothing here can raise a keyboard any more, so the panel is a plain fixed
+ * height with a scrollable body — the lift-above-the-keyboard machinery it used
+ * to need lives on in the language picker, which still has a search field.
  */
 
 import { useState } from "react";
 import { Modal, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { ThemedText } from "@/components/themed-text";
+import { DateField } from "@/components/ui/date-field";
 import { GlassChip, GlassSurface } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
-import { TextField } from "@/components/ui/text-field";
-import { useSheetKeyboard } from "@/hooks/use-sheet-keyboard";
 import { useTheme } from "@/hooks/use-theme";
 import {
   ANY_DATE,
   DATE_PRESETS,
-  formatDateInput,
-  formatDateTyping,
+  endOfDay,
   presetForRange,
   presetRange,
-  rangeFromInputs,
+  startOfDay,
   type DatePreset,
   type DateRange,
 } from "@/lib/dateRange";
@@ -39,36 +44,64 @@ import { spacing } from "@/theme/tokens";
 
 const SHEET_HEIGHT_RATIO = 0.62;
 
+/** What the range is being applied to. Changes the sheet's own wording only. */
+export type DateRangeSubject = "listens" | "notes";
+
 export type DateRangeSheetProps = {
   range: DateRange;
   onApply: (range: DateRange) => void;
   onClose: () => void;
+  subject?: DateRangeSubject;
 };
 
-export function DateRangeSheet({ range, onApply, onClose }: DateRangeSheetProps) {
+const COPY: Record<DateRangeSubject, { title: string; presetNote: string }> = {
+  listens: {
+    title: "When did you listen?",
+    presetNote: "Only listens that started inside the range are shown.",
+  },
+  notes: {
+    title: "When did you write it?",
+    presetNote: "Only notes written inside the range are shown.",
+  },
+};
+
+export function DateRangeSheet({
+  range,
+  onApply,
+  onClose,
+  subject = "listens",
+}: DateRangeSheetProps) {
   const theme = useTheme();
   const motionEnabled = useMotionEnabled();
   const { height: windowHeight } = useWindowDimensions();
-  const { insets, overlap, viewportHeight, onLayout } = useSheetKeyboard();
+  const insets = useSafeAreaInsets();
+  const copy = COPY[subject];
   const [preset, setPreset] = useState<DatePreset>(() => presetForRange(range));
-  const [fromText, setFromText] = useState(
-    range.from === null ? "" : formatDateInput(range.from),
+  // Both ends are held as the *start* of their day. A range's `to` is the last
+  // millisecond of its day, so it is normalised on the way in and widened again
+  // on the way out — a field showing "2026-03-16" must not be read back as
+  // 00:00:00 of that day, which would drop everything written after midnight.
+  const [from, setFrom] = useState<number | null>(
+    range.from === null ? null : startOfDay(range.from),
   );
-  const [toText, setToText] = useState(range.to === null ? "" : formatDateInput(range.to));
-  const [error, setError] = useState<string | null>(null);
+  const [to, setTo] = useState<number | null>(
+    range.to === null ? null : startOfDay(range.to),
+  );
+  // Read once, at mount: a calendar that offered tomorrow would be offering a
+  // day no listen and no note can be on. `Date.now()` cannot be called in the
+  // render body — the compiler is right that it is impure — so it is captured
+  // here instead, which is also the only moment the sheet needs it.
+  const [today] = useState(() => Date.now());
 
   const height = sheetHeightFor({
-    // Before the root is measured there is no viewport yet; the window's own
-    // height is the only honest stand-in for the first frame.
-    windowHeight: viewportHeight || windowHeight,
-    keyboardHeight: overlap,
+    windowHeight,
+    keyboardHeight: 0,
     topInset: insets.top,
     ratio: SHEET_HEIGHT_RATIO,
   });
 
   const choose = (next: DatePreset) => {
     setPreset(next);
-    setError(null);
     if (next === "custom") {
       return;
     }
@@ -77,12 +110,7 @@ export function DateRangeSheet({ range, onApply, onClose }: DateRangeSheetProps)
   };
 
   const apply = () => {
-    const parsed = rangeFromInputs(fromText, toText);
-    if (parsed.error) {
-      setError(parsed.error);
-      return;
-    }
-    onApply(parsed.range);
+    onApply({ from, to: to === null ? null : endOfDay(to) });
     onClose();
   };
 
@@ -97,9 +125,8 @@ export function DateRangeSheet({ range, onApply, onClose }: DateRangeSheetProps)
       <View
         style={[
           styles.root,
-          { paddingBottom: sheetLiftFor({ keyboardHeight: overlap, bottomInset: insets.bottom }) },
-        ]}
-        onLayout={onLayout}>
+          { paddingBottom: sheetLiftFor({ keyboardHeight: 0, bottomInset: insets.bottom }) },
+        ]}>
         <ElasticPressable
           accessibilityRole="button"
           accessibilityLabel="Close date filter"
@@ -121,7 +148,7 @@ export function DateRangeSheet({ range, onApply, onClose }: DateRangeSheetProps)
               <ThemedText type="overline" themeColor="textTertiary">
                 DATE RANGE
               </ThemedText>
-              <ThemedText type="bodyStrong">When did you listen?</ThemedText>
+              <ThemedText type="bodyStrong">{copy.title}</ThemedText>
             </View>
             {preset !== "any" ? (
               <ElasticPressable
@@ -146,9 +173,9 @@ export function DateRangeSheet({ range, onApply, onClose }: DateRangeSheetProps)
           </View>
 
           <ScrollView
-            // The panel keeps its height and the body scrolls inside it: with
-            // the keyboard up the custom block is taller than what is left, and
-            // a clipped Apply button is worse than a scroll.
+            // The panel keeps its height and the body scrolls inside it: iOS
+            // draws its calendar inline under the field, and a clipped Apply
+            // button is worse than a scroll.
             style={styles.body}
             contentContainerStyle={styles.bodyContent}
             keyboardShouldPersistTaps="handled"
@@ -168,35 +195,22 @@ export function DateRangeSheet({ range, onApply, onClose }: DateRangeSheetProps)
             {preset === "custom" ? (
               <View style={styles.custom}>
                 <View style={styles.fields}>
-                  <TextField
+                  {/* Each field is bounded by the other, so an inverted range
+                      cannot be built in the first place. */}
+                  <DateField
                     label="From"
-                    value={fromText}
-                    onChangeText={(next) => {
-                      setError(null);
-                      setFromText((current) => formatDateTyping(next, current));
-                    }}
-                    placeholder="2026-03-09"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    importantForAutofill="no"
+                    value={from}
+                    onChange={setFrom}
+                    maximumDate={to ?? today}
                     containerStyle={styles.field}
-                    error={error}
                   />
-                  <TextField
+                  <DateField
                     label="To"
-                    value={toText}
-                    onChangeText={(next) => {
-                      setError(null);
-                      setToText((current) => formatDateTyping(next, current));
-                    }}
-                    placeholder="2026-03-16"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    importantForAutofill="no"
+                    value={to}
+                    onChange={setTo}
+                    minimumDate={from}
+                    maximumDate={today}
                     containerStyle={styles.field}
-                    returnKeyType="done"
-                    submitBehavior="blurAndSubmit"
-                    onSubmitEditing={apply}
                   />
                 </View>
                 <ThemedText type="caption" themeColor="textTertiary">
@@ -206,7 +220,7 @@ export function DateRangeSheet({ range, onApply, onClose }: DateRangeSheetProps)
               </View>
             ) : (
               <ThemedText type="caption" themeColor="textTertiary" style={styles.note}>
-                Only listens that started inside the range are shown.
+                {copy.presetNote}
               </ThemedText>
             )}
           </ScrollView>
