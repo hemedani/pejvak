@@ -40,6 +40,31 @@
  * drawn by an inner view. An absolutely-positioned percentage width resolves
  * against the parent's padding box while the segments lay out in its content box,
  * so a horizontally-padded track would put the two on different grids.
+ *
+ * ## Following a swipe
+ *
+ * When a `position` is handed in — a `SwipePager`'s continuous page position —
+ * the thumb is driven by *that* instead of by its own spring. The thumb then
+ * travels with the finger, in the same frame and at the same rate as the page
+ * beneath it, and the release is already animating because the pager is. That is
+ * the difference between a control that reports a change and one that performs
+ * it: with a spring of its own the thumb would arrive on its own curve, a beat
+ * behind the content it belongs to.
+ *
+ * The two line up because both are counted in the same unit. A page position of
+ * `1.4` is "40% of the way from the second page to the third", and the thumb is
+ * one segment wide per page — so `1.4 × 100` percent of its own width is exactly
+ * 40% of the way from the second segment to the third.
+ *
+ * ## Collapsing the labels
+ *
+ * Five labelled segments do not fit across a phone: at 14pt "Playlists" alone is
+ * most of a fifth of the screen, and a label that has to truncate is worse than
+ * no label. `collapse` draws the *selected* segment's name and its neighbours'
+ * glyphs, which fits five comfortably and still answers "where am I?" — the thumb
+ * gives the position, the name confirms it. Nothing reflows while it changes:
+ * every segment is one fifth of the track either way, so a label appearing does
+ * not push its neighbours aside.
  */
 
 import { useEffect } from "react";
@@ -48,6 +73,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
+  type SharedValue,
 } from "react-native-reanimated";
 
 import { ThemedText } from "@/components/themed-text";
@@ -67,20 +93,44 @@ export type SegmentOption<T extends string | number> = {
   value: T;
   label: string;
   icon?: IconName;
+  /**
+   * A count drawn in the glyph's place — a search's tally for this view.
+   *
+   * `0` is a real answer and is drawn: it is the one that sends the listener to
+   * another segment instead of leaving them tapping through empty lists.
+   */
+  badge?: number | null;
 };
 
 export type SegmentedControlProps<T extends string | number> = {
   options: readonly SegmentOption<T>[];
   value: T;
   onChange: (value: T) => void;
+  /**
+   * A pager's continuous position, in pages. When given, the thumb follows it —
+   * including mid-drag — instead of springing to `value`.
+   */
+  position?: SharedValue<number>;
+  /**
+   * Draw only the selected segment's label. The rest show their glyph (or their
+   * badge), which is what lets five segments share one line.
+   */
+  collapse?: boolean;
   accessibilityLabel?: string;
   style?: StyleProp<ViewStyle>;
 };
+
+/** Caps a badge at three characters; past 99 the exact number is not the point. */
+function formatBadge(count: number): string {
+  return count > 99 ? "99+" : String(count);
+}
 
 export function SegmentedControl<T extends string | number>({
   options,
   value,
   onChange,
+  position,
+  collapse = false,
   accessibilityLabel,
   style,
 }: SegmentedControlProps<T>) {
@@ -105,16 +155,25 @@ export function SegmentedControl<T extends string | number>({
    * `selected` rather than landing after a layout pass.
    */
   const target = thumbTargetPercent(selected, options.length);
-  const position = useSharedValue(target);
+  const own = useSharedValue(target);
+  const driven = position !== undefined;
 
   useEffect(() => {
-    position.value = motionEnabled ? withSpring(target, spring.snappy) : target;
-  }, [motionEnabled, position, target]);
+    // A pager owns the motion when one is supplied; running this spring as well
+    // would be a second value deciding where the same thumb is.
+    if (driven) {
+      return;
+    }
+    own.value = motionEnabled ? withSpring(target, spring.snappy) : target;
+  }, [driven, motionEnabled, own, target]);
 
   const thumbStyle = useAnimatedStyle(() => ({
     width: `${100 / options.length}%`,
-    // One shared value, one string. Nothing in here is a function call.
-    transform: [{ translateX: `${position.value}%` }],
+    // One number, in pages. The thumb is one segment wide, so pages and
+    // thumb-widths are the same unit — and nothing in here is a function call.
+    transform: [
+      { translateX: `${(position ? position.value : own.value) * 100}%` },
+    ],
   }));
 
   return (
@@ -147,12 +206,20 @@ export function SegmentedControl<T extends string | number>({
 
       {options.map((option) => {
         const active = option.value === value;
+        const badge = option.badge ?? null;
+        const showLabel = collapse ? active : true;
+        const showGlyph = collapse ? !active : true;
+
         return (
           <ElasticPressable
             key={String(option.value)}
             accessibilityRole="radio"
             accessibilityState={{ selected: active }}
-            accessibilityLabel={option.label}
+            accessibilityLabel={
+              badge === null
+                ? option.label
+                : `${option.label}, ${badge} result${badge === 1 ? "" : "s"}`
+            }
             scaleTo={0.94}
             overshootTo={1.02}
             haptic="select"
@@ -161,20 +228,37 @@ export function SegmentedControl<T extends string | number>({
             }}
             style={styles.segment}
           >
-            {option.icon ? (
+            {showGlyph && badge !== null ? (
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: active ? theme.accent : theme.surface },
+                ]}
+              >
+                <ThemedText
+                  type="caption"
+                  numberOfLines={1}
+                  style={{ color: active ? theme.onAccent : theme.textSecondary }}
+                >
+                  {formatBadge(badge)}
+                </ThemedText>
+              </View>
+            ) : showGlyph && option.icon ? (
               <Icon
                 name={option.icon}
                 size={15}
                 color={active ? theme.accent : theme.textTertiary}
               />
             ) : null}
-            <ThemedText
-              type="label"
-              numberOfLines={1}
-              style={{ color: active ? theme.text : theme.textTertiary }}
-            >
-              {option.label}
-            </ThemedText>
+            {showLabel ? (
+              <ThemedText
+                type="label"
+                numberOfLines={1}
+                style={{ color: active ? theme.text : theme.textTertiary }}
+              >
+                {option.label}
+              </ThemedText>
+            ) : null}
           </ElasticPressable>
         );
       })}
@@ -211,5 +295,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.xs,
     minHeight: cardTokens.segmentHeight,
+  },
+  badge: {
+    // Fixed width, like the Library's own count: a tally that changed width
+    // would reflow the strip on every keystroke of a search.
+    minWidth: 22,
+    paddingHorizontal: spacing.xxs,
+    paddingVertical: 1,
+    borderRadius: radii.pill,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

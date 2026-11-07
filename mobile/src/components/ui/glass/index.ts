@@ -2,8 +2,6 @@ export { GlassBlurTarget, useBlurTarget } from "./BlurTarget";
 export type { GlassBlurTargetProps } from "./BlurTarget";
 export { GlassChip } from "./GlassChip";
 export type { GlassChipProps } from "./GlassChip";
-export { ExpandingChip } from "./ExpandingChip";
-export type { ExpandingChipProps } from "./ExpandingChip";
 export { GlassProgress } from "./GlassProgress";
 export type { GlassProgressProps } from "./GlassProgress";
 export { GlassSheet } from "./GlassSheet";

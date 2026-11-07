@@ -1,6 +1,7 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { FlatList, RefreshControl, Share, StyleSheet, View } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 
 import { ContextPlayCard } from "@/components/context-play-card";
 import { DateRangeSheet } from "@/components/history/date-range-sheet";
@@ -168,6 +169,15 @@ export default function HistoryScreen() {
   const [view, setView] = useState<HistoryView>("sessions");
 
   const panelIndex = panelIndexFor(panel);
+
+  /**
+   * The strip's position, shared with the tab control above it.
+   *
+   * The same value the pager writes and the control reads, so the thumb is drawn
+   * from the finger's own travel rather than from a spring of its own that would
+   * arrive after the page had already landed.
+   */
+  const panelPosition = useSharedValue(panelIndex);
 
   /**
    * A page chosen by swiping.
@@ -436,28 +446,27 @@ export default function HistoryScreen() {
             ) : undefined
           }
         />
-        <View style={styles.panelToggle}>
-          {HISTORY_PANELS.map((option) => (
-            <GlassChip
-              key={option.value}
-              label={option.label}
-              icon={option.icon}
-              selected={panel === option.value}
-              onPress={() => setPanel(option.value)}
-              style={styles.panelChip}
-            />
-          ))}
-        </View>
+        {/* The same control the Library and Discover use, and the same
+            relationship to the strip below it: the thumb travels with the drag,
+            so a swipe and a tap are the same movement seen from two places. */}
+        <SegmentedControl
+          options={HISTORY_PANELS}
+          value={panel}
+          onChange={setPanel}
+          position={panelPosition}
+          accessibilityLabel="History views"
+        />
       </View>
 
       {/* Two readings of one record, swiped between like the Library's
-          views. The header and the chips stay put: navigation that slid
-          away with the page would be a second tab strip crossing the
+          views. The header and the tab control stay put: navigation that
+          slid away with the page would be a second tab strip crossing the
           screen on every swipe. */}
       <SwipePager
         index={panelIndex}
         count={HISTORY_PANELS.length}
         onIndexChange={selectPanelIndex}
+        position={panelPosition}
         renderPage={(pageIndex) =>
           pageIndex === PANEL_STATS ? (
             <StatsPanel />
@@ -624,13 +633,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.sm,
-  },
-  panelToggle: {
-    flexDirection: "row",
-    gap: spacing.xs,
-  },
-  panelChip: {
-    flexGrow: 1,
   },
   list: {
     gap: spacing.lg,

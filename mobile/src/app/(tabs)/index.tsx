@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 
 import { LibraryFolderCard } from "@/components/library/folder-card";
 import { LibraryPlaylistCard } from "@/components/library/playlist-card";
@@ -26,7 +27,7 @@ import { SourceRow } from "@/components/online/source-row";
 import { SmartPlaylistRow } from "@/components/smart-playlist-row";
 import { ThemedText } from "@/components/themed-text";
 import { Card } from "@/components/ui/card";
-import { ExpandingChip } from "@/components/ui/glass";
+import { SegmentedControl } from "@/components/ui/card/segmented-control";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { EmptyState, InlineNotice, ListGroup } from "@/components/ui/row";
@@ -328,12 +329,21 @@ export default function LibraryScreen() {
   );
   const recentHits = useMemo(() => searchIndex(recentIndex, terms), [recentIndex, terms]);
 
-  const counts: Record<SearchableLibraryView, number> = {
-    tracks: trackHits.length,
-    folders: folderHits.length,
-    playlists: playlistHits.length,
-    recent: recentHits.length,
-  };
+  /**
+   * Memoised rather than built inline: the tab control's options are derived
+   * from these, and a fresh object per render would make that derivation new on
+   * every keystroke — which is a new `options` array for a control that renders
+   * five segments.
+   */
+  const counts = useMemo<Record<SearchableLibraryView, number>>(
+    () => ({
+      tracks: trackHits.length,
+      folders: folderHits.length,
+      playlists: playlistHits.length,
+      recent: recentHits.length,
+    }),
+    [folderHits, playlistHits, recentHits, trackHits],
+  );
   const totalMatches =
     counts.tracks + counts.folders + counts.playlists + counts.recent;
   const hint = searching ? describeElsewhere(counts, view) : null;
@@ -651,6 +661,34 @@ export default function LibraryScreen() {
     [goToView, tabs],
   );
 
+  /**
+   * The strip's own position, shared with the tab control above it.
+   *
+   * One value rather than two: the thumb and the page are the same fact drawn
+   * twice, and a control with a spring of its own would slide to the new segment
+   * while the page it describes was still travelling — visibly out of step.
+   */
+  const pagePosition = useSharedValue(viewIndex);
+
+  /**
+   * The tabs, in the shape the segmented control wants them.
+   *
+   * Rebuilt only when one of its inputs changes: a new array on every render
+   * would be a new `options` prop on a control that memoises nothing, and during
+   * a search that is a new object per keystroke.
+   */
+  const segments = useMemo(
+    () =>
+      tabs.map((tab) => ({
+        value: tab.value,
+        label: tab.label,
+        icon: tab.icon,
+        badge:
+          searching && tab.value !== "language" ? counts[tab.value] : null,
+      })),
+    [counts, searching, tabs],
+  );
+
   const createPlaylist = useCallback(async () => {
     setCreatingPlaylist(true);
     try {
@@ -761,32 +799,32 @@ export default function LibraryScreen() {
       </Reveal>
 
       <Reveal index={3}>
-        {/* The strip never wraps, because it can no longer overflow: an
-            unselected chip is a 44pt circle around its glyph, and only the
-            selected one opens to show its name. Five labelled chips do not fit
-            across a small phone — the fifth landed on a second row, which reads
-            as two strips rather than one — while five glyphs with one name do.
+        {/* The same control the Discover and History screens use: one enclosed
+            track, one thumb, exactly one view selected. It replaces a row of
+            free-floating chips, which had to shrink to bare glyphs to fit five
+            of themselves on one line and then re-widened as the selection
+            moved — a strip whose *shape* changed on every tap.
 
-            While a query is active each chip carries its match count *instead
-            of* its glyph — the count is information and the glyph is
+            `collapse` is what buys the room here rather than a second layout:
+            five segments of 14pt labels do not fit a phone, so the selected one
+            shows its name and the others their glyph. Every segment stays one
+            fifth of the track either way, so nothing reflows when the selection
+            moves — the thumb is what moves.
+
+            While a query is active each segment carries its match count in the
+            glyph's place — the count is information and the glyph is
             decoration, and they occupy the same slot. "Online" has no count: its
             tab is a short directory of providers, not a list of library items,
             and counting them would make "N matches" in the subtitle a total of
             two different things. */}
-        <View style={styles.viewToggle}>
-          {tabs.map((tab) => (
-            <ExpandingChip
-              key={tab.value}
-              label={tab.label}
-              icon={tab.icon}
-              selected={view === tab.value}
-              count={
-                searching && tab.value !== "language" ? counts[tab.value] : null
-              }
-              onPress={() => goToView(tab.value)}
-            />
-          ))}
-        </View>
+        <SegmentedControl
+          options={segments}
+          value={view}
+          onChange={goToView}
+          position={pagePosition}
+          collapse
+          accessibilityLabel="Library views"
+        />
       </Reveal>
     </View>
   );
@@ -1309,18 +1347,21 @@ export default function LibraryScreen() {
     return tab ? pageFor(tab.value) : null;
   };
 
+  /**
+   * The gesture covers the pages, not the chrome: a drag that started on the tab
+   * control would be a drag on a control. The control is a fixed-width track
+   * rather than a horizontal scroller for the same reason — a second horizontal
+   * gesture a few points away is a coin toss the listener would feel as
+   * unreliability.
+   */
   return (
     <Screen wash={wash}>
       {chrome}
-      {/* The gesture covers the pages, not the chrome: a drag that started on
-          the chip strip would be a drag on a control. The strip is a plain
-          wrapping row rather than a horizontal scroller for the same reason —
-          a second horizontal gesture a few points away is a coin toss the
-          listener would feel as unreliability. */}
       <SwipePager
         index={viewIndex}
         count={tabs.length}
         onIndexChange={goToViewIndex}
+        position={pagePosition}
         renderPage={renderPage}
       />
       {languagePicker}
@@ -1352,21 +1393,6 @@ const styles = StyleSheet.create({
   },
   headerActions: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  /**
-   * One line, always.
-   *
-   * The chips no longer grow to share it: an unselected chip is a fixed circle
-   * and the selected one is as wide as its own name, so the strip's width is
-   * decided by which view is open rather than by how much room is left. `wrap`
-   * stays as the safety valve for a text size large enough to overrun a 320pt
-   * phone, but nothing in the ordinary case reaches it.
-   */
-  viewToggle: {
-    flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
     gap: spacing.sm,
   },

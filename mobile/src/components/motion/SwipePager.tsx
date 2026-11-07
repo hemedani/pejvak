@@ -80,6 +80,17 @@ export type SwipePagerProps = {
   onIndexChange: (next: number) => void;
   /** Builds one page's content. Called only for pages inside the window. */
   renderPage: (index: number) => ReactNode;
+  /**
+   * A shared value to write the strip's continuous position into, so a control
+   * above it can travel with the drag.
+   *
+   * Supplied rather than exposed through a callback because the consumer needs
+   * the number *on the UI thread*: the thumb of a segmented control is drawn in
+   * the same frame as the page, and a value that had to round-trip through React
+   * state would arrive a frame later — which reads as a thumb that lags the
+   * content it is describing.
+   */
+  position?: SharedValue<number>;
   style?: StyleProp<ViewStyle>;
 };
 
@@ -88,13 +99,20 @@ export function SwipePager({
   count,
   onIndexChange,
   renderPage,
+  position: sharedPosition,
   style,
 }: SwipePagerProps) {
   const motionEnabled = useMotionEnabled();
   const [width, setWidth] = useState(0);
 
-  /** Continuous position, in pages. See the note at the top. */
-  const position = useSharedValue(index);
+  /**
+   * Continuous position, in pages. See the note at the top.
+   *
+   * The local value is always created — hooks cannot be conditional — but it is
+   * only used when the caller did not supply one.
+   */
+  const local = useSharedValue(index);
+  const position = sharedPosition ?? local;
   /** Where the strip was when the finger landed. */
   const origin = useSharedValue(index);
   /**
