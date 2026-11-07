@@ -1,9 +1,15 @@
 /**
- * One listen, opened.
+ * One listen — or one note — opened.
  *
  * The History card says what was heard and for how long; this says *how much of
  * it, where, and when* — and gives the listener the two things a row cannot: a
  * way back into that exact second, and a way to remove the entry.
+ *
+ * A note is the third kind of thing this sheet opens, and it is here rather than
+ * in a sheet of its own because the questions are the same shape: what is this,
+ * where in the file is it, what else is around it, and how do I get back to it.
+ * The note branch swaps the bar for one that marks positions instead of showing
+ * how much was heard, and puts the note's own words at the top.
  *
  * Four decisions worth knowing:
  *
@@ -34,6 +40,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { scheduleOnRN } from "react-native-worklets";
 
 import { useAddToPlaylist } from "@/components/add-to-playlist";
+import { NoteTimeline } from "@/components/notes/note-timeline";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
 import { PaletteTile } from "@/components/motion/PaletteTile";
@@ -42,6 +49,7 @@ import { ThemedText } from "@/components/themed-text";
 import { GlassChip, GlassSurface } from "@/components/ui/glass";
 import { PrimaryButton } from "@/components/ui/primary-button";
 import { useResumeHistory, type HistoryResumeTarget } from "@/hooks/use-resume-history";
+import { useTrackDetail } from "@/hooks/use-track-detail";
 import { useTheme } from "@/hooks/use-theme";
 import {
   describeSpeed,
@@ -56,9 +64,15 @@ import {
   describeStretchTracks,
 } from "@/lib/listeningStretch";
 import { timelineForSession, timelineForStretch } from "@/lib/listeningTimeline";
-import { paletteFor } from "@/lib/palette";
-import { confirmRemoveSession, confirmRemoveStretch } from "@/lib/sessionActions";
+import { describeNoteFacts, noteMarkers } from "@/lib/noteDetail";
+import { paletteFor, withAlpha } from "@/lib/palette";
+import {
+  confirmRemoveNote,
+  confirmRemoveSession,
+  confirmRemoveStretch,
+} from "@/lib/sessionActions";
 import { formatClock } from "@/lib/time";
+import { AnnotationService } from "@/services/AnnotationService";
 import { LocalDBService } from "@/services/LocalDBService";
 import {
   useSessionDetailStore,
@@ -86,12 +100,22 @@ const OUTCOME_LABELS: Record<ReturnType<typeof describeStretchOutcome>, string> 
 /**
  * Everything the sheet draws, in one object.
  *
- * A pure function of the target rather than a branch inside the render: the two
+ * A pure function of the target rather than a branch inside the render: the
  * shapes a listen can arrive in (a whole stretch, a single session) differ only
  * in which rows they are built from, and spreading that difference through the
- * JSX is how the two branches end up disagreeing about a fact's wording.
+ * JSX is how the two branches end up disagreeing about a fact's wording. A note
+ * is the third shape, and it reuses the same slots: it has a position to resume
+ * at, facts to state, and something to remove.
+ *
+ * `durationSec` is passed in rather than looked up here because only the note
+ * branch uses it, and it arrives asynchronously — the sheet draws before the
+ * track's row has been read. `null` means "not known yet", which the note's facts
+ * render as the position alone rather than as a position of an unknown whole.
  */
-function describeTarget(target: SessionDetailTarget): {
+function describeTarget(
+  target: SessionDetailTarget,
+  durationSec: number | null,
+): {
   title: string;
   artworkUrl: string | null;
   paletteKey: string;
@@ -104,7 +128,29 @@ function describeTarget(target: SessionDetailTarget): {
   replay: boolean;
   sessionIds: string[];
   removal: string;
+  /** A note's own colour, when it has one; the accent stands in otherwise. */
+  tint: string | null;
 } {
+  if (target.kind === "note") {
+    const { annotation, track } = target.note;
+    return {
+      title: track.title,
+      artworkUrl: track.artworkUrl,
+      paletteKey: track.contentHash,
+      overline: "NOTE",
+      // The clock, because it is what the Resume button will seek to and the
+      // one number the header can carry without repeating the facts below.
+      subtitle: `at ${formatClock(annotation.positionSec)}`,
+      resume: { trackId: track.id, positionSec: annotation.positionSec },
+      trackIds: [track.id],
+      replay: false,
+      sessionIds: [],
+      removal: `the note "${annotation.text}"`,
+      tint: annotation.color,
+      facts: describeNoteFacts(target.note, durationSec),
+    };
+  }
+
   if (target.kind === "session") {
     const { session, track } = target.item;
     const resume = { trackId: track.id, positionSec: resumeTargetSec(target.item) };
@@ -119,6 +165,7 @@ function describeTarget(target: SessionDetailTarget): {
       replay: session.completed,
       sessionIds: [session.id],
       removal: `the session for "${track.title}"`,
+      tint: null,
       facts: [
         { label: "Date", value: new Date(session.startedAt).toLocaleDateString() },
         // The span inside the file — the fact a song most wants, and the one the
@@ -171,6 +218,7 @@ function describeTarget(target: SessionDetailTarget): {
     replay: stretch.completed,
     sessionIds: entry.items.map((item) => item.session.id),
     removal: `the listen for "${entry.start.track.title}"`,
+    tint: null,
   };
 }
 
@@ -221,14 +269,50 @@ function SessionDetailSheetContent({ request }: { request: SessionDetailRequest 
   const progress = useSharedValue(0);
   const [sheetHeight, setSheetHeight] = useState(0);
 
-  const detail = useMemo(() => describeTarget(target), [target]);
+  /**
+   * The track a note sits in, read only when a note is what is open.
+   *
+   * Two things the note branch cannot know on its own: the track's *length*,
+   * which is what turns a position into a place on a bar, and the other notes on
+   * the same track, which are what make the bar worth drawing. Reading it here
+   * rather than in `describeTarget` keeps that function pure and lets the sheet
+   * open on the note immediately — the bar appears a frame later, when the row
+   * arrives, instead of the whole sheet waiting for it.
+   */
+  const noteTrackId = target.kind === "note" ? target.note.track.id : null;
+  const { data: noteTrack } = useTrackDetail(noteTrackId);
+
+  const durationSec = noteTrack?.track.durationSec ?? null;
+
+  const detail = useMemo(
+    () => describeTarget(target, durationSec),
+    [durationSec, target],
+  );
   const ramp = paletteFor(detail.paletteKey);
-  const timeline = useMemo(
+  /** The note's own colour, or the accent when it was written without one. */
+  const noteTint = detail.tint ?? theme.accent;
+
+  const timeline = useMemo(() => {
+    if (target.kind === "session") {
+      return timelineForSession(target.item, detail.resume);
+    }
+    if (target.kind === "stretch") {
+      return timelineForStretch(target.entry);
+    }
+    return null;
+  }, [detail.resume, target]);
+
+  /** The note's own ticks, once its track has been read. */
+  const markers = useMemo(
     () =>
-      target.kind === "session"
-        ? timelineForSession(target.item, detail.resume)
-        : timelineForStretch(target.entry),
-    [detail.resume, target],
+      target.kind === "note" && noteTrack
+        ? noteMarkers(
+            noteTrack.track.durationSec,
+            noteTrack.annotations,
+            target.note.annotation.id,
+          )
+        : [],
+    [noteTrack, target],
   );
 
   /**
@@ -259,9 +343,11 @@ function SessionDetailSheetContent({ request }: { request: SessionDetailRequest 
    */
   const onResume = useCallback(() => {
     const target_: HistoryResumeTarget =
-      target.kind === "session"
-        ? { kind: "session", item: target.item }
-        : { kind: "stretch", entry: target.entry };
+      target.kind === "note"
+        ? { kind: "note", note: target.note }
+        : target.kind === "session"
+          ? { kind: "session", item: target.item }
+          : { kind: "stretch", entry: target.entry };
     dismiss();
     void resumeHistory(target_);
   }, [dismiss, resumeHistory, target]);
@@ -276,16 +362,25 @@ function SessionDetailSheetContent({ request }: { request: SessionDetailRequest 
   }, [detail, openPlaylistPicker, ramp]);
 
   const remove = useCallback(async () => {
-    await LocalDBService.softDeleteSessions(detail.sessionIds);
+    if (target.kind === "note") {
+      // A note is deleted, not tombstoned-and-hidden like a listen: it is the
+      // listener's own writing, and keeping a copy on the server would be the
+      // app refusing to forget something they asked it to.
+      await AnnotationService.deleteAnnotation(target.note.annotation);
+    } else {
+      await LocalDBService.softDeleteSessions(detail.sessionIds);
+    }
     onChanged?.();
     dismiss();
-  }, [detail.sessionIds, dismiss, onChanged]);
+  }, [detail.sessionIds, dismiss, onChanged, target]);
 
   const onDelete = useCallback(() => {
     // The confirmation belongs to the shared module: it already knows that a
     // stretch can stand for hours of listening across several files, and that
     // the removal is local-only.
-    if (target.kind === "session") {
+    if (target.kind === "note") {
+      confirmRemoveNote(target.note, () => void remove());
+    } else if (target.kind === "session") {
       confirmRemoveSession(target.item, () => void remove());
     } else {
       confirmRemoveStretch(target.entry, () => void remove());
@@ -324,6 +419,7 @@ function SessionDetailSheetContent({ request }: { request: SessionDetailRequest 
 
   const bodyMaxHeight = Math.round(windowHeight * BODY_HEIGHT_RATIO);
   const resumeLabel = `${detail.replay ? "Replay from" : "Resume at"} ${formatClock(detail.resume.positionSec)}`;
+  const closeLabel = target.kind === "note" ? "Close note" : "Close session details";
 
   return (
     <Modal
@@ -337,7 +433,7 @@ function SessionDetailSheetContent({ request }: { request: SessionDetailRequest 
         <Animated.View style={[StyleSheet.absoluteFill, scrimStyle]}>
           <ElasticPressable
             accessibilityRole="button"
-            accessibilityLabel="Close session details"
+            accessibilityLabel={closeLabel}
             haptic="none"
             scaleTo={1}
             overshootTo={1}
@@ -384,7 +480,7 @@ function SessionDetailSheetContent({ request }: { request: SessionDetailRequest 
                   </View>
                   <BouncyIconButton
                     name="close"
-                    accessibilityLabel="Close session details"
+                    accessibilityLabel={closeLabel}
                     size={36}
                     iconSize={18}
                     tone="ghost"
@@ -400,7 +496,32 @@ function SessionDetailSheetContent({ request }: { request: SessionDetailRequest 
               style={{ maxHeight: bodyMaxHeight }}
               contentContainerStyle={styles.body}
               showsVerticalScrollIndicator={false}>
-              <ListeningTimelineBar timeline={timeline} tint={ramp[1]} />
+              {target.kind === "note" ? (
+                <>
+                  {/* The note itself, first and in its own colour: everything
+                      below this block is *about* it, and a sheet that led with
+                      the metadata would bury the one thing the listener tapped. */}
+                  <View
+                    style={[
+                      styles.quote,
+                      {
+                        backgroundColor: withAlpha(noteTint, 0.1),
+                        borderLeftColor: noteTint,
+                      },
+                    ]}>
+                    <ThemedText type="body">{target.note.annotation.text}</ThemedText>
+                  </View>
+                  {noteTrack && markers.length > 0 ? (
+                    <NoteTimeline
+                      markers={markers}
+                      durationSec={noteTrack.track.durationSec}
+                      tint={noteTint}
+                    />
+                  ) : null}
+                </>
+              ) : timeline ? (
+                <ListeningTimelineBar timeline={timeline} tint={ramp[1]} />
+              ) : null}
 
               <View style={styles.facts}>
                 {detail.facts.map((fact, index) => (
@@ -432,9 +553,16 @@ function SessionDetailSheetContent({ request }: { request: SessionDetailRequest 
                   onPress={onAddToPlaylist}
                 />
                 <GlassChip
-                  label="Remove from history"
+                  // A note is deleted; a listen is hidden. Saying "remove from
+                  // history" over a note would promise a tombstone the delete
+                  // does not leave.
+                  label={target.kind === "note" ? "Delete note" : "Remove from history"}
                   icon="trash"
-                  accessibilityLabel={`Remove ${detail.removal} from history`}
+                  accessibilityLabel={
+                    target.kind === "note"
+                      ? `Delete ${detail.removal}`
+                      : `Remove ${detail.removal} from history`
+                  }
                   onPress={onDelete}
                   style={{ borderColor: theme.danger }}
                 />
@@ -489,6 +617,14 @@ const styles = StyleSheet.create({
   body: {
     padding: spacing.xl,
     gap: spacing.lg,
+  },
+  quote: {
+    padding: spacing.md,
+    paddingLeft: spacing.lg,
+    borderRadius: radii.md,
+    // The bar in the note's own colour, so the quote is tied to the row it came
+    // from and to the marker it puts on the bar below.
+    borderLeftWidth: 3,
   },
   facts: {
     borderRadius: radii.md,

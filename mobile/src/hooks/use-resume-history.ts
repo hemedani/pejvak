@@ -25,15 +25,22 @@ import { useRouter } from "expo-router";
 import { useCallback } from "react";
 import { Alert } from "react-native";
 
-import type { LocalContextPlay } from "@/lib/db/types";
+import type { AnnotationWithTrack, LocalContextPlay } from "@/lib/db/types";
 import { stretchResumeTarget, type HistoryItem, type HistoryStretch } from "@/lib/history";
+import { noteResumeParams } from "@/lib/noteDetail";
 import { sessionResumeParams, stretchResumeParams } from "@/lib/sessionActions";
 import { ContextService } from "@/services/ContextService";
 
 export type HistoryResumeTarget =
   | { kind: "stretch"; entry: HistoryStretch }
   | { kind: "session"; item: HistoryItem }
-  | { kind: "run"; run: LocalContextPlay };
+  | { kind: "run"; run: LocalContextPlay }
+  /**
+   * A note is a position in one track, so picking it up is the plainest case
+   * there is: open that track at that second. It lives here so the note sheet's
+   * Resume button and the row's tap cannot land in different places.
+   */
+  | { kind: "note"; note: AnnotationWithTrack };
 
 export function useResumeHistory(): (target: HistoryResumeTarget) => Promise<void> {
   const router = useRouter();
@@ -50,6 +57,11 @@ export function useResumeHistory(): (target: HistoryResumeTarget) => Promise<voi
           return;
         }
         router.push({ pathname: "/player", params: { trackId } });
+        return;
+      }
+
+      if (target.kind === "note") {
+        router.push({ pathname: "/player", params: noteResumeParams(target.note) });
         return;
       }
 

@@ -11,7 +11,7 @@
 
 import { Alert } from "react-native";
 
-import type { LocalContextPlay } from "@/lib/db/types";
+import type { AnnotationWithTrack, LocalContextPlay } from "@/lib/db/types";
 import {
   resumeTargetSec,
   stretchResumeTarget,
@@ -111,6 +111,29 @@ export function confirmRemoveRun(run: LocalContextPlay, onConfirm: () => void): 
     [
       { text: "Cancel", style: "cancel" },
       { text: "Remove", style: "destructive", onPress: onConfirm },
+    ],
+  );
+}
+
+/**
+ * Confirms deleting a note, then runs `onConfirm`.
+ *
+ * Unlike the three above this is a *delete*, not a hide: a note is the listener's
+ * own writing, and a tombstone that kept it on the server would be the app
+ * refusing to forget something they asked it to. The note's own words are quoted
+ * back so the dialog names what is about to go — a sheet can be opened on a note
+ * the listener scrolled past a minute ago.
+ */
+export function confirmRemoveNote(
+  note: AnnotationWithTrack,
+  onConfirm: () => void,
+): void {
+  Alert.alert(
+    "Delete note?",
+    `"${note.annotation.text}" will be removed from ${note.track.title}.`,
+    [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: onConfirm },
     ],
   );
 }

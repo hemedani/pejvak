@@ -1,5 +1,5 @@
 /**
- * Which listen's own modal is open, if any.
+ * Which listen's — or note's — own modal is open, if any.
  *
  * Mounted once, globally, so the History list and a track's own detail screen
  * open the same sheet from the same place — and so it can be reached from inside
@@ -15,20 +15,27 @@
 
 import { create } from "zustand";
 
+import type { AnnotationWithTrack } from "@/lib/db/types";
 import type { HistoryItem, HistoryStretch } from "@/lib/history";
 
 /**
  * What is being inspected.
  *
- * Two shapes rather than one, because the two lists genuinely hold different
+ * Three shapes rather than one, because the lists genuinely hold different
  * things: History lists *stretches* (a continuous listen across as many tracks
- * as it reached) while a track's own screen lists single *sessions*. Forcing one
- * into the other's shape would mean either a stretch of one invented per session
- * or a stretch flattened to its last row.
+ * as it reached), a track's own screen lists single *sessions*, and the Notes
+ * screen lists notes. Forcing one into another's shape would mean either a
+ * stretch of one invented per session or a stretch flattened to its last row.
+ *
+ * A note is here rather than in a sheet of its own because the sheet it opens is
+ * the same sheet, down to the drag-to-dismiss and the resume button — the only
+ * differences are what it says and that its bar marks positions instead of
+ * showing how much was heard.
  */
 export type SessionDetailTarget =
   | { kind: "stretch"; entry: HistoryStretch }
-  | { kind: "session"; item: HistoryItem };
+  | { kind: "session"; item: HistoryItem }
+  | { kind: "note"; note: AnnotationWithTrack };
 
 export type SessionDetailRequest = {
   target: SessionDetailTarget;

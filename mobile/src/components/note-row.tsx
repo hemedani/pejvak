@@ -3,8 +3,10 @@
  *
  * The note's own words are the headline — that is what the listener wrote and
  * what they are scanning for — while the track it belongs to and the clock
- * inside it are the supporting line. Tapping plays that track from that second,
- * which is the only thing a note can usefully *do*.
+ * inside it are the supporting line. Tapping opens the note's own sheet, the
+ * same one a History row opens, where the note is shown in full with its place
+ * on the track and a Resume button; playing it is a decision made *there*, so a
+ * tap cannot start audio the listener only meant to read.
  *
  * The leading tile is the note's own colour at low alpha with the swatch in the
  * middle: the same colour the marker carries on the player's timeline, so a
@@ -86,7 +88,7 @@ export const NoteRow = memo(function NoteRow({
       }
       onPress={() => onOpen(note)}
       accessibilityLabel={`Note at ${formatClock(note.annotation.positionSec)} in ${note.track.title}`}
-      accessibilityHint="Plays this track from the note"
+      accessibilityHint="Opens the note"
       actions={actions}
     />
   );

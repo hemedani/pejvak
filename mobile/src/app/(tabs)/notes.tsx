@@ -13,12 +13,13 @@
  * listener *returns to*, not something they drill into from one track, and the
  * dock is the app's answer to "where does this live?".
  *
- * Tapping does not open a detail view. A note *is* the detail; the useful action
- * is to hear what it was about, so the row goes straight to the player at that
- * second.
+ * Tapping opens the note: the same sheet a History row opens, with the note in
+ * full, the facts around it, its place on the track's timeline and a Resume
+ * button. It used to jump straight into the player, which answered "what was
+ * this about?" but not "when did I write this, and what else did I notice around
+ * here?" — and the second question is the one a *list* of notes raises.
  */
 
-import { useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 
@@ -50,12 +51,12 @@ import {
   searchIndex,
   type Range,
 } from "@/lib/search";
+import { openSessionDetail } from "@/store/sessionDetailStore";
 import { dockInset, spacing } from "@/theme/tokens";
 
 export default function NotesScreen() {
-  const router = useRouter();
   const theme = useTheme();
-  const { notes, loading, remove } = useAllNotes();
+  const { notes, loading, refresh, remove } = useAllNotes();
   const [query, setQuery] = useState("");
   const [range, setRange] = useState<DateRange>(ANY_DATE);
   const [dateOpen, setDateOpen] = useState(false);
@@ -114,18 +115,21 @@ export default function NotesScreen() {
     }));
   }, [dated, hits, searching]);
 
-  /** Play the moment the note describes — the only thing a note can do. */
+  /**
+   * Opening a note is opening the sheet, not the player.
+   *
+   * `onChanged` re-reads the list after a delete made inside the sheet: the
+   * sheet is global and has no way to tell this screen to refresh, and a delete
+   * that left the row on screen would read as a delete that did nothing.
+   */
   const open = useCallback(
     (note: AnnotationWithTrack) => {
-      router.push({
-        pathname: "/player",
-        params: {
-          trackId: note.track.id,
-          positionSec: String(note.annotation.positionSec),
-        },
+      openSessionDetail({
+        target: { kind: "note", note },
+        onChanged: () => void refresh(),
       });
     },
-    [router],
+    [refresh],
   );
 
   const confirmDelete = useCallback(
