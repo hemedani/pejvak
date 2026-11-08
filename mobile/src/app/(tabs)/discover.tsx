@@ -17,19 +17,39 @@
  * from SQLite, and Browse is a static catalogue — the source is only contacted
  * once the listener has chosen a language and a provider. Opening the app's
  * centre tab must not cost a request.
+ *
+ * ## The same strip the Library and History have
+ *
+ * A header, one segmented control, and a pager under them. The three lists are
+ * *pages*, not three re-renders of one list: dragging moves the page with the
+ * finger and the thumb of the control travels with it, because both are drawn
+ * from one shared value. That is the whole mechanism — see `SwipePager` and
+ * `SegmentedControl`.
+ *
+ * What stays above the pager is navigation (the title, the language button, the
+ * control) and what goes inside a page is that page's own content. The search
+ * field is the interesting case: it filters Browse and nothing else, so it
+ * belongs to the Browse page rather than to the chrome. It used to live in the
+ * header and appear only on the Browse tab, which would now mean the pager's
+ * viewport changing height mid-swipe.
  */
 
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 
 import { Reveal } from "@/components/motion/Reveal";
 import { Screen, ScreenHeader } from "@/components/motion/Screen";
+import { SwipePager } from "@/components/motion/SwipePager";
 import { CollectionCard } from "@/components/online/collection-card";
 import { LanguageButton } from "@/components/online/language-button";
 import { LanguagePickerSheet } from "@/components/online/language-picker-sheet";
 import { LanguageRow } from "@/components/online/language-row";
-import { SegmentedControl } from "@/components/ui/card/segmented-control";
+import {
+  SegmentedControl,
+  type SegmentOption,
+} from "@/components/ui/card/segmented-control";
 import { KeyboardAwareFlatList } from "@/components/ui/keyboard-scroll-view";
 import { EmptyState, ListGroup } from "@/components/ui/row";
 import { SearchField } from "@/components/ui/search-field";
@@ -59,22 +79,30 @@ import { listPerformance } from "@/lib/listPerformance";
 
 type DiscoverView = "continue" | "favorites" | "browse";
 
-const DISCOVER_VIEWS: readonly { value: DiscoverView; label: string }[] = [
-  { value: "continue", label: "Continue" },
-  { value: "favorites", label: "Favorites" },
-  { value: "browse", label: "Browse" },
+/**
+ * The three lists, each with the glyph that names it.
+ *
+ * Every tab has one: "Continue" and "Favorites" are two words that start with
+ * the same letter and read as the same idea at a glance, and the glyph is what
+ * separates "pick up where you left off" from "the ones you kept". Browse is a
+ * globe because that is what a list of languages is.
+ */
+const DISCOVER_VIEWS: readonly SegmentOption<DiscoverView>[] = [
+  { value: "continue", label: "Continue", icon: "playCircle" },
+  { value: "favorites", label: "Favorites", icon: "bookmark" },
+  { value: "browse", label: "Browse", icon: "globe" },
 ];
 
 /**
- * One row, whichever list is showing.
+ * Where a view sits in the strip.
  *
- * A discriminated union rather than three separate lists: the header, the
- * refresh control and the empty state are the same for all three, and three
- * `FlatList`s would mean three copies of them drifting apart.
+ * Derived from the list rather than written out beside it, so the control and
+ * the pager cannot end up disagreeing about which page a tab belongs to.
  */
-type DiscoverRow =
-  | { kind: "continue"; item: ContinueItem }
-  | { kind: "favorite"; item: LocalOnlineCollection };
+function discoverIndexFor(view: DiscoverView): number {
+  const index = DISCOVER_VIEWS.findIndex((option) => option.value === view);
+  return index < 0 ? 0 : index;
+}
 
 /** The second line under a continued collection: how far in, and where. */
 function continueMeta(entry: ContinueItem): string {
@@ -177,13 +205,6 @@ export default function DiscoverScreen() {
     [languageHits, searchingLanguages],
   );
 
-  const rows = useMemo<DiscoverRow[]>(() => {
-    if (view === "continue") {
-      return continuing.map((item) => ({ kind: "continue", item }));
-    }
-    return favorites.map((item) => ({ kind: "favorite", item }));
-  }, [view, continuing, favorites]);
-
   /** Tapping a continued collection picks the collection up, not the track. */
   const resume = useCallback(
     async (run: ContinueItem["run"]) => {
@@ -195,96 +216,97 @@ export default function DiscoverScreen() {
     [router],
   );
 
-  const renderItem = useCallback(
-    ({ item, index }: { item: DiscoverRow; index: number }) => {
-      if (item.kind === "continue") {
-        const { run, collection, resumeTargetSec } = item.item;
-        return (
-          <Reveal index={index} limit={10}>
-            <CollectionCard
-              title={collection?.title ?? run.contextTitle}
-              meta={continueMeta(item.item)}
-              artworkUrl={collection?.artworkUrl ?? null}
-              paletteKey={run.contextKey}
-              progressRatio={runProgressRatio(run.finishedCount, run.trackCount)}
-              onPress={() => void resume(run)}
-              accessibilityHint={
-                resumeTargetSec > 0
-                  ? "Continues this collection where you left off"
-                  : "Continues this collection"
-              }
-            />
-          </Reveal>
-        );
-      }
-
-      if (item.kind === "favorite") {
-        const collection = item.item;
-        return (
-          <Reveal index={index} limit={10}>
-            <CollectionCard
-              title={collection.title}
-              // A saved collection's size is only known once it has been
-              // opened; a run's is always known, which is why the two calls
-              // above this one still use `describeTrackCount`.
-              meta={favoriteMeta(collection)}
-              artworkUrl={collection.artworkUrl}
-              paletteKey={collection.key}
-              isFavorite
-              onToggleFavorite={() => void removeFavorite(collection.key)}
-              onPress={() =>
-                router.push({ pathname: "/online/[key]", params: { key: collection.key } })
-              }
-              accessibilityHint="Opens this collection"
-            />
-          </Reveal>
-        );
-      }
-
-      return null;
+  const renderContinue = useCallback(
+    ({ item, index }: { item: ContinueItem; index: number }) => {
+      const { run, collection, resumeTargetSec } = item;
+      return (
+        <Reveal index={index} limit={10}>
+          <CollectionCard
+            title={collection?.title ?? run.contextTitle}
+            meta={continueMeta(item)}
+            artworkUrl={collection?.artworkUrl ?? null}
+            paletteKey={run.contextKey}
+            progressRatio={runProgressRatio(run.finishedCount, run.trackCount)}
+            onPress={() => void resume(run)}
+            accessibilityHint={
+              resumeTargetSec > 0
+                ? "Continues this collection where you left off"
+                : "Continues this collection"
+            }
+          />
+        </Reveal>
+      );
     },
-    [removeFavorite, resume, router],
+    [resume],
   );
 
-  const subtitle = useMemo(() => {
-    if (view === "continue") {
-      return continuing.length > 0
-        ? `${continuing.length} collection${continuing.length === 1 ? "" : "s"} to carry on with`
-        : undefined;
-    }
-    if (view === "favorites") {
-      return favorites.length > 0 ? `${favorites.length} saved` : undefined;
-    }
-    return `Free audio in ${LANGUAGES.length} languages`;
-  }, [view, continuing.length, favorites.length]);
-
-  const loading = view === "continue" ? continueLoading : favoritesLoading;
-
-  const emptyView =
-    view === "continue" ? (
-      <EmptyState
-        icon="playCircle"
-        title="Nothing in progress"
-        message="Start a collection and it will wait for you here."
-      />
-    ) : (
-      <EmptyState
-        icon="bookmark"
-        title="No saved collections"
-        message="Tap the bookmark on any collection to keep it here."
-      />
-    );
-
-  const browseEmpty = (
-    <EmptyState
-      icon={searchingLanguages ? "search" : "globe"}
-      title={
-        searchingLanguages
-          ? `No language matches “${search.trim()}”`
-          : "No languages to show"
-      }
-    />
+  const renderFavorite = useCallback(
+    ({ item, index }: { item: LocalOnlineCollection; index: number }) => (
+      <Reveal index={index} limit={10}>
+        <CollectionCard
+          title={item.title}
+          // A saved collection's size is only known once it has been opened; a
+          // run's is always known, which is why the continue card above still
+          // uses `describeTrackCount`.
+          meta={favoriteMeta(item)}
+          artworkUrl={item.artworkUrl}
+          paletteKey={item.key}
+          isFavorite
+          onToggleFavorite={() => void removeFavorite(item.key)}
+          onPress={() =>
+            router.push({ pathname: "/online/[key]", params: { key: item.key } })
+          }
+          accessibilityHint="Opens this collection"
+        />
+      </Reveal>
+    ),
+    [removeFavorite, router],
   );
+
+  /**
+   * The line under the title, on every page and always one line.
+   *
+   * Not decoration: the pager's height is the screen's height minus this
+   * header's, so a subtitle that came and went with the page would resize the
+   * viewport while a page was still travelling — a visible jolt in the middle of
+   * a swipe. The empty pages state their emptiness here instead of saying
+   * nothing.
+   */
+  const subtitle =
+    view === "browse"
+      ? `Free audio in ${LANGUAGES.length} languages`
+      : view === "favorites"
+        ? favorites.length > 0
+          ? `${favorites.length} saved`
+          : "Nothing saved yet"
+        : continuing.length > 0
+          ? `${continuing.length} collection${continuing.length === 1 ? "" : "s"} to carry on with`
+          : "Nothing in progress";
+
+  const viewIndex = discoverIndexFor(view);
+
+  /**
+   * The strip's position, shared with the control above it.
+   *
+   * One value rather than two: the thumb and the page are the same fact drawn
+   * twice, and a control with a spring of its own would slide to the new segment
+   * while the page it describes was still travelling — visibly out of step.
+   */
+  const viewPosition = useSharedValue(viewIndex);
+
+  /**
+   * A page chosen by swiping.
+   *
+   * The strip commits on release, so this lands while the page is still
+   * travelling — the tab lights up as the finger lifts, which is what makes the
+   * gesture feel performed rather than observed.
+   */
+  const selectViewIndex = useCallback((next: number) => {
+    const option = DISCOVER_VIEWS[next];
+    if (option) {
+      setView(option.value);
+    }
+  }, []);
 
   const languagePicker = pickingLanguage ? (
     <LanguagePickerSheet
@@ -295,8 +317,15 @@ export default function DiscoverScreen() {
     />
   ) : null;
 
-  const header = (
-    <View style={styles.headerBlock}>
+  /**
+   * Everything that must not move when the strip does.
+   *
+   * The title, the language button and the control are navigation; navigation
+   * that slid away with the page would put two tab strips on screen at once
+   * during a swipe.
+   */
+  const chrome = (
+    <View style={styles.chrome}>
       <ScreenHeader
         overline="DISCOVER"
         title="Listen online"
@@ -312,71 +341,148 @@ export default function DiscoverScreen() {
         options={DISCOVER_VIEWS}
         value={view}
         onChange={setView}
+        position={viewPosition}
         accessibilityLabel="Discover lists"
       />
-      {view === "browse" ? (
-        <SearchField
-          value={search}
-          onChangeText={setSearch}
-          placeholder="English | Dutch | فارسی"
-          accessibilityLabel="Find a language"
-        />
-      ) : null}
     </View>
   );
 
-  if (view === "browse") {
-    return (
-      <Screen wash={theme.accent}>
-        <ScrollView
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled">
-          {header}
-          {visibleLanguages.length > 0 ? (
-            <ListGroup>
-              {visibleLanguages.map((language) => (
-                <LanguageRow
-                  key={language.code}
-                  language={language}
-                  sourceCount={sourcesForLanguage(language.code).length}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/online/language/[code]",
-                      params: { code: language.code },
-                    })
-                  }
-                />
-              ))}
-            </ListGroup>
-          ) : (
-            browseEmpty
-          )}
-        </ScrollView>
-        {languagePicker}
-      </Screen>
-    );
-  }
+  /**
+   * The three pages, each built only when the strip is about to draw it.
+   *
+   * Functions rather than elements on purpose: the pager keeps one page either
+   * side of the finger mounted and asks for them by number, so a page built
+   * eagerly would be forty-six language rows constructed on every keystroke of
+   * a search that only ever filters one of the three lists.
+   */
+  const continuePage = () => (
+    <KeyboardAwareFlatList
+      {...listPerformance}
+      data={continuing}
+      keyExtractor={(item) => item.run.contextKey}
+      renderItem={renderContinue}
+      contentContainerStyle={styles.list}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl
+          refreshing={continueLoading}
+          onRefresh={() => void refreshContinue()}
+        />
+      }
+      ListEmptyComponent={
+        continueLoading ? null : (
+          <EmptyState
+            icon="playCircle"
+            title="Nothing in progress"
+            message="Start a collection and it will wait for you here."
+          />
+        )
+      }
+    />
+  );
+
+  const favoritesPage = () => (
+    <KeyboardAwareFlatList
+      {...listPerformance}
+      data={favorites}
+      keyExtractor={(item) => item.key}
+      renderItem={renderFavorite}
+      contentContainerStyle={styles.list}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl
+          refreshing={favoritesLoading}
+          onRefresh={() => void refreshFavorites()}
+        />
+      }
+      ListEmptyComponent={
+        favoritesLoading ? null : (
+          <EmptyState
+            icon="bookmark"
+            title="No saved collections"
+            message="Tap the bookmark on any collection to keep it here."
+          />
+        )
+      }
+    />
+  );
+
+  /**
+   * The language list, with the field that filters it.
+   *
+   * The field belongs to this page rather than to the chrome because it filters
+   * nothing else — see the note at the top of the file.
+   */
+  const browsePage = () => (
+    <ScrollView
+      contentContainerStyle={styles.list}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled">
+      <SearchField
+        value={search}
+        onChangeText={setSearch}
+        placeholder="English | Dutch | فارسی"
+        accessibilityLabel="Find a language"
+      />
+      {visibleLanguages.length > 0 ? (
+        <ListGroup>
+          {visibleLanguages.map((entry) => (
+            <LanguageRow
+              key={entry.code}
+              language={entry}
+              sourceCount={sourcesForLanguage(entry.code).length}
+              onPress={() =>
+                router.push({
+                  pathname: "/online/language/[code]",
+                  params: { code: entry.code },
+                })
+              }
+            />
+          ))}
+        </ListGroup>
+      ) : (
+        <EmptyState
+          icon={searchingLanguages ? "search" : "globe"}
+          title={
+            searchingLanguages
+              ? `No language matches “${search.trim()}”`
+              : "No languages to show"
+          }
+        />
+      )}
+    </ScrollView>
+  );
+
+  /**
+   * One page of the strip.
+   *
+   * Switched on the *page's* view rather than on `view`, because the pager
+   * builds its neighbours before they are on screen: handing the Continue page
+   * the Browse list would show the wrong content for the frame it first slides
+   * in.
+   */
+  const pageFor = (pageIndex: number) => {
+    const option = DISCOVER_VIEWS[pageIndex];
+    if (!option) {
+      return null;
+    }
+    if (option.value === "browse") {
+      return browsePage();
+    }
+    return option.value === "favorites" ? favoritesPage() : continuePage();
+  };
 
   return (
     <Screen wash={theme.accent}>
-      <KeyboardAwareFlatList
-        {...listPerformance}
-        data={rows}
-        keyExtractor={(row) =>
-          row.kind === "continue"
-            ? `c:${row.item.run.contextKey}`
-            : `f:${row.item.key}`
-        }
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={() => void refreshAll()} />
-        }
-        ListHeaderComponent={header}
-        ListEmptyComponent={loading ? null : emptyView}
+      {chrome}
+      <SwipePager
+        index={viewIndex}
+        count={DISCOVER_VIEWS.length}
+        onIndexChange={selectViewIndex}
+        position={viewPosition}
+        renderPage={pageFor}
       />
       {languagePicker}
     </Screen>
@@ -391,8 +497,16 @@ const styles = StyleSheet.create({
     // to scroll clear of it.
     paddingBottom: spacing.giant + dockInset,
   },
-  headerBlock: {
+  /**
+   * The part of the screen a swipe cannot move.
+   *
+   * It carries the horizontal inset the list used to supply, because it is now
+   * the list's sibling rather than its header — and it stops one gap short of
+   * the pager so the first row is not flush against the control.
+   */
+  chrome: {
     gap: spacing.md,
-    paddingBottom: spacing.xs,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.sm,
   },
 });
