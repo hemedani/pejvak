@@ -60,11 +60,23 @@
  *
  * Five labelled segments do not fit across a phone: at 14pt "Playlists" alone is
  * most of a fifth of the screen, and a label that has to truncate is worse than
- * no label. `collapse` draws the *selected* segment's name and its neighbours'
- * glyphs, which fits five comfortably and still answers "where am I?" — the thumb
- * gives the position, the name confirms it. Nothing reflows while it changes:
- * every segment is one fifth of the track either way, so a label appearing does
- * not push its neighbours aside.
+ * no label. `collapse` draws the *selected* segment's name beside its glyph and
+ * only the neighbours' glyphs, which fits five comfortably and still answers
+ * "where am I?" — the thumb gives the position, the name confirms it. Nothing
+ * reflows while it changes: every segment is one fifth of the track either way,
+ * so a label appearing does not push its neighbours aside.
+ *
+ * **The glyph is drawn in every state, the selected one included.** Swapping it
+ * for the label was a state that lost its icon: the strip then read as four
+ * glyphs and one bare word, so the tab you were looking at was the one tab you
+ * could not recognise at a glance. A collapsed segment is therefore
+ * glyph + name when it is selected and glyph alone when it is not.
+ *
+ * That needs a tighter row than the uncollapsed one — 15pt of glyph, a 2pt gap
+ * and a 13pt name is what keeps "Playlists" inside its fifth of a 360pt phone.
+ * The name is not allowed to shrink (`flexShrink: 0`): a word that ellipsised
+ * to "Playl…" the moment it was selected would be worse than the few points it
+ * may hang over its neighbour's empty margin.
  */
 
 import { useEffect } from "react";
@@ -208,7 +220,6 @@ export function SegmentedControl<T extends string | number>({
         const active = option.value === value;
         const badge = option.badge ?? null;
         const showLabel = collapse ? active : true;
-        const showGlyph = collapse ? !active : true;
 
         return (
           <ElasticPressable
@@ -226,9 +237,9 @@ export function SegmentedControl<T extends string | number>({
             onPress={() => {
               onChange(option.value);
             }}
-            style={styles.segment}
+            style={[styles.segment, collapse ? styles.segmentTight : null]}
           >
-            {showGlyph && badge !== null ? (
+            {badge !== null ? (
               <View
                 style={[
                   styles.badge,
@@ -243,7 +254,7 @@ export function SegmentedControl<T extends string | number>({
                   {formatBadge(badge)}
                 </ThemedText>
               </View>
-            ) : showGlyph && option.icon ? (
+            ) : option.icon ? (
               <Icon
                 name={option.icon}
                 size={15}
@@ -254,7 +265,10 @@ export function SegmentedControl<T extends string | number>({
               <ThemedText
                 type="label"
                 numberOfLines={1}
-                style={{ color: active ? theme.text : theme.textTertiary }}
+                style={[
+                  collapse ? styles.collapsedLabel : null,
+                  { color: active ? theme.text : theme.textTertiary },
+                ]}
               >
                 {option.label}
               </ThemedText>
@@ -295,6 +309,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: spacing.xs,
     minHeight: cardTokens.segmentHeight,
+  },
+  /**
+   * The collapsed row: a glyph *and* a name in one fifth of the track.
+   *
+   * Two points of gap and a 13pt name are the difference between "Playlists"
+   * fitting its share of a 360pt phone and hanging over the edge of the thumb.
+   */
+  segmentTight: {
+    gap: spacing.xxs,
+  },
+  collapsedLabel: {
+    fontSize: 13,
+    letterSpacing: -0.2,
+    // Never truncated: a name that ellipsised the instant it was selected would
+    // read as a layout bug. The few points it may overrun land on a neighbour's
+    // empty margin, where the glyph is centred and a good 20pt away.
+    flexShrink: 0,
   },
   badge: {
     // Fixed width, like the Library's own count: a tally that changed width
