@@ -99,9 +99,13 @@ const PANEL_STATS = panelIndexFor("stats");
  */
 type HistoryView = "sessions" | "collections";
 
-const HISTORY_VIEWS: { value: HistoryView; label: string }[] = [
-  { value: "sessions", label: "Sessions" },
-  { value: "collections", label: "Collections" },
+const HISTORY_VIEWS: { value: HistoryView; label: string; icon: IconName }[] = [
+  // A listen is a stretch of playing; a collection is the whole course or
+  // album it belonged to. Two glyphs that say that in one glance — the words
+  // alone ("Sessions", "Collections") are long enough to crowd a third of the
+  // track each and still leave the listener guessing.
+  { value: "sessions", label: "Sessions", icon: "playCircle" },
+  { value: "collections", label: "Collections", icon: "layers" },
 ];
 
 /** One row of the list, whichever half it came from. */
