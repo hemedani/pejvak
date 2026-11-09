@@ -53,11 +53,15 @@ import {
 } from "@/lib/librarySearch";
 import { listPerformance } from "@/lib/listPerformance";
 import {
+  hasBothTrackSources,
   LIBRARY_VIEW_LABELS,
   libraryTabs,
   resolveLibraryView,
+  resolveTrackSource,
+  TRACK_SOURCE_TABS,
   type LibraryView,
   type SearchableLibraryView,
+  type TrackSource,
 } from "@/lib/libraryTabs";
 import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
 import { findLanguage, sourcesForLanguage } from "@/lib/online";
@@ -89,14 +93,14 @@ import {
 } from "@/theme/tokens";
 
 /**
- * The header block occupies reveal indices 1–6 (language prompt, search field,
- * view toggle, continue card, missing-files alert, add-audio button), so list
- * rows start at 7. Only the opening screenful staggers in — recycled rows past
- * this limit render immediately instead of replaying a 320 ms-delayed fade. See
- * `Reveal`'s `limit`.
+ * The header block occupies reveal indices 1–7 (language prompt, search field,
+ * view toggle, continue card, missing-files alert, add-audio button, source
+ * sub-tab), so list rows start at 8. Only the opening screenful staggers in —
+ * recycled rows past this limit render immediately instead of replaying a
+ * 320 ms-delayed fade. See `Reveal`'s `limit`.
  */
-const ROW_REVEAL_LIMIT = 13;
-const FIRST_ROW_REVEAL_INDEX = 7;
+const ROW_REVEAL_LIMIT = 14;
+const FIRST_ROW_REVEAL_INDEX = 8;
 
 /**
  * How many files one Library visit examines for cover art. Small on purpose:
@@ -227,6 +231,7 @@ export default function LibraryScreen() {
   const [pickingLanguage, setPickingLanguage] = useState(false);
   const [chosenView, setChosenView] = useState<LibraryView | null>(null);
   const view = resolveLibraryView(chosenView, language !== null);
+  const [chosenSource, setChosenSource] = useState<TrackSource | null>(null);
   const tabs = useMemo(() => libraryTabs(language !== null), [language]);
   const sources = useMemo(
     () => (language ? sourcesForLanguage(language.code) : []),
@@ -245,6 +250,38 @@ export default function LibraryScreen() {
   const { run: runArtworkBackfill } = useArtworkBackfill();
   const terms = useMemo(() => foldQuery(query), [query]);
   const searching = terms.length > 0;
+
+  /**
+   * The two kinds of row the Tracks view holds, counted once per data load.
+   *
+   * Counted from the whole library rather than from the visible half, because
+   * the counts are what decide whether the sub-tab exists at all — a library of
+   * imported files only has nothing to switch between.
+   */
+  const sourceCounts = useMemo(
+    () => ({
+      local: tracks.filter((track) => track.origin !== "online").length,
+      online: tracks.filter((track) => track.origin === "online").length,
+    }),
+    [tracks],
+  );
+  const showSourceTabs = hasBothTrackSources(sourceCounts);
+  const source = resolveTrackSource(chosenSource, sourceCounts);
+
+  /**
+   * What the Tracks list actually draws, and what its queue is built from.
+   *
+   * One list rather than a filter inside `renderItem`: the search index, the
+   * "continue listening" card and the play queue all read from it, so a row the
+   * sub-tab has hidden cannot be searched, continued, or played next.
+   */
+  const visibleTracks = useMemo(
+    () =>
+      source === "online"
+        ? tracks.filter((track) => track.origin === "online")
+        : tracks.filter((track) => track.origin !== "online"),
+    [source, tracks],
+  );
 
   /** True between a drag/momentum starting and the last one ending. */
   const scrollingRef = useRef(false);
@@ -277,12 +314,17 @@ export default function LibraryScreen() {
   }, [playlists, recent]);
   const playlistOrigins = usePlaylistOrigins(badgedPlaylists);
 
+  /**
+   * The card offers the track the listener would pick up, *within the half they
+   * are looking at*: a "continue" card for an online course sitting above a
+   * list of files on the device would describe a different page.
+   */
   const continueTrack = useMemo(
     () =>
-      tracks
+      visibleTracks
         .filter((item) => item.lastPlayedAt !== null)
         .sort((left, right) => (right.lastPlayedAt ?? 0) - (left.lastPlayedAt ?? 0))[0],
-    [tracks],
+    [visibleTracks],
   );
 
   const wash = continueTrack ? paletteFor(continueTrack.contentHash)[1] : theme.accent;
@@ -296,8 +338,8 @@ export default function LibraryScreen() {
    * are already folded.
    */
   const trackIndex = useMemo(
-    () => createSearchIndex(tracks, trackSearchFields, TITLE_FIELD),
-    [tracks],
+    () => createSearchIndex(visibleTracks, trackSearchFields, TITLE_FIELD),
+    [visibleTracks],
   );
   const folderIndex = useMemo(
     () => createSearchIndex(folders, folderSearchFields, TITLE_FIELD),
@@ -358,8 +400,8 @@ export default function LibraryScreen() {
     () =>
       searching
         ? trackHits.map((hit) => ({ track: hit.item, hit }))
-        : tracks.map((track) => ({ track, hit: null })),
-    [searching, trackHits, tracks],
+        : visibleTracks.map((track) => ({ track, hit: null })),
+    [searching, trackHits, visibleTracks],
   );
   const folderRows = useMemo<{ folder: FolderSummary; hit: FolderHit | null }[]>(
     () =>
@@ -508,17 +550,19 @@ export default function LibraryScreen() {
   );
 
   /**
-   * Plays one track with the **whole library** behind it, so next/previous step
-   * through the library.
+   * Plays one track with the **visible half of the library** behind it, so
+   * next/previous step through what the listener is looking at.
    *
    * Takes an id rather than an index because the list it is called from may be
    * the search results, whose positions say nothing about the library's. The
-   * queue is deliberately still the full library while searching: a search is a
-   * way to *find* something, not a way to redefine what comes next.
+   * queue is deliberately the whole *source* rather than the search results
+   * while searching: a search is a way to *find* something, not a way to
+   * redefine what comes next — but the Local/Online choice does define what the
+   * list is, so it carries over.
    */
   const playAt = useCallback(
     (trackId: string) => {
-      const ids = tracks.map((track) => track.id);
+      const ids = visibleTracks.map((track) => track.id);
       const index = ids.indexOf(trackId);
       if (index < 0) {
         return;
@@ -526,7 +570,7 @@ export default function LibraryScreen() {
       void TrackPlayerService.playQueueAt(ids, index);
       router.push({ pathname: "/player", params: { trackId } });
     },
-    [router, tracks],
+    [router, visibleTracks],
   );
 
   /**
@@ -726,6 +770,43 @@ export default function LibraryScreen() {
   ) : null;
 
   /**
+   * The one line under the title.
+   *
+   * It answers "how much is here", so on the Tracks view it counts the half
+   * being shown and names it — "412 local tracks" is the whole story of the
+   * sub-tab below, and a bare total would describe a list the listener is not
+   * looking at. Everywhere else the source is irrelevant and the total stands.
+   */
+  const subtitle = useMemo(() => {
+    if (view === "language" && language) {
+      return `${sources.length} source${sources.length === 1 ? "" : "s"} for ${language.nativeName}`;
+    }
+    if (searching) {
+      return `${totalMatches} match${totalMatches === 1 ? "" : "es"}`;
+    }
+    if (view === "tracks") {
+      if (visibleTracks.length === 0) {
+        return undefined;
+      }
+      const plural = visibleTracks.length === 1 ? "" : "s";
+      return showSourceTabs
+        ? `${visibleTracks.length} ${source} track${plural}`
+        : `${visibleTracks.length} track${plural}`;
+    }
+    return tracks.length > 0 ? `${tracks.length} tracks` : undefined;
+  }, [
+    language,
+    searching,
+    showSourceTabs,
+    source,
+    sources,
+    totalMatches,
+    tracks.length,
+    view,
+    visibleTracks.length,
+  ]);
+
+  /**
    * Everything that must not move when the strip does.
    *
    * The title, the search field and the chips are navigation, and navigation
@@ -737,15 +818,7 @@ export default function LibraryScreen() {
       <ScreenHeader
         overline="YOUR LISTENING SPACE"
         title="Library"
-        subtitle={
-          view === "language" && language
-            ? `${sources.length} source${sources.length === 1 ? "" : "s"} for ${language.nativeName}`
-            : searching
-              ? `${totalMatches} match${totalMatches === 1 ? "" : "es"}`
-              : tracks.length > 0
-                ? `${tracks.length} tracks`
-                : undefined
-        }
+        subtitle={subtitle}
         action={
           <View style={styles.headerActions}>
             {/* The pill states the language once there is one. With none, the
@@ -971,6 +1044,24 @@ export default function LibraryScreen() {
             <PrimaryButton label="Add audio" onPress={onImport} />
           </Reveal>
         )}
+
+        {/* The sub-tab closes the header rather than opening it: it divides the
+            rows *below* it, and a control that sat above the continue card would
+            read as a setting of the page instead of a filter on the list.
+
+            Only when both kinds are present — see `hasBothTrackSources`. It
+            stays put while a query is running, because the search reads the
+            half it names. */}
+        {pageView === "tracks" && showSourceTabs ? (
+          <Reveal index={7}>
+            <SegmentedControl
+              options={TRACK_SOURCE_TABS}
+              value={source}
+              onChange={setChosenSource}
+              accessibilityLabel="Show local or online tracks"
+            />
+          </Reveal>
+        ) : null}
       </View>
     );
   };

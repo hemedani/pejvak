@@ -1,4 +1,10 @@
-import { libraryTabs, resolveLibraryView } from "@/lib/libraryTabs";
+import {
+  hasBothTrackSources,
+  libraryTabs,
+  resolveLibraryView,
+  resolveTrackSource,
+  TRACK_SOURCE_TABS,
+} from "@/lib/libraryTabs";
 
 describe("libraryTabs", () => {
   it("keeps the four library tabs when no language is chosen", () => {
@@ -59,5 +65,36 @@ describe("resolveLibraryView", () => {
 
   it("falls back to tracks when the language is cleared while its tab is open", () => {
     expect(resolveLibraryView("language", false)).toBe("tracks");
+  });
+});
+
+describe("the Tracks view's source sub-tab", () => {
+  it("names the two kinds the way the badges do", () => {
+    // Same words as `OriginBadge`, so the control and the rows below it cannot
+    // describe the same fact two different ways.
+    expect(TRACK_SOURCE_TABS.map((tab) => tab.label)).toEqual(["Local", "Online"]);
+    expect(TRACK_SOURCE_TABS.map((tab) => tab.icon)).toEqual(["device", "stream"]);
+  });
+
+  it("is only a choice when both kinds are present", () => {
+    expect(hasBothTrackSources({ local: 12, online: 3 })).toBe(true);
+    expect(hasBothTrackSources({ local: 12, online: 0 })).toBe(false);
+    expect(hasBothTrackSources({ local: 0, online: 3 })).toBe(false);
+    expect(hasBothTrackSources({ local: 0, online: 0 })).toBe(false);
+  });
+
+  it("follows the data when there is nothing to switch between", () => {
+    // A remembered "Online" with no online tracks left would open an empty list
+    // behind a control that had just disappeared — a dead end.
+    expect(resolveTrackSource("online", { local: 4, online: 0 })).toBe("local");
+    expect(resolveTrackSource(null, { local: 0, online: 4 })).toBe("online");
+    expect(resolveTrackSource("local", { local: 0, online: 4 })).toBe("online");
+    expect(resolveTrackSource(null, { local: 0, online: 0 })).toBe("local");
+  });
+
+  it("honours a real choice, and opens on Local", () => {
+    expect(resolveTrackSource(null, { local: 4, online: 4 })).toBe("local");
+    expect(resolveTrackSource("online", { local: 4, online: 4 })).toBe("online");
+    expect(resolveTrackSource("local", { local: 4, online: 4 })).toBe("local");
   });
 });
