@@ -34,6 +34,17 @@ type PlayerState = {
   isAudiobook: boolean;
   positionSec: number;
   durationSec: number;
+  /**
+   * How much of this track has actually been heard since it was opened.
+   *
+   * Wall-clock listening, accumulated from the player's progress deltas by the
+   * session tracker — not `positionSec`, which a seek or a speed change moves
+   * without the listener having heard anything. It is the figure the player
+   * shows as "18:42 listened", and it deliberately survives a pause, a resume
+   * and a speed change: those are three records in the database but one listen
+   * to the person doing it. It resets when the track changes.
+   */
+  listenedSec: number;
   playbackSpeed: number;
   error: string | null;
   /** Track ids in play order. */
@@ -81,6 +92,7 @@ const initialState = {
   isAudiobook: false,
   positionSec: 0,
   durationSec: 0,
+  listenedSec: 0,
   playbackSpeed: 1,
   error: null,
   queue: [] as string[],

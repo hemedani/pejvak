@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, StyleSheet, View } from "react-native";
 
+import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { AnnotationComposer } from "@/components/player/AnnotationComposer";
 import { JumpToTimeSheet } from "@/components/player/JumpToTimeSheet";
 import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
@@ -64,6 +65,7 @@ export default function PlayerScreen() {
   const waiting = usePlayerStore((state) => state.waiting);
   const positionSec = usePlayerStore((state) => state.positionSec);
   const durationSec = usePlayerStore((state) => state.durationSec);
+  const listenedSec = usePlayerStore((state) => state.listenedSec);
   const playbackSpeed = usePlayerStore((state) => state.playbackSpeed);
   const error = usePlayerStore((state) => state.error);
   const skip = usePlayerStore((state) => state.skip);
@@ -339,7 +341,6 @@ export default function PlayerScreen() {
         <PlayerContent
           reveal={reveal}
           headerGesture={gesture}
-          trackId={activeTrackId}
           title={resolvedTitle}
           artist={artist ?? track?.author ?? null}
           artworkUrl={artworkUrl ?? track?.artworkUrl ?? null}
@@ -359,6 +360,7 @@ export default function PlayerScreen() {
           waiting={waiting}
           positionSec={positionSec}
           durationSec={durationSec}
+          listenedSec={listenedSec}
           playbackSpeed={playbackSpeed}
           sleepActive={sleep.active}
           sleepLabel={
@@ -396,6 +398,22 @@ export default function PlayerScreen() {
           onOpenSleepTimer={openSleepTimer}
           onOpenJumpToTime={openJumpToTime}
           onAddNote={openComposer}
+          headerAction={
+            /* Only once a library row has resolved — before that there is no id
+               to hand to the picker. The same control, in the same slot, that a
+               track's and a folder's screen carry. */
+            activeTrackId ? (
+              <AddToPlaylistButton
+                trackIds={[activeTrackId]}
+                title={resolvedTitle}
+                ramp={ramp}
+                artwork={artworkUrl ?? track?.artworkUrl ?? null}
+                size={42}
+                iconSize={20}
+                tone="glass"
+              />
+            ) : null
+          }
           composer={composer}
           panels={panels}
         />

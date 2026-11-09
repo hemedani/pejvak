@@ -20,16 +20,16 @@ import { GestureDetector, type PanGesture } from "react-native-gesture-handler";
 
 import { AnnotationList } from "@/components/annotation-list";
 import { AnnotationMarker } from "@/components/annotation-marker";
-import { AddToPlaylistChip } from "@/components/add-to-playlist";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { CrossfadeArtwork } from "@/components/motion/CrossfadeArtwork";
 import { PlaybackStatusLine } from "@/components/player/PlaybackStatusLine";
 import { Scrubber } from "@/components/player/Scrubber";
 import { TransportControls } from "@/components/player/TransportControls";
 import { ThemedText } from "@/components/themed-text";
+import { Icon } from "@/components/ui/icon";
 import { GlassChip } from "@/components/ui/glass/GlassChip";
 import { KeyboardScrollView } from "@/components/ui/keyboard-scroll-view";
-import { useScheme } from "@/hooks/use-theme";
+import { useScheme, useTheme } from "@/hooks/use-theme";
 import { useWaitProgress } from "@/hooks/use-wait-progress";
 import type { LocalAnnotation } from "@/lib/db/types";
 import { describeWait, type PlaybackWait } from "@/lib/playbackPhase";
@@ -53,8 +53,6 @@ const BODY_REVEAL_START = 0.42;
 export type PlayerContentProps = {
   /** 0 = collapsed over the mini-player, 1 = full screen. */
   reveal: SharedValue<number>;
-  /** The library row being played; null before a track resolves. */
-  trackId: string | null;
   title: string;
   artist: string | null;
   artworkUrl: string | null;
@@ -75,6 +73,12 @@ export type PlayerContentProps = {
   waiting: PlaybackWait | null;
   positionSec: number;
   durationSec: number;
+  /**
+   * How much of this track has actually been heard since it was opened — the
+   * figure the header prints beside the overline. See `playerStore.listenedSec`
+   * for why it is not `positionSec`.
+   */
+  listenedSec: number;
   playbackSpeed: number;
   sleepActive: boolean;
   sleepLabel: string;
@@ -104,6 +108,16 @@ export type PlayerContentProps = {
   onAddNote: () => void;
   /** Attached to the header so the sheet can be dragged down to dismiss. */
   headerGesture?: PanGesture;
+  /**
+   * The header's trailing control — the same slot, and the same "add to a
+   * playlist" verb, that a track's and a folder's own screen offer.
+   *
+   * It lives here rather than in the chip row because the chip row sits below
+   * the artwork and scrolls out of sight on a short screen: the one action a
+   * listener most often opens the player to perform was the one they had to go
+   * looking for. The header is drawn before the artwork and never moves.
+   */
+  headerAction?: ReactNode;
   /** Annotation composer, owned by the route. */
   composer?: ReactNode;
   /** Sleep-timer and jump-to-time sheets, owned by the route. */
@@ -112,7 +126,6 @@ export type PlayerContentProps = {
 
 export function PlayerContent({
   reveal,
-  trackId,
   title,
   artist,
   artworkUrl,
@@ -125,6 +138,7 @@ export function PlayerContent({
   waiting,
   positionSec,
   durationSec,
+  listenedSec,
   playbackSpeed,
   sleepActive,
   sleepLabel,
@@ -149,10 +163,12 @@ export function PlayerContent({
   onOpenJumpToTime,
   onAddNote,
   headerGesture,
+  headerAction,
   composer,
   panels,
 }: PlayerContentProps) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const scheme = useScheme();
   const progress = durationSec > 0 ? Math.min(1, positionSec / durationSec) : 0;
   const remainingSec = Math.max(0, durationSec - positionSec);
@@ -206,7 +222,10 @@ export function PlayerContent({
           a deepened one in dark mode, so the grabber has to follow the theme —
           a hardcoded white pill disappears entirely in light mode. */}
       <View style={[styles.headerGrabber, { backgroundColor: colors[scheme].textSecondary }]} />
-      <View style={styles.headerSpacer} />
+      {/* The header's trailing slot, where every other screen puts the same
+          control. An empty box of the same width keeps the grabber centred when
+          there is no track to add yet. */}
+      {headerAction ?? <View style={styles.headerSpacer} />}
     </View>
   );
 
@@ -240,9 +259,36 @@ export function PlayerContent({
 
         <Animated.View style={[styles.body, bodyStyle]}>
           <View style={styles.meta}>
-            <ThemedText type="overline" themeColor="textSecondary">
-              {overline}
-            </ThemedText>
+            {/* The overline names what this is; the readout answers the other
+                question the listener arrives with — "how long have I been at
+                this?". They share a line because neither is a headline, and the
+                readout is right-aligned so it appears *beside* the overline
+                instead of pushing it: the title below never moves as the figure
+                starts counting.
+
+                Wall-clock listening, not the playhead: a seek or a speed change
+                moves `positionSec` without anything having been heard, and this
+                is the number the listener recognises as their own time. */}
+            <View style={styles.metaTop}>
+              <ThemedText
+                type="overline"
+                themeColor="textSecondary"
+                numberOfLines={1}
+                style={styles.overline}>
+                {overline}
+              </ThemedText>
+              {listenedSec > 0 ? (
+                <View
+                  accessible
+                  accessibilityLabel={`${formatClock(listenedSec)} listened this session`}
+                  style={styles.listened}>
+                  <Icon name="clock" size={12} color={theme.textTertiary} />
+                  <ThemedText type="numeric" themeColor="textTertiary">
+                    {formatClock(listenedSec)} listened
+                  </ThemedText>
+                </View>
+              ) : null}
+            </View>
             <ThemedText type="title" numberOfLines={2}>
               {title}
             </ThemedText>
@@ -352,16 +398,6 @@ export function PlayerContent({
               accessibilityLabel="Go to time"
               onPress={onOpenJumpToTime}
             />
-            {/* Only once a library row has resolved — before that there is no id
-                to hand to the picker. */}
-            {trackId ? (
-              <AddToPlaylistChip
-                trackIds={[trackId]}
-                title={title}
-                ramp={ramp}
-                artwork={artworkUrl}
-              />
-            ) : null}
           </View>
 
           {composer}
@@ -431,6 +467,22 @@ const styles = StyleSheet.create({
   },
   meta: {
     gap: spacing.xs,
+  },
+  metaTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  /** Yields to the readout rather than wrapping: "FOLDER · 4 OF 12" is a label. */
+  overline: {
+    flexShrink: 1,
+  },
+  listened: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xxs,
+    flexShrink: 0,
   },
   timeline: {
     gap: spacing.sm,

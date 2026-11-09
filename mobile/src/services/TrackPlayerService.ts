@@ -88,6 +88,19 @@ let nextSessionStartSec = 0;
  * event that fires every second from becoming a database write every second.
  */
 let durationReported = false;
+/**
+ * Seconds heard since this track was opened, as a float.
+ *
+ * The session tracker's total is reset every time a session ends — a pause, a
+ * speed change — because those are separate records. The player's readout is
+ * about the *listener*, not the record: someone who paused for a minute and
+ * carried on has listened to the sum of both. So the deltas are accumulated
+ * here, across sessions, and only a new track clears them.
+ *
+ * A float, because a status event can report a 0.3 s delta and rounding each
+ * one would lose more than it kept; the store is handed the floor.
+ */
+let listenedSec = 0;
 
 /**
  * Tracks already reported as unreachable, so a player that keeps failing does
@@ -564,6 +577,17 @@ function handleStatus(status: AudioStatus): void {
         atMs: Date.now(),
       });
       active.tracker = result.state;
+      // Only whole seconds reach the store, and only when one has passed: the
+      // status tick fires once a second but a delta can be a fraction, and a
+      // patch per tick that changed nothing would re-render the player for
+      // nothing.
+      if (result.countedSec > 0) {
+        listenedSec += result.countedSec;
+        const whole = Math.floor(listenedSec);
+        if (whole !== usePlayerStore.getState().listenedSec) {
+          patch({ listenedSec: whole });
+        }
+      }
       if (result.checkpointDue) {
         void writeCheckpoint();
       }
@@ -596,6 +620,9 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
   currentTrack = track;
   awaitingAudio = true;
   durationReported = false;
+  // A new track is a new listen: the readout counts from zero even when the
+  // queue advanced by itself.
+  listenedSec = 0;
   nextSessionStartSec = Math.round(startPositionSec);
   pendingSeekSec = startPositionSec > 0 ? startPositionSec : null;
 
@@ -615,6 +642,7 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
     isAudiobook: track.isAudiobook,
     positionSec: Math.floor(startPositionSec),
     durationSec: track.durationSec,
+    listenedSec: 0,
     playbackSpeed: defaultSpeed,
     error: null,
   });
@@ -711,6 +739,7 @@ export async function stop(): Promise<void> {
   activeStretchId = null;
   pendingStretchId = null;
   durationReported = false;
+  listenedSec = 0;
   seekReported = false;
   pendingSeekSec = null;
   nextSessionStartSec = 0;
