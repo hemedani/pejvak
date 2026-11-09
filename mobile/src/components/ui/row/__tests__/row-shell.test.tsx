@@ -139,3 +139,42 @@ describe("RowShell", () => {
     expect(body.props.accessibilityHint).toBe("The file is no longer on this device");
   });
 });
+
+/**
+ * The cluster beside the copy is a line of glyphs, and a glyph only says what it
+ * does to someone who already knows. The long press is how the same actions are
+ * offered *named* — including the ones already on screen, because the point of
+ * the gesture is to read the row's vocabulary rather than to hunt for leftovers.
+ */
+describe("RowShell, long-pressed", () => {
+  it("names every action, including the ones that already fitted", async () => {
+    await renderRow([action("play", 40, 4), action("add", 40, 3)], 430);
+
+    // Both are inline — there is nothing in the overflow — and the menu is not
+    // empty because of it.
+    expect(screen.getByTestId("inline-add")).toBeTruthy();
+    expect(screen.queryByTestId("row-overflow")).toBeNull();
+
+    await fireEvent(screen.getByTestId("row-body"), "longPress");
+
+    expect(screen.getByTestId("row-menu-play")).toBeTruthy();
+    expect(screen.getByTestId("row-menu-add")).toBeTruthy();
+  });
+
+  it("opens nothing on a row that has no actions", async () => {
+    await render(
+      <RowShell
+        density="shelf"
+        title="A plain row"
+        onPress={() => {}}
+        accessibilityLabel="Open the plain row"
+        cardWidth={350}
+        testID="row"
+      />,
+    );
+
+    await fireEvent(screen.getByTestId("row-body"), "longPress");
+
+    expect(screen.queryByTestId("row-menu-play")).toBeNull();
+  });
+});

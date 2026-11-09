@@ -132,6 +132,16 @@ export function RowShell({
   const overflow = (actions ?? []).filter(
     (action) => action.menuOnly || plan.overflow.includes(action.key),
   );
+  /**
+   * The menu lists *every* action, not just the ones that did not fit.
+   *
+   * It is opened two ways: by the "more" button, where the listener is looking
+   * for the leftovers, and by a long press on the row, where they are looking
+   * for the whole vocabulary. Filtering it down to `overflow` would make the
+   * second gesture open an empty sheet on a card whose controls all fitted —
+   * which is most of them.
+   */
+  const menuActions = actions ?? [];
 
   const resolvedHint = disabled
     ? (disabledReason ?? accessibilityHint)
@@ -195,6 +205,14 @@ export function RowShell({
             overshootTo={1.004}
             haptic="tap"
             onPress={onPress}
+            // The cluster beside the copy is a row of glyphs, and a glyph is
+            // only legible once you know what it means. A long press opens the
+            // same actions *named*, which is how someone who did not recognise
+            // the playlist glyph finds it — and it costs the row no width.
+            onLongPress={
+              actions && actions.length > 0 ? () => setMenuOpen(true) : undefined
+            }
+            delayLongPress={400}
             style={[styles.body, plan.reflow ? null : styles.bodyInline]}>
             {bodyContent}
           </ElasticPressable>
@@ -233,7 +251,7 @@ export function RowShell({
       {menuOpen ? (
         <RowActionMenu
           title={title}
-          actions={overflow}
+          actions={menuActions}
           onClose={() => setMenuOpen(false)}
         />
       ) : null}
