@@ -56,27 +56,35 @@
  * one segment wide per page — so `1.4 × 100` percent of its own width is exactly
  * 40% of the way from the second segment to the third.
  *
- * ## Collapsing the labels
+ * ## Collapsing: the glyph sits above the name
  *
- * Five labelled segments do not fit across a phone: at 14pt "Playlists" alone is
- * most of a fifth of the screen, and a label that has to truncate is worse than
- * no label. `collapse` draws the *selected* segment's name beside its glyph and
- * only the neighbours' glyphs, which fits five comfortably and still answers
- * "where am I?" — the thumb gives the position, the name confirms it. Nothing
- * reflows while it changes: every segment is one fifth of the track either way,
- * so a label appearing does not push its neighbours aside.
+ * Five labelled segments do not fit across a phone — at 14pt "Playlists" alone is
+ * most of a fifth of the screen. The earlier answer was to draw the selected
+ * segment's name *beside* its glyph, which left the name with no room: on a
+ * five-view strip the label measured wider than the slot it was centred in, so
+ * it overhung the thumb on both sides and read as a control that had been
+ * squeezed rather than designed.
+ *
+ * The fix is the one every tab bar makes: in `collapse` mode the glyph sits on a
+ * fixed line and the name goes *under* it. A name needs ~55pt and a slot has
+ * ~64pt of thumb to give, so the label finally has real padding on both sides
+ * instead of running into the edge. The two rows are fixed heights, so the glyph
+ * never moves when the selection does — only the name appears, and it appears
+ * exactly where the glyph already was.
  *
  * **The glyph is drawn in every state, the selected one included.** Swapping it
  * for the label was a state that lost its icon: the strip then read as four
  * glyphs and one bare word, so the tab you were looking at was the one tab you
- * could not recognise at a glance. A collapsed segment is therefore
- * glyph + name when it is selected and glyph alone when it is not.
+ * could not recognise at a glance.
  *
- * That needs a tighter row than the uncollapsed one — 15pt of glyph, a 2pt gap
- * and a 13pt name is what keeps "Playlists" inside its fifth of a 360pt phone.
- * The name is not allowed to shrink (`flexShrink: 0`): a word that ellipsised
- * to "Playl…" the moment it was selected would be worse than the few points it
- * may hang over its neighbour's empty margin.
+ * ## The selected pill is the accent, not a white rectangle
+ *
+ * The thumb used to be `surface` on a `surfaceSunken` track, which in the dark
+ * theme is a *darker* fill than the track it sits in — the selected segment read
+ * as a hole. It is now the accent at low alpha with an accent hairline and an
+ * accent label, which is the same "this one is current" language the dock uses
+ * for its selected destination, works in both themes by construction, and makes
+ * the active tab the one thing on the strip the eye lands on.
  */
 
 import { useEffect } from "react";
@@ -91,7 +99,8 @@ import Animated, {
 import { ThemedText } from "@/components/themed-text";
 import { Icon, type IconName } from "@/components/ui/icon";
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
-import { useTheme } from "@/hooks/use-theme";
+import { useScheme, useTheme } from "@/hooks/use-theme";
+import { withAlpha } from "@/lib/palette";
 import { thumbTargetPercent } from "@/lib/segmentedLayout";
 import { spring, useMotionEnabled } from "@/theme/motion";
 import {
@@ -100,6 +109,15 @@ import {
   radius as radii,
   spacing,
 } from "@/theme/tokens";
+
+/** Inset of the visible pill inside the track, on every side. */
+const PILL_INSET = 3;
+/**
+ * The glyph's row. Fixed height on purpose: the name may come and go, and a row
+ * that grew with it would move every glyph on the strip by a few points each
+ * time the selection changed.
+ */
+const GLYPH_ROW = 18;
 
 export type SegmentOption<T extends string | number> = {
   value: T;
@@ -124,8 +142,8 @@ export type SegmentedControlProps<T extends string | number> = {
    */
   position?: SharedValue<number>;
   /**
-   * Draw only the selected segment's label. The rest show their glyph (or their
-   * badge), which is what lets five segments share one line.
+   * Draw the names only under the selected segment, on a second line. The rest
+   * show their glyph alone, which is what lets five segments share one line.
    */
   collapse?: boolean;
   accessibilityLabel?: string;
@@ -147,6 +165,7 @@ export function SegmentedControl<T extends string | number>({
   style,
 }: SegmentedControlProps<T>) {
   const theme = useTheme();
+  const scheme = useScheme();
   const motionEnabled = useMotionEnabled();
 
   const selected = Math.max(
@@ -188,6 +207,11 @@ export function SegmentedControl<T extends string | number>({
     ],
   }));
 
+  // The dark canvas needs a touch more accent in the fill to separate the pill
+  // from the sunken track it sits in; the light one needs less before it starts
+  // reading as a tinted block rather than as a selected control.
+  const pillAlpha = scheme === "dark" ? 0.26 : 0.16;
+
   return (
     <View
       accessibilityRole="radiogroup"
@@ -211,7 +235,11 @@ export function SegmentedControl<T extends string | number>({
         <View
           style={[
             styles.thumbFill,
-            { backgroundColor: theme.surface, borderColor: theme.outline },
+            {
+              backgroundColor: withAlpha(theme.accent, pillAlpha),
+              borderColor: withAlpha(theme.accent, 0.42),
+              shadowColor: theme.accent,
+            },
           ]}
         />
       </Animated.View>
@@ -237,37 +265,43 @@ export function SegmentedControl<T extends string | number>({
             onPress={() => {
               onChange(option.value);
             }}
-            style={[styles.segment, collapse ? styles.segmentTight : null]}
+            style={[styles.segment, collapse ? styles.segmentStacked : null]}
           >
-            {badge !== null ? (
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: active ? theme.accent : theme.surface },
-                ]}
-              >
-                <ThemedText
-                  type="caption"
-                  numberOfLines={1}
-                  style={{ color: active ? theme.onAccent : theme.textSecondary }}
+            <View style={styles.glyphRow}>
+              {badge !== null ? (
+                <View
+                  style={[
+                    styles.badge,
+                    {
+                      backgroundColor: active
+                        ? theme.accent
+                        : theme.surface,
+                    },
+                  ]}
                 >
-                  {formatBadge(badge)}
-                </ThemedText>
-              </View>
-            ) : option.icon ? (
-              <Icon
-                name={option.icon}
-                size={15}
-                color={active ? theme.accent : theme.textTertiary}
-              />
-            ) : null}
+                  <ThemedText
+                    type="caption"
+                    numberOfLines={1}
+                    style={{ color: active ? theme.onAccent : theme.textSecondary }}
+                  >
+                    {formatBadge(badge)}
+                  </ThemedText>
+                </View>
+              ) : option.icon ? (
+                <Icon
+                  name={option.icon}
+                  size={collapse ? 17 : 15}
+                  color={active ? theme.accent : theme.textTertiary}
+                />
+              ) : null}
+            </View>
             {showLabel ? (
               <ThemedText
                 type="label"
                 numberOfLines={1}
                 style={[
-                  collapse ? styles.collapsedLabel : null,
-                  { color: active ? theme.text : theme.textTertiary },
+                  collapse ? styles.stackedLabel : null,
+                  { color: active ? theme.accent : theme.textTertiary },
                 ]}
               >
                 {option.label}
@@ -284,23 +318,29 @@ const styles = StyleSheet.create({
   track: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: radii.segment,
+    borderRadius: radii.pill,
     borderWidth: hairline,
     // Vertical only. A horizontal inset here would split the track's padding box
     // from its content box and put the thumb on a different grid to the segments.
-    paddingVertical: spacing.xxs,
+    paddingVertical: PILL_INSET,
   },
   thumb: {
     position: "absolute",
-    top: spacing.xxs,
-    bottom: spacing.xxs,
+    top: PILL_INSET,
+    bottom: PILL_INSET,
     left: 0,
   },
   thumbFill: {
     flex: 1,
-    marginHorizontal: spacing.xxs,
-    borderRadius: radii.segment - spacing.xxs,
+    marginHorizontal: PILL_INSET,
+    borderRadius: radii.pill,
     borderWidth: hairline,
+    // A glow in the accent rather than a grey drop: the pill is the *selected*
+    // control, and a coloured light under it says so without a legend.
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    elevation: 2,
   },
   segment: {
     flex: 1,
@@ -311,28 +351,40 @@ const styles = StyleSheet.create({
     minHeight: cardTokens.segmentHeight,
   },
   /**
-   * The collapsed row: a glyph *and* a name in one fifth of the track.
+   * The stacked row: glyph on a fixed line, name beneath it.
    *
-   * Two points of gap and a 13pt name are the difference between "Playlists"
-   * fitting its share of a 360pt phone and hanging over the edge of the thumb.
+   * `flex-start` with a fixed glyph row rather than `space-between`: the glyph
+   * has to sit at the same height whether or not a name follows it, or every
+   * icon on the strip would shift the moment the selection moved.
    */
-  segmentTight: {
-    gap: spacing.xxs,
+  segmentStacked: {
+    flexDirection: "column",
+    gap: 0,
+    justifyContent: "flex-start",
+    // (44 − 18 glyph − 15 name) / 2, so the block is optically centred.
+    paddingTop: 6,
   },
-  collapsedLabel: {
-    fontSize: 13,
-    letterSpacing: -0.2,
+  glyphRow: {
+    height: GLYPH_ROW,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  /** 12pt rather than the label's 14: a name must fit its fifth of the track. */
+  stackedLabel: {
+    fontSize: 12,
+    lineHeight: 15,
+    letterSpacing: -0.3,
     // Never truncated: a name that ellipsised the instant it was selected would
-    // read as a layout bug. The few points it may overrun land on a neighbour's
-    // empty margin, where the glyph is centred and a good 20pt away.
+    // read as a layout bug. At 12pt "Playlists" measures inside the thumb, which
+    // is the whole reason the name moved to its own line.
     flexShrink: 0,
   },
   badge: {
     // Fixed width, like the Library's own count: a tally that changed width
     // would reflow the strip on every keystroke of a search.
     minWidth: 22,
+    height: GLYPH_ROW,
     paddingHorizontal: spacing.xxs,
-    paddingVertical: 1,
     borderRadius: radii.pill,
     alignItems: "center",
     justifyContent: "center",
