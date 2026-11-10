@@ -266,6 +266,21 @@ export type KeyboardScrollViewProps = {
   children: ReactNode;
   contentContainerStyle?: StyleProp<ViewStyle>;
   style?: StyleProp<ViewStyle>;
+  /**
+   * Size to the content instead of filling the parent.
+   *
+   * The default is `flex: 1`, which is right for a screen — the scroll view is
+   * the screen's content view, so it has to take the height the screen gives it.
+   * It is *wrong* for a surface that sizes itself to its children, which is what
+   * a bottom sheet is: `flex: 1` means `flexBasis: 0`, and in a column whose own
+   * height is decided by its children there is no free space to grow into, so
+   * the scroll view resolves to zero height and the sheet renders as a header
+   * with nothing under it.
+   *
+   * With this, the box is the content's height, still capped by the caller's
+   * `maxHeight` — past which the content scrolls as usual.
+   */
+  fitContent?: boolean;
   /** Tapping a non-input row dismisses the keyboard. */
   keyboardDismissMode?: "on-drag" | "interactive" | "none";
   keyboardShouldPersistTaps?: boolean | "always" | "never" | "handled";
@@ -279,6 +294,7 @@ export function KeyboardScrollView({
   children,
   contentContainerStyle,
   style,
+  fitContent = false,
   keyboardDismissMode = Platform.OS === "ios" ? "interactive" : "on-drag",
   keyboardShouldPersistTaps = "handled",
   showsVerticalScrollIndicator = false,
@@ -323,7 +339,7 @@ export function KeyboardScrollView({
       <ScrollView
         ref={scrollRef}
         testID={testID}
-        style={[styles.root, style]}
+        style={[fitContent ? styles.contentSized : styles.root, style]}
         contentContainerStyle={contentStyle}
         keyboardDismissMode={keyboardDismissMode}
         keyboardShouldPersistTaps={keyboardShouldPersistTaps}
@@ -428,6 +444,17 @@ const styles = StyleSheet.create({
     // `flex: 1`. Without this it would size to its content and push the form past
     // the bottom of the window — the very thing it exists to prevent.
     flex: 1,
+  },
+  /**
+   * The opposite of `root`, for a scroll view inside a surface that measures
+   * itself — a sheet. `flex: 1` would be `flexBasis: 0`, and an auto-height
+   * column has no free space to grow into, so the view would resolve to nothing.
+   * `auto` basis plus no growth makes the box exactly as tall as its content.
+   */
+  contentSized: {
+    flexGrow: 0,
+    flexShrink: 1,
+    flexBasis: "auto",
   },
   fill: {
     flex: 1,

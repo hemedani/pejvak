@@ -148,11 +148,21 @@ function AddToPlaylistSheetContent({
 
   useEffect(() => {
     let cancelled = false;
-    void PlaylistService.list().then((rows) => {
-      if (!cancelled) {
-        setPlaylists(rows);
-      }
-    });
+    void PlaylistService.list()
+      .then((rows) => {
+        if (!cancelled) {
+          setPlaylists(rows);
+        }
+      })
+      .catch(() => {
+        // A failed read must not leave the sheet in its loading state forever:
+        // `playlists` staying null means the empty message never draws either,
+        // and the sheet would read as blank. An empty list is the honest
+        // answer, and "New playlist" above it still works.
+        if (!cancelled) {
+          setPlaylists([]);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -328,8 +338,15 @@ function AddToPlaylistSheetContent({
 
             {/* Keyboard-aware: the composer sits at the top of a list that is
                 anchored to the bottom of the screen, so the keyboard lands
-                straight on top of it. */}
+                straight on top of it.
+
+                `fitContent` is load-bearing. The sheet measures itself, and a
+                `flex: 1` scroll view inside an auto-height column collapses to
+                zero height — the sheet then draws its header and nothing else,
+                which is exactly what "the playlist button does nothing" looked
+                like. The list is as tall as its rows, capped by `maxHeight`. */}
             <KeyboardScrollView
+              fitContent
               style={{ maxHeight: listMaxHeight }}
               contentContainerStyle={styles.listContent}
             >
