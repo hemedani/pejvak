@@ -23,6 +23,7 @@ import { AnnotationMarker } from "@/components/annotation-marker";
 import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { CrossfadeArtwork } from "@/components/motion/CrossfadeArtwork";
 import { PlaybackStatusLine } from "@/components/player/PlaybackStatusLine";
+import { RoomToneControl } from "@/components/player/RoomToneControl";
 import { Scrubber } from "@/components/player/Scrubber";
 import { TransportControls } from "@/components/player/TransportControls";
 import { ThemedText } from "@/components/themed-text";
@@ -105,6 +106,10 @@ export type PlayerContentProps = {
   queueLength: number;
   onOpenSleepTimer: () => void;
   onOpenJumpToTime: () => void;
+  /** Opens the audio enhancer: boost, bass and treble for a poor recording. */
+  onOpenEnhancer: () => void;
+  /** Whether the enhancer is currently doing anything, for the chip's state. */
+  enhancerActive: boolean;
   onAddNote: () => void;
   /** Attached to the header so the sheet can be dragged down to dismiss. */
   headerGesture?: PanGesture;
@@ -161,6 +166,8 @@ export function PlayerContent({
   queueLength,
   onOpenSleepTimer,
   onOpenJumpToTime,
+  onOpenEnhancer,
+  enhancerActive,
   onAddNote,
   headerGesture,
   headerAction,
@@ -357,6 +364,11 @@ export function PlayerContent({
             onForward={onForward}
           />
 
+          {/* Directly under the transport, where the ear already is: this is a
+              workaround for a speaker that drops out mid-sentence, and it has to
+              be adjustable without leaving what is being listened to. */}
+          <RoomToneControl tint={ramp[1]} />
+
           <View style={styles.chips}>
             {/* First, because it answers "what am I in the middle of", which
                 comes before "how fast". */}
@@ -384,6 +396,13 @@ export function PlayerContent({
               icon="speed"
               accessibilityLabel={`Playback speed ${playbackSpeed} times`}
               onPress={onCycleSpeed}
+            />
+            <GlassChip
+              label="Enhance"
+              icon="equalizer"
+              selected={enhancerActive}
+              accessibilityLabel="Audio enhancer"
+              onPress={onOpenEnhancer}
             />
             <GlassChip
               label={sleepLabel}

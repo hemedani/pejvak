@@ -61,6 +61,10 @@ module.exports = defineConfig([
       "src/components/motion/**/*.{ts,tsx}",
       "src/components/player/**/*.{ts,tsx}",
       "src/components/ui/glass/**/*.{ts,tsx}",
+      // `Slider` is the same kind of component as the sheets below: a gesture
+      // primitive whose whole job is to write a shared value from a pan
+      // callback, with the JS side reached through `scheduleOnRN`.
+      "src/components/ui/slider.tsx",
       // The add-to-playlist sheet is the same kind of component: a glass sheet
       // with a drag-to-dismiss gesture, so it writes to a shared value from a
       // pan callback exactly as the player's sheet does.

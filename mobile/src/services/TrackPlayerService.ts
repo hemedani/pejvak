@@ -17,6 +17,7 @@ import {
   createSessionTracker,
   type SessionTrackerState,
 } from "@/lib/sessionTracking";
+import * as AudioEffectsService from "@/services/AudioEffectsService";
 import { LocalDBService } from "@/services/LocalDBService";
 import { isLocationReachable } from "@/services/FileLocationService";
 import { syncPending } from "@/services/SyncService";
@@ -479,6 +480,10 @@ function handleStatus(status: AudioStatus): void {
   if (!player) {
     return;
   }
+  // The audio treatments follow the audio, not a screen: the noise floor and the
+  // effect have to start and stop with playback even when no screen is mounted.
+  // Idempotent, so a tick per second costs one comparison.
+  AudioEffectsService.syncPlayback(status.playing);
   const currentTime = Number.isFinite(status.currentTime) ? status.currentTime : 0;
   const current = usePlayerStore.getState();
   // A live stream reports `Infinity`, which is `> 0` and would be written
@@ -733,6 +738,11 @@ export async function stop(): Promise<void> {
   const instance = player;
   player = null;
   instance?.release();
+
+  // The listener has finished listening, so the effect goes back to the system
+  // and the noise player goes back to memory. Both are re-armed by the next
+  // `syncPlayback(true)`.
+  AudioEffectsService.release();
 
   currentTrack = null;
   awaitingAudio = false;

@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!--
+    Attaching an AudioEffect to the output mix session is a privileged operation
+    in the sense that it needs this permission. It is a normal permission: it is
+    granted at install time and never prompts.
+  -->
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+</manifest>

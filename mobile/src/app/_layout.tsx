@@ -12,6 +12,7 @@ import { SessionDetailSheet } from "@/components/session-detail";
 import { GlassBlurTarget } from "@/components/ui/glass/BlurTarget";
 import { ICON_FONT } from "@/components/ui/icon";
 import { isTabPathname } from "@/lib/tabNavigation";
+import * as AudioEffectsService from "@/services/AudioEffectsService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
 import { useAuthStore } from "@/store/authStore";
 import { useSettingsStore } from "@/store/settingsStore";
@@ -48,6 +49,13 @@ export default function RootLayout() {
 
   useEffect(() => {
     void useSettingsStore.getState().load();
+  }, []);
+
+  useEffect(() => {
+    // Reads the tone curve and the room-tone level, and does not apply them:
+    // attaching an effect at launch would colour audio this app is not playing.
+    // The first playback arms both.
+    void AudioEffectsService.load();
   }, []);
 
   useEffect(() => {

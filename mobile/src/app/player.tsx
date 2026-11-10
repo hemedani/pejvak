@@ -4,6 +4,7 @@ import { Alert, Pressable, StyleSheet, View } from "react-native";
 
 import { AddToPlaylistButton } from "@/components/add-to-playlist";
 import { AnnotationComposer } from "@/components/player/AnnotationComposer";
+import { AudioEnhancerSheet } from "@/components/player/AudioEnhancerSheet";
 import { JumpToTimeSheet } from "@/components/player/JumpToTimeSheet";
 import { NowPlayingSheet } from "@/components/player/NowPlayingSheet";
 import { PlayerContent } from "@/components/player/PlayerContent";
@@ -16,6 +17,7 @@ import { usePlaybackContext } from "@/hooks/use-playback-context";
 import { useSleepTimer } from "@/hooks/use-sleep-timer";
 import type { LocalAnnotation, LocalTrack } from "@/lib/db/types";
 import { pickAnnotationColor } from "@/lib/annotations";
+import { isEnhancerActive } from "@/lib/audioEffects";
 import { paletteFor } from "@/lib/palette";
 import { resolvePlaybackPhase } from "@/lib/playbackPhase";
 import { contextRouteTarget } from "@/lib/playbackContext";
@@ -23,6 +25,7 @@ import { formatRemaining } from "@/lib/sleepTimer";
 import { formatClock } from "@/lib/time";
 import { LocalDBService } from "@/services/LocalDBService";
 import * as TrackPlayerService from "@/services/TrackPlayerService";
+import { useAudioEffectsStore } from "@/store/audioEffectsStore";
 import { usePlayerStore } from "@/store/playerStore";
 import { spacing } from "@/theme/tokens";
 
@@ -71,6 +74,7 @@ export default function PlayerScreen() {
   const skip = usePlayerStore((state) => state.skip);
   const queue = usePlayerStore((state) => state.queue);
   const queueIndex = usePlayerStore((state) => state.queueIndex);
+  const enhancer = useAudioEffectsStore((state) => state.enhancer);
 
   const activeTrackId = paramTrackId ?? storeTrackId;
   const [track, setTrack] = useState<LocalTrack | null>(null);
@@ -78,6 +82,7 @@ export default function PlayerScreen() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [sleepSheetOpen, setSleepSheetOpen] = useState(false);
   const [jumpSheetOpen, setJumpSheetOpen] = useState(false);
+  const [enhancerOpen, setEnhancerOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftPositionSec, setDraftPositionSec] = useState(0);
@@ -283,6 +288,11 @@ export default function PlayerScreen() {
           onClose={() => setJumpSheetOpen(false)}
         />
       ) : null}
+      {/* A `Modal`, so it opens over the player as its own window rather than
+          scrolling into view inside the player's content. */}
+      {enhancerOpen ? (
+        <AudioEnhancerSheet tint={ramp[1]} onClose={() => setEnhancerOpen(false)} />
+      ) : null}
     </>
   );
 
@@ -380,6 +390,7 @@ export default function PlayerScreen() {
             setComposerOpen(false);
             setSleepSheetOpen(false);
             setJumpSheetOpen(false);
+            setEnhancerOpen(false);
             setQueueOpen(false);
             setSelectedId(null);
             close();
@@ -397,6 +408,8 @@ export default function PlayerScreen() {
           queueLength={queue.length}
           onOpenSleepTimer={openSleepTimer}
           onOpenJumpToTime={openJumpToTime}
+          onOpenEnhancer={() => setEnhancerOpen(true)}
+          enhancerActive={isEnhancerActive(enhancer)}
           onAddNote={openComposer}
           headerAction={
             /* Only once a library row has resolved — before that there is no id

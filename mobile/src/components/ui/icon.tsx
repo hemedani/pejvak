@@ -101,6 +101,10 @@ export const ICON_GLYPHS = {
   layers: "layers-outline",
 
   speed: "speedometer",
+  /** The audio enhancer: a tone curve, not a gear — it changes the sound. */
+  equalizer: "tune-vertical",
+  /** The room tone: a faint waveform that never reaches zero. */
+  roomTone: "waveform",
   moon: "moon-waning-crescent",
   /** The other half of `moon` — a theme control needs two, not one. */
   sunny: "white-balance-sunny",
