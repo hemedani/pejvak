@@ -33,6 +33,8 @@ jest.mock("@/services/LocalDBService", () => ({
     applyRemoteOnlineCollectionUpdate: jest.fn(),
     insertRemoteContextPlay: jest.fn(),
     insertRemoteSession: jest.fn(),
+    insertTrack: jest.fn(),
+    setTrackOrigin: jest.fn(),
     setTrackSyncStatus: jest.fn(),
     setSessionSyncStatus: jest.fn(),
     setAnnotationSyncStatus: jest.fn(),
@@ -834,6 +836,58 @@ describe("pullFromServer", () => {
       contextPlays: 0,
       onlineCollections: 0,
     });
+  });
+
+  it("repairs the origin of a row the pull used to file as local", async () => {
+    // The pull forgot to ask for `origin`, so every track registered on another
+    // device was stored as a local file. Those rows cannot be recognised from
+    // here — only the server knows — so the correction lands on the next pull.
+    db.tracks.set(
+      "t1",
+      track({ id: "t1", contentHash: "hash-1", origin: "local", serverId: "srv-t1" }),
+    );
+    callTypedActMock.mockImplementation(async (request) => {
+      if (request.act === "getMyTracks") {
+        return [
+          { _id: "srv-t1", contentHash: "hash-1", title: "Streamed", origin: "online" },
+        ];
+      }
+      return [];
+    });
+
+    await pullFromServer();
+
+    expect(LocalDBService.setTrackOrigin).toHaveBeenCalledWith("t1", "online");
+  });
+
+  it("files a pulled track under the origin it was registered with", async () => {
+    // Provenance is registered with the track, so it has to survive the round
+    // trip. Defaulting it here would file an online track from another device
+    // as a local file, and the Local half of the Tracks view is drawn from
+    // exactly that column.
+    const insertTrack = jest.mocked(LocalDBService.insertTrack);
+    insertTrack.mockImplementation(async (input) =>
+      track({ contentHash: input.contentHash }),
+    );
+    callTypedActMock.mockImplementation(async (request) => {
+      if (request.act === "getMyTracks") {
+        return [
+          {
+            _id: "srv-t9",
+            contentHash: "hash-9",
+            title: "Streamed",
+            origin: "online",
+          },
+        ];
+      }
+      return [];
+    });
+
+    await pullFromServer();
+
+    expect(insertTrack).toHaveBeenCalledWith(
+      expect.objectContaining({ contentHash: "hash-9", origin: "online" }),
+    );
   });
 
   it("restores a saved collection, address and all, from the server", async () => {

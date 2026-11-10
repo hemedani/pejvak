@@ -257,6 +257,8 @@ type RemoteTrackRow = {
   isAudiobook?: boolean;
   author?: string;
   narrator?: string;
+  /** Absent on rows registered before the field existed. */
+  origin?: string;
 };
 
 type RemoteSessionRow = {
@@ -338,6 +340,11 @@ async function fetchRemoteTracks(): Promise<RemoteTrack[]> {
       isAudiobook: 1,
       author: 1,
       narrator: 1,
+      // Provenance is registered with the track (see `registerTrack`), so it has
+      // to come back with it. Dropping it here is how an online track pulled
+      // from another device turned into a row this device called "local" — and
+      // the Local half of the Tracks view is drawn from exactly that column.
+      origin: 1,
     },
   };
   const rows = await callTypedAct<"main", "track", "getMyTracks", RemoteTrackRow[]>({
@@ -358,6 +365,9 @@ async function fetchRemoteTracks(): Promise<RemoteTrack[]> {
             isAudiobook: row.isAudiobook ?? false,
             author: row.author ?? null,
             narrator: row.narrator ?? null,
+            // A row written before the backend had the field is a file someone
+            // imported, which is the same reading `toTrackOrigin` makes.
+            origin: row.origin === "online" ? ("online" as const) : ("local" as const),
           },
         ]
       : [],
@@ -735,11 +745,20 @@ export async function pullFromServer(): Promise<PullSummary> {
       isAudiobook: item.isAudiobook,
       author: item.author,
       narrator: item.narrator,
+      // Without this the row defaults to `local` and an online track synced from
+      // another device shows up under Local for the rest of its life.
+      origin: item.origin,
     });
     await LocalDBService.setTrackSyncStatus(local.id, "synced", item.serverId);
   }
   for (const item of trackPlan.backfill) {
     await LocalDBService.setTrackSyncStatus(item.id, "synced", item.serverId);
+  }
+  // Rows the pull used to file as local because it never asked for `origin`.
+  // Nothing on this device can tell them apart from real local files, so the
+  // server is the only authority and the next pull is when it can be applied.
+  for (const item of trackPlan.originRepairs) {
+    await LocalDBService.setTrackOrigin(item.id, item.origin);
   }
 
   const sessionPlan = reconcileSessions(await LocalDBService.getAllSessions(), remoteSessions);

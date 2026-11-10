@@ -65,6 +65,7 @@ import type {
   RecordDownloadedFileInput,
   TrackAvailability,
   TrackDetailData,
+  TrackOrigin,
   UpsertOnlineCollectionInput,
 } from "@/lib/db/types";
 import { sortFoldersByDownload } from "@/lib/folderOrder";
@@ -310,6 +311,20 @@ async function setTrackSyncStatus(
      WHERE id = ?`,
     [status, serverId ?? null, Date.now(), id],
   );
+}
+
+/**
+ * Corrects a row's provenance to the one it was registered with.
+ *
+ * Only the pull uses this: a track registered on another device came back as
+ * `local` for as long as the pull forgot to ask for `origin`, and nothing on
+ * this device can tell those rows apart from real local files. `updated_at` is
+ * deliberately left alone — provenance is not an edit, and bumping it would
+ * reorder the library the next time it is read.
+ */
+async function setTrackOrigin(id: string, origin: TrackOrigin): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(`UPDATE tracks SET origin = ? WHERE id = ?`, [origin, id]);
 }
 
 // --- Sessions -------------------------------------------------------------
@@ -3072,6 +3087,7 @@ export const LocalDBService = {
   getTrackBySourceUri,
   getTrackDetailData,
   getAllTracks,
+  setTrackOrigin,
   getTracksByAvailability,
   getTrackActivityCounts,
   getPendingTracks,

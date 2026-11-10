@@ -7,6 +7,7 @@ import type {
   LocalSession,
   LocalTrack,
   PlaylistItem,
+  TrackOrigin,
 } from "@/lib/db/types";
 
 export type RemoteTrack = {
@@ -18,6 +19,11 @@ export type RemoteTrack = {
   isAudiobook: boolean;
   author: string | null;
   narrator: string | null;
+  /**
+   * Where the audio lives, carried so a row pulled from another device keeps
+   * its provenance instead of being filed as a local file.
+   */
+  origin: TrackOrigin;
 };
 
 export type RemoteSession = {
@@ -118,29 +124,47 @@ export type PlaylistUpdate = {
 
 export type Backfill = { id: string; serverId: string };
 
+/** A local row whose stored origin disagrees with the one it was registered with. */
+export type OriginRepair = { id: string; origin: TrackOrigin };
+
 function remoteLocalId(remote: { clientId: string | null; serverId: string }): string {
   return remote.clientId ?? remote.serverId;
 }
 
-/** Tracks are matched by `contentHash` (the identity of a file across devices). */
+/**
+ * Tracks are matched by `contentHash` (the identity of a file across devices).
+ *
+ * The third answer, `originRepairs`, exists because the pull used to drop the
+ * origin: every track registered on another device came back as a local file,
+ * and those rows are still in the database. Nothing on this device can tell a
+ * mis-filed row from a real one — a synced row has no stream URL and no bytes —
+ * so the server is the only authority, and the correction has to happen here, on
+ * the next pull, rather than in a migration.
+ */
 export function reconcileTracks(
   local: LocalTrack[],
   remote: RemoteTrack[],
-): { inserts: RemoteTrack[]; backfill: Backfill[] } {
+): { inserts: RemoteTrack[]; backfill: Backfill[]; originRepairs: OriginRepair[] } {
   const byHash = new Map(local.map((track) => [track.contentHash, track]));
   const inserts: RemoteTrack[] = [];
   const backfill: Backfill[] = [];
+  const originRepairs: OriginRepair[] = [];
 
   for (const item of remote) {
     const existing = byHash.get(item.contentHash);
     if (!existing) {
       inserts.push(item);
-    } else if (!existing.serverId) {
+      continue;
+    }
+    if (!existing.serverId) {
       backfill.push({ id: existing.id, serverId: item.serverId });
+    }
+    if (existing.origin !== item.origin) {
+      originRepairs.push({ id: existing.id, origin: item.origin });
     }
   }
 
-  return { inserts, backfill };
+  return { inserts, backfill, originRepairs };
 }
 
 /** Sessions are append-only; deduped by `clientId` so re-pulls never duplicate. */

@@ -118,6 +118,7 @@ const remoteTrack: RemoteTrack = {
   isAudiobook: false,
   author: null,
   narrator: null,
+  origin: "local",
 };
 
 const remoteSession: RemoteSession = {
@@ -232,6 +233,25 @@ describe("reconcileTracks", () => {
     const result = reconcileTracks([localTrack({ serverId: "srv-t" })], [remoteTrack]);
     expect(result.inserts).toEqual([]);
     expect(result.backfill).toEqual([]);
+  });
+
+  it("reports a row whose stored origin disagrees with the server", () => {
+    // A row the pull filed as local because it never asked for `origin`.
+    const result = reconcileTracks(
+      [localTrack({ origin: "local", serverId: "srv-t" })],
+      [{ ...remoteTrack, origin: "online" }],
+    );
+
+    expect(result.originRepairs).toEqual([{ id: "lt1", origin: "online" }]);
+  });
+
+  it("reports nothing when the two agree", () => {
+    const result = reconcileTracks(
+      [localTrack({ origin: "online", serverId: "srv-t" })],
+      [{ ...remoteTrack, origin: "online" }],
+    );
+
+    expect(result.originRepairs).toEqual([]);
   });
 });
 

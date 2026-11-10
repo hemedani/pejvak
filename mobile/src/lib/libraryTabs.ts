@@ -16,6 +16,8 @@
  */
 
 import type { IconName } from "@/components/ui/icon";
+import type { LocalTrack } from "@/lib/db/types";
+import { trackOrigin } from "@/lib/origin";
 
 export const LIBRARY_VIEW_LABELS = {
   language: "Online",
@@ -44,19 +46,25 @@ export type LibraryTab = {
 /**
  * Which half of the Tracks view is showing.
  *
- * The library holds two kinds of row that look identical in a list — a file on
- * this phone and an item served by an online source — and the Tracks view is the
- * one place that shows both at once. The badge on each row says which is which;
- * a control that can *separate* them is what turns "provenance" into something
- * the listener can act on ("show me what will still play on a plane").
+ * Named `TrackOrigin` and not `TrackSource`, because `TrackSource` is already
+ * taken and means something else entirely: *how* a local file was found
+ * (`mediastore`, `saf`, `picker`). The question this control asks is the one
+ * `origin` answers — file on this phone, or item served by a source — which is
+ * also what `OriginBadge` and `trackOrigin` mean by the word.
+ *
+ * The library holds two kinds of row that look identical in a list, and the
+ * Tracks view is the one place that shows both at once. The badge on each row
+ * says which is which; a control that can *separate* them is what turns
+ * "provenance" into something the listener can act on ("show me what will still
+ * play on a plane").
  *
  * Two values, not three. "Mixed" is a property of a container (a playlist, a
  * folder) that can hold both; a single track is always one or the other.
  */
-export type TrackSource = "local" | "online";
+export type TrackOrigin = "local" | "online";
 
-export type TrackSourceTab = {
-  value: TrackSource;
+export type TrackOriginTab = {
+  value: TrackOrigin;
   label: string;
   icon: IconName;
 };
@@ -67,12 +75,39 @@ export type TrackSourceTab = {
  * the control and the badges on the rows below it cannot describe the same fact
  * two different ways.
  */
-export const TRACK_SOURCE_TABS: readonly TrackSourceTab[] = [
+export const TRACK_ORIGIN_TABS: readonly TrackOriginTab[] = [
   { value: "local", label: "Local", icon: "device" },
   { value: "online", label: "Online", icon: "stream" },
 ];
 
-export type TrackSourceCounts = { local: number; online: number };
+export type TrackOriginCounts = { local: number; online: number };
+
+/**
+ * The library split in two, once.
+ *
+ * Both halves come out of one pass so they are exactly complementary and
+ * exhaustive: a track is in one of them and never in both, and nothing is
+ * dropped. Splitting with two independent `filter`s is the shape that lets a
+ * track go missing from both halves when the predicate is not symmetric.
+ *
+ * Classified through `trackOrigin` rather than off the column directly, so the
+ * sub-tab and the badge on the row it filters can never disagree about the same
+ * track — the vocabulary that decides "Local" is the one that prints it.
+ */
+export function splitTracksByOrigin<T extends Pick<LocalTrack, "origin">>(
+  tracks: readonly T[],
+): { local: T[]; online: T[] } {
+  const local: T[] = [];
+  const online: T[] = [];
+  for (const track of tracks) {
+    if (trackOrigin(track) === "online") {
+      online.push(track);
+    } else {
+      local.push(track);
+    }
+  }
+  return { local, online };
+}
 
 /**
  * Whether the two kinds are both present, which is the only case where the
@@ -81,12 +116,12 @@ export type TrackSourceCounts = { local: number; online: number };
  * A library of nothing but imported files would get a control whose second half
  * is an empty list — a switch that only ever shows nothing is noise.
  */
-export function hasBothTrackSources(counts: TrackSourceCounts): boolean {
+export function hasBothOrigins(counts: TrackOriginCounts): boolean {
   return counts.local > 0 && counts.online > 0;
 }
 
 /**
- * Which source the Tracks view is showing.
+ * Which origin the Tracks view is showing.
  *
  * When only one kind exists the answer follows the data rather than the last
  * choice: a remembered "Online" with no online tracks left would open an empty
@@ -95,11 +130,11 @@ export function hasBothTrackSources(counts: TrackSourceCounts): boolean {
  * exist, and the default is Local — it is what most libraries are made of, and
  * it is the half that plays with no network.
  */
-export function resolveTrackSource(
-  preferred: TrackSource | null,
-  counts: TrackSourceCounts,
-): TrackSource {
-  if (!hasBothTrackSources(counts)) {
+export function resolveTrackOrigin(
+  preferred: TrackOrigin | null,
+  counts: TrackOriginCounts,
+): TrackOrigin {
+  if (!hasBothOrigins(counts)) {
     return counts.online > 0 ? "online" : "local";
   }
   return preferred ?? "local";

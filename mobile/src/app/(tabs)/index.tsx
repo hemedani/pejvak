@@ -53,15 +53,17 @@ import {
 } from "@/lib/librarySearch";
 import { listPerformance } from "@/lib/listPerformance";
 import {
-  hasBothTrackSources,
+  hasBothOrigins,
   LIBRARY_VIEW_LABELS,
   libraryTabs,
   resolveLibraryView,
-  resolveTrackSource,
-  TRACK_SOURCE_TABS,
+  resolveTrackOrigin,
+  splitTracksByOrigin,
+  TRACK_ORIGIN_TABS,
   type LibraryView,
   type SearchableLibraryView,
-  type TrackSource,
+  type TrackOrigin,
+  type TrackOriginCounts,
 } from "@/lib/libraryTabs";
 import { folderKeyToRouteSegment } from "@/lib/mediaFolders";
 import { findLanguage, sourcesForLanguage } from "@/lib/online";
@@ -231,7 +233,7 @@ export default function LibraryScreen() {
   const [pickingLanguage, setPickingLanguage] = useState(false);
   const [chosenView, setChosenView] = useState<LibraryView | null>(null);
   const view = resolveLibraryView(chosenView, language !== null);
-  const [chosenSource, setChosenSource] = useState<TrackSource | null>(null);
+  const [chosenOrigin, setChosenOrigin] = useState<TrackOrigin | null>(null);
   const tabs = useMemo(() => libraryTabs(language !== null), [language]);
   const sources = useMemo(
     () => (language ? sourcesForLanguage(language.code) : []),
@@ -252,21 +254,21 @@ export default function LibraryScreen() {
   const searching = terms.length > 0;
 
   /**
-   * The two kinds of row the Tracks view holds, counted once per data load.
+   * The two kinds of row the Tracks view holds, split once per data load.
    *
-   * Counted from the whole library rather than from the visible half, because
-   * the counts are what decide whether the sub-tab exists at all — a library of
-   * imported files only has nothing to switch between.
+   * Split from the whole library rather than from the visible half, because the
+   * counts are what decide whether the sub-tab exists at all — a library of
+   * imported files only has nothing to switch between. One split, so the two
+   * halves are exactly complementary: every track is in one of them, and the
+   * list, the search index and the queue all read the same array.
    */
-  const sourceCounts = useMemo(
-    () => ({
-      local: tracks.filter((track) => track.origin !== "online").length,
-      online: tracks.filter((track) => track.origin === "online").length,
-    }),
-    [tracks],
+  const byOrigin = useMemo(() => splitTracksByOrigin(tracks), [tracks]);
+  const originCounts = useMemo<TrackOriginCounts>(
+    () => ({ local: byOrigin.local.length, online: byOrigin.online.length }),
+    [byOrigin],
   );
-  const showSourceTabs = hasBothTrackSources(sourceCounts);
-  const source = resolveTrackSource(chosenSource, sourceCounts);
+  const showOriginTabs = hasBothOrigins(originCounts);
+  const origin = resolveTrackOrigin(chosenOrigin, originCounts);
 
   /**
    * What the Tracks list actually draws, and what its queue is built from.
@@ -275,13 +277,7 @@ export default function LibraryScreen() {
    * "continue listening" card and the play queue all read from it, so a row the
    * sub-tab has hidden cannot be searched, continued, or played next.
    */
-  const visibleTracks = useMemo(
-    () =>
-      source === "online"
-        ? tracks.filter((track) => track.origin === "online")
-        : tracks.filter((track) => track.origin !== "online"),
-    [source, tracks],
-  );
+  const visibleTracks = origin === "online" ? byOrigin.online : byOrigin.local;
 
   /** True between a drag/momentum starting and the last one ending. */
   const scrollingRef = useRef(false);
@@ -789,16 +785,16 @@ export default function LibraryScreen() {
         return undefined;
       }
       const plural = visibleTracks.length === 1 ? "" : "s";
-      return showSourceTabs
-        ? `${visibleTracks.length} ${source} track${plural}`
+      return showOriginTabs
+        ? `${visibleTracks.length} ${origin} track${plural}`
         : `${visibleTracks.length} track${plural}`;
     }
     return tracks.length > 0 ? `${tracks.length} tracks` : undefined;
   }, [
     language,
     searching,
-    showSourceTabs,
-    source,
+    showOriginTabs,
+    origin,
     sources,
     totalMatches,
     tracks.length,
@@ -1052,12 +1048,12 @@ export default function LibraryScreen() {
             Only when both kinds are present — see `hasBothTrackSources`. It
             stays put while a query is running, because the search reads the
             half it names. */}
-        {pageView === "tracks" && showSourceTabs ? (
+        {pageView === "tracks" && showOriginTabs ? (
           <Reveal index={7}>
             <SegmentedControl
-              options={TRACK_SOURCE_TABS}
-              value={source}
-              onChange={setChosenSource}
+              options={TRACK_ORIGIN_TABS}
+              value={origin}
+              onChange={setChosenOrigin}
               accessibilityLabel="Show local or online tracks"
             />
           </Reveal>
