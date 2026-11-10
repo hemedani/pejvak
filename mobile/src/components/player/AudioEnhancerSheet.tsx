@@ -23,10 +23,18 @@
  *     app's player, so while it is on it shapes whatever the phone plays. The
  *     footer says so, and switching it off releases the effect rather than
  *     leaving a silent curve attached.
+ *
+ * The `GestureHandlerRootView` inside the modal is not decoration. A `Modal` is a
+ * second window, and a gesture handler only receives touches from a root view in
+ * *its own* window — the app's root view, being in the window underneath, cannot
+ * forward them. Without this the sliders render, look correct, and never move,
+ * while the switch (a plain native `Switch`) keeps working. That asymmetry is the
+ * signature of this bug: it is not the slider, it is the window.
  */
 
 import { useEffect } from "react";
 import { Modal, Pressable, StyleSheet, Switch, View } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ElasticPressable } from "@/components/motion/ElasticPressable";
@@ -79,7 +87,7 @@ export function AudioEnhancerSheet({ onClose, tint }: AudioEnhancerSheetProps) {
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}>
-      <View style={styles.root}>
+      <GestureHandlerRootView style={styles.root}>
         <ElasticPressable
           accessibilityRole="button"
           accessibilityLabel="Dismiss the audio enhancer"
@@ -187,7 +195,7 @@ export function AudioEnhancerSheet({ onClose, tint }: AudioEnhancerSheetProps) {
             </View>
           </View>
         </GlassSurface>
-      </View>
+      </GestureHandlerRootView>
     </Modal>
   );
 }

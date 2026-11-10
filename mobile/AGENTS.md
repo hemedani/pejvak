@@ -68,6 +68,7 @@ Two treatments for a recording that is hard to hear, one service, because both h
 - **Both follow the transport from `handleStatus`.** `syncPlayback(status.playing)` is idempotent so the 1 Hz tick may call it; `stop()` calls `release()`. The noise is *paused*, not released, while paused: recreating a player on resume would delay the thing the room tone exists to keep alive.
 - **These are device preferences and are never synced.** Whether a speaker drops out during silence is a fact about *this* pair of headphones; a level that followed the listener to a phone that did not need it would be noise they never asked for.
 - `src/components/ui/slider.tsx` is in the `react-hooks/immutability` exemption list for the same reason the sheets are: it writes shared values from a pan callback and reaches the JS side through `scheduleOnRN`.
+- **A `Modal` needs its own `GestureHandlerRootView`.** A React Native `Modal` is a second Android window, and a `GestureDetector` only receives touches from a root view inside *that* window — the app's root view sits in the window underneath and cannot forward them. Without one, the enhancer's sliders rendered perfectly and never moved while the switch (a plain native `Switch`, no gesture handler) kept working; that asymmetry is the signature. Any future modal that puts a slider or a swipe inside it needs the same wrapper.
 
 ## Local database (`LocalDBService`)
 

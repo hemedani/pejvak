@@ -15,6 +15,28 @@ import { DEFAULT_ENHANCER } from "@/lib/audioEffects";
 import * as AudioEffectsService from "@/services/AudioEffectsService";
 import { useAudioEffectsStore } from "@/store/audioEffectsStore";
 
+/**
+ * `GestureHandlerRootView` calls the native module's `install()` as it renders,
+ * and there is no native module here. It is stood in for by a plain view with a
+ * testID, which keeps the assertion — "the sheet gives its sliders a gesture root
+ * of their own" — meaningful without pretending the mock is the real thing.
+ */
+jest.mock("react-native-gesture-handler", () => {
+  // A `jest.mock` factory is hoisted above the imports, so these cannot be
+  // module-level imports: they would be `undefined` by the time it runs.
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const React = require("react");
+  const { View } = require("react-native");
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  const actual = jest.requireActual("react-native-gesture-handler");
+
+  return {
+    ...actual,
+    GestureHandlerRootView: (props: Record<string, unknown>) =>
+      React.createElement(View, { ...props, testID: "enhancer-gesture-root" }),
+  };
+});
+
 jest.mock("@/services/AudioEffectsService", () => ({
   probe: jest.fn(),
   setEnhancer: jest.fn(),
@@ -76,6 +98,19 @@ describe("AudioEnhancerSheet", () => {
     });
 
     expect(service.setEnhancer).toHaveBeenCalledWith({ bassDb: 2 });
+  });
+
+  /**
+   * A `Modal` is a window of its own, and a gesture handler only receives touches
+   * from a root view inside that window. Without this the sliders draw correctly
+   * and never move, while the switch — a plain native `Switch` — keeps working,
+   * which is exactly how the bug was reported.
+   */
+  it("carries a gesture root of its own, so the sliders can be dragged", async () => {
+    useAudioEffectsStore.getState().patch({ enhancerAvailable: true });
+    await renderSheet();
+
+    expect(screen.getByTestId("enhancer-gesture-root")).toBeTruthy();
   });
 
   it("switches the whole curve off from the switch", async () => {
