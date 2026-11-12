@@ -7,6 +7,7 @@ import {
 import Constants, { ExecutionEnvironment } from "expo-constants";
 
 import { isStreamUri } from "@/lib/audioLocation";
+import { normalizeVolume, volumeAmplitude } from "@/lib/audioEffects";
 import type { LocalTrack } from "@/lib/db/types";
 import { getAdapter, isLiveSource } from "@/lib/online";
 import type { PlaybackWait } from "@/lib/playbackPhase";
@@ -49,6 +50,16 @@ type ActiveRun = {
  */
 const IS_EXPO_GO = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
+/** The device preference this service owns, alongside the tone curve. */
+const SETTING_VOLUME = "volume";
+
+/**
+ * Sliders report every pixel of a drag. Writing the setting that often would be
+ * a hundred database writes per gesture; the audio changes immediately and the
+ * write waits for the finger to rest.
+ */
+const PERSIST_DELAY_MS = 400;
+
 let player: AudioPlayer | null = null;
 let currentTrack: LocalTrack | null = null;
 let active: ActiveSession | null = null;
@@ -90,18 +101,29 @@ let nextSessionStartSec = 0;
  */
 let durationReported = false;
 /**
- * Seconds heard since this track was opened, as a float.
+ * Seconds heard since this listen was opened, as a float.
  *
  * The session tracker's total is reset every time a session ends — a pause, a
- * speed change — because those are separate records. The player's readout is
- * about the *listener*, not the record: someone who paused for a minute and
- * carried on has listened to the sum of both. So the deltas are accumulated
- * here, across sessions, and only a new track clears them.
+ * speed change — because those are separate records. This figure is about the
+ * *listen* the listener is in the middle of, which is the unit History shows:
+ * one entry per stretch, and a stretch survives an automatic advance. So the
+ * deltas accumulate across a track that ended by itself, and start again from
+ * zero when the listener pauses, skips or loads something else — because that
+ * is exactly when History starts a new entry.
+ *
+ * The rule is the stretch rule, stated once in `lib/listeningStretch` and
+ * applied here: `pendingStretchId` is non-null only when the previous track
+ * handed its listen forward.
  *
  * A float, because a status event can report a 0.3 s delta and rounding each
  * one would lose more than it kept; the store is handed the floor.
  */
 let listenedSec = 0;
+
+/** The player's own output level, 0–100. Device preference; never synced. */
+let volumePercent = 100;
+let volumeWriteTimer: ReturnType<typeof setTimeout> | null = null;
+let preferencesLoaded: Promise<void> | null = null;
 
 /**
  * Tracks already reported as unreachable, so a player that keeps failing does
@@ -163,9 +185,62 @@ function clearWait(): void {
 function getPlayer(): AudioPlayer {
   if (!player) {
     player = createAudioPlayer(null, { updateInterval: 1000 });
+    // The stored level is applied at creation, so the first second of audio is
+    // already at the volume the listener chose rather than at full scale.
+    player.volume = volumeAmplitude(volumePercent);
     player.addListener("playbackStatusUpdate", handleStatus);
   }
   return player;
+}
+
+/**
+ * Reads the device preferences this service owns. Called once at launch.
+ *
+ * Separate from `configureAudio`, which is about the audio session and runs on
+ * the first play: the volume is a *screen* value as well, and the slider has to
+ * read the stored level before anything is playing.
+ */
+export function loadPreferences(): Promise<void> {
+  preferencesLoaded ??= (async () => {
+    const stored = await LocalDBService.getSetting(SETTING_VOLUME).catch(() => null);
+    volumePercent = normalizeVolume(stored);
+    patch({ volume: volumePercent });
+    applyVolume();
+  })().catch(() => {
+    // The default in the store is already correct; a failed read is not worth
+    // a message. Retrying would only repeat it.
+  });
+  return preferencesLoaded;
+}
+
+/**
+ * Sets the player's own output level, 0–100.
+ *
+ * Written through the store and applied to the player in the same call, so the
+ * slider and the sound can never disagree; the persisted write is coalesced,
+ * because a drag reports every pixel.
+ */
+export function setVolume(percent: number): void {
+  const next = normalizeVolume(percent);
+  if (next === volumePercent) {
+    return;
+  }
+  volumePercent = next;
+  patch({ volume: next });
+  applyVolume();
+  if (volumeWriteTimer) {
+    clearTimeout(volumeWriteTimer);
+  }
+  volumeWriteTimer = setTimeout(() => {
+    volumeWriteTimer = null;
+    void LocalDBService.setSetting(SETTING_VOLUME, String(volumePercent)).catch(() => undefined);
+  }, PERSIST_DELAY_MS);
+}
+
+function applyVolume(): void {
+  if (player) {
+    player.volume = volumeAmplitude(volumePercent);
+  }
 }
 
 /** Configure background playback once. Safe to call repeatedly. */
@@ -299,9 +374,19 @@ async function beginSession(
     // Automatic progression hands the current stretch forward; every other way
     // into a track starts a new one. Consumed here so it cannot outlive the
     // handover it was set for.
+    const handedForward = pendingStretchId !== null;
     const stretchId = pendingStretchId ?? LocalDBService.newStretchId();
     pendingStretchId = null;
     activeStretchId = stretchId;
+    // The readout follows the *listen*, not the session: a track that ended by
+    // itself continues the same History entry and the same figure, while a
+    // pause, a skip or a fresh queue begins a new entry — and so begins again
+    // from zero. Reset here rather than only in `loadAndPlay`, because resuming
+    // after a pause never loads a track.
+    if (!handedForward && listenedSec !== 0) {
+      listenedSec = 0;
+      patch({ listenedSec: 0 });
+    }
     seekReported = false;
     const session = await LocalDBService.insertSession({
       trackId: track.id,
@@ -625,9 +710,14 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
   currentTrack = track;
   awaitingAudio = true;
   durationReported = false;
-  // A new track is a new listen: the readout counts from zero even when the
-  // queue advanced by itself.
-  listenedSec = 0;
+  // A new track is a new listen *unless the previous one handed its listen
+  // forward* — an automatic advance is the same History entry, so the figure
+  // continues instead of restarting. Every other route into a track (a tap, a
+  // skip, a fresh queue) arrives here with nothing handed forward.
+  const continuingListen = pendingStretchId !== null;
+  if (!continuingListen) {
+    listenedSec = 0;
+  }
   nextSessionStartSec = Math.round(startPositionSec);
   pendingSeekSec = startPositionSec > 0 ? startPositionSec : null;
 
@@ -647,7 +737,7 @@ export async function loadAndPlay(track: LocalTrack, startPositionSec = 0): Prom
     isAudiobook: track.isAudiobook,
     positionSec: Math.floor(startPositionSec),
     durationSec: track.durationSec,
-    listenedSec: 0,
+    listenedSec: Math.floor(listenedSec),
     playbackSpeed: defaultSpeed,
     error: null,
   });
@@ -757,6 +847,9 @@ export async function stop(): Promise<void> {
   reportedUnreachable.clear();
 
   usePlayerStore.getState().reset();
+  // Closing the bar ends the listen, not the preference: the level the listener
+  // set belongs to the phone, so it survives the reset that clears the track.
+  patch({ volume: volumePercent });
 }
 
 export async function seekTo(positionSec: number): Promise<void> {
@@ -986,4 +1079,11 @@ export function __resetForTests(): void {
   durationReported = false;
   seekReported = false;
   reportedUnreachable.clear();
+  listenedSec = 0;
+  volumePercent = 100;
+  preferencesLoaded = null;
+  if (volumeWriteTimer) {
+    clearTimeout(volumeWriteTimer);
+    volumeWriteTimer = null;
+  }
 }

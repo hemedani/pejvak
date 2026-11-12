@@ -17,6 +17,8 @@
  * can be tested without an audio engine, a device, or a rendered screen.
  */
 
+import { TONE_TARGET_RMS_DB } from "@/lib/ambientTones";
+
 /**
  * A tone control's travel, in decibels.
  *
@@ -171,32 +173,85 @@ export function parseEnhancer(raw: string | null): AudioEnhancerSettings {
 export const ROOM_TONE_MAX = 100;
 
 /**
+ * The noise's level in the mix, in dBFS, at the first step and at the top.
+ *
+ * These are figures *in the output*, not the player's volume: the generated
+ * buffer has a known RMS (see `ambientTones`), so the two are one subtraction
+ * apart. The floor is below the noise floor of a phone's output stage — the
+ * listener hears nothing, and the stream still never reaches digital silence,
+ * which is the only thing the tone is *required* to do. The ceiling is a soft,
+ * clearly present bed: audible in a quiet room, never competing with speech.
+ *
+ * The span is deliberately large and the mapping linear in decibels. The old
+ * curve topped out at −15 dBFS, which made even one percent audible; a listener
+ * who wants the tone *under* a recording needs the whole bottom half of the
+ * slider to be quieter than their room, not merely quieter than the last step.
+ */
+export const ROOM_TONE_DB = { floor: -75, ceiling: -30 } as const;
+
+/**
  * The level the noise is played at, as a linear amplitude for `player.volume`.
  *
  * Mapped in decibels rather than as a percentage of full scale, because that is
  * how the ear works: a linear slider would spend its first half inaudible and
- * its second half far too loud. The floor sits at −55 dBFS — still thousands of
- * times above the digital silence that drops a Bluetooth link, and quiet enough
- * to disappear under a recording — and the ceiling at −15 dBFS, which is
- * audible but never competes with speech.
+ * its second half far too loud.
  */
 export function roomToneAmplitude(percent: number): number {
   const clamped = clamp(asFinite(percent, 0), 0, ROOM_TONE_MAX);
   if (clamped === 0) {
     return 0;
   }
-  const db = -55 + (clamped / ROOM_TONE_MAX) * 40;
-  return 10 ** (db / 20);
+  const db =
+    ROOM_TONE_DB.floor +
+    (clamped / ROOM_TONE_MAX) * (ROOM_TONE_DB.ceiling - ROOM_TONE_DB.floor);
+  // The generated buffer is normalised to `TONE_TARGET_RMS_DB`, so the player's
+  // linear volume is the difference between the level wanted and that buffer.
+  return 10 ** ((db - TONE_TARGET_RMS_DB) / 20);
 }
 
-/** "Off" or "24%". */
-export function describeRoomTone(percent: number): string {
+/** The volume slider is 0–100, and it is the player's own output level. */
+export const VOLUME_MAX = 100;
+
+/**
+ * Where the volume control bottoms out, in decibels below full scale.
+ *
+ * A linear slider on amplitude spends its top third doing almost nothing and its
+ * bottom third dropping off a cliff; −40 dB at the bottom spreads the travel
+ * over a range the ear hears as even, and still leaves 1 % effectively silent.
+ */
+export const VOLUME_FLOOR_DB = -40;
+
+/** The player's `volume` for a slider position. 100 % is exactly 1.0. */
+export function volumeAmplitude(percent: number): number {
+  const clamped = clamp(asFinite(percent, 0), 0, VOLUME_MAX);
+  if (clamped === 0) {
+    return 0;
+  }
+  return 10 ** ((VOLUME_FLOOR_DB * (1 - clamped / VOLUME_MAX)) / 20);
+}
+
+/** Coerces a stored or dragged volume into 0–100 whole percent. */
+export function normalizeVolume(value: number | string | null | undefined): number {
+  return normalizePercent(value);
+}
+
+/** "Off" or "24%" — the readout beside a level slider. */
+export function describeLevel(percent: number): string {
   const clamped = Math.round(clamp(asFinite(percent, 0), 0, ROOM_TONE_MAX));
   return clamped === 0 ? "Off" : `${clamped}%`;
 }
 
+/** "Off" or "24%". */
+export function describeRoomTone(percent: number): string {
+  return describeLevel(percent);
+}
+
 /** Coerces a stored or dragged value into 0–100 whole percent. */
 export function normalizeRoomTone(value: number | string | null | undefined): number {
+  return normalizePercent(value);
+}
+
+function normalizePercent(value: number | string | null | undefined): number {
   const parsed = typeof value === "string" ? Number(value) : value;
   if (typeof parsed !== "number" || !Number.isFinite(parsed)) {
     return 0;

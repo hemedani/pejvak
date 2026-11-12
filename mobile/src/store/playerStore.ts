@@ -46,6 +46,15 @@ type PlayerState = {
    */
   listenedSec: number;
   playbackSpeed: number;
+  /**
+   * The player's own output level, 0–100.
+   *
+   * Separate from `listenedSec`-style state in one way that matters: it is a
+   * device preference, persisted locally and never synced, because how loud a
+   * phone needs to be is a fact about the phone. The phone's hardware volume
+   * multiplies it.
+   */
+  volume: number;
   error: string | null;
   /** Track ids in play order. */
   queue: string[];
@@ -94,6 +103,7 @@ const initialState = {
   durationSec: 0,
   listenedSec: 0,
   playbackSpeed: 1,
+  volume: 100,
   error: null,
   queue: [] as string[],
   queueIndex: -1,

@@ -26,6 +26,7 @@ import { PlaybackStatusLine } from "@/components/player/PlaybackStatusLine";
 import { RoomToneControl } from "@/components/player/RoomToneControl";
 import { Scrubber } from "@/components/player/Scrubber";
 import { TransportControls } from "@/components/player/TransportControls";
+import { VolumeControl } from "@/components/player/VolumeControl";
 import { ThemedText } from "@/components/themed-text";
 import { Icon } from "@/components/ui/icon";
 import { GlassChip } from "@/components/ui/glass/GlassChip";
@@ -287,7 +288,7 @@ export function PlayerContent({
               {listenedSec > 0 ? (
                 <View
                   accessible
-                  accessibilityLabel={`${formatClock(listenedSec)} listened this session`}
+                  accessibilityLabel={`${formatClock(listenedSec)} listened this listen`}
                   style={styles.listened}>
                   <Icon name="clock" size={12} color={theme.textTertiary} />
                   <ThemedText type="numeric" themeColor="textTertiary">
@@ -366,8 +367,13 @@ export function PlayerContent({
 
           {/* Directly under the transport, where the ear already is: this is a
               workaround for a speaker that drops out mid-sentence, and it has to
-              be adjustable without leaving what is being listened to. */}
-          <RoomToneControl tint={ramp[1]} />
+              be adjustable without leaving what is being listened to. Volume
+              sits above it because it is the level everything else is judged
+              against. */}
+          <View style={styles.levels}>
+            <VolumeControl tint={ramp[1]} />
+            <RoomToneControl tint={ramp[1]} />
+          </View>
 
           <View style={styles.chips}>
             {/* First, because it answers "what am I in the middle of", which
@@ -514,6 +520,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing.sm,
+  },
+  /** The two level rows, tight against each other so they read as one block. */
+  levels: {
+    gap: spacing.xs,
   },
   notes: {
     gap: spacing.sm,

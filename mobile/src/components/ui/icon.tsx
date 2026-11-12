@@ -105,6 +105,16 @@ export const ICON_GLYPHS = {
   equalizer: "tune-vertical",
   /** The room tone: a faint waveform that never reaches zero. */
   roomTone: "waveform",
+  /** The player's own output level — not a treatment, the volume itself. */
+  volume: "volume-high",
+  /**
+   * The tones a room tone can be made of. Each is the place, not the sound:
+   * the picker's whole job is to let someone choose a *where*.
+   */
+  rain: "weather-pouring",
+  forest: "pine-tree",
+  waves: "waves",
+  wind: "weather-windy",
   moon: "moon-waning-crescent",
   /** The other half of `moon` — a theme control needs two, not one. */
   sunny: "white-balance-sunny",

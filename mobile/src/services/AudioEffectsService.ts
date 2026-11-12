@@ -25,6 +25,13 @@ import { File, Paths } from "expo-file-system";
 
 import AudioEnhancer from "../../modules/audio-enhancer";
 import {
+  DEFAULT_TONE_ID,
+  buildToneWav,
+  parseToneId,
+  toneFileName,
+  type AmbientToneId,
+} from "@/lib/ambientTones";
+import {
   DEFAULT_ENHANCER,
   normalizeRoomTone,
   parseEnhancer,
@@ -33,12 +40,22 @@ import {
   serializeEnhancer,
   type AudioEnhancerSettings,
 } from "@/lib/audioEffects";
-import { ROOM_TONE_FILE_NAME, buildRoomToneWav } from "@/lib/roomTone";
 import { LocalDBService } from "@/services/LocalDBService";
 import { useAudioEffectsStore, type AudioEffectsPatch } from "@/store/audioEffectsStore";
 
 const SETTING_ENHANCER = "audioEnhancer";
 const SETTING_ROOM_TONE = "roomTone";
+const SETTING_TONE = "ambientTone";
+
+/**
+ * The level a tone is turned on at when the listener picks one while the slider
+ * is at zero.
+ *
+ * Choosing a tone is asking for it to be heard, and a control that changes its
+ * own name and produces no sound reads as broken — the same rule the enhancer
+ * follows when a band is moved. Kept low: the tone is a floor, not a track.
+ */
+const DEFAULT_TONE_LEVEL = 35;
 
 /**
  * Sliders report every pixel of a drag. Writing the setting that often would be
@@ -49,6 +66,7 @@ const PERSIST_DELAY_MS = 400;
 
 let enhancer: AudioEnhancerSettings = DEFAULT_ENHANCER;
 let roomTone = 0;
+let tone: AmbientToneId = DEFAULT_TONE_ID;
 let loaded: Promise<void> | null = null;
 
 let attached = false;
@@ -92,13 +110,15 @@ function flushWrites(): void {
  */
 export function load(): Promise<void> {
   loaded ??= (async () => {
-    const [storedEnhancer, storedRoomTone] = await Promise.all([
+    const [storedEnhancer, storedRoomTone, storedTone] = await Promise.all([
       LocalDBService.getSetting(SETTING_ENHANCER).catch(() => null),
       LocalDBService.getSetting(SETTING_ROOM_TONE).catch(() => null),
+      LocalDBService.getSetting(SETTING_TONE).catch(() => null),
     ]);
     enhancer = parseEnhancer(storedEnhancer);
     roomTone = normalizeRoomTone(storedRoomTone);
-    patch({ enhancer, roomTone });
+    tone = parseToneId(storedTone);
+    patch({ enhancer, roomTone, tone });
     // Audio can already be playing if the read lost the race with a tap on the
     // mini-player. Without this the stored settings would sit unused until the
     // next track.
@@ -154,6 +174,31 @@ export function setRoomTone(percent: number): void {
   roomTone = next;
   patch({ roomTone });
   scheduleWrite(SETTING_ROOM_TONE, String(roomTone));
+  void applyRoomTone();
+}
+
+/**
+ * Chooses which sound the noise floor is made of.
+ *
+ * The player is re-pointed at the new file rather than rebuilt, and it keeps
+ * playing: the tone is a floor under something else, and a gap while a name
+ * changes would be the one moment the sink hears silence. Picking a tone while
+ * the level is at zero turns it on at `DEFAULT_TONE_LEVEL`, because a choice
+ * that produces nothing is indistinguishable from a broken control.
+ */
+export function setTone(id: AmbientToneId): void {
+  const next = parseToneId(id);
+  if (next === tone) {
+    return;
+  }
+  tone = next;
+  patch({ tone });
+  scheduleWrite(SETTING_TONE, tone);
+  if (roomTone === 0) {
+    roomTone = DEFAULT_TONE_LEVEL;
+    patch({ roomTone });
+    scheduleWrite(SETTING_ROOM_TONE, String(roomTone));
+  }
   void applyRoomTone();
 }
 
@@ -277,22 +322,25 @@ async function applyRoomTone(): Promise<void> {
  * zero. A `null` return means this device could not provide the file, and the
  * slider will simply do nothing — which is the right failure for a workaround
  * nobody should have to think about.
+ *
+ * A change of tone re-points the same player rather than building a second one:
+ * the old file is released with the old URI, and nothing else about the player
+ * changes.
  */
 function ensureNoisePlayer(): AudioPlayer | null {
-  if (noise && noiseUri) {
-    return noise;
-  }
-  const uri = ensureNoiseFile();
+  const uri = ensureNoiseFile(tone);
   if (!uri) {
     return null;
   }
   try {
     const player = noise ?? createAudioPlayer(null, { updateInterval: 5000 });
     player.loop = true;
-    player.replace({ uri });
+    if (uri !== noiseUri) {
+      player.replace({ uri });
+      noiseUri = uri;
+    }
     player.volume = roomToneAmplitude(roomTone);
     noise = player;
-    noiseUri = uri;
     return player;
   } catch {
     return null;
@@ -308,19 +356,20 @@ function releaseNoise(): void {
 }
 
 /**
- * Writes the noise file into the cache if it is not there.
+ * Writes a tone's file into the cache if it is not there.
  *
  * The cache is the right home: the bytes are regenerable, and a system that
- * reclaims them costs one regeneration rather than an error.
+ * reclaims them costs one regeneration rather than an error. Each tone has its
+ * own name, so switching back and forth costs one write per tone, ever.
  */
-function ensureNoiseFile(): string | null {
+function ensureNoiseFile(id: AmbientToneId): string | null {
   try {
-    const file = new File(Paths.cache, ROOM_TONE_FILE_NAME);
+    const file = new File(Paths.cache, toneFileName(id));
     if (file.exists) {
       return file.uri;
     }
     file.create();
-    file.write(buildRoomToneWav());
+    file.write(buildToneWav(id));
     return file.uri;
   } catch {
     return null;
@@ -331,6 +380,7 @@ function ensureNoiseFile(): string | null {
 export function __resetForTests(): void {
   enhancer = DEFAULT_ENHANCER;
   roomTone = 0;
+  tone = DEFAULT_TONE_ID;
   loaded = null;
   attached = false;
   attachReason = null;

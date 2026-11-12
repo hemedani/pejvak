@@ -7,19 +7,23 @@
  * same value and only one of them is true.
  */
 
+import { TONE_TARGET_RMS_DB } from "@/lib/ambientTones";
 import {
   DEFAULT_ENHANCER,
   ENHANCER_RANGE,
   describeGainDb,
+  describeLevel,
   describeRoomTone,
   isEnhancerActive,
   isEnhancerFlat,
   normalizeEnhancer,
   normalizeRoomTone,
+  normalizeVolume,
   parseEnhancer,
   patchEnhancer,
   roomToneAmplitude,
   serializeEnhancer,
+  volumeAmplitude,
 } from "@/lib/audioEffects";
 
 describe("normalizeEnhancer", () => {
@@ -122,6 +126,11 @@ describe("parseEnhancer", () => {
 });
 
 describe("roomToneAmplitude", () => {
+  /** What the noise actually sits at in the mix, given the generated buffer. */
+  function levelDb(percent: number): number {
+    return TONE_TARGET_RMS_DB + 20 * Math.log10(roomToneAmplitude(percent));
+  }
+
   it("is silent at zero, which is the only off", () => {
     expect(roomToneAmplitude(0)).toBe(0);
     expect(roomToneAmplitude(-10)).toBe(0);
@@ -134,17 +143,58 @@ describe("roomToneAmplitude", () => {
     }
   });
 
-  it("stays below a level that would compete with speech", () => {
-    // −15 dBFS at the top of the slider: audible, never loud.
-    expect(roomToneAmplitude(100)).toBeLessThan(0.2);
-    expect(roomToneAmplitude(100)).toBeGreaterThan(0.15);
+  it("stays below a level that would compete with speech, even at the top", () => {
+    // −30 dBFS in the mix: a floor under a recording, never a layer over it.
+    expect(levelDb(100)).toBeLessThan(-28);
+    expect(levelDb(100)).toBeGreaterThan(-33);
+  });
+
+  it("makes the low end of the slider inaudible under a recording", () => {
+    // The complaint this curve answers: at 1 % and 10 % the old mapping was
+    // still audible under a quiet passage. Both are now below the noise floor
+    // of the phone itself.
+    expect(levelDb(1)).toBeLessThan(-70);
+    expect(levelDb(10)).toBeLessThan(-70);
+    expect(levelDb(50)).toBeLessThan(-50);
   });
 
   it("keeps even the first step above digital silence", () => {
-    // The whole point: a sink that hears true silence powers down. −54.6 dBFS
-    // is roughly 1/500 of full scale — inaudible under a recording, and
-    // thousands of times above a zeroed buffer.
-    expect(roomToneAmplitude(1)).toBeGreaterThan(0.001);
+    // The whole point: a sink that hears true silence powers down. Any non-zero
+    // buffer is thousands of times above a zeroed one, however quiet it sounds.
+    expect(roomToneAmplitude(1)).toBeGreaterThan(0.0005);
+  });
+});
+
+describe("volumeAmplitude", () => {
+  it("is exactly full scale at the top", () => {
+    expect(volumeAmplitude(100)).toBeCloseTo(1, 6);
+  });
+
+  it("is silent at zero", () => {
+    expect(volumeAmplitude(0)).toBe(0);
+  });
+
+  it("falls in decibels rather than in amplitude", () => {
+    // Half the slider is −20 dB, not half the amplitude: a linear mapping spends
+    // its top third doing almost nothing and its bottom third dropping off a
+    // cliff.
+    expect(20 * Math.log10(volumeAmplitude(50))).toBeCloseTo(-20, 6);
+    expect(20 * Math.log10(volumeAmplitude(25))).toBeCloseTo(-30, 6);
+  });
+
+  it("clamps anything it is handed", () => {
+    expect(volumeAmplitude(-5)).toBe(0);
+    expect(volumeAmplitude(400)).toBeCloseTo(1, 6);
+    expect(normalizeVolume(140)).toBe(100);
+    expect(normalizeVolume("30")).toBe(30);
+    expect(normalizeVolume("nonsense")).toBe(0);
+  });
+});
+
+describe("describeLevel", () => {
+  it("says Off at zero and a percentage otherwise", () => {
+    expect(describeLevel(0)).toBe("Off");
+    expect(describeLevel(42)).toBe("42%");
   });
 });
 

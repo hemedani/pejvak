@@ -56,6 +56,9 @@ export default function RootLayout() {
     // attaching an effect at launch would colour audio this app is not playing.
     // The first playback arms both.
     void AudioEffectsService.load();
+    // The player's own volume *is* applied at launch: it belongs to the
+    // player's next sound, not to whatever the device is playing now.
+    void TrackPlayerService.loadPreferences();
   }, []);
 
   useEffect(() => {
