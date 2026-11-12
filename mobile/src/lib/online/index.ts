@@ -12,10 +12,13 @@ import type { StatusSpec } from "@/lib/rowStatus";
 import { aminikhaahAdapter } from "@/lib/online/aminikhaah";
 import { aminikhaahPodcastsAdapter } from "@/lib/online/aminikhaahPodcasts";
 import { archiveLanguageFacets, archiveSources, createArchiveAdapter } from "@/lib/online/archive";
+import { esraAdapter } from "@/lib/online/esra";
 import { librivoxAdapter } from "@/lib/online/librivox";
 import { manahejAdapter } from "@/lib/online/manahej";
+import { mesbahAdapter } from "@/lib/online/mesbah";
 import { parseDownloadedFolderKey } from "@/lib/online/naming";
 import { radioBrowserAdapter } from "@/lib/online/radiobrowser";
+import { shariatiAdapter } from "@/lib/online/shariati";
 import type { OnlineAdapter, OnlineLanguage, OnlineSource, OnlineSourceKind } from "@/lib/online/types";
 
 export * from "@/lib/online/languages";
@@ -34,6 +37,9 @@ export const SOURCES: readonly OnlineSource[] = [
   manahejAdapter.source,
   aminikhaahAdapter.source,
   aminikhaahPodcastsAdapter.source,
+  esraAdapter.source,
+  mesbahAdapter.source,
+  shariatiAdapter.source,
   librivoxAdapter.source,
   radioBrowserAdapter.source,
   ...archiveSources(),
@@ -71,6 +77,9 @@ const ADAPTER_BUILDERS: Record<OnlineSourceKind, (source: OnlineSource) => Onlin
   manahej: () => manahejAdapter,
   aminikhaah: () => aminikhaahAdapter,
   aminikhaahpodcasts: () => aminikhaahPodcastsAdapter,
+  esra: () => esraAdapter,
+  mesbah: () => mesbahAdapter,
+  shariati: () => shariatiAdapter,
   librivox: () => librivoxAdapter,
   radiobrowser: () => radioBrowserAdapter,
   archive: (source) => createArchiveAdapter(source),
@@ -157,6 +166,9 @@ const COLLECTION_KIND_LABELS: Record<OnlineSourceKind, string> = {
   manahej: "Category",
   aminikhaah: "Series",
   aminikhaahpodcasts: "Episode",
+  esra: "Series",
+  mesbah: "Lecture",
+  shariati: "Audiobook",
   librivox: "Audiobook",
   radiobrowser: "Station",
   archive: "Collection",

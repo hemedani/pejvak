@@ -80,6 +80,16 @@ describe("the registry", () => {
     expect(sourcesForLanguage("sv").length).toBeGreaterThan(0);
   });
 
+  it("offers a hand-written archive for each of the Persian scholars", () => {
+    // One adapter per scholar's own institute, added together: a regression
+    // that unregisters one of them would otherwise only show up as a scholar
+    // quietly missing from the Browse tab.
+    const persian = sourcesForLanguage("fa").map((source) => source.id);
+    expect(persian).toEqual(
+      expect.arrayContaining(["esra", "mesbah", "shariati"]),
+    );
+  });
+
   it("still answers nothing for a language it does not know", () => {
     expect(sourcesForLanguage("xx")).toEqual([]);
   });

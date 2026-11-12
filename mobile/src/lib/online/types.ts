@@ -40,7 +40,10 @@ export type OnlineSourceKind =
   | "aminikhaahpodcasts"
   | "archive"
   | "librivox"
-  | "radiobrowser";
+  | "radiobrowser"
+  | "esra"
+  | "mesbah"
+  | "shariati";
 
 /** A provider of free audio for one language. */
 export type OnlineSource = {
