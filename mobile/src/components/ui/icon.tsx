@@ -67,6 +67,15 @@ export const ICON_GLYPHS = {
    * will *do* with a recording, not about who is doing it. */
   ai: "creation-outline",
   aiFilled: "creation",
+  /**
+   * The four tools. Each glyph says what comes *out*, not what goes in: a
+   * transcript is text in a frame, a summary is short lines, a spoken summary
+   * is a speaker carrying a message, and cleanup is a filter.
+   */
+  transcribe: "text-recognition",
+  summarize: "text-short",
+  audioSummary: "speaker-message",
+  enhance: "filter-variant",
   playlists: "playlist-music-outline",
   playlistsFilled: "playlist-music",
   settings: "cog-outline",

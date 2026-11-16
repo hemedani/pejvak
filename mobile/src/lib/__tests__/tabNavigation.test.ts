@@ -51,6 +51,14 @@ describe("isTabPathname", () => {
     expect(isTabPathname("/track/abc")).toBe(false);
     expect(isTabPathname("/settings")).toBe(false);
   });
+
+  it("does not treat a screen that merely lives under a tab's name as the tab", () => {
+    // An AI tool is pushed from the AI tab but is a stack screen: it draws no
+    // dock, so it owes the listener the standalone mini-player. Matching only
+    // the first segment would hide that player on a screen with nothing else.
+    expect(isTabPathname("/ai/transcribe")).toBe(false);
+    expect(tabNameForPathname("/ai/transcribe")).toBe("ai");
+  });
 });
 
 describe("tabHref", () => {

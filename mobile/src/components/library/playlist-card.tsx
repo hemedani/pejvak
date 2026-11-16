@@ -11,6 +11,7 @@ import { memo, useCallback, useMemo } from "react";
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
 import {
   addToPlaylistAction,
+  aiAction,
   deleteAction,
   historyAction,
   playPlaylistAction,
@@ -86,6 +87,7 @@ export const LibraryPlaylistCard = memo(function LibraryPlaylistCard({
         title: playlist.title,
         tone: "glass",
       }),
+      aiAction({ title: playlist.title, tone: "glass" }),
     ];
     if (onDelete) {
       list.push(deleteAction({ title: playlist.title, onPress: remove }));

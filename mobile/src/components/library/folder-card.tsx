@@ -10,7 +10,7 @@
 import { memo, useCallback, useMemo } from "react";
 
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
-import { addToPlaylistAction, historyAction, playFolderAction } from "@/components/ui/row";
+import { addToPlaylistAction, aiAction, historyAction, playFolderAction } from "@/components/ui/row";
 import type { FolderSummary } from "@/lib/db/types";
 import { describeFolderProgress, folderProgressRatio } from "@/lib/folderPlay";
 import { formatDuration } from "@/lib/history";
@@ -82,6 +82,7 @@ export const LibraryFolderCard = memo(function LibraryFolderCard({
         artwork: folder.artworkUrl,
         tone: "glass",
       }),
+      aiAction({ title: folder.name, tone: "glass" }),
     ],
     [folder, play, ramp, resolveTrackIds],
   );

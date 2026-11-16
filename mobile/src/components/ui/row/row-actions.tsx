@@ -11,6 +11,7 @@
  * one owner.
  */
 
+import { router } from "expo-router";
 import type { ReactNode } from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
 
@@ -217,6 +218,85 @@ export function historyAction({
       `History for ${describeContextType(type).toLowerCase()} ${title}`,
       open,
       tone,
+    ),
+  };
+}
+
+/**
+ * The AI verb.
+ *
+ * One control, one destination: the AI page. It deliberately does not act on
+ * the row it was tapped from — the page it opens is a catalogue of four tools,
+ * and three of them would have nothing to do with the track underneath. Passing
+ * the track through would promise a transcription of *this* recording and then
+ * answer "coming soon", which is two promises broken instead of one.
+ *
+ * The glyph is drawn in the accent rather than the neutral icon colour, because
+ * this is the only control in the cluster that is not a library verb: it leaves
+ * the library. Tinting it is how that reads without adding a label to a row
+ * that has no room for one.
+ */
+function AiControl({
+  label,
+  onPress,
+  tone,
+  size,
+  iconSize: glyph,
+}: {
+  label: string;
+  onPress: () => void;
+  tone: BouncyIconButtonTone;
+  size: number;
+  iconSize: number;
+}) {
+  const theme = useTheme();
+  return (
+    <BouncyIconButton
+      name="ai"
+      accessibilityLabel={label}
+      size={size}
+      iconSize={glyph}
+      tone={tone}
+      color={theme.accent}
+      onPress={onPress}
+    />
+  );
+}
+
+export function aiAction({
+  title,
+  tone = "ghost",
+  size = control.md,
+}: {
+  title: string;
+  /**
+   * The control's diameter. A card's cluster is 40pt; the dense history rows
+   * use 36 and would otherwise show one button a head taller than its
+   * neighbours.
+   */
+  size?: number;
+} & PresetTone): RowAction {
+  const open = () => router.navigate("/ai");
+  const label = `AI tools for ${title}`;
+
+  return {
+    key: "ai",
+    width: size,
+    // Ties with history, which is fine: `planRowLayout` keeps declaration order
+    // between equal priorities, so where the two both fit the order is the
+    // caller's, not the sorter's.
+    priority: 2,
+    icon: "ai",
+    label: "AI tools",
+    onPress: open,
+    node: (
+      <AiControl
+        label={label}
+        onPress={open}
+        tone={tone}
+        size={size}
+        iconSize={size === control.sm ? 17 : iconSize.md}
+      />
     ),
   };
 }

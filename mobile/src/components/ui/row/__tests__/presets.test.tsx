@@ -1,8 +1,10 @@
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { router } from "expo-router";
 import { View } from "react-native";
 
 import {
   addToPlaylistAction,
+  aiAction,
   deleteAction,
   detailsAction,
   downloadAction,
@@ -15,6 +17,10 @@ import {
 import { useAddToPlaylistStore } from "@/store/addToPlaylistStore";
 import { useContextHistoryStore } from "@/store/contextHistoryStore";
 import { aurora, control } from "@/theme/tokens";
+
+jest.mock("expo-router", () => ({
+  router: { navigate: jest.fn(), push: jest.fn() },
+}));
 
 jest.mock("@/theme/motion", () => ({
   press: { down: 0.92, overshoot: 1.05, rest: 1 },
@@ -169,6 +175,26 @@ describe("action presets", () => {
     action.onPress();
 
     expect(onPress).toHaveBeenCalledTimes(2);
+  });
+
+  it("sends every row to the AI page, named after the row it came from", async () => {
+    const action = aiAction({ title: "Chapter 1" });
+
+    expect(action.key).toBe("ai");
+    expect(action.icon).toBe("ai");
+    expect(action.label).toBe("AI tools");
+    expect(action.width).toBe(control.md);
+    // Tied with history on purpose: `planRowLayout` keeps declaration order
+    // between equal priorities, so the caller decides which of the two wins.
+    expect(action.priority).toBe(historyAction({ type: "folder", contextKey: "k", title: "t" }).priority);
+
+    (router.navigate as jest.Mock).mockClear();
+    await press(action, "AI tools for Chapter 1");
+    expect(router.navigate).toHaveBeenCalledWith("/ai");
+  });
+
+  it("shrinks the AI control to fit a dense row's smaller cluster", () => {
+    expect(aiAction({ title: "Chapter 1", size: control.sm }).width).toBe(control.sm);
   });
 
   it("toggles a collection's favorite mark in place", async () => {

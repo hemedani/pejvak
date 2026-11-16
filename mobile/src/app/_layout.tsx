@@ -100,6 +100,10 @@ export default function RootLayout() {
                   <Stack.Screen name="online/source/[id]" />
                   <Stack.Screen name="online/[key]" />
                   <Stack.Screen name="smart/[rule]" />
+                  {/* One AI tool's page. It sits at the root rather than inside
+                      the AI tab so it pushes like every other detail screen —
+                      the tab is the catalogue, this is the item. */}
+                  <Stack.Screen name="ai/[feature]" />
                   <Stack.Screen name="missing" />
                   <Stack.Screen name="import" />
                   <Stack.Screen name="settings" />

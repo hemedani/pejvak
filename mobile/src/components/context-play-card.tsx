@@ -19,6 +19,7 @@ import { BouncyIconButton } from "@/components/motion/BouncyIconButton";
 import { ThemedText } from "@/components/themed-text";
 import {
   RecordRow,
+  aiAction,
   type ListRowPosition,
   type RowAction,
 } from "@/components/ui/row";
@@ -64,6 +65,13 @@ export const ContextPlayCard = memo(function ContextPlayCard({
   const action = run.completed ? "Replay" : "Continue";
 
   const actions: RowAction[] = [];
+
+  /**
+   * Always offered, unlike the two below it: the AI page is a destination
+   * rather than a verb on this run, so it does not depend on the caller having
+   * supplied an `onOpen` or an `onDelete`. Sized to the dense cluster's 36pt.
+   */
+  actions.push(aiAction({ title: run.contextTitle, size: control.sm }));
 
   if (onOpen) {
     const open = () => onOpen(run);

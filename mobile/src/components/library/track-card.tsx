@@ -13,7 +13,7 @@ import { useRouter } from "expo-router";
 import { memo, useCallback, useMemo } from "react";
 
 import { MediaCard, type MediaCardAction } from "@/components/ui/media-card";
-import { addToPlaylistAction, detailsAction } from "@/components/ui/row";
+import { addToPlaylistAction, aiAction, detailsAction } from "@/components/ui/row";
 import type { LocalTrack } from "@/lib/db/types";
 import { trackOrigin } from "@/lib/origin";
 import { paletteFor } from "@/lib/palette";
@@ -54,6 +54,7 @@ export const LibraryTrackCard = memo(function LibraryTrackCard({
         artwork: track.artworkUrl,
         trackIds: [track.id],
       }),
+      aiAction({ title: track.title }),
       detailsAction({
         title: track.title,
         onPress: () => router.push(`/track/${track.id}`),

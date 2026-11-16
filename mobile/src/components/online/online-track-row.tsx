@@ -17,12 +17,12 @@
  * course and a Latin episode inside it both look deliberate.
  */
 
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { ThemedText } from "@/components/themed-text";
 import { Icon } from "@/components/ui/icon";
-import { ListRow, type ListRowPosition } from "@/components/ui/row";
+import { ListRow, aiAction, type ListRowPosition } from "@/components/ui/row";
 import { useTheme } from "@/hooks/use-theme";
 import type { LocalDownloadJob, LocalTrack } from "@/lib/db/types";
 import { formatDuration } from "@/lib/history";
@@ -84,6 +84,10 @@ export const OnlineTrackRow = memo(function OnlineTrackRow({
   const tint = theme.accent;
   const downloaded = track.downloadedAt !== null;
 
+  // One action, so it never overflows: a streaming episode has no download
+  // button of its own (the collection owns that) and no playlist to add to.
+  const actions = useMemo(() => [aiAction({ title: track.title })], [track.title]);
+
   return (
     <ListRow
       position={position}
@@ -116,6 +120,7 @@ export const OnlineTrackRow = memo(function OnlineTrackRow({
       onPress={() => onPress(track.id)}
       accessibilityLabel={track.title}
       accessibilityHint={downloaded ? "Plays from this device" : "Streams from the source"}
+      actions={actions}
     />
   );
 }, onlineTrackRowPropsEqual);

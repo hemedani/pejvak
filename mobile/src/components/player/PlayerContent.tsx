@@ -13,6 +13,7 @@
  */
 
 import type { ReactNode } from "react";
+import { useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
 import Animated, { useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -51,6 +52,28 @@ function shortTitle(title: string, max = 22): string {
 const ART_REVEAL_START = 0.22;
 /** The morph progress at which the lower content starts rising in. */
 const BODY_REVEAL_START = 0.42;
+
+/**
+ * The AI chip.
+ *
+ * It navigates itself instead of taking another `onOpen…` prop, and that is
+ * deliberate: the chip row is a list of things the listener can do *without
+ * leaving what is playing*, and the AI page is a destination rather than a
+ * state of this playback. Threading a callback through the sheet for a control
+ * that owns no playback state would make `PlayerContent` less presentational
+ * without making anything clearer.
+ */
+function AiChip() {
+  const router = useRouter();
+  return (
+    <GlassChip
+      label="AI"
+      icon="ai"
+      accessibilityLabel="AI tools"
+      onPress={() => router.navigate("/ai")}
+    />
+  );
+}
 
 export type PlayerContentProps = {
   /** 0 = collapsed over the mini-player, 1 = full screen. */
@@ -410,6 +433,10 @@ export function PlayerContent({
               accessibilityLabel="Audio enhancer"
               onPress={onOpenEnhancer}
             />
+            {/* Beside the enhancer because it is the same ambition — a better
+                version of this recording — one step further than a tone curve
+                can go. */}
+            <AiChip />
             <GlassChip
               label={sleepLabel}
               icon="moon"

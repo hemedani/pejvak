@@ -63,11 +63,29 @@ export function tabNameForPathname(pathname: string): TabName {
  * every non-tab path, which would make a detail screen look like a tab.
  */
 export function isTabPathname(pathname: string): boolean {
-  const first = firstPathSegment(pathname);
-  if (!first || first === "index") {
+  const path = stripGroups(pathname.split("?")[0] ?? "").replace(/\/+$/, "");
+  if (!path || path === "/" || path === "/index") {
     return true;
   }
-  return TAB_NAMES.some((name) => name === first);
+  // Matched against the whole path, not its first segment. `/ai/transcribe` is a
+  // pushed screen that happens to live under a tab's name; treating it as the
+  // tab would tell the root layout to skip the mini-player on a screen that has
+  // no dock of its own, and the listener would lose the now-playing row.
+  return TAB_NAMES.some((name) => path === TAB_HREFS[name]);
+}
+
+/**
+ * Drops group segments (`(tabs)`, `(auth)`) from a pathname.
+ *
+ * The router reports the path it resolved, which may still carry the group the
+ * file lives in; the listener never sees those segments, and the tab hrefs do
+ * not have them.
+ */
+function stripGroups(pathname: string): string {
+  const kept = pathname
+    .split("/")
+    .filter((segment) => segment.length > 0 && !segment.startsWith("("));
+  return `/${kept.join("/")}`;
 }
 
 export function tabHref(name: TabName) {
