@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window background only; the real palette lives in ui/theme (Compose). -->
+    <color name="canvas_base">#33505F</color>
+    <color name="canvas_base_night">#0A0F16</color>
+    <color name="ic_launcher_background">#2F2690</color>
+</resources>
