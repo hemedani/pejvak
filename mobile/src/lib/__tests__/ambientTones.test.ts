@@ -1,171 +1,207 @@
 /**
- * The generated background tones.
+ * The tone catalogue and the one tone still generated in code.
  *
- * A buffer is the one thing here that cannot be checked by eye, so the cases
- * assert the properties that matter: each file is one the player will accept,
- * it is not silence (the entire purpose), it has no DC offset, it is as loud as
- * the next tone so the slider means the same thing whichever is chosen, and it
- * is the same bytes every time so a change to a generator is a deliberate one.
+ * Two things are worth pinning here. The catalogue is what the picker draws and
+ * what the player resolves to a file, so every recorded entry must actually
+ * have a file and a credit — a missing asset is a tone that silently does
+ * nothing, and a missing credit is a licence breach. And the room tone is the
+ * only tone whose bytes this app produces, so its loop, its loudness and its
+ * determinism are asserted rather than assumed.
  */
 
 import {
   DEFAULT_TONE_ID,
   TONES,
+  TONE_CREDITS,
   TONE_SAMPLE_RATE,
   TONE_TARGET_RMS_DB,
-  buildToneWav,
+  buildRoomToneWav,
+  describeCredits,
   findTone,
   parseToneId,
+  toneAsset,
   toneFileName,
-  type AmbientToneId,
 } from "@/lib/ambientTones";
 
 const HEADER_BYTES = 44;
 
-function ascii(bytes: Uint8Array, offset: number, length: number): string {
-  return String.fromCharCode(...bytes.slice(offset, offset + length));
-}
-
-function view(bytes: Uint8Array): DataView {
-  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-}
-
 function samplesOf(wav: Uint8Array): Int16Array {
-  return new Int16Array(wav.buffer, wav.byteOffset + HEADER_BYTES);
+  const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+  const count = (wav.byteLength - HEADER_BYTES) / 2;
+  const out = new Int16Array(count);
+  for (let i = 0; i < count; i += 1) {
+    out[i] = view.getInt16(HEADER_BYTES + i * 2, true);
+  }
+  return out;
 }
 
-/** RMS of a slice, as a fraction of full scale. */
-function rms(samples: Int16Array, from = 0, to = samples.length): number {
+function rmsOf(samples: Int16Array): number {
   let energy = 0;
-  for (let i = from; i < to; i += 1) {
-    const value = (samples[i] as number) / 32767;
+  for (let i = 0; i < samples.length; i += 1) {
+    const value = (samples[i] as number) / 32768;
     energy += value * value;
   }
-  return Math.sqrt(energy / Math.max(1, to - from));
+  return Math.sqrt(energy / samples.length);
 }
 
-describe("the tone catalogue", () => {
-  it("offers the room tone first, because it is the one that is not a place", () => {
-    expect(TONES[0]?.id).toBe(DEFAULT_TONE_ID);
+describe("the catalogue", () => {
+  it("names every tone once", () => {
+    const ids = TONES.map((tone) => tone.id);
+
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("offers the places a listener would ask for", () => {
+    const ids = TONES.map((tone) => tone.id);
+
+    expect(ids).toEqual(
+      expect.arrayContaining(["rain", "forest", "river", "ocean", "wind", "birds"]),
+    );
+  });
+
+  it("opens on the room tone, which is not a place", () => {
+    expect(TONES[0]?.id).toBe("room");
     expect(DEFAULT_TONE_ID).toBe("room");
   });
 
-  it("has one entry per id, with a distinct label and seed each", () => {
-    expect(new Set(TONES.map((tone) => tone.id)).size).toBe(TONES.length);
-    expect(new Set(TONES.map((tone) => tone.label)).size).toBe(TONES.length);
-    expect(new Set(TONES.map((tone) => tone.seed)).size).toBe(TONES.length);
+  it("gives every tone a label and a line saying what it sounds like", () => {
     for (const tone of TONES) {
       expect(tone.label.length).toBeGreaterThan(0);
       expect(tone.hint.length).toBeGreaterThan(0);
-      expect(tone.seconds).toBeGreaterThanOrEqual(1);
     }
   });
 
-  it("names each file after its tone, so two tones never share a cache entry", () => {
-    expect(toneFileName("rain")).toBe("tone-rain.wav");
-    expect(new Set(TONES.map((tone) => toneFileName(tone.id))).size).toBe(TONES.length);
+  it("ships a file for every recorded tone", () => {
+    // A recorded tone with no asset is a row in the picker that produces no
+    // sound, which reads as a broken feature rather than a missing file.
+    for (const tone of TONES) {
+      if (tone.kind !== "recorded") {
+        continue;
+      }
+      expect(toneAsset(tone.id)).not.toBeNull();
+    }
   });
 
-  it("falls back to the default for an id this build cannot play", () => {
-    expect(parseToneId("rain")).toBe("rain");
-    expect(parseToneId("thunder")).toBe(DEFAULT_TONE_ID);
+  it("generates the room tone rather than shipping one", () => {
+    // Room tone *is* noise; a deterministic buffer is smaller, retunable and
+    // testable in a way a binary is not.
+    expect(findTone("room")?.kind).toBe("generated");
+    expect(toneAsset("room")).toBeNull();
+  });
+
+  it("credits every recording that requires it", () => {
+    for (const tone of TONES) {
+      if (tone.kind !== "recorded") {
+        continue;
+      }
+      const credit = TONE_CREDITS[tone.id];
+      expect(credit).toBeDefined();
+      expect(credit?.artist.length).toBeGreaterThan(0);
+      expect(credit?.licence).toMatch(/CC/);
+    }
+  });
+
+  it("spells the credits out for the listener", () => {
+    const line = describeCredits();
+
+    expect(line).toContain("CC BY 4.0");
+    expect(line).toContain("Jarrod Stanley");
+    expect(line).not.toMatch(/undefined/);
+  });
+});
+
+describe("parseToneId", () => {
+  it("keeps a tone this build has", () => {
+    expect(parseToneId("river")).toBe("river");
+    expect(parseToneId("birds")).toBe("birds");
+  });
+
+  it("falls back rather than leaving the player with a file nothing provides", () => {
+    // "waves" was a synthetic tone this build replaced with a recording; a
+    // listener who had it selected must land somewhere playable.
+    expect(parseToneId("waves")).toBe(DEFAULT_TONE_ID);
+    expect(parseToneId("nope")).toBe(DEFAULT_TONE_ID);
     expect(parseToneId(null)).toBe(DEFAULT_TONE_ID);
-    expect(findTone("thunder")).toBeNull();
+    expect(parseToneId(undefined)).toBe(DEFAULT_TONE_ID);
   });
 });
 
-describe.each(TONES.map((tone) => [tone.id, tone] as const))("buildToneWav(%s)", (id, tone) => {
-  const wav = buildToneWav(id);
-  const header = view(wav);
-  const samples = samplesOf(wav);
+describe("toneFileName", () => {
+  it("names the generated file after its tone, so switching costs one write", () => {
+    expect(toneFileName("room")).toBe("tone-room.wav");
+  });
+});
 
-  it("is a mono 16-bit PCM WAV the player will accept", () => {
-    expect(ascii(wav, 0, 4)).toBe("RIFF");
-    expect(ascii(wav, 8, 4)).toBe("WAVE");
-    expect(ascii(wav, 12, 4)).toBe("fmt ");
-    expect(ascii(wav, 36, 4)).toBe("data");
-    expect(header.getUint16(20, true)).toBe(1); // PCM
-    expect(header.getUint16(22, true)).toBe(1); // mono
-    expect(header.getUint32(24, true)).toBe(TONE_SAMPLE_RATE);
-    expect(header.getUint16(34, true)).toBe(16);
+describe("buildRoomToneWav", () => {
+  const wav = buildRoomToneWav();
+  const view = new DataView(wav.buffer, wav.byteOffset, wav.byteLength);
+
+  it("writes a valid mono 16-bit WAV header", () => {
+    expect(String.fromCharCode(...wav.slice(0, 4))).toBe("RIFF");
+    expect(String.fromCharCode(...wav.slice(8, 12))).toBe("WAVE");
+    expect(view.getUint16(20, true)).toBe(1); // PCM
+    expect(view.getUint16(22, true)).toBe(1); // mono
+    expect(view.getUint32(24, true)).toBe(TONE_SAMPLE_RATE);
+    expect(view.getUint16(34, true)).toBe(16);
+    expect(view.getUint32(4, true)).toBe(wav.byteLength - 8);
   });
 
-  it("declares the length it actually has", () => {
-    const sampleCount = TONE_SAMPLE_RATE * tone.seconds;
-    expect(wav.byteLength).toBe(HEADER_BYTES + sampleCount * 2);
-    expect(header.getUint32(4, true)).toBe(wav.byteLength - 8);
-    expect(header.getUint32(40, true)).toBe(sampleCount * 2);
+  it("is exactly as long as the catalogue says", () => {
+    const seconds = findTone("room")?.seconds ?? 0;
+
+    expect(samplesOf(wav).length).toBe(Math.round(TONE_SAMPLE_RATE * seconds));
   });
 
-  it("is noise, not silence — the reason it exists", () => {
-    const nonZero = samples.reduce((count, sample) => count + (sample !== 0 ? 1 : 0), 0);
-    expect(nonZero).toBeGreaterThan(samples.length * 0.99);
+  it("is not silence, which is the one thing it exists to prevent", () => {
+    expect(rmsOf(samplesOf(wav))).toBeGreaterThan(0.01);
   });
 
-  it("has no DC offset, which would eat the headroom it normalises against", () => {
-    const mean = samples.reduce((sum, sample) => sum + sample, 0) / samples.length;
-    expect(Math.abs(mean)).toBeLessThan(120); // ~0.4% of full scale
+  it("lands on the shared RMS the volume mapping assumes", () => {
+    // `roomToneAmplitude` converts a level in dBFS to a linear volume by
+    // subtracting this buffer's RMS, so a buffer at a different level would
+    // make every tone slider position mean something else.
+    const measuredDb = 20 * Math.log10(rmsOf(samplesOf(wav)));
+
+    expect(Math.abs(measuredDb - TONE_TARGET_RMS_DB)).toBeLessThan(1);
   });
 
-  it("is as loud as every other tone, so one slider position means one level", () => {
-    // Normalised to a shared RMS rather than a shared peak: rain's droplets and
-    // the forest's birds spike well above their beds, and a peak-normalised
-    // version of either would sit several decibels under the room tone.
-    const db = 20 * Math.log10(rms(samples));
-    expect(db).toBeGreaterThan(TONE_TARGET_RMS_DB - 2);
-    expect(db).toBeLessThan(TONE_TARGET_RMS_DB + 1);
-  });
-
-  it("leaves headroom for the player's own volume to scale it", () => {
-    const peak = samples.reduce((max, sample) => Math.max(max, Math.abs(sample)), 0);
-    expect(peak).toBeGreaterThan(32767 * 0.2);
-    expect(peak).toBeLessThanOrEqual(32767 * 0.99);
-  });
-
-  it("is deterministic for its seed", () => {
-    // One second is enough to compare bytes, and keeps a case that renders
-    // every tone from taking a second each.
-    const short = buildToneWav(id, { seconds: 1 });
-    expect(buildToneWav(id, { seconds: 1 }).slice(HEADER_BYTES, HEADER_BYTES + 64)).toEqual(
-      short.slice(HEADER_BYTES, HEADER_BYTES + 64),
-    );
-    expect(
-      buildToneWav(id, { seconds: 1, seed: 12345 }).slice(HEADER_BYTES, HEADER_BYTES + 64),
-    ).not.toEqual(short.slice(HEADER_BYTES, HEADER_BYTES + 64));
-  });
-
-  it("honours a different sample rate and length", () => {
-    const short = buildToneWav(id, { sampleRate: 8000, seconds: 1 });
-    expect(view(short).getUint32(24, true)).toBe(8000);
-    expect(short.byteLength).toBe(HEADER_BYTES + 8000 * 2);
-  });
-
-  it("does not repeat the same bytes as another tone", () => {
-    const mine = buildToneWav(id, { seconds: 1 }).slice(HEADER_BYTES, HEADER_BYTES + 256);
-    for (const other of TONES.filter((candidate) => candidate.id !== id)) {
-      expect(buildToneWav(other.id, { seconds: 1 }).slice(HEADER_BYTES, HEADER_BYTES + 256)).not.toEqual(
-        mine,
-      );
+  it("leaves headroom rather than clipping", () => {
+    const samples = samplesOf(wav);
+    let peak = 0;
+    for (let i = 0; i < samples.length; i += 1) {
+      peak = Math.max(peak, Math.abs(samples[i] as number));
     }
-  });
-});
 
-describe("the loop seam", () => {
-  /**
-   * The buffers repeat with no crossfade, which is right for noise — but only
-   * if the *envelope* closes. A swell or a gust that did not end where it began
-   * would step once per loop, and a periodic step is audible in a way a step
-   * between two random noise values is not.
-   */
-  it.each(["waves", "wind"] as AmbientToneId[])(
-    "closes %s's envelope at the loop point",
-    (id) => {
-      const samples = samplesOf(buildToneWav(id));
-      const edge = Math.round(TONE_SAMPLE_RATE * 0.4);
-      const head = rms(samples, 0, edge);
-      const tail = rms(samples, samples.length - edge, samples.length);
-      expect(head / tail).toBeGreaterThan(0.5);
-      expect(head / tail).toBeLessThan(2);
-    },
-  );
+    expect(peak).toBeLessThan(32767 * 0.99);
+  });
+
+  it("has no DC offset, which would eat the headroom it needs", () => {
+    const samples = samplesOf(wav);
+    let sum = 0;
+    for (let i = 0; i < samples.length; i += 1) {
+      sum += samples[i] as number;
+    }
+
+    expect(Math.abs(sum / samples.length)).toBeLessThan(50);
+  });
+
+  it("is deterministic, so the same build produces the same bytes", () => {
+    expect(buildRoomToneWav().slice(HEADER_BYTES, HEADER_BYTES + 256)).toEqual(
+      buildRoomToneWav().slice(HEADER_BYTES, HEADER_BYTES + 256),
+    );
+  });
+
+  it("honours a different seed and a different length", () => {
+    expect(buildRoomToneWav({ seed: 12345 }).slice(HEADER_BYTES, HEADER_BYTES + 256)).not.toEqual(
+      buildRoomToneWav().slice(HEADER_BYTES, HEADER_BYTES + 256),
+    );
+    expect(samplesOf(buildRoomToneWav({ seconds: 1 })).length).toBe(TONE_SAMPLE_RATE);
+  });
+
+  it("honours a different sample rate", () => {
+    const low = buildRoomToneWav({ sampleRate: 8000, seconds: 1 });
+
+    expect(new DataView(low.buffer).getUint32(24, true)).toBe(8000);
+    expect(samplesOf(low).length).toBe(8000);
+  });
 });

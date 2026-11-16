@@ -213,6 +213,15 @@ export function roomToneAmplitude(percent: number): number {
 export const VOLUME_MAX = 100;
 
 /**
+ * The level a listener gets before they have ever chosen one.
+ *
+ * Full scale, because the two ways to be wrong here are not symmetrical: a
+ * wrong default of 100 is audible and one drag away from correct, while a
+ * default of 0 is a silent app that looks broken and gives no clue why.
+ */
+export const DEFAULT_VOLUME = 100;
+
+/**
  * Where the volume control bottoms out, in decibels below full scale.
  *
  * A linear slider on amplitude spends its top third doing almost nothing and its
@@ -230,9 +239,26 @@ export function volumeAmplitude(percent: number): number {
   return 10 ** ((VOLUME_FLOOR_DB * (1 - clamped / VOLUME_MAX)) / 20);
 }
 
-/** Coerces a stored or dragged volume into 0–100 whole percent. */
+/**
+ * Coerces a stored or dragged volume into 0–100 whole percent.
+ *
+ * An *absent* level is not a level of zero. The volume is read from the
+ * database at launch, and on a fresh install there is nothing to read: falling
+ * back to 0 turned "no preference stored yet" into "muted", so the very first
+ * track a listener opened played in silence with the slider already at the
+ * bottom. The fallback is full scale instead, and only a value that is really
+ * there and really zero mutes the player.
+ */
 export function normalizeVolume(value: number | string | null | undefined): number {
-  return normalizePercent(value);
+  const parsed =
+    typeof value === "string"
+      ? // `Number("")` is 0, which would read an empty setting as "muted".
+        (value.trim() === "" ? Number.NaN : Number(value))
+      : value;
+  if (typeof parsed !== "number" || !Number.isFinite(parsed)) {
+    return DEFAULT_VOLUME;
+  }
+  return Math.round(clamp(parsed, 0, VOLUME_MAX));
 }
 
 /** "Off" or "24%" — the readout beside a level slider. */

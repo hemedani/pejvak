@@ -6,54 +6,73 @@
  * A Bluetooth sink that hears digital silence long enough powers down its link,
  * and the word after the pause is lost while it comes back. A floor of sound
  * that never stops is the cure. "Room tone" is the audio world's own name for
- * the noise a room already has; the others here are the same idea with a place
- * attached, because a listener who has to leave the hiss on for an hour would
- * rather it sounded like rain than like a hiss.
+ * the noise a room already has; the others are the same idea with a place
+ * attached, because a listener who has to leave something playing for an hour
+ * would rather it sounded like rain than like a hiss.
  *
- * ## Why the files are generated instead of shipped
+ * ## Generated versus recorded
  *
- * Each one is a few hundred kilobytes of noise. Five binaries in the repository
- * would be blobs nobody can read, diff or retune, and they would still have to
- * be copied to the cache before the player could loop them. Generating them
- * costs a few milliseconds once per install, is deterministic, and keeps the
- * one thing that matters — how each is shaped and how loud it is — in code with
- * a test beside it.
+ * **Room tone is synthesised** (`buildRoomToneWav`). That is not a compromise:
+ * room tone *is* noise, and a deterministic buffer is smaller, retunable, and
+ * testable in a way a binary is not. It loops by repeating, because for noise a
+ * crossfade would dip the level once per loop — audible — while the seam it
+ * would hide is a step between two random values, indistinguishable from the
+ * noise itself.
  *
- * ## Why they loop without a crossfade
- *
- * The obvious seam treatment is to fade the tail into the head. For noise that
- * is the wrong move twice over: a fade makes the level dip once per loop, which
- * is *audible* as a periodic pulse, while the discontinuity it was meant to hide
- * is a step between two random values — indistinguishable from the noise
- * itself. So the buffer simply repeats. Everything that is *not* noise — a
- * swell, a gust, a shower's intensity — is built from whole cycles of the
- * buffer, so the level at the seam is the level after it.
+ * **Everything else is a real recording**, because that is the whole point of
+ * them. Filtered white noise does not sound like a forest; it sounds like
+ * filtered white noise, and a listener who chose "Forest" to mask a room can
+ * hear the difference within seconds. The six files in `assets/tones/` are
+ * field recordings, each normalised to the same RMS and each cut into a
+ * seamless loop by `scripts/build-tones.sh` — the loop point is a crossfade of
+ * the tail into the head, and the seam is verified against the surrounding
+ * waveform rather than assumed.
  *
  * ## Loudness
  *
  * Every tone is normalised to the same RMS rather than the same peak, because
- * the five have different crest factors: rain's droplets spike far above their
- * bed, and a peak-normalised rain would sit several decibels under a
- * peak-normalised room. The player then scales that one figure (see
- * `roomToneAmplitude`), so a given percentage sounds equally loud whichever
- * tone is chosen.
+ * they have different crest factors: rain's droplets spike far above their bed,
+ * and a peak-normalised rain would sit several decibels under a peak-normalised
+ * room. The player then scales that one figure (see `roomToneAmplitude`), so a
+ * given percentage sounds equally loud whichever tone is chosen.
+ *
+ * ## Licensing
+ *
+ * Every recording is CC0, CC BY or CC BY-SA, and `TONE_CREDITS` carries the
+ * attribution the latter two require. Nothing here is "free to use" by
+ * assumption — each file was checked on the page that hosts it.
  */
 
-/** 22.05 kHz is plenty for ambience and halves the file. */
+/** 22.05 kHz is plenty for a room's noise and halves the generated file. */
 export const TONE_SAMPLE_RATE = 22050;
 
-export type AmbientToneId = "room" | "rain" | "forest" | "waves" | "wind";
+export type AmbientToneId =
+  | "room"
+  | "rain"
+  | "forest"
+  | "river"
+  | "ocean"
+  | "wind"
+  | "birds";
+
+/** Where a tone's audio comes from. */
+export type ToneKind = "generated" | "recorded";
 
 export type AmbientTone = {
   id: AmbientToneId;
+  kind: ToneKind;
   /** What the tone is called, in the listener's words. */
   label: string;
   /** One line saying what it sounds like, for the picker. */
   hint: string;
-  /** Length of the loop, in seconds. Long enough that the repeat is not a rhythm. */
-  seconds: number;
+  /**
+   * Length of a generated loop, in seconds. Long enough that the repeat is not
+   * a rhythm. Recorded tones state their length in the credit instead, because
+   * it is a property of the file rather than of the code.
+   */
+  seconds?: number;
   /** Seed for the noise, so the same build always produces the same bytes. */
-  seed: number;
+  seed?: number;
 };
 
 /**
@@ -65,6 +84,7 @@ export type AmbientTone = {
 export const TONES: readonly AmbientTone[] = [
   {
     id: "room",
+    kind: "generated",
     label: "Room",
     hint: "The faint hiss a quiet room already has.",
     seconds: 4,
@@ -72,33 +92,96 @@ export const TONES: readonly AmbientTone[] = [
   },
   {
     id: "rain",
+    kind: "recorded",
     label: "Rain",
-    hint: "Steady rain on a window, with the odd heavier drop.",
-    seconds: 6,
-    seed: 0x1f123bb5,
+    hint: "Rain falling on leaves.",
   },
   {
     id: "forest",
+    kind: "recorded",
     label: "Forest",
-    hint: "Leaves and air, and a bird every few seconds.",
-    seconds: 8,
-    seed: 0x51ed270b,
+    hint: "A deciduous wood, with birds moving through it.",
   },
   {
-    id: "waves",
-    label: "Waves",
-    hint: "Slow surf, swelling and drawing back.",
-    seconds: 12,
-    seed: 0x2545f491,
+    id: "river",
+    kind: "recorded",
+    label: "River",
+    hint: "Water running fast over stones.",
+  },
+  {
+    id: "ocean",
+    kind: "recorded",
+    label: "Ocean",
+    hint: "Waves breaking on a beach and drawing back.",
   },
   {
     id: "wind",
+    kind: "recorded",
     label: "Wind",
-    hint: "A draught rising and falling, with no edges.",
-    seconds: 10,
-    seed: 0x6a09e667,
+    hint: "A steady wind, with no edges to it.",
+  },
+  {
+    id: "birds",
+    kind: "recorded",
+    label: "Birds",
+    hint: "A dawn chorus, many birds at once.",
   },
 ];
+
+/**
+ * The recordings, as Metro asset modules.
+ *
+ * `require` is static on purpose: Metro resolves these at build time, so the
+ * files ship inside the app and a tone works with the phone in aeroplane mode.
+ * A URL would have made the one feature that exists for offline listening the
+ * one feature that needs a network.
+ */
+const RECORDINGS: Partial<Record<AmbientToneId, number>> = {
+  rain: require("../../assets/tones/rain.mp3"),
+  forest: require("../../assets/tones/forest.mp3"),
+  river: require("../../assets/tones/river.mp3"),
+  ocean: require("../../assets/tones/ocean.mp3"),
+  wind: require("../../assets/tones/wind.mp3"),
+  birds: require("../../assets/tones/birds.mp3"),
+};
+
+/** The asset module for a recorded tone, or null for a generated one. */
+export function toneAsset(id: AmbientToneId): number | null {
+  return RECORDINGS[id] ?? null;
+}
+
+/**
+ * Who made each recording, and under what licence.
+ *
+ * CC BY and CC BY-SA both require attribution, so it travels with the app
+ * rather than living in a commit message. `work` is the file's own title on
+ * Wikimedia Commons, which is how a reader can find it again.
+ */
+export type ToneCredit = {
+  work: string;
+  artist: string;
+  licence: string;
+};
+
+export const TONE_CREDITS: Partial<Record<AmbientToneId, ToneCredit>> = {
+  rain: { work: "Rain on leaves", artist: "Gravity Sound", licence: "CC BY 4.0" },
+  forest: { work: "2020-04-28 deciduous forest", artist: "Strebo7", licence: "CC BY-SA 4.0" },
+  river: { work: "James River Rapids 1", artist: "Jarrod Stanley", licence: "CC0" },
+  ocean: { work: "Ocean Waves on a Tropical Beach", artist: "Jarrod Stanley", licence: "CC0" },
+  wind: { work: "Windy day", artist: "Gravity Sound", licence: "CC BY 4.0" },
+  birds: {
+    work: "Dawn chorus at Glencairnie, Craigmore",
+    artist: "DivyaCM",
+    licence: "CC BY 4.0",
+  },
+};
+
+/** The line the picker shows under the list, or null when nothing is owed. */
+export function describeCredits(): string {
+  return Object.values(TONE_CREDITS)
+    .map((credit) => `${credit.work} — ${credit.artist} (${credit.licence})`)
+    .join(" · ");
+}
 
 export const DEFAULT_TONE_ID: AmbientToneId = "room";
 
@@ -110,13 +193,15 @@ export function findTone(id: string | null | undefined): AmbientTone | null {
  * Coerces a stored or chosen id into one this build can play.
  *
  * A tone removed from the catalogue must degrade to the default rather than
- * leave the player with a file name nothing generates.
+ * leave the player with a file name nothing generates. This is also what
+ * carries a listener who had the old synthetic "waves" over to the default
+ * rather than leaving them with a tone that no longer exists.
  */
 export function parseToneId(value: string | null | undefined): AmbientToneId {
   return findTone(value)?.id ?? DEFAULT_TONE_ID;
 }
 
-/** Where a tone's bytes live in the cache. Regenerable, so reclaimable. */
+/** Where a generated tone's bytes live in the cache. Regenerable, so reclaimable. */
 export function toneFileName(id: AmbientToneId): string {
   return `tone-${id}.wav`;
 }
@@ -132,7 +217,8 @@ const PEAK_CEILING = 0.98;
 /**
  * Loudness every tone is normalised to, as RMS in full-scale units — roughly
  * −18 dBFS. Chosen so a droplet or a bird can spike above the bed without the
- * bed itself ending up inaudible under the recording.
+ * bed itself ending up inaudible under the recording. The recorded files are
+ * built to the same figure by `scripts/build-tones.sh`.
  */
 const TARGET_RMS = 0.12;
 
@@ -175,23 +261,6 @@ type RenderContext = {
   out: Float32Array;
 };
 
-/** A single decaying sine — one rain drop. */
-type Drop = {
-  phase: number;
-  increment: number;
-  amplitude: number;
-  decay: number;
-};
-
-function strike(drop: Drop, random: () => number, sampleRate: number): void {
-  const hz = 900 + random() * 2700;
-  drop.phase = 0;
-  drop.increment = (TWO_PI * hz) / sampleRate;
-  drop.amplitude = 0.35 + random() * 0.5;
-  // −60 dB in about 20 ms: a click with a body, not a tone.
-  drop.decay = Math.exp(-1 / (0.02 * sampleRate));
-}
-
 /** The noise a room already has: white noise with the top end taken off. */
 function renderRoom({ sampleRate, out, random }: RenderContext): void {
   const a = onePole(4500, sampleRate);
@@ -204,205 +273,6 @@ function renderRoom({ sampleRate, out, random }: RenderContext): void {
   }
 }
 
-/**
- * Rain: a band of hiss for the sheet of water, plus sparse droplets on top.
- *
- * The shower's intensity breathes over two whole cycles of the loop, so the
- * level at the seam is the level after it — a swell that did not close would
- * click once per repeat, which is exactly the pulse a crossfade would have
- * caused.
- */
-function renderRain({ sampleRate, random, out }: RenderContext): void {
-  const hi = onePole(8000, sampleRate);
-  const lo = onePole(1200, sampleRate);
-  let lpHi = 0;
-  let lpLo = 0;
-
-  const drops: Drop[] = Array.from({ length: 3 }, () => ({
-    phase: 0,
-    increment: 0,
-    amplitude: 0,
-    decay: 0,
-  }));
-  let next = 0;
-  // ~45 drops a second: a shower, not a tap.
-  const perSample = 45 / sampleRate;
-  const tail = Math.round(0.04 * sampleRate);
-
-  for (let i = 0; i < out.length; i += 1) {
-    const white = random() * 2 - 1;
-    lpHi += hi * (white - lpHi);
-    lpLo += lo * (white - lpLo);
-    const band = lpHi - lpLo;
-
-    const t = i / out.length;
-    const shower = 0.85 + 0.15 * Math.sin(TWO_PI * 2 * t - Math.PI / 2);
-
-    let value = band * 0.5 * shower;
-
-    // No new drop in the last few milliseconds: a decay cut off by the loop
-    // point is the one click this buffer can produce.
-    if (i < out.length - tail && random() < perSample) {
-      strike(drops[next] as Drop, random, sampleRate);
-      next = (next + 1) % drops.length;
-    }
-    for (const drop of drops) {
-      if (drop.amplitude < 1e-4) {
-        continue;
-      }
-      value += Math.sin(drop.phase) * drop.amplitude * 0.35;
-      drop.phase += drop.increment;
-      drop.amplitude *= drop.decay;
-    }
-
-    out[i] = value;
-  }
-}
-
-type Note = {
-  startSample: number;
-  lengthSamples: number;
-  fromHz: number;
-  toHz: number;
-  gain: number;
-};
-
-/**
- * Forest: a low bed of moving air, a little leaf rustle, and three birds.
- *
- * The birds are placed inside the loop with a margin at both ends, because a
- * chirp sliced by the repeat is a click, and the whole point of the loop is that
- * nothing marks it.
- */
-function renderForest({ sampleRate, seconds, random, out }: RenderContext): void {
-  const bed = onePole(700, sampleRate);
-  const rustleHi = onePole(6000, sampleRate);
-  const rustleLo = onePole(1800, sampleRate);
-  let lpBed = 0;
-  let lpRustleHi = 0;
-  let lpRustleLo = 0;
-
-  for (let i = 0; i < out.length; i += 1) {
-    const white = random() * 2 - 1;
-    lpBed += bed * (white - lpBed);
-    lpRustleHi += rustleHi * (white - lpRustleHi);
-    lpRustleLo += rustleLo * (white - lpRustleLo);
-
-    const t = i / out.length;
-    // Three gusts and five rustles, both whole cycles of the buffer.
-    const gust = 0.75 + 0.25 * (0.5 - 0.5 * Math.cos(TWO_PI * 3 * t));
-    const rustle = 0.5 + 0.5 * Math.sin(TWO_PI * 5 * t);
-
-    out[i] = lpBed * 0.55 * gust + (lpRustleHi - lpRustleLo) * 0.09 * rustle;
-  }
-
-  // Three birds, each a short phrase of rising notes.
-  const phrases = [0.12, 0.46, 0.79];
-  for (const phrase of phrases) {
-    const notes = 3 + Math.floor(random() * 3);
-    const base = 2400 + random() * 900;
-    const noteLength = 0.055 + random() * 0.035;
-    const spacing = 0.1 + random() * 0.05;
-    for (let note = 0; note < notes; note += 1) {
-      const start = Math.round((phrase + note * spacing) * seconds * sampleRate);
-      const length = Math.round(noteLength * sampleRate);
-      if (start + length >= out.length) {
-        break;
-      }
-      // Each note rises: a chirp, not a beep.
-      const from = base * (1 + note * 0.06);
-      const to = from * (1.18 + random() * 0.12);
-      addTone(out, sampleRate, {
-        startSample: start,
-        lengthSamples: length,
-        fromHz: from,
-        toHz: to,
-        gain: 0.16,
-      });
-    }
-  }
-}
-
-/** Adds one gliding, softly enveloped note into the buffer. */
-function addTone(out: Float32Array, sampleRate: number, note: Note): void {
-  let phase = 0;
-  for (let i = 0; i < note.lengthSamples; i += 1) {
-    const index = note.startSample + i;
-    if (index >= out.length) {
-      return;
-    }
-    const u = i / note.lengthSamples;
-    const hz = note.fromHz + (note.toHz - note.fromHz) * u;
-    phase += (TWO_PI * hz) / sampleRate;
-    // A sine bell: no attack click, no tail click.
-    const envelope = Math.sin(Math.PI * u) ** 1.4;
-    out[index] = (out[index] ?? 0) + Math.sin(phase) * envelope * note.gain;
-  }
-}
-
-/**
- * Waves: a low rumble that swells and draws back, with foam on the crest.
- *
- * Two swells over twelve seconds — six seconds each, which is roughly the period
- * of surf on a shore, and long enough that the repeat is not heard as a rhythm.
- */
-function renderWaves({ sampleRate, random, out }: RenderContext): void {
-  const rumble = onePole(1100, sampleRate);
-  const foam = onePole(2500, sampleRate);
-  let lpRumble = 0;
-  let lpFoam = 0;
-
-  for (let i = 0; i < out.length; i += 1) {
-    const white = random() * 2 - 1;
-    lpRumble += rumble * (white - lpRumble);
-    lpFoam += foam * (white - lpFoam);
-
-    const t = i / out.length;
-    const swell = 0.5 - 0.5 * Math.cos(TWO_PI * 2 * t);
-    const body = 0.3 + 0.7 * swell ** 1.6;
-    // The foam only exists at the crest, and rises faster than the body does.
-    const crest = swell ** 3;
-
-    out[i] = lpRumble * 0.7 * body + (white - lpFoam) * 0.16 * crest;
-  }
-}
-
-/**
- * Wind: a band of moving air under a gust that rises and falls.
- *
- * The gust is two sines with a whole number of cycles each, so it closes on
- * itself; a real gust is random, but a random one cannot loop without a level
- * step at the seam.
- */
-function renderWind({ sampleRate, random, out }: RenderContext): void {
-  const hi = onePole(1400, sampleRate);
-  const lo = onePole(200, sampleRate);
-  let lpHi = 0;
-  let lpLo = 0;
-
-  for (let i = 0; i < out.length; i += 1) {
-    const white = random() * 2 - 1;
-    lpHi += hi * (white - lpHi);
-    lpLo += lo * (white - lpLo);
-
-    const t = i / out.length;
-    const gust =
-      0.55 +
-      0.3 * Math.sin(TWO_PI * 1 * t - Math.PI / 2) +
-      0.15 * Math.sin(TWO_PI * 3 * t);
-
-    out[i] = (lpHi - lpLo) * 0.55 * Math.max(0.08, gust);
-  }
-}
-
-const RENDERERS: Record<AmbientToneId, (context: RenderContext) => void> = {
-  room: renderRoom,
-  rain: renderRain,
-  forest: renderForest,
-  waves: renderWaves,
-  wind: renderWind,
-};
-
 export type ToneOptions = {
   sampleRate?: number;
   seconds?: number;
@@ -410,24 +280,24 @@ export type ToneOptions = {
 };
 
 /**
- * A mono 16-bit PCM WAV of the chosen tone.
+ * A mono 16-bit PCM WAV of the room tone.
  *
- * The samples are generated in floating point, de-meaned, normalised to a
+ * The samples are generated in floating point, de-meaned, normalised to the
  * shared RMS, and only then quantised: normalising after the conversion to
  * `Int16` would leave the buffer clipping at whatever the loudest single sample
  * happened to be.
  */
-export function buildToneWav(id: AmbientToneId, options: ToneOptions = {}): Uint8Array {
-  const tone = findTone(id) ?? (TONES[0] as AmbientTone);
+export function buildRoomToneWav(options: ToneOptions = {}): Uint8Array {
+  const tone = findTone(DEFAULT_TONE_ID) as AmbientTone;
   const sampleRate = Math.max(8000, Math.round(options.sampleRate ?? TONE_SAMPLE_RATE));
-  const seconds = Math.max(1, options.seconds ?? tone.seconds);
+  const seconds = Math.max(1, options.seconds ?? tone.seconds ?? 4);
   const sampleCount = Math.round(sampleRate * seconds);
   const samples = new Float32Array(sampleCount);
 
-  RENDERERS[tone.id]({
+  renderRoom({
     sampleRate,
     seconds,
-    random: createRandom(options.seed ?? tone.seed),
+    random: createRandom(options.seed ?? tone.seed ?? 0),
     out: samples,
   });
 
@@ -504,8 +374,8 @@ function encodeWav(samples: Float32Array, sampleRate: number): Uint8Array {
   return buffer;
 }
 
-function writeAscii(target: Uint8Array, offset: number, text: string): void {
+function writeAscii(buffer: Uint8Array, offset: number, text: string): void {
   for (let i = 0; i < text.length; i += 1) {
-    target[offset + i] = text.charCodeAt(i);
+    buffer[offset + i] = text.charCodeAt(i);
   }
 }

@@ -10,6 +10,7 @@
 import { TONE_TARGET_RMS_DB } from "@/lib/ambientTones";
 import {
   DEFAULT_ENHANCER,
+  DEFAULT_VOLUME,
   ENHANCER_RANGE,
   describeGainDb,
   describeLevel,
@@ -187,7 +188,26 @@ describe("volumeAmplitude", () => {
     expect(volumeAmplitude(400)).toBeCloseTo(1, 6);
     expect(normalizeVolume(140)).toBe(100);
     expect(normalizeVolume("30")).toBe(30);
-    expect(normalizeVolume("nonsense")).toBe(0);
+  });
+
+  it("reads a missing level as full scale, never as muted", () => {
+    // The volume is loaded from the database at launch and there is nothing to
+    // read on a fresh install. Falling back to 0 turned "no preference yet"
+    // into "muted": the first track a listener opened played in silence with
+    // the slider already at the bottom, and nothing on screen explained it.
+    expect(normalizeVolume(null)).toBe(DEFAULT_VOLUME);
+    expect(normalizeVolume(undefined)).toBe(DEFAULT_VOLUME);
+    expect(normalizeVolume("")).toBe(DEFAULT_VOLUME);
+    expect(normalizeVolume("nonsense")).toBe(DEFAULT_VOLUME);
+    expect(normalizeVolume(Number.NaN)).toBe(DEFAULT_VOLUME);
+  });
+
+  it("keeps a level the listener really set to zero", () => {
+    // Only *absent* is a default; a deliberate mute must stay muted, or the
+    // control would undo the one thing the listener asked for.
+    expect(normalizeVolume(0)).toBe(0);
+    expect(normalizeVolume("0")).toBe(0);
+    expect(volumeAmplitude(normalizeVolume(0))).toBe(0);
   });
 });
 

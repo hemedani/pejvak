@@ -38,8 +38,10 @@ export const TONE_ICONS: Record<AmbientToneId, IconName> = {
   room: "roomTone",
   rain: "rain",
   forest: "forest",
-  waves: "waves",
+  river: "river",
+  ocean: "ocean",
   wind: "wind",
+  birds: "birds",
 };
 
 export type TonePickerSheetProps = {

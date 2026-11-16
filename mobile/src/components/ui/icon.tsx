@@ -113,8 +113,10 @@ export const ICON_GLYPHS = {
    */
   rain: "weather-pouring",
   forest: "pine-tree",
-  waves: "waves",
+  river: "waves",
+  ocean: "waves-arrow-right",
   wind: "weather-windy",
+  birds: "bird",
   moon: "moon-waning-crescent",
   /** The other half of `moon` — a theme control needs two, not one. */
   sunny: "white-balance-sunny",

@@ -20,14 +20,16 @@
  * nothing" and leaves playback untouched.
  */
 
+import { Asset } from "expo-asset";
 import { createAudioPlayer, type AudioPlayer } from "expo-audio";
 import { File, Paths } from "expo-file-system";
 
 import AudioEnhancer from "../../modules/audio-enhancer";
 import {
   DEFAULT_TONE_ID,
-  buildToneWav,
+  buildRoomToneWav,
   parseToneId,
+  toneAsset,
   toneFileName,
   type AmbientToneId,
 } from "@/lib/ambientTones";
@@ -74,6 +76,8 @@ let attachReason: string | null = null;
 
 let noise: AudioPlayer | null = null;
 let noiseUri: string | null = null;
+/** Serialises tone applications; see `scheduleRoomTone`. */
+let applyChain: Promise<void> = Promise.resolve();
 /** Whether the main player is currently producing audio. */
 let playbackActive = false;
 
@@ -126,7 +130,7 @@ export function load(): Promise<void> {
       if (enhancer.enabled) {
         applyEnhancer();
       }
-      void applyRoomTone();
+      scheduleRoomTone();
     }
   })().catch(() => {
     // The defaults in the store are already correct; a failed read is not worth
@@ -174,7 +178,7 @@ export function setRoomTone(percent: number): void {
   roomTone = next;
   patch({ roomTone });
   scheduleWrite(SETTING_ROOM_TONE, String(roomTone));
-  void applyRoomTone();
+  scheduleRoomTone();
 }
 
 /**
@@ -199,7 +203,7 @@ export function setTone(id: AmbientToneId): void {
     patch({ roomTone });
     scheduleWrite(SETTING_ROOM_TONE, String(roomTone));
   }
-  void applyRoomTone();
+  scheduleRoomTone();
 }
 
 /**
@@ -220,7 +224,7 @@ export function syncPlayback(playing: boolean): void {
     if (enhancer.enabled) {
       applyEnhancer();
     }
-    void applyRoomTone();
+    scheduleRoomTone();
     return;
   }
   noise?.pause();
@@ -302,12 +306,30 @@ function reportUnavailable(reason: string): void {
   }
 }
 
+/**
+ * Queues one application of the current level.
+ *
+ * Resolving a recorded tone's file is asynchronous (a bundled asset has to be
+ * copied out of the bundle the first time), so two quick changes — a drag
+ * reports every pixel — could otherwise interleave and build two players. One
+ * chain means the last level asked for is the one that ends up applied, and no
+ * two applications ever overlap.
+ */
+function scheduleRoomTone(): void {
+  applyChain = applyChain.then(() => applyRoomTone()).catch(() => undefined);
+}
+
+/** Test-only: resolves once every queued application has finished. */
+export function __flushForTests(): Promise<void> {
+  return applyChain;
+}
+
 async function applyRoomTone(): Promise<void> {
   if (roomTone <= 0) {
     noise?.pause();
     return;
   }
-  const player = ensureNoisePlayer();
+  const player = await ensureNoisePlayer();
   if (!player) {
     return;
   }
@@ -327,8 +349,8 @@ async function applyRoomTone(): Promise<void> {
  * the old file is released with the old URI, and nothing else about the player
  * changes.
  */
-function ensureNoisePlayer(): AudioPlayer | null {
-  const uri = ensureNoiseFile(tone);
+async function ensureNoisePlayer(): Promise<AudioPlayer | null> {
+  const uri = await ensureNoiseFile(tone);
   if (!uri) {
     return null;
   }
@@ -356,20 +378,36 @@ function releaseNoise(): void {
 }
 
 /**
- * Writes a tone's file into the cache if it is not there.
+ * The file the noise player should loop for a tone.
  *
- * The cache is the right home: the bytes are regenerable, and a system that
- * reclaims them costs one regeneration rather than an error. Each tone has its
- * own name, so switching back and forth costs one write per tone, ever.
+ * A recorded tone ships inside the app as a Metro asset; `downloadAsync`
+ * resolves it to a real path, which is a no-op copy when the bundle already
+ * contains it and a fetch the first time in a development build. A generated
+ * tone is written into the cache instead: the bytes are regenerable, so a
+ * system that reclaims them costs one regeneration rather than an error, and
+ * each tone has its own name so switching back and forth costs one write per
+ * tone, ever.
  */
-function ensureNoiseFile(id: AmbientToneId): string | null {
+async function ensureNoiseFile(id: AmbientToneId): Promise<string | null> {
+  const module = toneAsset(id);
+  if (module !== null) {
+    try {
+      const asset = Asset.fromModule(module);
+      if (!asset.localUri) {
+        await asset.downloadAsync();
+      }
+      return asset.localUri ?? asset.uri ?? null;
+    } catch {
+      return null;
+    }
+  }
   try {
     const file = new File(Paths.cache, toneFileName(id));
     if (file.exists) {
       return file.uri;
     }
     file.create();
-    file.write(buildToneWav(id));
+    file.write(buildRoomToneWav());
     return file.uri;
   } catch {
     return null;
@@ -386,6 +424,7 @@ export function __resetForTests(): void {
   attachReason = null;
   noise = null;
   noiseUri = null;
+  applyChain = Promise.resolve();
   playbackActive = false;
   pendingWrites.clear();
   if (persistTimer) {

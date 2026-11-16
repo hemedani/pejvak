@@ -7,7 +7,7 @@ import {
 import Constants, { ExecutionEnvironment } from "expo-constants";
 
 import { isStreamUri } from "@/lib/audioLocation";
-import { normalizeVolume, volumeAmplitude } from "@/lib/audioEffects";
+import { DEFAULT_VOLUME, normalizeVolume, volumeAmplitude } from "@/lib/audioEffects";
 import type { LocalTrack } from "@/lib/db/types";
 import { getAdapter, isLiveSource } from "@/lib/online";
 import type { PlaybackWait } from "@/lib/playbackPhase";
@@ -121,7 +121,7 @@ let durationReported = false;
 let listenedSec = 0;
 
 /** The player's own output level, 0–100. Device preference; never synced. */
-let volumePercent = 100;
+let volumePercent = DEFAULT_VOLUME;
 let volumeWriteTimer: ReturnType<typeof setTimeout> | null = null;
 let preferencesLoaded: Promise<void> | null = null;
 
@@ -1080,7 +1080,7 @@ export function __resetForTests(): void {
   seekReported = false;
   reportedUnreachable.clear();
   listenedSec = 0;
-  volumePercent = 100;
+  volumePercent = DEFAULT_VOLUME;
   preferencesLoaded = null;
   if (volumeWriteTimer) {
     clearTimeout(volumeWriteTimer);

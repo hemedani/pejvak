@@ -163,8 +163,14 @@ describe("the enhancer", () => {
 });
 
 describe("the room tone", () => {
-  it("loads and loops the noise file, but stays silent while nothing plays", () => {
+  // Applying a tone is queued because resolving a recorded tone's file is
+  // asynchronous; these cases wait for the queue rather than assume the work
+  // finished in the same tick.
+  const flush = () => AudioEffectsService.__flushForTests();
+
+  it("loads and loops the noise file, but stays silent while nothing plays", async () => {
     AudioEffectsService.setRoomTone(40);
+    await flush();
 
     const player = noisePlayer();
     expect(player.replace).toHaveBeenCalledTimes(1);
@@ -173,32 +179,40 @@ describe("the room tone", () => {
     expect(player.play).not.toHaveBeenCalled();
   });
 
-  it("follows the transport", () => {
+  it("follows the transport", async () => {
     AudioEffectsService.setRoomTone(40);
+    await flush();
     const player = noisePlayer();
 
     AudioEffectsService.syncPlayback(true);
+    await flush();
     expect(player.play).toHaveBeenCalledTimes(1);
 
     AudioEffectsService.syncPlayback(false);
+    await flush();
     expect(player.pause).toHaveBeenCalledTimes(1);
   });
 
-  it("does not restart a player that is already running", () => {
+  it("does not restart a player that is already running", async () => {
     AudioEffectsService.setRoomTone(40);
+    await flush();
     AudioEffectsService.syncPlayback(true);
+    await flush();
     // A status tick repeats the same answer every second.
     AudioEffectsService.syncPlayback(true);
 
     expect(noisePlayer().play).toHaveBeenCalledTimes(1);
   });
 
-  it("pauses at zero and gives the player back to memory", () => {
+  it("pauses at zero and gives the player back to memory", async () => {
     AudioEffectsService.setRoomTone(40);
+    await flush();
     AudioEffectsService.syncPlayback(true);
+    await flush();
     const player = noisePlayer();
 
     AudioEffectsService.setRoomTone(0);
+    await flush();
     expect(player.pause).toHaveBeenCalled();
     expect(useAudioEffectsStore.getState().roomTone).toBe(0);
 
@@ -206,9 +220,10 @@ describe("the room tone", () => {
     expect(player.release).toHaveBeenCalledTimes(1);
   });
 
-  it("reuses one player across level changes rather than rebuilding it", () => {
+  it("reuses one player across level changes rather than rebuilding it", async () => {
     AudioEffectsService.setRoomTone(20);
     AudioEffectsService.setRoomTone(60);
+    await flush();
 
     expect(noisePlayer().replace).toHaveBeenCalledTimes(1);
     expect(noisePlayer().volume).toBeCloseTo(roomToneAmplitude(60), 6);
