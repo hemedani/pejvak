@@ -1109,3 +1109,156 @@ From root `AGENTS.md` + `mobile/AGENTS.md` — these are non-negotiable and iden
   `dumpsys media_session` reports `PLAYING`, the notification shows the real track, Home keeps audio
   alive, and `logcat -b crash` is empty. `testDebugUnitTest` 404/404, `assembleDebug`,
   `assembleDebugAndroidTest` and `assembleRelease` green.
+
+### 2026-11-17 — Owner UX round: player entry, wave loading, glass sheets, Online default
+- **Mini-player progress:** the dock and standalone mini-player now carry the same wavy progress
+  line as the full scrubber. Position is a separate `miniProgress` flow so the once-a-second tick
+  recomposes only the leaf wave, not the dock.
+- **Open the player on play:** `PlaybackEngine` emits `openPlayer` from `transportLoadAndPlay` only
+  (deliberate starts and resumes), and the shell collects it to show the full player. Auto-advance
+  and queue skips never emit, so finishing a chapter does not pop the overlay.
+- **Wavy loading:** while a source is `Connecting`/`Buffering`, the scrubber and mini wave draw a
+  full-width low-contrast travelling wave instead of the old sweep band; reduced motion keeps it
+  static.
+- **Glass sheets:** `GlassSheet` is now a floating xl-rounded panel with a 1 dp white (`glassBorder`)
+  stroke, a bottom margin so it clears the navigation bar, and the drag handle inside the border.
+- **Glass player:** the shell behind `NowPlayingSheet` blurs (animated 18 dp on API 31+), and the
+  overlay dropped from 94 % to 68 % canvas plus a glass wash, so the player reads as frosted glass
+  instead of an opaque screen.
+- **Online default:** once an online language is stored, the Library opens on the Online directory;
+  choosing a language in the prompt switches to it, while an explicit tab choice is respected.
+- **Verification:** emulator API 35 screenshots confirm the default Online tab, the sheet stroke and
+  bottom gap, the mini wave, the wavy `Connecting…` scrubber, and the player opening on play.
+  A new engine test pins that a deliberate start emits `openPlayer` and a queue skip does not.
+  `testDebugUnitTest` 405/405, `assembleDebug` and `assembleRelease` green.
+
+### 2026-11-17 — Owner UX round 2: sheet margins/blur, transparent chrome, history rows, chrome cleanup
+- **Sheet margins + frosted backdrop:** `GlassSheet` now insets the panel on the sides as well as the
+  bottom (floating card), and a new `SheetPresence` / `LocalSheetPresence` counter lets the shell blur
+  the content behind any open sheet (18 dp animated, API 31+). Sheets render in their own window, so
+  the panel stays crisp while the activity window behind frosts; the scrim lightened from 55 % to 35 %
+  black so the blur reads. `NowPlayingSheet` blur now shares the same target as any sheet.
+- **Transparent chrome:** `GlassSurface` gained `filled`; the dock and standalone mini-player pass
+  `filled = false`, so they are a stroke + rim light over the soft ambient canvas instead of a filled
+  panel.
+- **History rows:** session and collection cards now show exactly two trailing actions — AI and delete.
+  Tapping a card opens its detail sheet (which carries resume + delete) instead of resuming inline;
+  the inline play/info buttons are gone. Removed the now-unused resume plumbing from `HistoryList`.
+- **Top-right cleanup:** removed the floating top-right column (settings + debug gallery/import/missing)
+  that overlaid History, Notes, Discover and AI. Settings stays on the Library header.
+- **Verification:** API 35 screenshots confirm AI + delete rows, the removed top-right column, and the
+  border-only dock. The emulator was in concurrent use by the owner during the session, so the sheet
+  margin/blur pass was verified in code (build + tests) rather than by a fresh screenshot.
+  `testDebugUnitTest` 405/405, `assembleDebug` and `assembleRelease` green.
+
+### 2026-11-17 — Owner bug round: folder keys with spaces, player context/queue, wave redesign
+- **Folder names with spaces (data loss on open):** every folder/collection route used
+  `java.net.URLEncoder`, which is a *form* encoder — it writes a space as `+`. Navigation decodes
+  `%20` but leaves `+` alone, so "Test Folder" arrived as the key `Test+Folder`, matched no track,
+  and the detail screen rendered "Empty folder". All route builders now live in one place at the
+  bottom of `PejvakNavHost` (`folderRoute` / `playlistRoute` / `trackRoute` / `sourceRoute` /
+  `languageRoute` / `onlineCollectionRoute`) and every argument goes through `android.net.Uri.encode`.
+  Verified on the emulator against a seeded folder literally named "Test Folder": the header keeps
+  the space and all three tracks list.
+- **Player folder/context chip went home:** `onOpenContext` was hard-wired to
+  `navigate(Tab.Library.route)`, so the chip that names the playing collection always dumped the
+  listener on the Library tab. `NowPlayingSheet` now takes `onOpenContext: (PlaybackContext) -> Unit`,
+  passes the player's own context through, and the shell routes Folder → `folderRoute(key)`,
+  Playlist → `playlistRoute(key)`, Online → `onlineCollectionRoute(key)`. Verified: the chip opens
+  "Test Folder" with its three tracks and the mini-player dock intact.
+- **Queue sheet robustness:** the queue may legitimately hold the same track twice (`enqueue`
+  appends), and `LazyColumn` throws on a repeated key — the whole sheet dies with it. Keys are now
+  `"index:trackId"` in `QueueSheet` (and the same fix in `PlaylistDetailScreen`, which has the same
+  shape). Verified: folder playback fills the queue with all three tracks and the chip opens it.
+- **Scrubber wave redesign** (`Scrubber.kt`), three points the owner raised:
+  - *Balance over time:* the old `wavePath` took the drawn width and ran a fixed 3 cycles across it,
+    so the first seconds were a tight scribble and the last stretch a lazy near-flat line. The wave
+    now has an **absolute wavelength** (25 dp) — crests keep their spacing at any progress — plus a
+    gentle amplitude modulation (`variation`) so no two crests are identical, and a soft ramp at each
+    end so the stroke never stops on a vertical jump at the playhead.
+  - *Rippled resting track:* the faint unplayed line is no longer a straight rule; it carries a fine
+    9 dp ripple at 1.1 dp amplitude in `glassBorder`, deliberately shorter and weaker than the played
+    wave so it reads as texture, not signal.
+  - *Third layer:* a 1.4 dp, ~92 dp segment leaves the playhead and dissolves through a
+    `Brush.horizontalGradient` (0.38 → 0.20 → transparent) instead of ending on a visible edge.
+  - The mini-player `WavyProgress` shares the same helpers at a smaller scale, and its canvas grew
+    from 3 dp to 9 dp — at 3 dp the 2 dp stroke plus amplitude was clipped and the crests smeared.
+  - Verified on API 35 in dark **and** light theme: the played wave has the same rhythm at 20 % and
+    80 % of a 30 s track, the resting ripple stays subordinate, and the ghost segment is legible but
+    quiet. `testDebugUnitTest` green, `assembleDebug` green.
+
+### 2026-11-17 — Owner round 2: loudness strip + fish-wake scrubber
+The owner rejected the previous wave pass on both counts and restated what he wanted: the resting
+line should be an **audio visualization** (bars whose height is the volume at that point), and the
+progress bar's motion should read as **a fish moving near the surface** — three waves, two flanking
+and one in the middle, that fade, break into dots and converge into a single wave as they run back
+from the playhead.
+
+- **Loudness strip** — new `domain/Waveform.kt` (pure, unit-tested) and
+  `data/media/WaveformAnalyzer.kt`. The analyzer seeks to the middle of each of 84 buckets and
+  decodes ~60 ms through `MediaExtractor` + `MediaCodec`, mono-downmixes, takes RMS, and maps it to
+  0..1 between a −52 dB floor and a −6 dB ceiling (`WAVEFORM_MIN_HEIGHT = 0.12` keeps silence
+  visible as a hairline rather than a gap). Results are cached twice — an in-memory LRU and
+  `files/waveforms/<contentHash>.waveform` behind a magic header with an atomic rename — and the
+  whole thing runs only while the player is on screen (`flatMapLatest` over the track id,
+  `WhileSubscribed(5_000)`), emitting partial arrays every 12 buckets so the strip fills
+  left-to-right instead of appearing all at once. Any failure (a stream, an undecodable file) emits
+  `null` and the strip degrades to a plain rule.
+- **Strip rendering** — `drawWaveformBars` samples the measured array to the available pitch
+  (4.4 dp) with a peak-preserving resample, 1.8 dp wide, ±9 dp tall. Played bars are drawn at 0.92
+  alpha and resting bars at 0.17, so the loudness shape is legible behind the playhead and a quiet
+  texture ahead of it.
+- **The wake** — `drawWakeStrand`, drawn twice per frame, is the part that took the tuning. Three
+  things had to be true at once and each earlier attempt got one of them wrong:
+  - *Three waves, not one line with a shadow.* The strands need their **own phase offset**
+    (±1.5 rad, decaying), not just a vertical offset. With an offset alone they run parallel to the
+    centre wave and read as a grey ghost of it.
+  - *Enough room to be counted.* At a 9 dp spread the strands grazed the centre wave's own envelope
+    (3 dp amplitude plus a 3 dp stroke) and were swallowed; the spread is 10.5 dp and the strand
+    amplitude is 0.35× the wave's.
+  - *Converge gradually, not at once.* `1-(1-near)²` holds the fan open through most of the wake and
+    closes it near the tail; a plain `near^1.9` shut the fan a third of the way back and left the
+    rest as one bare line.
+  - The two strands are deliberately **not mirror images** (different spread, different phase,
+    different sign of phase): a mirrored pair closes into a lens that reads as an outline. Dash
+    length collapses `near^2.2` (9 dp → 0.6 dp) while the gaps widen, so the ripple turns into dots.
+  - The wake is drawn only while `amplitude > 0.01`; paused, the amplitude animates to zero and the
+    fan would freeze into three flat dashed rules. Verified paused: a flat played line, no strands.
+  - The played wave is no longer tapered at the playhead end (`taperEnd = 0`), so the crest the eye
+    follows stays alive; the playhead dot masks the cut. The halo shrank 11 dp/0.20 → 9 dp/0.14
+    because it read as a grey smudge over the bars, and the drift slowed to 3.8 s per cycle.
+- **Verification:** seeded a 120 s tone with a 17 s swell into the emulator's app-private storage and
+  drove the UI with `uiautomator` + `input tap`; checked at ~60 % progress in light and dark theme,
+  paused and playing, and on the dock's mini wave. `testDebugUnitTest` **413/413** (8 new in
+  `WaveformTest`), `assembleDebug` green. Seeded rows, audio and the waveform cache were removed
+  afterwards; `themePreference` restored to `light`.
+
+### 2026-11-17 — Owner round 3: the playhead swims, the dock gets the same bar
+Two follow-ups from the owner after round 2: the dot should rise and fall with the wave ("just
+like a fish swimming"), and the mini-player should carry the same progress bar.
+
+- **The playhead rides the wave.** The dot used to be pinned to the vertical centre, which read as
+  a slider handle rather than as a body on the surface. The curve is now evaluated in exactly one
+  place — `waveOffsetAt(x, amplitude, wavelength, phase, variation)` — and both `wavePath` and the
+  playhead call it, so the dot cannot drift off the line it is supposed to be sitting on. The
+  playhead also applies the path's start taper (`ramp(playedX, min(taper, playedX/2f))`), otherwise
+  the dot would sit above the wave during the first second of a track, where the taper is still
+  pulling the curve down to the baseline. Verified by sampling the dot's y in five screenshots
+  ~0.5 s apart: 1489 → 1499 px, i.e. it tracks the ±3 dp swing. It rests at centre when paused
+  because the amplitude animates to zero.
+- **One renderer, two sizes.** `drawTrack(playedX, cy, amplitude, phase, waveform, waiting,
+  accent, border, scale)` now draws the whole design — loudness strip → wake → played wave → riding
+  playhead — and both surfaces call it: the scrubber at `scale = 1f`, the dock at `MINI_SCALE =
+  0.55f`. Every dimension (bar pitch/width/height, wavelength, amplitude, stroke, wake spread,
+  dash lengths, dot and halo radii) is the scrubber's multiplied by the scale, so the two can never
+  drift into two different looks; `MINI_WAVELENGTH` / `MINI_RIPPLE_WAVELENGTH` are gone.
+- **Dock wiring.** `WavyProgress` gained `waveform: FloatArray?`; `AppDock` and `StandaloneMiniPlayer`
+  gained `miniWaveform: StateFlow<FloatArray?>?` and collect it in the leaf (`MiniWave`), so the
+  waveform never recomposes the dock itself. `PejvakNavHost` passes `playerVm.waveform`.
+- **Layout.** The dock's bar canvas went 9 dp → 14 dp (`MINI_HEIGHT`) to hold the mini bars (±5 dp)
+  and the halo (±7 dp); the top padding dropped 4 dp → 2 dp so the row still fits
+  `geo.dock.playerHeight` (58 dp) with **both** a title and an artist line — checked on the
+  emulator, nothing clips and the panel edge is clear.
+- **Verification:** API 35, light and dark theme, playing and paused, on the scrubber and on the
+  dock (with and without an artist line). `testDebugUnitTest` 413/413, `assembleDebug` green.
+  Seeded track/folder, audio and waveform cache removed afterwards; theme restored to `light`.

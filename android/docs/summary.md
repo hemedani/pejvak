@@ -54,6 +54,11 @@ second-install pull, scan/import and visual checks are the owner's.
 | Settings, AI catalogue, share/gallery/credits polish (Phase 13) | ✅ done |
 | Hardening & release: parity audit, R8 release (14 MB), splash/predictive-back, Room smoke test (Phase 14) | ✅ done |
 | Owner bug-fix round: tab order/insets, Library→Online shelf, online URL re-resolve, sync identity, crash containment | ✅ code (build green) |
+| Owner UX round: mini wave, open-player-on-play, wavy online loading, stroked floating sheets, glass player, Online default tab | ✅ code (emulator verified) |
+| Owner UX round 2: sheet side margins + frosted backdrop, transparent dock/mini, history rows = AI + delete (tap → detail+resume), removed stray top-right chrome | ✅ code (build green) |
+| Owner bug round: folder keys with spaces (`Uri.encode`, not `URLEncoder`), player context chip opens its collection, queue/playlist key safety, scrubber wave redesign (fixed wavelength, rippled track, gradient ghost layer) | ✅ code (emulator verified, dark + light) |
+| Owner round 2: scrubber resting line → real loudness strip (MediaCodec RMS, 84 buckets, dual cache), played wave → fish-wake (two flanking strands + centre, phase-offset, fading into dots and converging) | ✅ code (emulator verified, dark + light, playing + paused) |
+| Owner round 3: playhead rides the wave (`waveOffsetAt` shared with `wavePath`), one `drawTrack` renderer used by both the scrubber and the dock at `MINI_SCALE` | ✅ code (emulator verified, dark + light, playing + paused) |
 | Owner device pass: notification crash logcat, offline→online, kill recovery, themes, haptics, performance | ⬜ owner |
 
 ## 3. Tech stack (pinned, verified on this machine via Hawraa)
