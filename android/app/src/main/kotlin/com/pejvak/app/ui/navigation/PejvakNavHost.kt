@@ -1,16 +1,30 @@
 package com.pejvak.app.ui.navigation
 
 import android.net.Uri
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.EditNote
@@ -21,17 +35,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -42,6 +63,9 @@ import com.pejvak.app.ui.components.AmbientCanvas
 import com.pejvak.app.ui.components.AppDock
 import com.pejvak.app.ui.components.LocalSheetPresence
 import com.pejvak.app.ui.components.SheetPresence
+import com.pejvak.app.ui.components.wavePath
+import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.useMotionEnabled
 import com.pejvak.app.ui.screens.GalleryScreen
 import com.pejvak.app.ui.screens.ai.AiFeatureScreen
 import com.pejvak.app.ui.screens.ai.AiScreen
@@ -65,6 +89,8 @@ import com.pejvak.app.ui.screens.track.TrackDetailScreen
 import com.pejvak.app.domain.folderKeyToRouteSegment
 import com.pejvak.app.domain.ContextType
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
+import kotlin.math.PI
+import kotlin.math.sin
 
 /**
  * App shell: the five dock destinations over the ambient canvas, with the glass
@@ -119,15 +145,33 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
 
     CompositionLocalProvider(LocalSheetPresence provides sheetPresence) {
     Box(modifier = modifier.fillMaxSize()) {
+        // One swell per navigation. The route is the trigger, so pushing a detail
+        // screen, popping back and switching tabs all get the same water passing
+        // through instead of three different feels.
+        var sweep by remember { mutableIntStateOf(0) }
+        LaunchedEffect(currentDestination?.route) {
+            if (currentDestination != null) sweep++
+        }
+        val tabSwipe = rememberTabSwipe(
+            enabled = isTabRoute,
+            selectedRoute = selectedRoute,
+            onSelect = { route -> navController.navigateTab(route) },
+        )
+        val motion = useMotionEnabled()
         Box(Modifier.fillMaxSize().blur(backdropBlur)) {
             AmbientCanvas()
             NavHost(
                 navController = navController,
                 startDestination = Tab.Library.route,
+                enterTransition = { pageEnter(motion) },
+                exitTransition = { pageExit(motion) },
+                popEnterTransition = { pagePopEnter(motion) },
+                popExitTransition = { pagePopExit(motion) },
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
-                    .padding(bottom = bottomInset),
+                    .padding(bottom = bottomInset)
+                    .then(tabSwipe),
             ) {
                 composable(Tab.Library.route) {
                     LibraryScreen(
@@ -264,13 +308,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
             if (isTabRoute) {
                 AppDock(
                     selectedRoute = selectedRoute,
-                    onSelect = { tab ->
-                        navController.navigate(tab.route) {
-                            popUpTo(navController.graph.startDestinationId) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
+                    onSelect = { tab -> navController.navigateTab(tab.route) },
                     nowPlaying = mini,
                     miniProgress = playerVm.miniProgress,
                     miniWaveform = playerVm.waveform,
@@ -298,16 +336,17 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
             }
         }
 
+        WaveSweep(
+            trigger = sweep,
+            modifier = Modifier.fillMaxSize(),
+        )
+
         NowPlayingSheet(
             vm = playerVm,
             visible = playerOpen,
             onDismiss = { playerOpen = false },
             onOpenAi = {
-                navController.navigate(Tab.Ai.route) {
-                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
-                }
+                navController.navigateTab(Tab.Ai.route)
             },
             onOpenContext = { context ->
                 val route = when (context.type) {
@@ -342,4 +381,148 @@ private fun languageRoute(code: String): String = "online/language/${Uri.encode(
 private fun onlineCollectionRoute(key: String, trackId: String?, positionSec: Int): String {
     val track = trackId?.let { Uri.encode(it) }.orEmpty()
     return "online/${Uri.encode(key)}?trackId=$track&positionSec=$positionSec"
+}
+
+/**
+ * Switch tab by route, keeping each tab's own scroll and selection: `saveState` /
+ * `restoreState` on the start destination, `launchSingleTop` so re-tapping the
+ * current tab does not stack a duplicate. One place, because the dock and the
+ * swipe gesture must behave identically.
+ */
+private fun NavHostController.navigateTab(route: String) {
+    navigate(route) {
+        popUpTo(graph.startDestinationId) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
+/**
+ * Swipe left/right to move between the five tabs.
+ *
+ * The handler sits on the NavHost, which is the *parent* of the screen: Compose
+ * delivers pointer events to the deepest node first, so a horizontal drag that a
+ * chip row, a slider or the scrubber has already claimed never reaches this and a
+ * tab change cannot be triggered by scrubbing the progress bar.
+ */
+@Composable
+private fun rememberTabSwipe(
+    enabled: Boolean,
+    selectedRoute: String,
+    onSelect: (String) -> Unit,
+): Modifier {
+    val density = LocalDensity.current
+    val threshold = with(density) { 56.dp.toPx() }
+    return Modifier.pointerInput(enabled, selectedRoute, threshold) {
+        if (!enabled) return@pointerInput
+        var total = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { total = 0f },
+            onDragCancel = { total = 0f },
+            onDragEnd = {
+                val index = Tab.entries.indexOfFirst { it.route == selectedRoute }
+                if (index < 0) return@detectHorizontalDragGestures
+                when {
+                    total <= -threshold && index < Tab.entries.lastIndex ->
+                        onSelect(Tab.entries[index + 1].route)
+                    total >= threshold && index > 0 ->
+                        onSelect(Tab.entries[index - 1].route)
+                }
+                total = 0f
+            },
+            onHorizontalDrag = { change, delta ->
+                total += delta
+                change.consume()
+            },
+        )
+    }
+}
+
+/**
+ * Page transitions in the app's own vocabulary: the outgoing page sinks and thins
+ * out while the incoming one rises into place, so navigating reads as water moving
+ * rather than as two rectangles swapping. Forward and back are mirror images, and
+ * the scale is deliberately small — enough to suggest depth, never enough to make
+ * text swim while it settles.
+ */
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.pageEnter(motion: Boolean): EnterTransition =
+    if (!motion) {
+        EnterTransition.None
+    } else {
+        fadeIn(tween(260)) +
+            slideInVertically(tween(360, easing = FastOutSlowInEasing)) { it / 12 } +
+            scaleIn(tween(360, easing = FastOutSlowInEasing), initialScale = 0.975f)
+    }
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.pageExit(motion: Boolean): ExitTransition =
+    if (!motion) {
+        ExitTransition.None
+    } else {
+        fadeOut(tween(180)) +
+            slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { -it / 20 } +
+            scaleOut(tween(300, easing = FastOutSlowInEasing), targetScale = 0.985f)
+    }
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.pagePopEnter(motion: Boolean): EnterTransition =
+    if (!motion) {
+        EnterTransition.None
+    } else {
+        fadeIn(tween(240)) +
+            slideInVertically(tween(320, easing = FastOutSlowInEasing)) { -it / 20 } +
+            scaleIn(tween(320, easing = FastOutSlowInEasing), initialScale = 0.985f)
+    }
+
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.pagePopExit(motion: Boolean): ExitTransition =
+    if (!motion) {
+        ExitTransition.None
+    } else {
+        fadeOut(tween(200)) +
+            slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { it / 12 } +
+            scaleOut(tween(300, easing = FastOutSlowInEasing), targetScale = 0.985f)
+    }
+
+/**
+ * The swell that crosses the screen once per navigation.
+ *
+ * Two crests — the second fainter and lagging — travel from the top edge to the
+ * bottom while fading in and out at the ends, so the change of page happens *behind*
+ * a ripple instead of being a hard cut. Purely decorative: it draws no input, and it
+ * disappears completely (no composition work at all) when motion is off.
+ */
+@Composable
+private fun WaveSweep(trigger: Int, modifier: Modifier = Modifier) {
+    val tokens = LocalPejvakTokens.current
+    val motion = useMotionEnabled()
+    val sweep = remember { Animatable(0f) }
+    LaunchedEffect(trigger) {
+        if (trigger <= 0 || !motion) return@LaunchedEffect
+        sweep.snapTo(0f)
+        sweep.animateTo(1f, tween(640, easing = LinearEasing))
+    }
+    val eased = sweep.value
+    if (!motion || eased <= 0f || eased >= 1f) return
+    Canvas(modifier) {
+        val y = size.height * eased
+        val fade = sin(eased * PI).toFloat()
+        val wavelength = 88.dp.toPx()
+        listOf(
+            Triple(0f, 7.dp.toPx(), 0.34f),
+            Triple(-26.dp.toPx(), 4.dp.toPx(), 0.16f),
+        ).forEach { (lag, amplitude, alpha) ->
+            drawPath(
+                path = wavePath(
+                    from = 0f,
+                    to = size.width,
+                    cy = y + lag,
+                    amplitude = amplitude,
+                    wavelength = wavelength,
+                    phase = eased * 3.4f,
+                    taper = 28.dp.toPx(),
+                    variation = 0.4f,
+                ),
+                color = tokens.accent.copy(alpha = alpha * fade),
+                style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round),
+            )
+        }
+    }
 }
