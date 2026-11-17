@@ -56,7 +56,6 @@ import com.pejvak.app.domain.describeRunOutcome
 import com.pejvak.app.domain.describeStretchTitle
 import com.pejvak.app.domain.describeStretchTracks
 import com.pejvak.app.domain.formatDuration
-import com.pejvak.app.domain.formatSpeed
 import com.pejvak.app.domain.formatTimeRange
 import com.pejvak.app.domain.runProgressRatio
 import com.pejvak.app.domain.shape
@@ -160,11 +159,10 @@ fun HistoryScreen(
                         onTab = viewModel::setTab,
                         onSort = viewModel::setSort,
                         onRange = { rangeOpen = true },
-                        onResumeStretch = viewModel::resumeStretch,
                         onOpenStretch = { entry ->
                             entry.end.let(viewModel::openSession)
                         },
-                        onResumeRun = viewModel::resumeRun,
+                        onDeleteStretch = viewModel::deleteStretch,
                         onOpenRun = { run ->
                             if (onOpenCollection != null) onOpenCollection(run)
                             else viewModel.openCollection(run)
@@ -227,9 +225,8 @@ private fun HistoryList(
     onTab: (HistoryTab) -> Unit,
     onSort: (HistorySort) -> Unit,
     onRange: () -> Unit,
-    onResumeStretch: (HistoryStretchEntry) -> Unit,
     onOpenStretch: (HistoryStretchEntry) -> Unit,
-    onResumeRun: (ContextPlay) -> Unit,
+    onDeleteStretch: (HistoryStretchEntry) -> Unit,
     onOpenRun: (ContextPlay) -> Unit,
     onDeleteRun: (ContextPlay) -> Unit,
     onLoadMore: () -> Unit,
@@ -326,8 +323,8 @@ private fun HistoryList(
                         selectionMode = state.selectionMode,
                         selected = state.selected.containsAll(entry.items.map { it.session.id }),
                         onToggle = { onToggleSelected(entry) },
-                        onResume = { onResumeStretch(entry) },
                         onOpen = { onOpenStretch(entry) },
+                        onDelete = { onDeleteStretch(entry) },
                         onOpenAi = onOpenAi,
                     )
                 }
@@ -353,7 +350,6 @@ private fun HistoryList(
             items(state.filteredCollections, key = { it.id }) { run ->
                 RunCard(
                     run = run,
-                    onResume = { onResumeRun(run) },
                     onOpen = { onOpenRun(run) },
                     onDelete = { onDeleteRun(run) },
                     onOpenAi = onOpenAi,
@@ -392,14 +388,14 @@ private fun StretchCard(
     selectionMode: Boolean,
     selected: Boolean,
     onToggle: () -> Unit,
-    onResume: () -> Unit,
     onOpen: () -> Unit,
+    onDelete: () -> Unit,
     onOpenAi: () -> Unit,
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
     val stretch = entry.stretch
-    GlassCard(modifier = Modifier.clickable(onClick = if (selectionMode) onToggle else onResume)) {
+    GlassCard(modifier = Modifier.clickable(onClick = if (selectionMode) onToggle else onOpen)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -440,14 +436,9 @@ private fun StretchCard(
             } else {
                 AiActionButton(onClick = onOpenAi)
                 BubbleButton(
-                    icon = ICON_GLYPHS.getValue("info"),
-                    contentDescription = stringResource(R.string.history_open),
-                    onClick = onOpen,
-                )
-                BubbleButton(
-                    icon = ICON_GLYPHS.getValue("play"),
-                    contentDescription = stringResource(R.string.history_resume),
-                    onClick = onResume,
+                    icon = ICON_GLYPHS.getValue("delete"),
+                    contentDescription = stringResource(R.string.action_delete),
+                    onClick = onDelete,
                 )
             }
         }
@@ -457,14 +448,13 @@ private fun StretchCard(
 @Composable
 private fun RunCard(
     run: ContextPlay,
-    onResume: () -> Unit,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
     onOpenAi: () -> Unit,
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassCard(modifier = Modifier.clickable(onClick = onResume)) {
+    GlassCard(modifier = Modifier.clickable(onClick = onOpen)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -489,11 +479,6 @@ private fun RunCard(
                 )
             }
             AiActionButton(onClick = onOpenAi)
-            BubbleButton(
-                icon = ICON_GLYPHS.getValue("info"),
-                contentDescription = stringResource(R.string.history_open),
-                onClick = onOpen,
-            )
             BubbleButton(
                 icon = ICON_GLYPHS.getValue("delete"),
                 contentDescription = stringResource(R.string.action_delete),
