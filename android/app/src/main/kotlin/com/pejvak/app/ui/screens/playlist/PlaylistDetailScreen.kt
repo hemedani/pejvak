@@ -36,6 +36,7 @@ import com.pejvak.app.ui.components.ContextHistorySheet
 import com.pejvak.app.ui.components.EmptyState
 import com.pejvak.app.ui.components.GlassCard
 import com.pejvak.app.ui.components.GlassChip
+import com.pejvak.app.ui.components.row.ActionCluster
 import com.pejvak.app.ui.components.row.AiActionButton
 import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.ICON_GLYPHS
@@ -175,31 +176,33 @@ fun PlaylistDetailScreen(
                             color = tokens.textSecondary,
                         )
                     }
-                    if (state.editing) {
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue("chevronLeft"),
-                            contentDescription = stringResource(R.string.playlist_move_up),
-                            onClick = { if (index > 0) viewModel.move(index, index - 1) },
-                        )
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue("chevronRight"),
-                            contentDescription = stringResource(R.string.playlist_move_down),
-                            onClick = {
-                                if (index < state.rows.lastIndex) viewModel.move(index, index + 1)
-                            },
-                        )
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue("delete"),
-                            contentDescription = stringResource(R.string.playlist_remove),
-                            onClick = { viewModel.removeTrack(row.track.id) },
-                        )
-                    } else {
-                        AiActionButton(onClick = onOpenAi)
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue("play"),
-                            contentDescription = stringResource(R.string.library_play),
-                            onClick = { viewModel.play(index) },
-                        )
+                    ActionCluster {
+                        if (state.editing) {
+                            BubbleButton(
+                                icon = ICON_GLYPHS.getValue("chevronLeft"),
+                                contentDescription = stringResource(R.string.playlist_move_up),
+                                onClick = { if (index > 0) viewModel.move(index, index - 1) },
+                            )
+                            BubbleButton(
+                                icon = ICON_GLYPHS.getValue("chevronRight"),
+                                contentDescription = stringResource(R.string.playlist_move_down),
+                                onClick = {
+                                    if (index < state.rows.lastIndex) viewModel.move(index, index + 1)
+                                },
+                            )
+                            BubbleButton(
+                                icon = ICON_GLYPHS.getValue("delete"),
+                                contentDescription = stringResource(R.string.playlist_remove),
+                                onClick = { viewModel.removeTrack(row.track.id) },
+                            )
+                        } else {
+                            AiActionButton(onClick = onOpenAi)
+                            BubbleButton(
+                                icon = ICON_GLYPHS.getValue("play"),
+                                contentDescription = stringResource(R.string.library_play),
+                                onClick = { viewModel.play(index) },
+                            )
+                        }
                     }
                 }
             }
@@ -207,7 +210,7 @@ fun PlaylistDetailScreen(
     }
 
     if (renameOpen) {
-        GlassSheet(onDismiss = { renameOpen = false }, title = stringResource(R.string.action_rename)) {
+        GlassSheet(onDismiss = { renameOpen = false }, title = stringResource(R.string.action_rename), icon = "edit") {
             TextField(
                 value = draftTitle,
                 onValueChange = { draftTitle = it },
@@ -229,7 +232,7 @@ fun PlaylistDetailScreen(
     if (addOpen) {
         val existing = state.rows.map { it.track.id }.toSet()
         val candidates = state.allTracks.filterNot { it.id in existing }
-        GlassSheet(onDismiss = { addOpen = false }, title = stringResource(R.string.playlist_add_tracks)) {
+        GlassSheet(onDismiss = { addOpen = false }, title = stringResource(R.string.playlist_add_tracks), icon = "addToPlaylist") {
             if (candidates.isEmpty()) {
                 Text(
                     text = stringResource(R.string.playlist_no_more_tracks),

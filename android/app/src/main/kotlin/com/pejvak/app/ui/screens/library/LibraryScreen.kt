@@ -60,6 +60,7 @@ import com.pejvak.app.ui.components.NoticeTone
 import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.PrimaryButton
 import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.row.ActionCluster
 import com.pejvak.app.ui.components.row.AiActionButton
 import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
@@ -680,12 +681,14 @@ private fun PlaylistRow(
                     color = tokens.textSecondary,
                 )
             }
-            AiActionButton(onClick = onOpenAi)
-            BubbleButton(
-                icon = ICON_GLYPHS.getValue("delete"),
-                contentDescription = stringResource(R.string.library_playlist_delete_action),
-                onClick = onDelete,
-            )
+            ActionCluster {
+                AiActionButton(onClick = onOpenAi)
+                BubbleButton(
+                    icon = ICON_GLYPHS.getValue("delete"),
+                    contentDescription = stringResource(R.string.library_playlist_delete_action),
+                    onClick = onDelete,
+                )
+            }
         }
     }
 }

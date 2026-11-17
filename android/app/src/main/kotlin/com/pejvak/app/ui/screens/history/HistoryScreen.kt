@@ -62,6 +62,7 @@ import com.pejvak.app.domain.shape
 import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.EmptyState
 import com.pejvak.app.ui.components.GlassCard
+import com.pejvak.app.ui.components.row.ActionCluster
 import com.pejvak.app.ui.components.row.AiActionButton
 import com.pejvak.app.ui.components.GlassChip
 import com.pejvak.app.ui.components.ICON_GLYPHS
@@ -434,12 +435,14 @@ private fun StretchCard(
                     onClick = onToggle,
                 )
             } else {
-                AiActionButton(onClick = onOpenAi)
-                BubbleButton(
-                    icon = ICON_GLYPHS.getValue("delete"),
-                    contentDescription = stringResource(R.string.action_delete),
-                    onClick = onDelete,
-                )
+                ActionCluster {
+                    AiActionButton(onClick = onOpenAi)
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("delete"),
+                        contentDescription = stringResource(R.string.action_delete),
+                        onClick = onDelete,
+                    )
+                }
             }
         }
     }
@@ -478,12 +481,14 @@ private fun RunCard(
                     color = tokens.textSecondary,
                 )
             }
-            AiActionButton(onClick = onOpenAi)
-            BubbleButton(
-                icon = ICON_GLYPHS.getValue("delete"),
-                contentDescription = stringResource(R.string.action_delete),
-                onClick = onDelete,
-            )
+            ActionCluster {
+                AiActionButton(onClick = onOpenAi)
+                BubbleButton(
+                    icon = ICON_GLYPHS.getValue("delete"),
+                    contentDescription = stringResource(R.string.action_delete),
+                    onClick = onDelete,
+                )
+            }
         }
     }
 }
@@ -497,7 +502,7 @@ private fun RunDetailSheet(
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    com.pejvak.app.ui.components.GlassSheet(onDismiss = onDismiss, title = run.contextTitle) {
+    com.pejvak.app.ui.components.GlassSheet(onDismiss = onDismiss, title = run.contextTitle, icon = "history") {
         Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
             Text(
                 text = "${describeContextType(run.contextType)} · ${describeRunOutcome(run.shape()).label}",

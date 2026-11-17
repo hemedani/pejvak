@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pejvak.app.core.HapticIntent
 import com.pejvak.app.core.rememberHaptics
@@ -58,6 +59,13 @@ fun GlassChip(
             PejvakIcon(name = icon, contentDescription = null, tint = content, size = geo.icons.sm)
             androidx.compose.foundation.layout.Spacer(Modifier.size(geo.spacing.xs))
         }
-        Text(text = label, style = MaterialTheme.typography.labelLarge, color = content)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = content,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+        )
     }
 }
