@@ -1,5 +1,6 @@
 package com.pejvak.app.ui.navigation
 
+import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -8,6 +9,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.EditNote
@@ -15,14 +18,16 @@ import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -35,8 +40,8 @@ import com.pejvak.app.BuildConfig
 import com.pejvak.app.R
 import com.pejvak.app.ui.components.AmbientCanvas
 import com.pejvak.app.ui.components.AppDock
-import com.pejvak.app.ui.components.BubbleButton
-import com.pejvak.app.ui.components.ICON_GLYPHS
+import com.pejvak.app.ui.components.LocalSheetPresence
+import com.pejvak.app.ui.components.SheetPresence
 import com.pejvak.app.ui.screens.GalleryScreen
 import com.pejvak.app.ui.screens.ai.AiFeatureScreen
 import com.pejvak.app.ui.screens.ai.AiScreen
@@ -58,6 +63,7 @@ import com.pejvak.app.ui.screens.settings.SettingsScreen
 import com.pejvak.app.ui.screens.smart.SmartPlaylistScreen
 import com.pejvak.app.ui.screens.track.TrackDetailScreen
 import com.pejvak.app.domain.folderKeyToRouteSegment
+import com.pejvak.app.domain.ContextType
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 
 /**
@@ -86,6 +92,19 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
     val playerVm: PlayerViewModel = hiltViewModel()
     val mini by playerVm.mini.collectAsStateWithLifecycle()
     var playerOpen by remember { mutableStateOf(false) }
+    val sheetPresence = remember { SheetPresence() }
+    // Blur the shell behind the player or any open sheet so their translucent
+    // surfaces read as real glass rather than a flat scrim. Sheets render in their
+    // own window, so the content frosts behind them while the sheet stays crisp.
+    // Modifier.blur is a no-op before API 31; NowPlayingSheet keeps its fallback.
+    val backdropBlur by animateDpAsState(
+        targetValue = if (playerOpen || sheetPresence.count > 0) 18.dp else 0.dp,
+        animationSpec = tween(220),
+        label = "playerBackdropBlur",
+    )
+    LaunchedEffect(playerVm) {
+        playerVm.openPlayer.collect { playerOpen = true }
+    }
     // The dock floats over the canvas; the content owes it exactly its measured
     // height plus the system navigation inset. Reserving the dock's tallest
     // (now-playing) height when nothing is playing leaves a dead green band.
@@ -98,220 +117,184 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
         else -> 0.dp
     }
 
+    CompositionLocalProvider(LocalSheetPresence provides sheetPresence) {
     Box(modifier = modifier.fillMaxSize()) {
-        AmbientCanvas()
-        NavHost(
-            navController = navController,
-            startDestination = Tab.Library.route,
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .padding(bottom = bottomInset),
-        ) {
-            composable(Tab.Library.route) {
-                LibraryScreen(
-                    onOpenSettings = { navController.navigate("settings") },
-                    onOpenMissing = { navController.navigate("missing") },
-                    onImport = { navController.navigate("import") },
-                    onOpenTrack = { id -> navController.navigate("track/$id") },
-                    onOpenFolder = { key ->
-                        navController.navigate(
-                            "folder/${java.net.URLEncoder.encode(folderKeyToRouteSegment(key), "UTF-8")}",
-                        )
-                    },
-                    onOpenPlaylist = { id -> navController.navigate("playlist/$id") },
-                    onOpenSmart = { rule -> navController.navigate("smart/$rule") },
-                    onOpenAi = { navController.navigate(Tab.Ai.route) },
-                    onOpenSource = { sourceId -> navController.navigate("online/source/$sourceId") },
-                )
+        Box(Modifier.fillMaxSize().blur(backdropBlur)) {
+            AmbientCanvas()
+            NavHost(
+                navController = navController,
+                startDestination = Tab.Library.route,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(bottom = bottomInset),
+            ) {
+                composable(Tab.Library.route) {
+                    LibraryScreen(
+                        onOpenSettings = { navController.navigate("settings") },
+                        onOpenMissing = { navController.navigate("missing") },
+                        onImport = { navController.navigate("import") },
+                        onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
+                        onOpenFolder = { key -> navController.navigate(folderRoute(key)) },
+                        onOpenPlaylist = { id -> navController.navigate(playlistRoute(id)) },
+                        onOpenSmart = { rule -> navController.navigate("smart/${Uri.encode(rule)}") },
+                        onOpenAi = { navController.navigate(Tab.Ai.route) },
+                        onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
+                    )
+                }
+                composable(Tab.Discover.route) {
+                    DiscoverScreen(
+                        onOpenCollection = { key, trackId, positionSec ->
+                            navController.navigate(onlineCollectionRoute(key, trackId, positionSec))
+                        },
+                        onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
+                        onOpenLanguage = { code -> navController.navigate(languageRoute(code)) },
+                    )
+                }
+                composable(Tab.History.route) {
+                    HistoryScreen(
+                        onOpenAi = { navController.navigate(Tab.Ai.route) },
+                        onOpenCollection = { run ->
+                            when (run.contextType) {
+                                com.pejvak.app.domain.ContextType.Folder ->
+                                    navController.navigate(folderRoute(run.contextKey))
+                                com.pejvak.app.domain.ContextType.Playlist ->
+                                    navController.navigate(playlistRoute(run.contextKey))
+                                com.pejvak.app.domain.ContextType.Online -> navController.navigate(
+                                    onlineCollectionRoute(run.contextKey, run.lastTrackId, run.lastPositionSec),
+                                )
+                            }
+                        },
+                    )
+                }
+                composable(Tab.Notes.route) {
+                    NotesScreen(onOpenPlayer = { playerOpen = true })
+                }
+                composable(Tab.Ai.route) {
+                    AiScreen(onOpenTool = { id -> navController.navigate("ai/tool/$id") })
+                }
+                composable("ai/tool/{feature}") { entry ->
+                    AiFeatureScreen(
+                        featureId = entry.arguments?.getString("feature"),
+                        onBack = { navController.popBackStack() },
+                    )
+                }
+                if (BuildConfig.DEBUG) {
+                    composable("gallery") { GalleryScreen() }
+                }
+                composable("import") {
+                    ImportScreen(onBack = { navController.popBackStack() })
+                }
+                composable("missing") {
+                    MissingScreen(
+                        onBack = { navController.popBackStack() },
+                        onImport = { navController.navigate("import") },
+                        onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
+                    )
+                }
+                composable("settings") {
+                    SettingsScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenNotes = {
+                            navController.navigate(Tab.Notes.route) {
+                                popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        onOpenGallery = { navController.navigate("gallery") },
+                    )
+                }
+                // Detail screens land with the rest of Phase 8.
+                composable("track/{id}") {
+                    TrackDetailScreen(onBack = { navController.popBackStack() })
+                }
+                composable("folder/{key}") {
+                    FolderDetailScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
+                        onOpenAi = { navController.navigate(Tab.Ai.route) },
+                    )
+                }
+                composable("playlist/{id}") {
+                    PlaylistDetailScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
+                        onOpenAi = { navController.navigate(Tab.Ai.route) },
+                    )
+                }
+                composable("online/source/{sourceId}") {
+                    SourceScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenCollection = { key -> navController.navigate(onlineCollectionRoute(key, null, 0)) },
+                    )
+                }
+                composable("online/language/{code}") {
+                    LanguageScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
+                    )
+                }
+                composable(
+                    "online/{key}?trackId={trackId}&positionSec={positionSec}",
+                    arguments = listOf(
+                        androidx.navigation.navArgument("trackId") {
+                            type = androidx.navigation.NavType.StringType
+                            nullable = true
+                            defaultValue = null
+                        },
+                        androidx.navigation.navArgument("positionSec") {
+                            type = androidx.navigation.NavType.IntType
+                            defaultValue = 0
+                        },
+                    ),
+                ) {
+                    OnlineCollectionScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenAi = { navController.navigate(Tab.Ai.route) },
+                    )
+                }
+                composable("smart/{rule}") {
+                    SmartPlaylistScreen(
+                        onBack = { navController.popBackStack() },
+                        onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
+                    )
+                }
             }
-            composable(Tab.Discover.route) {
-                DiscoverScreen(
-                    onOpenCollection = { key, trackId, positionSec ->
-                        navController.navigate(onlineCollectionRoute(key, trackId, positionSec))
-                    },
-                    onOpenSource = { sourceId -> navController.navigate("online/source/$sourceId") },
-                    onOpenLanguage = { code -> navController.navigate("online/language/$code") },
-                )
-            }
-            composable(Tab.History.route) {
-                HistoryScreen(
-                    onOpenAi = { navController.navigate(Tab.Ai.route) },
-                    onOpenCollection = { run ->
-                        when (run.contextType) {
-                            com.pejvak.app.domain.ContextType.Folder -> navController.navigate(
-                                "folder/${java.net.URLEncoder.encode(
-                                    folderKeyToRouteSegment(run.contextKey),
-                                    "UTF-8",
-                                )}",
-                            )
-                            com.pejvak.app.domain.ContextType.Playlist ->
-                                navController.navigate("playlist/${run.contextKey}")
-                            com.pejvak.app.domain.ContextType.Online -> navController.navigate(
-                                onlineCollectionRoute(run.contextKey, run.lastTrackId, run.lastPositionSec),
-                            )
-                        }
-                    },
-                )
-            }
-            composable(Tab.Notes.route) {
-                NotesScreen(onOpenPlayer = { playerOpen = true })
-            }
-            composable(Tab.Ai.route) {
-                AiScreen(onOpenTool = { id -> navController.navigate("ai/tool/$id") })
-            }
-            composable("ai/tool/{feature}") { entry ->
-                AiFeatureScreen(
-                    featureId = entry.arguments?.getString("feature"),
-                    onBack = { navController.popBackStack() },
-                )
-            }
-            if (BuildConfig.DEBUG) {
-                composable("gallery") { GalleryScreen() }
-            }
-            composable("import") {
-                ImportScreen(onBack = { navController.popBackStack() })
-            }
-            composable("missing") {
-                MissingScreen(
-                    onBack = { navController.popBackStack() },
-                    onImport = { navController.navigate("import") },
-                    onOpenTrack = { id -> navController.navigate("track/$id") },
-                )
-            }
-            composable("settings") {
-                SettingsScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenNotes = {
-                        navController.navigate(Tab.Notes.route) {
+            if (isTabRoute) {
+                AppDock(
+                    selectedRoute = selectedRoute,
+                    onSelect = { tab ->
+                        navController.navigate(tab.route) {
                             popUpTo(navController.graph.startDestinationId) { saveState = true }
                             launchSingleTop = true
                             restoreState = true
                         }
                     },
-                    onOpenGallery = { navController.navigate("gallery") },
+                    nowPlaying = mini,
+                    miniProgress = playerVm.miniProgress,
+                    miniWaveform = playerVm.waveform,
+                    onPlayPause = playerVm::toggle,
+                    onNext = playerVm::next,
+                    onExpand = { playerOpen = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
+                        .navigationBarsPadding(),
                 )
-            }
-            // Detail screens land with the rest of Phase 8.
-            composable("track/{id}") {
-                TrackDetailScreen(onBack = { navController.popBackStack() })
-            }
-            composable("folder/{key}") {
-                FolderDetailScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenTrack = { id -> navController.navigate("track/$id") },
-                    onOpenAi = { navController.navigate(Tab.Ai.route) },
+            } else {
+                StandaloneMiniPlayer(
+                    nowPlaying = mini,
+                    miniProgress = playerVm.miniProgress,
+                    miniWaveform = playerVm.waveform,
+                    onExpand = { playerOpen = true },
+                    onPlayPause = playerVm::toggle,
+                    onNext = playerVm::next,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
+                        .navigationBarsPadding(),
                 )
-            }
-            composable("playlist/{id}") {
-                PlaylistDetailScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenTrack = { id -> navController.navigate("track/$id") },
-                    onOpenAi = { navController.navigate(Tab.Ai.route) },
-                )
-            }
-            composable("online/source/{sourceId}") {
-                SourceScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenCollection = { key -> navController.navigate(onlineCollectionRoute(key, null, 0)) },
-                )
-            }
-            composable("online/language/{code}") {
-                LanguageScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenSource = { sourceId -> navController.navigate("online/source/$sourceId") },
-                )
-            }
-            composable(
-                "online/{key}?trackId={trackId}&positionSec={positionSec}",
-                arguments = listOf(
-                    androidx.navigation.navArgument("trackId") {
-                        type = androidx.navigation.NavType.StringType
-                        nullable = true
-                        defaultValue = null
-                    },
-                    androidx.navigation.navArgument("positionSec") {
-                        type = androidx.navigation.NavType.IntType
-                        defaultValue = 0
-                    },
-                ),
-            ) {
-                OnlineCollectionScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenAi = { navController.navigate(Tab.Ai.route) },
-                )
-            }
-            composable("smart/{rule}") {
-                SmartPlaylistScreen(
-                    onBack = { navController.popBackStack() },
-                    onOpenTrack = { id -> navController.navigate("track/$id") },
-                )
-            }
-        }
-        if (isTabRoute) {
-            AppDock(
-                selectedRoute = selectedRoute,
-                onSelect = { tab ->
-                    navController.navigate(tab.route) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                },
-                nowPlaying = mini,
-                onPlayPause = playerVm::toggle,
-                onNext = playerVm::next,
-                onExpand = { playerOpen = true },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
-                    .navigationBarsPadding(),
-            )
-        } else {
-            StandaloneMiniPlayer(
-                nowPlaying = mini,
-                onExpand = { playerOpen = true },
-                onPlayPause = playerVm::toggle,
-                onNext = playerVm::next,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
-                    .navigationBarsPadding(),
-            )
-        }
-        // Settings lives on the tab headers only; detail screens keep their own
-        // back header and must not be covered by the floating debug shortcuts.
-        if (isTabRoute && currentDestination?.route != Tab.Library.route) {
-            androidx.compose.foundation.layout.Column(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(geo.spacing.lg),
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(geo.spacing.sm),
-                horizontalAlignment = Alignment.End,
-            ) {
-                BubbleButton(
-                    icon = ICON_GLYPHS.getValue("settings"),
-                    contentDescription = stringResource(R.string.settings_title),
-                    onClick = { navController.navigate("settings") },
-                )
-                if (BuildConfig.DEBUG) {
-                    BubbleButton(
-                        icon = ICON_GLYPHS.getValue("equalizer"),
-                        contentDescription = "Component gallery",
-                        onClick = { navController.navigate("gallery") },
-                    )
-                    BubbleButton(
-                        icon = ICON_GLYPHS.getValue("add"),
-                        contentDescription = "Import audio",
-                        onClick = { navController.navigate("import") },
-                    )
-                    BubbleButton(
-                        icon = ICON_GLYPHS.getValue("warning"),
-                        contentDescription = "Missing files",
-                        onClick = { navController.navigate("missing") },
-                    )
-                }
             }
         }
 
@@ -326,19 +309,37 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                     restoreState = true
                 }
             },
-            onOpenContext = {
-                navController.navigate(Tab.Library.route) {
-                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                    launchSingleTop = true
-                    restoreState = true
+            onOpenContext = { context ->
+                val route = when (context.type) {
+                    ContextType.Folder -> folderRoute(context.key)
+                    ContextType.Playlist -> playlistRoute(context.key)
+                    ContextType.Online -> onlineCollectionRoute(context.key, null, 0)
                 }
+                navController.navigate(route)
             },
         )
     }
+    }
 }
 
+/**
+ * Route builders. Every argument goes through [Uri.encode] — percent encoding, not
+ * `URLEncoder`, which is a form encoder and turns a space into `+`. Navigation
+ * decodes `%20` back to a space but leaves `+` alone, so a folder named
+ * "Test Folder" arrived as the key "Test+Folder" and its detail screen found no
+ * tracks at all. Encoding and decoding stay paired here, in one place.
+ */
+private fun folderRoute(key: String): String = "folder/${Uri.encode(folderKeyToRouteSegment(key))}"
+
+private fun playlistRoute(id: String): String = "playlist/${Uri.encode(id)}"
+
+private fun trackRoute(id: String): String = "track/${Uri.encode(id)}"
+
+private fun sourceRoute(sourceId: String): String = "online/source/${Uri.encode(sourceId)}"
+
+private fun languageRoute(code: String): String = "online/language/${Uri.encode(code)}"
+
 private fun onlineCollectionRoute(key: String, trackId: String?, positionSec: Int): String {
-    val encoded = java.net.URLEncoder.encode(key, "UTF-8")
-    val track = trackId?.let { java.net.URLEncoder.encode(it, "UTF-8") }
-    return "online/$encoded?trackId=${track.orEmpty()}&positionSec=$positionSec"
+    val track = trackId?.let { Uri.encode(it) }.orEmpty()
+    return "online/${Uri.encode(key)}?trackId=$track&positionSec=$positionSec"
 }

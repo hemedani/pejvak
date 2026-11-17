@@ -44,6 +44,7 @@ import com.pejvak.app.domain.describeNoteTags
 import com.pejvak.app.domain.formatClock
 import com.pejvak.app.domain.pickAnnotationColor
 import com.pejvak.app.domain.findTone
+import com.pejvak.app.playback.PlaybackContext
 import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.notes.AnnotationComposerSheet
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
@@ -57,7 +58,7 @@ fun NowPlayingSheet(
     visible: Boolean,
     onDismiss: () -> Unit,
     onOpenAi: () -> Unit,
-    onOpenContext: () -> Unit,
+    onOpenContext: (PlaybackContext) -> Unit,
 ) {
     val tokens = LocalPejvakTokens.current
     val motion = useMotionEnabled()
@@ -103,7 +104,8 @@ fun NowPlayingSheet(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(tokens.canvasBase.copy(alpha = 0.94f))
+                .background(tokens.canvasBase.copy(alpha = 0.68f))
+                .background(tokens.glassFill)
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
                         while (true) awaitPointerEvent()
@@ -115,6 +117,7 @@ fun NowPlayingSheet(
                 state = state,
                 positionFlow = vm.position,
                 listened = vm.listened,
+                waveform = vm.waveform,
                 notes = notes,
                 enhancer = enhancer,
                 volume = volume,
@@ -150,8 +153,12 @@ fun NowPlayingSheet(
                     onOpenAi()
                 },
                 onOpenContext = {
+                    // The chip carries the collection this run belongs to, so it has
+                    // to open that collection — not the Library tab it used to fall
+                    // back to, which read as "the folder button goes home".
+                    val context = state.context
                     onDismiss()
-                    onOpenContext()
+                    if (context != null) onOpenContext(context)
                 },
                 modifier = Modifier.fillMaxSize(),
             )
