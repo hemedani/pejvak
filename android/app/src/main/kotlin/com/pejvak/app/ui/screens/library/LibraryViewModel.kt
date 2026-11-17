@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pejvak.app.core.foldQuery
+import com.pejvak.app.core.foldText
 import com.pejvak.app.data.media.ArtworkService
 import com.pejvak.app.data.repository.ContextPlayRepository
+import com.pejvak.app.data.remote.online.OnlineRegistry
 import com.pejvak.app.data.repository.LibraryRepository
 import com.pejvak.app.data.repository.PlaylistRepository
 import com.pejvak.app.data.repository.SettingsRepository
@@ -25,6 +27,7 @@ import com.pejvak.app.domain.RecentPlay
 import com.pejvak.app.domain.SearchEntry
 import com.pejvak.app.domain.Session
 import com.pejvak.app.domain.Track
+import com.pejvak.app.domain.online.OnlineSource
 import com.pejvak.app.domain.buildFolderPlan
 import com.pejvak.app.domain.buildFolderSummaries
 import com.pejvak.app.domain.buildPlaylistSummaries
@@ -72,6 +75,7 @@ data class LibraryUiState(
     val localCount: Int = 0,
     val onlineCount: Int = 0,
     val hasBothOrigins: Boolean = false,
+    val sources: List<OnlineSource> = emptyList(),
 )
 
 private data class Quad(
@@ -102,6 +106,7 @@ private data class LibraryData(
 class LibraryViewModel @Inject constructor(
     private val library: LibraryRepository,
     private val playlists: PlaylistRepository,
+    private val registry: OnlineRegistry,
     private val runs: ContextPlayRepository,
     private val settings: SettingsRepository,
     private val engine: PlaybackEngine,
@@ -295,8 +300,16 @@ class LibraryViewModel @Inject constructor(
         }
         val visibleTracks = if (chosenOrigin == TrackOriginTab.Online) online else local
 
+        // The Online view is a provider directory, like RN's: a language first,
+        // then the sources that actually serve it. The search field filters it too.
+        val allSources = data.languageCode?.let { registry.sourcesForLanguage(it) }.orEmpty()
+        val visibleSources = if (terms.isEmpty()) allSources else allSources.filter { source ->
+            val haystack = foldText("${source.name} ${source.nativeName} ${source.description}")
+            terms.all { haystack.contains(it) }
+        }
+
         val counts = mapOf(
-            LibraryView.Online to 0,
+            LibraryView.Online to visibleSources.size,
             LibraryView.Tracks to trackHits.size,
             LibraryView.Folders to folderHits.size,
             LibraryView.Playlists to playlistHits.size,
@@ -331,6 +344,7 @@ class LibraryViewModel @Inject constructor(
             localCount = local.size,
             onlineCount = online.size,
             hasBothOrigins = hasBoth,
+            sources = visibleSources,
         )
     }
 

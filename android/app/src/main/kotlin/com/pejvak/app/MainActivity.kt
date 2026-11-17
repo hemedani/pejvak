@@ -1,9 +1,12 @@
 package com.pejvak.app
 
+import android.graphics.Color as AndroidColor
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.SideEffect
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
@@ -59,6 +62,26 @@ class MainActivity : ComponentActivity() {
                 DomainMotion.Full -> MotionPreference.Full
                 DomainMotion.Reduced -> MotionPreference.Reduced
                 DomainMotion.System -> MotionPreference.System
+            }
+            // Both canvases are dark (light theme = deep teal, dark theme = near
+            // black), so the bars always want light icons and a transparent
+            // scrim. Tying this to the app theme also avoids the opaque light
+            // band a light system leaves behind the three-button navigation bar.
+            SideEffect {
+                enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+                    navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+                )
+                window.isNavigationBarContrastEnforced = false
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility =
+                    window.decorView.systemUiVisibility and
+                    android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR.inv() and
+                    android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
+                androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = false
+                    isAppearanceLightNavigationBars = false
+                }
             }
             CompositionLocalProvider(
                 LocalMotionPreference provides motion,

@@ -44,6 +44,7 @@ import com.pejvak.app.domain.PlaylistSummary
 import com.pejvak.app.domain.RecentPlay
 import com.pejvak.app.domain.SMART_RULES
 import com.pejvak.app.domain.Track
+import com.pejvak.app.domain.online.OnlineSource
 import com.pejvak.app.domain.describeFolderProgress
 import com.pejvak.app.domain.describeRecentWhen
 import com.pejvak.app.domain.folderProgressRatio
@@ -60,6 +61,8 @@ import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.PrimaryButton
 import com.pejvak.app.ui.components.ScreenHeader
 import com.pejvak.app.ui.components.row.AiActionButton
+import com.pejvak.app.ui.components.row.ListGroup
+import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.field.SearchField
 import com.pejvak.app.ui.components.field.TextField
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
@@ -82,6 +85,7 @@ fun LibraryScreen(
     onOpenPlaylist: (String) -> Unit,
     onOpenSmart: (String) -> Unit,
     onOpenAi: () -> Unit,
+    onOpenSource: (String) -> Unit,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -224,12 +228,29 @@ fun LibraryScreen(
         }
 
         when (state.view) {
-            LibraryView.Online -> item {
-                EmptyState(
-                    icon = "language",
-                    title = stringResource(R.string.library_online_soon),
-                    body = stringResource(R.string.library_online_soon_body),
-                )
+            LibraryView.Online -> {
+                if (state.sources.isEmpty()) {
+                    item {
+                        EmptyState(
+                            icon = "language",
+                            title = stringResource(R.string.discover_no_sources),
+                            body = stringResource(R.string.discover_no_sources_body),
+                        )
+                    }
+                } else {
+                    item {
+                        Text(
+                            text = stringResource(R.string.discover_sources_here),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = tokens.textSecondary,
+                        )
+                    }
+                    item {
+                        ListGroup(items = state.sources) { source, _ ->
+                            SourceShelfRow(source = source, onClick = { onOpenSource(source.id) })
+                        }
+                    }
+                }
             }
             LibraryView.Tracks -> {
                 if (state.tracks.isEmpty() && !state.loading) {
@@ -512,6 +533,20 @@ private fun SpotlightCard(card: TrackCard, onPlay: (TrackCard) -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun SourceShelfRow(source: OnlineSource, onClick: () -> Unit) {
+    val geo = LocalPejvakGeometry.current
+    ListRow(
+        title = source.name,
+        subtitle = source.description,
+        meta = listOfNotNull(source.nativeName, if (source.live) stringResource(R.string.discover_live) else null)
+            .joinToString(" · ")
+            .ifBlank { null },
+        leading = { PaletteTile(contentHash = source.id, label = source.name, size = geo.tiles.md) },
+        onClick = onClick,
+    )
 }
 
 @Composable

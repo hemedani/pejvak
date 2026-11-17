@@ -58,6 +58,8 @@ class DiscoverViewModel @Inject constructor(
     private val sheet = MutableStateFlow(false)
 
     private val _state = MutableStateFlow(DiscoverUiState())
+    private var savedTitles: Map<String, String> = emptyMap()
+    private var latestRuns: List<ContextPlay> = emptyList()
     val state: StateFlow<DiscoverUiState> = _state.asStateFlow()
 
     val languages: List<OnlineLanguage> = LANGUAGES
@@ -71,11 +73,16 @@ class DiscoverViewModel @Inject constructor(
         }
         viewModelScope.launch {
             collections.observeLive().collect { rows ->
-                _state.value = _state.value.copy(downloadStates = rows.associate { it.key to it.downloadState })
+                savedTitles = rows.associate { it.key to it.title }
+                _state.value = _state.value.copy(
+                    downloadStates = rows.associate { it.key to it.downloadState },
+                    continueRuns = continueCards(latestRuns),
+                )
             }
         }
         viewModelScope.launch {
             combine(page, language, sheet, runs.observeLive(), collections.observeFavorites()) { p, code, open, runRows, favorites ->
+                latestRuns = runRows
                 DiscoverUiState(
                     page = p,
                     languageCode = code,
@@ -121,11 +128,16 @@ class DiscoverViewModel @Inject constructor(
         .sortedByDescending { it.updatedAt }
         .take(8)
         .mapNotNull { run ->
-            val (sourceId, _) = parseCollectionKey(run.contextKey) ?: return@mapNotNull null
+            val (sourceId, collectionSlug) = parseCollectionKey(run.contextKey) ?: return@mapNotNull null
             val source = registry.source(sourceId) ?: return@mapNotNull null
+            // Older runs stored the key/slug as the title; prefer the saved
+            // collection's real title, then a readable slug fallback.
+            val title = savedTitles[run.contextKey]
+                ?: run.contextTitle.takeIf { it.isNotBlank() && it != run.contextKey && it != collectionSlug }
+                ?: collectionSlug.replace('_', ' ').replaceFirstChar { it.uppercase() }
             ContinueCard(
                 key = run.contextKey,
-                title = run.contextTitle,
+                title = title,
                 sourceName = source.name,
                 languageCode = source.languageCode,
                 trackCount = run.trackCount,

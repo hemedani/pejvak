@@ -1,6 +1,11 @@
 package com.pejvak.app.ui.navigation
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -62,8 +67,8 @@ import com.pejvak.app.ui.theme.LocalPejvakGeometry
  */
 enum class Tab(val route: String, val labelRes: Int, val icon: ImageVector) {
     Library("library", R.string.tab_library, Icons.Rounded.LibraryMusic),
-    Discover("discover", R.string.tab_discover, Icons.Rounded.Explore),
     History("history", R.string.tab_history, Icons.Rounded.History),
+    Discover("discover", R.string.tab_discover, Icons.Rounded.Explore),
     Notes("notes", R.string.tab_notes, Icons.Rounded.EditNote),
     Ai("ai", R.string.tab_ai, Icons.Rounded.AutoAwesome),
 }
@@ -81,9 +86,15 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
     val playerVm: PlayerViewModel = hiltViewModel()
     val mini by playerVm.mini.collectAsStateWithLifecycle()
     var playerOpen by remember { mutableStateOf(false) }
+    // The dock floats over the canvas; the content owes it exactly its measured
+    // height plus the system navigation inset. Reserving the dock's tallest
+    // (now-playing) height when nothing is playing leaves a dead green band.
+    val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val dockHeight = geo.dock.navHeight + geo.dock.margin * 2 +
+        if (mini != null) geo.dock.playerHeight else 0.dp
     val bottomInset = when {
-        isTabRoute -> geo.dock.dockInset
-        mini != null -> geo.dock.playerHeight + geo.dock.margin * 2
+        isTabRoute -> dockHeight + navigationInset
+        mini != null -> geo.dock.playerHeight + geo.dock.margin * 2 + navigationInset
         else -> 0.dp
     }
 
@@ -94,6 +105,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
             startDestination = Tab.Library.route,
             modifier = Modifier
                 .fillMaxSize()
+                .statusBarsPadding()
                 .padding(bottom = bottomInset),
         ) {
             composable(Tab.Library.route) {
@@ -110,6 +122,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                     onOpenPlaylist = { id -> navController.navigate("playlist/$id") },
                     onOpenSmart = { rule -> navController.navigate("smart/$rule") },
                     onOpenAi = { navController.navigate(Tab.Ai.route) },
+                    onOpenSource = { sourceId -> navController.navigate("online/source/$sourceId") },
                 )
             }
             composable(Tab.Discover.route) {
@@ -251,7 +264,8 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                 onExpand = { playerOpen = true },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin),
+                    .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
+                    .navigationBarsPadding(),
             )
         } else {
             StandaloneMiniPlayer(
@@ -261,16 +275,17 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                 onNext = playerVm::next,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin),
+                    .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
+                    .navigationBarsPadding(),
             )
         }
-        // Settings is a real destination (account, sync, sign out). The debug
-        // entries below it are temporary entry points for screens whose own
-        // headers/actions land with their phases (Library header, Phase 8).
-        if (currentDestination?.route !in setOf("gallery", "import", "missing", "settings", Tab.Library.route)) {
+        // Settings lives on the tab headers only; detail screens keep their own
+        // back header and must not be covered by the floating debug shortcuts.
+        if (isTabRoute && currentDestination?.route != Tab.Library.route) {
             androidx.compose.foundation.layout.Column(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
+                    .statusBarsPadding()
                     .padding(geo.spacing.lg),
                 verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(geo.spacing.sm),
                 horizontalAlignment = Alignment.End,

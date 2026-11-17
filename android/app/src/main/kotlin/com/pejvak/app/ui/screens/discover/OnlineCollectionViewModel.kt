@@ -1,5 +1,6 @@
 package com.pejvak.app.ui.screens.discover
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,7 +16,10 @@ import com.pejvak.app.domain.online.OnlineSourceException
 import com.pejvak.app.domain.online.parseCollectionKey
 import com.pejvak.app.playback.PlaybackContext
 import com.pejvak.app.playback.PlaybackEngine
+import com.pejvak.app.playback.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,6 +57,7 @@ data class OnlineCollectionUiState(
 
 @HiltViewModel
 class OnlineCollectionViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle,
     private val registry: OnlineRegistry,
     private val catalog: OnlineCatalogService,
@@ -146,7 +151,9 @@ class OnlineCollectionViewModel @Inject constructor(
                 )
                 applyProgress()
                 maybeResume()
-            } catch (error: OnlineSourceException) {
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
                 val saved = collections.get(key)
                 val materialised = catalog.tracksForCollection(key)
                 _state.value = _state.value.copy(
@@ -168,10 +175,13 @@ class OnlineCollectionViewModel @Inject constructor(
     fun play(index: Int = 0, positionSec: Int = 0) {
         val tracks = _state.value.tracks.map { it.track }
         val entry = tracks.getOrNull(index) ?: return
-        val context = PlaybackContext(ContextType.Online, key, _state.value.title)
+        val playbackContext = PlaybackContext(ContextType.Online, key, _state.value.title)
         viewModelScope.launch {
             _state.value = _state.value.copy(playingTrackId = entry.id)
-            engine.loadAndPlay(entry, positionSec, context, tracks.map { it.id }, index)
+            // The engine is useless without the media service that owns ExoPlayer.
+            // Library/history start it; this screen must too.
+            PlaybackService.start(context)
+            engine.loadAndPlay(entry, positionSec, playbackContext, tracks.map { it.id }, index)
         }
     }
 

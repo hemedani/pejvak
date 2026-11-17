@@ -12,6 +12,7 @@ import com.pejvak.app.domain.online.OnlineCollectionInfo
 import com.pejvak.app.domain.online.OnlineSource
 import com.pejvak.app.domain.online.OnlineSourceException
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -70,15 +71,25 @@ class SourceViewModel @Inject constructor(
             error = null,
         )
         viewModelScope.launch {
-            val result = catalog.browse(sourceId, source.languageCode)
-            _state.value = _state.value.copy(
-                collections = result.collections,
-                fromCache = result.fromCache,
-                loading = false,
-                refreshing = false,
-                error = result.error?.message,
-            )
-            refreshDownloadSummaries()
+            try {
+                val result = catalog.browse(sourceId, source.languageCode)
+                _state.value = _state.value.copy(
+                    collections = result.collections,
+                    fromCache = result.fromCache,
+                    loading = false,
+                    refreshing = false,
+                    error = result.error?.message,
+                )
+                refreshDownloadSummaries()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _state.value = _state.value.copy(
+                    loading = false,
+                    refreshing = false,
+                    error = error.message ?: "The source could not be loaded.",
+                )
+            }
         }
     }
 

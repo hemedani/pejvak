@@ -1,6 +1,8 @@
 package com.pejvak.app.data.remote.online
 
+import com.pejvak.app.domain.online.OnlineErrorCode
 import com.pejvak.app.domain.online.OnlineSourceException
+import kotlinx.coroutines.CancellationException
 import java.net.URLEncoder
 import kotlin.math.floor
 import kotlinx.serialization.json.JsonArray
@@ -87,10 +89,22 @@ internal fun JsonElement?.roundedPositiveNumber(): Int {
 internal suspend fun <T> onlineGuard(block: suspend () -> T): T =
     try {
         block()
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: OnlineSourceException) {
+        throw error
     } catch (error: OnlineTransportException) {
         throw OnlineSourceException(
             error.message ?: "The source did not answer.",
             error.code,
+            error,
+        )
+    } catch (error: Exception) {
+        // A stranger's HTML/JSON is not a contract. A parser's IndexOutOfBounds or
+        // ClassCast must become a typed source failure, never a process crash.
+        throw OnlineSourceException(
+            "The source sent something unreadable.",
+            OnlineErrorCode.InvalidResponse,
             error,
         )
     }
