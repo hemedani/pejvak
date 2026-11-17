@@ -17,25 +17,33 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
+import com.pejvak.app.ui.components.player.WavyProgress
 import com.pejvak.app.ui.navigation.Tab
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 /** The dock's now-playing half. Only the fields the mini-player draws, so a
- *  once-a-second position tick never recomposes the dock. */
+ *  once-a-second position tick never recomposes the dock; the progress wave
+ *  collects its own flow in a leaf. */
 data class NowPlayingUi(
     val title: String,
     val artist: String,
     val isPlaying: Boolean,
     val artworkUrl: String? = null,
     val contentHash: String? = null,
+    val waiting: Boolean = false,
 )
 
 /**
@@ -50,6 +58,8 @@ fun AppDock(
     onSelect: (Tab) -> Unit,
     modifier: Modifier = Modifier,
     nowPlaying: NowPlayingUi? = null,
+    miniProgress: StateFlow<Float>? = null,
+    miniWaveform: StateFlow<FloatArray?>? = null,
     onPlayPause: () -> Unit = {},
     onNext: () -> Unit = {},
     onExpand: () -> Unit = {},
@@ -59,12 +69,14 @@ fun AppDock(
     GlassSurface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(geo.radius.xl),
-        strong = true,
+        filled = false,
     ) {
         Column(Modifier.fillMaxWidth()) {
             if (nowPlaying != null) {
                 MiniPlayerRow(
                     nowPlaying = nowPlaying,
+                    miniProgress = miniProgress,
+                    miniWaveform = miniWaveform,
                     onPlayPause = onPlayPause,
                     onNext = onNext,
                     onExpand = onExpand,
@@ -128,6 +140,8 @@ private fun DockItem(tab: Tab, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun MiniPlayerRow(
     nowPlaying: NowPlayingUi,
+    miniProgress: StateFlow<Float>?,
+    miniWaveform: StateFlow<FloatArray?>?,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onExpand: () -> Unit,
@@ -165,6 +179,14 @@ private fun MiniPlayerRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (miniProgress != null) {
+                MiniWave(
+                    progress = miniProgress,
+                    waveform = miniWaveform,
+                    isPlaying = nowPlaying.isPlaying,
+                    waiting = nowPlaying.waiting,
+                )
+            }
         }
         Spacer(Modifier.width(geo.spacing.sm))
         BubbleButton(
@@ -182,4 +204,22 @@ private fun MiniPlayerRow(
             size = geo.controls.md,
         )
     }
+}
+@Composable
+private fun MiniWave(
+    progress: StateFlow<Float>,
+    waveform: StateFlow<FloatArray?>?,
+    isPlaying: Boolean,
+    waiting: Boolean,
+) {
+    val value by progress.collectAsStateWithLifecycle()
+    val bars by (waveform ?: remember { MutableStateFlow<FloatArray?>(null) })
+        .collectAsStateWithLifecycle()
+    WavyProgress(
+        progress = value,
+        isPlaying = isPlaying,
+        waiting = waiting,
+        waveform = bars,
+        modifier = Modifier.padding(top = 2.dp),
+    )
 }

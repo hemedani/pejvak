@@ -13,8 +13,11 @@ import com.pejvak.app.domain.applyProgress
 import com.pejvak.app.domain.createSessionTracker
 import com.pejvak.app.domain.resolvePlaybackPhase
 import com.pejvak.app.domain.PlaybackStatus
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
@@ -40,6 +43,12 @@ class PlaybackEngine(
     private val mutex = Mutex()
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
+
+    private val _openPlayer = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /** Emitted when the listener starts a track deliberately, so the shell can
+     *  surface the full player. Auto-advance never emits. */
+    val openPlayer: SharedFlow<Unit> = _openPlayer.asSharedFlow()
 
     private class ActiveRun(
         val id: String,
@@ -399,5 +408,6 @@ class PlaybackEngine(
         awaitingAudio = true
         patch { it.copy(phase = PlaybackPhase.Connecting, waiting = PlaybackWait(PlaybackWaitKind.Connecting, clock(), track.origin == com.pejvak.app.domain.Origin.Online)) }
         command.loadAndPlay(track, positionSec)
+        _openPlayer.tryEmit(Unit)
     }
 }

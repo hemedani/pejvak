@@ -5,6 +5,9 @@ import com.pejvak.app.domain.ContextPlay
 import com.pejvak.app.domain.ContextType
 import com.pejvak.app.domain.Session
 import com.pejvak.app.domain.Track
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
@@ -57,6 +60,7 @@ private class FakeCommand : PlayerCommand {
     override fun release() { released = true }
 }
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class PlaybackEngineTest {
 
     private fun track(id: String, durationSec: Int = 600) =
@@ -67,6 +71,23 @@ class PlaybackEngineTest {
         val cmd = FakeCommand()
         val engine = PlaybackEngine(store, cmd) { 1000L }
         return Triple(engine, store, cmd)
+    }
+
+    @Test
+    fun deliberateStartRequestsPlayerButQueueSkipDoesNot() = runTest {
+        val (engine, store, _) = setup()
+        val t1 = track("t1"); val t2 = track("t2")
+        store.tracks["t1"] = t1; store.tracks["t2"] = t2
+        var opens = 0
+
+        val listener = launch(UnconfinedTestDispatcher(testScheduler)) {
+            engine.openPlayer.collect { opens++ }
+        }
+        engine.loadAndPlay(t1, 0, queue = listOf("t1", "t2"), index = 0)
+        assertEquals(1, opens)
+        engine.next()
+        assertEquals("queue skips must not reopen the player", 1, opens)
+        listener.cancel()
     }
 
     @Test

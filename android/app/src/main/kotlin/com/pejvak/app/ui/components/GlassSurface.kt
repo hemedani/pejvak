@@ -32,6 +32,7 @@ fun GlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(28.dp),
     strong: Boolean = false,
+    filled: Boolean = true,
     rimLight: Boolean = true,
     borderWidth: Dp = 1.dp,
     content: @Composable BoxScope.() -> Unit,
@@ -41,7 +42,7 @@ fun GlassSurface(
     Box(
         modifier = modifier
             .clip(shape)
-            .background(fill)
+            .then(if (filled) Modifier.background(fill) else Modifier)
             .then(
                 if (rimLight) Modifier.drawWithContent {
                     drawContent()
