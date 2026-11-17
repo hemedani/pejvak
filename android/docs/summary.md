@@ -59,6 +59,7 @@ second-install pull, scan/import and visual checks are the owner's.
 | Owner bug round: folder keys with spaces (`Uri.encode`, not `URLEncoder`), player context chip opens its collection, queue/playlist key safety, scrubber wave redesign (fixed wavelength, rippled track, gradient ghost layer) | ✅ code (emulator verified, dark + light) |
 | Owner round 2: scrubber resting line → real loudness strip (MediaCodec RMS, 84 buckets, dual cache), played wave → fish-wake (two flanking strands + centre, phase-offset, fading into dots and converging) | ✅ code (emulator verified, dark + light, playing + paused) |
 | Owner round 3: playhead rides the wave (`waveOffsetAt` shared with `wavePath`), one `drawTrack` renderer used by both the scrubber and the dock at `MINI_SCALE` | ✅ code (emulator verified, dark + light, playing + paused) |
+| Owner round 4: folder page (scrollable chips, played state per row), icon spacing via `ActionCluster`, backdrop blur behind the player's own sheets, modal headers + tone picker + session timeline redesign, `WaveSlider` everywhere, room-tone label, swipe-down to minimise, swipe between dock tabs, wave page transitions | ✅ code (emulator verified) |
 | Owner device pass: notification crash logcat, offline→online, kill recovery, themes, haptics, performance | ⬜ owner |
 
 ## 3. Tech stack (pinned, verified on this machine via Hawraa)

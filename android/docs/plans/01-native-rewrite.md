@@ -1262,3 +1262,58 @@ like a fish swimming"), and the mini-player should carry the same progress bar.
 - **Verification:** API 35, light and dark theme, playing and paused, on the scrubber and on the
   dock (with and without an artist line). `testDebugUnitTest` 413/413, `assembleDebug` green.
   Seeded track/folder, audio and waveform cache removed afterwards; theme restored to `light`.
+
+### 2026-11-18 — Owner round 4: ten fixes, one water language
+
+The owner sent a list of ten. The theme behind most of them was that the wave language
+had been invented for the scrubber and never carried anywhere else; the rest were
+layout bugs that had been read as "unfinished design".
+
+- **The wave moved into one module.** `ui/components/Wave.kt` owns `waveOffsetAt`,
+  `wavePath`, `ramp`, `rememberWavePhase` and the wake; `Scrubber.kt` lost its private
+  copies (~70 lines). Everything that needs a wave — the scrubber, the sliders, the
+  session timeline, the tone chips, the page-transition swell — now draws the same curve.
+- **Sliders are water** (`WaveSlider.kt`). The whole range is a dotted crest, the set
+  value is a solid one, the thumb is a body riding the crest, and the wave only drifts
+  and leaves a wake while the finger is down. The track is inset by half a thumb so the
+  handle at 0 % is a whole dot; Material's `Slider` is gone from the app. The dotted rest
+  is what makes "how much is left" readable — a solid line looked like the value.
+- **Folder page.** Four chips in a fixed `Row` squeezed the last one into two lines; the
+  row now scrolls edge-to-edge (and `GlassChip` refuses to wrap at all). The screen also
+  gained a hierarchy: header → play button → chips → 20 dp break → rows at 8 dp, instead
+  of one uniform 12 dp gap that made the first track look detached. Rows state what the
+  folder is for: a finished track shows a tick and its play count, a partly-heard one
+  shows `WaveProgressBar` with a head at the resume point. `FolderTrackRow` carries
+  `playCount` (finalized sessions, same definition as `TrackStats`). The title now comes
+  from `folderName`, not the tail of the key — "test-folder" was being shown as the name.
+- **Icons that sit next to icons** go through `ActionCluster` (8 dp apart), applied to
+  every row that pairs the AI bubble with play/delete.
+- **Backdrop blur.** The shell already frosted behind the player and behind sheets, but a
+  sheet opened *from* the player rendered in its own window while the player — the thing
+  actually visible behind it — stayed crisp. `NowPlayingSheet` now frosts its own surface
+  from `LocalSheetPresence.count`. While fixing it: `glassFill.copy(alpha = 1f)` painted
+  the player solid white (the token is a 6 % white); the alpha is now scaled, not replaced.
+- **Sheets got a header.** `GlassSheet(title, subtitle, icon)` draws an accent icon bubble,
+  a headline, an optional subtitle and a hairline wave rule, and every call site passes an
+  icon. The tone picker replaced seven identical radio dots with a per-tone wave chip and a
+  check bubble; the session-detail timeline is now the player's wave with the heard range
+  lit, "1 m 23 s of 3 m 19 s" above it and the seek tick still marked.
+- **Room tone labels.** The player row names the selected tone ("Forest"), not the
+  category; the enhancer's row shows it as an overline + value with a chevron. The row is
+  also clickable as a whole — a clickable word was a 20 dp strip nobody found.
+- **Swipe down to minimise.** The player body is a `verticalScroll`, so every drag went to
+  the scroll and a sheet-level gesture never saw one (`change.isConsumed` on the first
+  move). The body now reports its *unconsumed* downward pull through a
+  `NestedScrollConnection`, and the sheet translates itself with it, dims as it travels,
+  and minimises past 110 dp (springs back otherwise). `onPreFling` is the release signal.
+- **Swipe between dock tabs.** `rememberTabSwipe` on the NavHost: because Compose delivers
+  pointer events to the deepest node first, a horizontal drag a chip row, slider or
+  scrubber has claimed never reaches it — so scrubbing cannot change tab.
+- **Page transitions.** Forward: the incoming page rises and fades in while the outgoing
+  one sinks and thins (mirrored on pop). A `WaveSweep` overlay sends two crests down the
+  screen once per navigation, fading in and out at the ends, so the change happens behind
+  a ripple. `useMotionEnabled()` turns all of it off.
+- **Verification:** API 35 emulator. Folder page with mixed states (3 finished, 2 partial,
+  1 untouched), swipe-down → mini player, tab swipe Library → History, queue/tone/enhancer
+  sheets (frost + headers), session detail sheet, tone switch → row label follows.
+  `testDebugUnitTest` 413/413, `assembleDebug` green.
