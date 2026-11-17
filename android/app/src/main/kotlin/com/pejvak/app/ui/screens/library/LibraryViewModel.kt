@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -126,6 +127,16 @@ class LibraryViewModel @Inject constructor(
     private val view = MutableStateFlow(LibraryView.Tracks)
     private val origin = MutableStateFlow(TrackOriginTab.Local)
     private var lastSessions: List<Session> = emptyList()
+    private var viewChosen = false
+
+    init {
+        // A listener who has already picked an online language lands on the
+        // Online directory; the Track list is what you choose when you have none.
+        viewModelScope.launch {
+            settings.settings.first { it.languageCode != null }
+            if (!viewChosen) view.value = LibraryView.Online
+        }
+    }
 
     private val core = combine(
         library.observeTracks(),
@@ -160,6 +171,7 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun setView(value: LibraryView) {
+        viewChosen = true
         view.value = value
     }
 
