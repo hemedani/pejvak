@@ -1058,3 +1058,54 @@ From root `AGENTS.md` + `mobile/AGENTS.md` — these are non-negotiable and iden
 - **Verification:** `testDebugUnitTest` + `assembleDebug` green (403/403 after the new engine test);
   `assembleRelease` green. Offline→online recovery, kill recovery, both themes, haptics and
   performance are the owner's device checks.
+
+### 2026-11-16 — Owner bug-fix round (code done; device checks pending)
+- **Tabs & insets:** bottom tabs now match RN order (Library, History, Discover, Notes, AI);
+  the content is `statusBarsPadding()`, the dock/mini-player are `navigationBarsPadding()`, and the
+  reserved bottom space is computed from the real dock + optional player height instead of a fixed
+  inset (removes the tall empty band).
+- **Library → Online:** the Online view is now RN's language → source directory (`sourcesForLanguage`
+  filtered by the fold query, with counts), and a source row opens `online/source/{id}`.
+- **Online playback:** `ExoPlayerCommand.loadAndPlay` resolves a fresh signed stream URL through
+  `OnlineCatalogService.resolveTrack` before handing the URI to ExoPlayer; the stored URL is only a
+  fallback. Local playback is unchanged.
+- **Online identity in sync:** pulled tracks now carry `sourceId`/`externalId`/`collectionKey`/
+  `collectionTitle`/`artworkUrl`; online inserts use the content hash as their local id; existing
+  rows missing the online address are repaired in place (`OnlineIdentityRepair`), and materialise
+  matches on `content_hash` so an old random-id row is reused rather than forked. This is what lets
+  pulled online notes resolve to a track and online rows play.
+- **Crash containment:** `onlineGuard` now converts every non-cancellation exception from a source
+  adapter (parse, cast, index) into `OnlineSourceException`; `SourceViewModel` and
+  `OnlineCollectionViewModel` also catch unexpected exceptions and surface the error state instead of
+  crashing the screen.
+- **Verification:** `testDebugUnitTest` (404/404, new `OnlineIdentityRepair` test),
+  `assembleDebug`, `assembleDebugAndroidTest`, `assembleRelease` all green. The notification crash
+  still needs a logcat from the owner's device; no emulator is attached here.
+
+### 2026-11-17 — On-device bug-fix round (emulator API 35)
+- **Emulator set up** because no AVD existed and `sdkmanager` cannot reach Google's repo here:
+  emulator 35.4.5 + `system-images;android-35;default;x86_64` were fetched from the redirector CDN,
+  unpacked into the SDK with a hand-written `emulator/package.xml`, and an AVD
+  (`flowcast_api35`, Pixel 6, 4 GB) was created.
+- **Playback force-close (root cause found):** starting an online track called
+  `startForegroundService()` and then spent >5 s resolving the signed URL before ExoPlayer played;
+  `PlaybackService` never called `startForeground()`, so Android killed the process with
+  `ForegroundServiceDidNotStartInTimeException`. The service now posts a low-importance placeholder
+  notification immediately in `onCreate` (same id/channel Media3 uses), so the deadline is met even
+  when the network is slow.
+- **Media notification was stuck on the placeholder:** the session was never handed to
+  `MediaSessionService`, so `getSessions()` stayed empty and Media3 never generated its transport
+  notification. `onCreate` now calls `addSession(mediaSession)`; the notification updates with the
+  track title/artist and 2 transport actions, and playback survives backgrounding.
+- **Bottom navigation “background”:** the three-button system bar drew an opaque light scrim over
+  the teal canvas. `MainActivity` now applies `SystemBarStyle.dark(transparent)` for both bars, turns
+  off navigation-bar contrast enforcement, and clears the legacy light-bar flags — the canvas runs
+  edge-to-edge behind the buttons with light icons in both themes.
+- **Debug shortcut overlay** no longer covers detail screens (it was overlapping the collection's
+  Favorite button); it is limited to tab headers.
+- **Discover → Continue** now shows the saved collection's real title (`The Art of War`) instead of
+  the raw `archive-en:art_of_war_librivox` key stored by older runs.
+- **Verification on emulator:** register → Library → Online source → collection → play works;
+  `dumpsys media_session` reports `PLAYING`, the notification shows the real track, Home keeps audio
+  alive, and `logcat -b crash` is empty. `testDebugUnitTest` 404/404, `assembleDebug`,
+  `assembleDebugAndroidTest` and `assembleRelease` green.

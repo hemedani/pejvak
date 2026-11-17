@@ -31,7 +31,7 @@ phase.
 **App renamed FlowCast** (`applicationId com.flowcast.app`, code package still `com.pejvak.app`) so it
 installs **alongside** the RN app (`com.pejvak.app`). Skeleton + design system + data layer + playback
 engine + local library pipeline + auth & sync + player UI + annotations, verified: `./gradlew assembleDebug` → BUILD SUCCESSFUL;
-`testDebugUnitTest` → 403/403 pass, zero failures. 12-table Room schema verified column-for-column
+`testDebugUnitTest` → 404/404 pass, zero failures. 12-table Room schema verified column-for-column
 against RN. Debug APK at `app/build/outputs/apk/debug/app-debug.apk` (~91 MB); the R8 release APK is **14 MB**
 (`app/build/outputs/apk/release/app-release-unsigned.apk`). No device attached — background/lock-screen playback, live-backend login, a
 second-install pull, scan/import and visual checks are the owner's.
@@ -53,7 +53,8 @@ second-install pull, scan/import and visual checks are the owner's.
 | Audio effects: enhancer on real session, ambient tones, device-only prefs (Phase 12) | ✅ done |
 | Settings, AI catalogue, share/gallery/credits polish (Phase 13) | ✅ done |
 | Hardening & release: parity audit, R8 release (14 MB), splash/predictive-back, Room smoke test (Phase 14) | ✅ done |
-| Owner device pass: offline→online, kill recovery, themes, haptics, performance | ⬜ owner |
+| Owner bug-fix round: tab order/insets, Library→Online shelf, online URL re-resolve, sync identity, crash containment | ✅ code (build green) |
+| Owner device pass: notification crash logcat, offline→online, kill recovery, themes, haptics, performance | ⬜ owner |
 
 ## 3. Tech stack (pinned, verified on this machine via Hawraa)
 
