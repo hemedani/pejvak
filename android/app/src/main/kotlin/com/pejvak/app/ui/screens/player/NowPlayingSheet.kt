@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -12,33 +14,41 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
 import com.pejvak.app.domain.Annotation
+import com.pejvak.app.domain.DEFAULT_TONE_ID
 import com.pejvak.app.domain.TONES
 import com.pejvak.app.domain.describeNoteTags
 import com.pejvak.app.domain.formatClock
@@ -46,9 +56,11 @@ import com.pejvak.app.domain.pickAnnotationColor
 import com.pejvak.app.domain.findTone
 import com.pejvak.app.playback.PlaybackContext
 import com.pejvak.app.ui.components.GlassSheet
+import com.pejvak.app.ui.components.LocalSheetPresence
 import com.pejvak.app.ui.components.notes.AnnotationComposerSheet
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import com.pejvak.app.ui.theme.useMotionEnabled
 
@@ -101,16 +113,54 @@ fun NowPlayingSheet(
         var editingNote by remember { mutableStateOf<Annotation?>(null) }
         var confirmDeleteNote by remember { mutableStateOf<Annotation?>(null) }
 
+        // A sheet opened from the player renders in its own window, so the shell's
+        // backdrop blur only reaches the library behind the player — the player itself
+        // stayed crisp, which is why "the background does not blur" was most obvious
+        // here. Frost the player's own surface instead whenever one of its sheets is up.
+        val presence = LocalSheetPresence.current
+        val sheetCount = presence?.count ?: 0
+        val frost by animateDpAsState(
+            targetValue = if (sheetCount > 0) 16.dp else 0.dp,
+            animationSpec = tween(220),
+            label = "playerFrost",
+        )
+
+        // Swipe the player down to sink back to the mini player. This is the only
+        // pointer handler on the surface: two handlers on one node meant the inner one
+        // got every event and the drag never started, and being *hit* here is also what
+        // keeps a tap from reaching the library behind the player.
+        val density = LocalDensity.current
+        val dismissAt = with(density) { 110.dp.toPx() }
+        val travel = with(density) { 320.dp.toPx() }
+        val slop = with(density) { 14.dp.toPx() }
+        var dragY by remember { mutableFloatStateOf(0f) }
+        val sank = (dragY / travel).coerceIn(0f, 1f)
+
+        fun settle() {
+            val from = dragY
+            if (from <= 0f) return
+            scope.launch {
+                Animatable(from).animateTo(0f, tween(200)) { dragY = value }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(tokens.canvasBase.copy(alpha = 0.68f))
-                .background(tokens.glassFill)
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) awaitPointerEvent()
-                    }
-                }
+                .offset { IntOffset(0, dragY.roundToInt()) }
+                .background(tokens.canvasBase.copy(alpha = 0.68f * (1f - 0.7f * sank)))
+                // Scale the token's own alpha rather than replacing it: glassFill is a
+                // near-transparent white, and copy(alpha = 1f) painted the player solid.
+                .background(tokens.glassFill.copy(alpha = tokens.glassFill.alpha * (1f - 0.85f * sank)))
+                .blur(frost)
+                // The player is a full-screen surface, so a tap that no control claimed
+                // must stop here rather than reach the library behind it. A no-ripple
+                // clickable does that without stealing the drags the body scroll needs.
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {},
+                )
                 .systemBarsPadding(),
         ) {
             PlayerContent(
@@ -123,6 +173,7 @@ fun NowPlayingSheet(
                 volume = volume,
                 sleepRemaining = vm.sleepRemainingSec,
                 toneLevel = toneLevel,
+                toneLabel = roomToneLabel(toneId),
                 onClose = onDismiss,
                 onToggle = vm::toggle,
                 onNext = vm::next,
@@ -161,6 +212,12 @@ fun NowPlayingSheet(
                     if (context != null) onOpenContext(context)
                 },
                 modifier = Modifier.fillMaxSize(),
+                onPullDown = { dy ->
+                    dragY = (dragY + dy * 0.7f).coerceIn(0f, travel * 1.2f)
+                },
+                onPullEnd = {
+                    if (dragY > dismissAt) onDismiss() else settle()
+                },
             )
         }
 
@@ -282,6 +339,17 @@ fun NowPlayingSheet(
                 },
             )
         }
+    }
+}
+
+/** "Room tone" for the default room noise, otherwise the selected tone's own name. */
+@Composable
+private fun roomToneLabel(toneId: String): String {
+    val tone = findTone(toneId)
+    return if (tone == null || tone.id == DEFAULT_TONE_ID) {
+        stringResource(R.string.player_room_tone)
+    } else {
+        tone.label
     }
 }
 

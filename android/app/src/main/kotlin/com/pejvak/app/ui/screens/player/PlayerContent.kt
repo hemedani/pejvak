@@ -20,17 +20,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.domain.Annotation
 import com.pejvak.app.domain.AudioEnhancerSettings
 import com.pejvak.app.domain.contextPositionLabel
+import com.pejvak.app.domain.describeRoomTone
 import com.pejvak.app.domain.formatListened
 import com.pejvak.app.domain.formatSpeed
 import com.pejvak.app.domain.isEnhancerActive
@@ -68,6 +75,7 @@ fun PlayerContent(
     volume: Int,
     sleepRemaining: StateFlow<Int?>,
     toneLevel: Int,
+    toneLabel: String,
     onClose: () -> Unit,
     onToggle: () -> Unit,
     onNext: () -> Unit,
@@ -88,6 +96,10 @@ fun PlayerContent(
     onOpenAi: () -> Unit,
     onOpenContext: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Downward pull the body could not scroll any further, in px. */
+    onPullDown: (Float) -> Unit = {},
+    /** The pull gesture ended — the caller decides whether it meant anything. */
+    onPullEnd: () -> Unit = {},
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
@@ -131,10 +143,39 @@ fun PlayerContent(
             )
         }
 
+        // The body scrolls, so a downward drag belongs to the scroll until it has
+        // nowhere left to go; only then does it become the swipe-down-to-minimise
+        // gesture. Reporting the leftover from onPostScroll is what makes the two
+        // coexist — grabbing the drag at the sheet level lost every gesture to this
+        // scrollable, which is why swiping down did nothing.
+        val bodyScroll = rememberScrollState()
+        val pullDown by rememberUpdatedState(onPullDown)
+        val pullEnd by rememberUpdatedState(onPullEnd)
+        val pullConnection = remember(bodyScroll) {
+            object : NestedScrollConnection {
+                override fun onPostScroll(
+                    consumed: Offset,
+                    available: Offset,
+                    source: NestedScrollSource,
+                ): Offset {
+                    if (available.y > 0f && bodyScroll.value <= 0) {
+                        pullDown(available.y)
+                        return Offset(0f, available.y)
+                    }
+                    return Offset.Zero
+                }
+
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    pullEnd()
+                    return Velocity.Zero
+                }
+            }
+        }
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .nestedScroll(pullConnection)
+                .verticalScroll(bodyScroll)
                 .padding(horizontal = geo.spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(geo.spacing.xxl),
         ) {
@@ -218,10 +259,14 @@ fun PlayerContent(
                     icon = "volume",
                 )
                 LevelSliderRow(
-                    label = stringResource(R.string.player_room_tone),
+                    // The row names the tone that is actually playing, not the
+                    // category: picking "Forest" and still reading "Room tone" is
+                    // exactly the kind of quiet lie this screen should not tell.
+                    label = toneLabel,
                     value = toneLevel,
                     onChange = onToneLevel,
                     icon = "music",
+                    valueLabel = describeRoomTone(toneLevel),
                     onLabelClick = onOpenTone,
                 )
             }
