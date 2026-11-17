@@ -81,7 +81,10 @@ fun QueueSheet(
                 modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
                 verticalArrangement = Arrangement.spacedBy(geo.spacing.xs),
             ) {
-                itemsIndexed(items = tracks, key = { _, track -> track.id }) { index, track ->
+                // The queue may legitimately hold the same track twice ("add all to
+                // queue" twice), so the key cannot be the track id alone — a repeated
+                // key throws and takes the whole sheet down with it.
+                itemsIndexed(items = tracks, key = { index, track -> "$index:${track.id}" }) { index, track ->
                     val selected = index == currentIndex
                     Row(
                         modifier = Modifier

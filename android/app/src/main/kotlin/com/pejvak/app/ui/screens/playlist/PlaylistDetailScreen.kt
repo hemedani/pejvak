@@ -146,7 +146,8 @@ fun PlaylistDetailScreen(
                 )
             }
         }
-        itemsIndexed(state.rows, key = { _, row -> row.track.id }) { index, row ->
+        // A playlist may hold the same track twice, so the index is part of the key.
+        itemsIndexed(state.rows, key = { index, row -> "$index:${row.track.id}" }) { index, row ->
             GlassCard(
                 modifier = Modifier.clickable {
                     if (state.editing) onOpenTrack(row.track.id) else viewModel.play(index)
