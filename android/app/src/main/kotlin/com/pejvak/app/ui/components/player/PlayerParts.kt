@@ -19,8 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -37,6 +35,7 @@ import com.pejvak.app.domain.Annotation
 import com.pejvak.app.domain.formatClock
 import com.pejvak.app.domain.paletteIndexFor
 import com.pejvak.app.ui.components.PaletteTile
+import com.pejvak.app.ui.components.WaveSlider
 import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.components.UserText
 import com.pejvak.app.ui.theme.AuroraRamps
@@ -58,7 +57,20 @@ fun LevelSliderRow(
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
     Column(modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // When the label opens something, the whole header row is the target and it
+        // ends in a chevron: a clickable word alone is a 20 dp-tall strip that reads
+        // as plain text, so nobody finds the picker behind it.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = if (onLabelClick != null) {
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(geo.radius.sm))
+                    .clickable(onClick = onLabelClick)
+            } else {
+                Modifier.fillMaxWidth()
+            },
+        ) {
             if (icon != null) {
                 PejvakIcon(name = icon, contentDescription = null, tint = tokens.textSecondary, size = geo.icons.sm)
                 Spacer(Modifier.width(geo.spacing.xs))
@@ -67,22 +79,24 @@ fun LevelSliderRow(
                 text = label,
                 style = MaterialTheme.typography.labelLarge,
                 color = tokens.text,
-                modifier = if (onLabelClick != null) Modifier.clickable(onClick = onLabelClick) else Modifier,
             )
             Spacer(Modifier.weight(1f))
             Text(valueLabel, style = MaterialTheme.typography.labelSmall, color = tokens.textSecondary)
+            if (onLabelClick != null) {
+                Spacer(Modifier.width(geo.spacing.xs))
+                PejvakIcon(
+                    name = "chevronRight",
+                    contentDescription = null,
+                    tint = tokens.textTertiary,
+                    size = geo.icons.xs,
+                )
+            }
         }
-        Slider(
+        WaveSlider(
             value = value.coerceIn(0, max).toFloat(),
             onValueChange = { onChange(it.roundToInt()) },
-            valueRange = 0f..max.toFloat(),
-            colors = SliderDefaults.colors(
-                thumbColor = tokens.accent,
-                activeTrackColor = tokens.accent,
-                inactiveTrackColor = tokens.glassBorder,
-                activeTickColor = Color.Transparent,
-                inactiveTickColor = Color.Transparent,
-            ),
+            range = 0f..max.toFloat(),
+            contentDescription = label,
         )
     }
 }
@@ -106,19 +120,12 @@ fun GainSliderRow(
                 color = tokens.textSecondary,
             )
         }
-        val steps = (((range.max - range.min) / range.step).roundToInt() - 1).coerceAtLeast(0)
-        Slider(
+        WaveSlider(
             value = value.coerceIn(range.min, range.max).toFloat(),
             onValueChange = { onChange(it.toDouble()) },
-            valueRange = range.min.toFloat()..range.max.toFloat(),
-            steps = steps,
-            colors = SliderDefaults.colors(
-                thumbColor = tokens.accent,
-                activeTrackColor = tokens.accent,
-                inactiveTrackColor = tokens.glassBorder,
-                activeTickColor = Color.Transparent,
-                inactiveTickColor = Color.Transparent,
-            ),
+            range = range.min.toFloat()..range.max.toFloat(),
+            step = range.step.toFloat(),
+            contentDescription = label,
         )
     }
 }
