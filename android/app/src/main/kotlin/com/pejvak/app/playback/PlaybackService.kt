@@ -1,8 +1,13 @@
 package com.pejvak.app.playback
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import androidx.core.app.NotificationCompat
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -57,6 +62,11 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        // startForegroundService() gives the service five seconds to post a
+        // notification. Building the session and resolving a track can take
+        // longer than that, so promote immediately with a placeholder; Media3
+        // later updates the same notification id with the real media controls.
+        startForeground(DEFAULT_NOTIFICATION_ID, buildPlaceholderNotification())
         val audioSessionId = (getSystemService(AUDIO_SERVICE) as? AudioManager)
             ?.generateAudioSessionId() ?: 0
         val exoPlayer = ExoPlayer.Builder(this).build().apply {
@@ -74,6 +84,7 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, exoPlayer)
             .setCallback(MediaButtonCallback())
             .build()
+            .also { addSession(it) }
         // A finalized session is the highest-value moment to push; WorkManager
         // coalesces this with any sync already queued.
         engine.onSessionFinalized = { syncScheduler.syncNow() }
@@ -90,6 +101,30 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
+
+    private fun buildPlaceholderNotification(): android.app.Notification {
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        if (manager.getNotificationChannel(DEFAULT_CHANNEL_ID) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    DEFAULT_CHANNEL_ID,
+                    getString(com.pejvak.app.R.string.app_name),
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply { setShowBadge(false) },
+            )
+        }
+        val launch = packageManager.getLaunchIntentForPackage(packageName)
+        val pending = launch?.let {
+            PendingIntent.getActivity(this, 0, it, PendingIntent.FLAG_IMMUTABLE)
+        }
+        return NotificationCompat.Builder(this, DEFAULT_CHANNEL_ID)
+            .setSmallIcon(androidx.media3.session.R.drawable.media3_notification_small_icon)
+            .setContentTitle(getString(com.pejvak.app.R.string.app_name))
+            .setContentIntent(pending)
+            .setOngoing(true)
+            .setSilent(true)
+            .build()
+    }
 
     override fun onDestroy() {
         handler.removeCallbacks(tick)
@@ -160,6 +195,8 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         private const val TICK_MS = 1000L
+        private const val DEFAULT_CHANNEL_ID = DefaultMediaNotificationProvider.DEFAULT_CHANNEL_ID
+        private const val DEFAULT_NOTIFICATION_ID = DefaultMediaNotificationProvider.DEFAULT_NOTIFICATION_ID
 
         fun start(context: android.content.Context) {
             androidx.core.content.ContextCompat.startForegroundService(

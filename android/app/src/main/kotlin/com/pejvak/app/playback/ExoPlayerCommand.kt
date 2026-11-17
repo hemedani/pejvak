@@ -4,6 +4,8 @@ import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
+import com.pejvak.app.data.repository.OnlineCatalogService
+import com.pejvak.app.domain.Origin
 import com.pejvak.app.domain.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -17,13 +19,21 @@ import javax.inject.Singleton
  * clears it in onDestroy. The engine calls this from its own serialized scope.
  */
 @Singleton
-class ExoPlayerCommand @Inject constructor() : PlayerCommand {
+class ExoPlayerCommand @Inject constructor(
+    private val onlineCatalog: OnlineCatalogService,
+) : PlayerCommand {
 
     var player: ExoPlayer? = null
     private val main = Handler(Looper.getMainLooper())
 
     override suspend fun loadAndPlay(track: Track, positionSec: Int) {
-        val uri = track.fileUri ?: return
+        // Signed online URLs expire; re-resolve before handing the URI to ExoPlayer.
+        val playable = if (track.origin == Origin.Online && track.collectionKey != null) {
+            runCatching { onlineCatalog.resolveTrack(track) }.getOrDefault(track)
+        } else {
+            track
+        }
+        val uri = playable.fileUri ?: playable.streamUrl ?: return
         withContext(Dispatchers.Main) {
             var active = player
             var attempts = 0
