@@ -48,7 +48,7 @@ fun LanguagePickerSheet(
                 foldText(language.nativeName).contains(needle)
         }
     }
-    GlassSheet(onDismiss = onDismiss, title = stringResource(R.string.discover_choose_language)) {
+    GlassSheet(onDismiss = onDismiss, title = stringResource(R.string.discover_choose_language), icon = "language") {
         SearchField(
             value = query,
             onValueChange = { query = it },

@@ -24,7 +24,7 @@ fun DateRangeSheet(
 ) {
     val geo = LocalPejvakGeometry.current
     val active = presetForRange(range)
-    GlassSheet(onDismiss = onDismiss, title = describeDateRange(range)) {
+    GlassSheet(onDismiss = onDismiss, title = describeDateRange(range), icon = "time") {
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
             verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),

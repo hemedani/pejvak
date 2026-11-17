@@ -29,7 +29,7 @@ fun ContextHistorySheet(
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassSheet(onDismiss = onDismiss, title = stringResource(R.string.context_history_title)) {
+    GlassSheet(onDismiss = onDismiss, title = stringResource(R.string.context_history_title), icon = "history") {
         if (runs.isEmpty()) {
             Text(
                 text = stringResource(R.string.context_history_empty),

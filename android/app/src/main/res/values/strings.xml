@@ -108,6 +108,7 @@
     <string name="player_finished">Finished</string>
     <string name="player_failed">Playback failed</string>
     <string name="player_queue_empty">Nothing queued</string>
+    <string name="player_queue_count">%1$d in line</string>
     <string name="player_sleep_title">Sleep timer</string>
     <string name="player_sleep_pauses">Pauses in %1$s</string>
     <string name="player_sleep_duration">Duration</string>
@@ -360,6 +361,8 @@
     <string name="history_resume">Resume</string>
     <string name="history_single_track">Single track</string>
     <string name="history_in_progress">in progress</string>
+    <string name="history_timeline_heard">Heard</string>
+    <string name="history_timeline_span">%1$s of %2$s</string>
     <string name="history_fact_when">When</string>
     <string name="history_fact_listened">Listened</string>
     <string name="history_fact_speed">Speed</string>

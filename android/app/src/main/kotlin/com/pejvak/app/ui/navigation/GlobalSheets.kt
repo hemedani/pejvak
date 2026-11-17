@@ -24,10 +24,10 @@ sealed interface SheetRequest {
 @Composable
 fun GlobalSheetHost(request: SheetRequest?, onDismiss: () -> Unit) {
     when (request) {
-        is SheetRequest.AddToPlaylist -> GlassSheet(onDismiss = onDismiss, title = "Add to playlist") {
+        is SheetRequest.AddToPlaylist -> GlassSheet(onDismiss = onDismiss, title = "Add to playlist", icon = "playlist") {
             SheetPlaceholder("Playlist picker arrives with the library screens (Phase 8).")
         }
-        is SheetRequest.ContextHistory -> GlassSheet(onDismiss = onDismiss, title = request.title) {
+        is SheetRequest.ContextHistory -> GlassSheet(onDismiss = onDismiss, title = request.title, icon = "history") {
             SheetPlaceholder("Collection run history arrives with History (Phase 9).")
         }
         is SheetRequest.SessionDetail -> GlassSheet(

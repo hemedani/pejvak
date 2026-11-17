@@ -45,7 +45,7 @@ fun NotesDateRangeSheet(
         DatePreset.Year to R.string.date_range_year,
     )
 
-    GlassSheet(onDismiss = onClose, title = stringResource(R.string.date_range_title)) {
+    GlassSheet(onDismiss = onClose, title = stringResource(R.string.date_range_title), icon = "time") {
         Column(
             modifier = Modifier.padding(bottom = geo.spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(geo.spacing.lg),

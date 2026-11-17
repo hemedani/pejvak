@@ -282,6 +282,7 @@ fun TrackDetailScreen(
         GlassSheet(
             onDismiss = { addSheet = false },
             title = stringResource(R.string.track_detail_add_playlist),
+            icon = "addToPlaylist",
         ) {
             if (state.playlists.isEmpty()) {
                 Text(

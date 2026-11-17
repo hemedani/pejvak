@@ -36,7 +36,7 @@ fun AddToPlaylistSheet(
     val geo = LocalPejvakGeometry.current
     var draft by remember { mutableStateOf("") }
 
-    GlassSheet(onDismiss = onDismiss, title = stringResource(R.string.library_playlist_new)) {
+    GlassSheet(onDismiss = onDismiss, title = stringResource(R.string.library_playlist_new), icon = "playlist") {
         Column(Modifier.fillMaxWidth()) {
             TextField(
                 value = draft,
