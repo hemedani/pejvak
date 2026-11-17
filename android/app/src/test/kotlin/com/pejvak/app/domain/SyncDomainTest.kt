@@ -95,6 +95,23 @@ class ReconcileTest {
     }
 
     @Test
+    fun `online identity is repaired on a row pulled without it`() {
+        val local = listOf(track("c", "h3", serverId = "s3", origin = Origin.Online))
+        val remote = listOf(
+            RemoteTrack(
+                "s3", "h3", "T", 0, 0, true, null, null, Origin.Online,
+                sourceId = "librivox", externalId = "123", collectionKey = "librivox:9",
+                collectionTitle = "A Book",
+            ),
+        )
+        val result = reconcileTracks(local, remote)
+        assertEquals(
+            listOf(OnlineIdentityRepair("c", "librivox", "123", "librivox:9", "A Book", null)),
+            result.onlineIdentityRepairs,
+        )
+    }
+
+    @Test
     fun `sessions dedupe by clientId`() {
         val local = listOf(
             Session("s1", trackId = "t", contentHash = "h", startedAt = 0, createdAt = 0, updatedAt = 0, stretchId = "st"),

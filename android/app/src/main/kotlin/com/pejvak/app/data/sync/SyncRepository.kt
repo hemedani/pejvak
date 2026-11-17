@@ -123,18 +123,39 @@ class SyncRepository @Inject constructor(
         // Tracks first, by contentHash.
         val trackPlan = reconcileTracks(trackDao.getAll().map { it.toDomain() }, tracks)
         for (item in trackPlan.inserts) {
+            // Online identity is the hash (sha256("online:source:external")), the
+            // same id materialise() writes. A random id here would fork one
+            // episode into two rows and split its notes and history.
+            val id = if (item.origin == com.pejvak.app.domain.Origin.Online) {
+                item.contentHash
+            } else {
+                java.util.UUID.randomUUID().toString()
+            }
             val local = Track(
-                id = java.util.UUID.randomUUID().toString(),
+                id = id,
                 serverId = item.serverId, contentHash = item.contentHash, title = item.title,
                 durationSec = item.durationSec, fileSizeBytes = item.fileSizeBytes,
                 isAudiobook = item.isAudiobook, author = item.author, narrator = item.narrator,
+                artworkUrl = item.artworkUrl,
                 origin = item.origin, syncStatus = SyncStatus.Synced,
+                sourceId = item.sourceId, externalId = item.externalId,
+                collectionKey = item.collectionKey, collectionTitle = item.collectionTitle,
                 createdAt = System.currentTimeMillis(), updatedAt = System.currentTimeMillis(),
             )
             trackDao.insertIgnore(local.toEntity())
         }
         for (item in trackPlan.backfill) trackDao.markSynced(item.id, item.serverId)
         for (item in trackPlan.originRepairs) trackDao.setOrigin(item.id, item.origin.wire)
+        for (item in trackPlan.onlineIdentityRepairs) {
+            trackDao.setOnlineIdentity(
+                item.id,
+                item.sourceId,
+                item.externalId,
+                item.collectionKey,
+                item.collectionTitle,
+                item.artworkUrl,
+            )
+        }
 
         // Sessions, by clientId. Resolve trackId from the contentHash.
         val tracksByHash = trackDao.getAll().associateBy { it.content_hash }

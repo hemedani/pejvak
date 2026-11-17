@@ -129,8 +129,12 @@ class OnlineCatalogService @Inject constructor(
                 key = key,
                 sourceId = sourceId,
                 externalId = externalId,
-                title = saved?.title ?: key.substringAfter(':'),
-                subtitle = saved?.subtitle,
+                // The track metadata is the source's own title; the key's tail is
+                // an identifier, not a name. Prefer it over a stale saved title.
+                title = tracks.firstNotNullOfOrNull { it.albumTitle?.takeIf(String::isNotBlank) }
+                    ?: saved?.title ?: key.substringAfter(':'),
+                subtitle = tracks.firstNotNullOfOrNull { it.artist?.takeIf(String::isNotBlank) }
+                    ?: saved?.subtitle,
                 artworkUrl = saved?.artworkUrl ?: tracks.firstOrNull()?.artworkUrl,
                 trackCount = tracks.size,
                 languageCode = saved?.languageCode ?: languageCodeHint ?: adapter.source.languageCode,
@@ -148,6 +152,26 @@ class OnlineCatalogService @Inject constructor(
     }
 
     /**
+     * The playable version of [track]. Online sources sign their media URLs with
+     * an expiry, so the stored URL is a cache that must be re-resolved before it
+     * is trusted; a local track is returned untouched. A resolution failure falls
+     * back to the stored URL rather than blocking playback outright.
+     */
+    suspend fun resolveTrack(track: Track): Track {
+        if (track.origin != Origin.Online) return track
+        val key = track.collectionKey ?: return track
+        val fresh = runCatching { resolveStreamUrls(key) }.getOrNull() ?: return track
+        val byExternal = track.externalId?.let { external -> fresh.firstOrNull { it.externalId == external } }
+        if (byExternal == null) return track
+        return track.copy(
+            fileUri = track.downloadPath ?: byExternal.streamUrl ?: track.fileUri,
+            streamUrl = byExternal.streamUrl ?: track.streamUrl,
+            durationSec = if (byExternal.durationSec > 0) byExternal.durationSec else track.durationSec,
+            artworkUrl = byExternal.artworkUrl ?: track.artworkUrl,
+        )
+    }
+
+    /**
      * Re-resolves signed stream URLs for every track in a collection and stores them
      * on the rows. Called before playback of a stale cache and before downloading.
      */
@@ -161,7 +185,7 @@ class OnlineCatalogService @Inject constructor(
         withContext(Dispatchers.IO) {
             for (item in tracks) {
                 val hash = hashOnlineIdentity(sourceId, item.externalId)
-                val existing = trackDao.getById(hash) ?: continue
+                val existing = trackDao.getByContentHash(hash) ?: continue
                 val stream = item.streamUrl
                 trackDao.upsert(
                     existing.copy(
@@ -198,9 +222,12 @@ class OnlineCatalogService @Inject constructor(
         withContext(Dispatchers.IO) {
             for (item in tracks) {
                 val hash = hashOnlineIdentity(info.sourceId, item.externalId)
-                val prev = trackDao.getById(hash)?.toDomain()
+                // Match on the hash, not the primary key: rows written by an older
+                // sync pull may carry a random id, and inserting the hash as a
+                // second row would fork the episode and its notes.
+                val prev = trackDao.getByContentHash(hash)?.toDomain()
                 val row = Track(
-                    id = hash,
+                    id = prev?.id ?: hash,
                     contentHash = hash,
                     title = item.title.ifBlank { "Track ${item.order}" },
                     fileName = prev?.fileName,

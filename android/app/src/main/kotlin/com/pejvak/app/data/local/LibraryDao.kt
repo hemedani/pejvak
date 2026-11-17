@@ -57,6 +57,21 @@ interface TrackDao {
     @Query("UPDATE tracks SET origin = :origin WHERE id = :id")
     suspend fun setOrigin(id: String, origin: String)
 
+    @Query(
+        """UPDATE tracks SET source_id = :sourceId, external_id = :externalId,
+           collection_key = :collectionKey, collection_title = :collectionTitle,
+           artwork_url = COALESCE(:artworkUrl, artwork_url), origin = 'online'
+           WHERE id = :id""",
+    )
+    suspend fun setOnlineIdentity(
+        id: String,
+        sourceId: String,
+        externalId: String,
+        collectionKey: String?,
+        collectionTitle: String?,
+        artworkUrl: String?,
+    )
+
     @Query("UPDATE tracks SET sync_status = 'synced', server_id = :serverId WHERE id = :id")
     suspend fun markSynced(id: String, serverId: String)
 

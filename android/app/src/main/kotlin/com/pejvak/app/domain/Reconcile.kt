@@ -17,6 +17,11 @@ data class RemoteTrack(
     val author: String?,
     val narrator: String?,
     val origin: Origin,
+    val artworkUrl: String? = null,
+    val sourceId: String? = null,
+    val externalId: String? = null,
+    val collectionKey: String? = null,
+    val collectionTitle: String? = null,
 )
 
 data class RemoteSession(
@@ -98,6 +103,19 @@ data class RemoteOnlineCollection(
 data class Backfill(val id: String, val serverId: String)
 data class OriginRepair(val id: String, val origin: Origin)
 
+/**
+ * Fills in the online address of a row pulled before the sync asked for it. Without
+ * it the row has no source to re-resolve a signed URL from, so it cannot play.
+ */
+data class OnlineIdentityRepair(
+    val id: String,
+    val sourceId: String,
+    val externalId: String,
+    val collectionKey: String?,
+    val collectionTitle: String?,
+    val artworkUrl: String?,
+)
+
 data class AnnotationUpdate(
     val id: String, val serverId: String, val text: String,
     val tags: List<String>, val color: String?, val updatedAt: Long,
@@ -114,7 +132,12 @@ data class OnlineCollectionUpdate(
     val isFavorite: Boolean, val lastOpenedAt: Long?, val updatedAt: Long,
 )
 
-data class TrackReconcileResult(val inserts: List<RemoteTrack>, val backfill: List<Backfill>, val originRepairs: List<OriginRepair>)
+data class TrackReconcileResult(
+    val inserts: List<RemoteTrack>,
+    val backfill: List<Backfill>,
+    val originRepairs: List<OriginRepair>,
+    val onlineIdentityRepairs: List<OnlineIdentityRepair> = emptyList(),
+)
 data class AppendReconcileResult<T>(val inserts: List<T>, val backfill: List<Backfill>)
 data class AnnotationReconcileResult(val inserts: List<RemoteAnnotation>, val updates: List<AnnotationUpdate>, val backfill: List<Backfill>)
 data class PlaylistReconcileResult(val inserts: List<RemotePlaylist>, val updates: List<PlaylistUpdate>, val backfill: List<Backfill>)
@@ -131,6 +154,7 @@ fun reconcileTracks(local: List<Track>, remote: List<RemoteTrack>): TrackReconci
     val inserts = mutableListOf<RemoteTrack>()
     val backfill = mutableListOf<Backfill>()
     val originRepairs = mutableListOf<OriginRepair>()
+    val onlineIdentityRepairs = mutableListOf<OnlineIdentityRepair>()
     for (item in remote) {
         val existing = byHash[item.contentHash]
         if (existing == null) {
@@ -139,8 +163,20 @@ fun reconcileTracks(local: List<Track>, remote: List<RemoteTrack>): TrackReconci
         }
         if (existing.serverId == null) backfill.add(Backfill(existing.id, item.serverId))
         if (existing.origin != item.origin) originRepairs.add(OriginRepair(existing.id, item.origin))
+        if (item.origin == Origin.Online && existing.sourceId == null && item.sourceId != null && item.externalId != null) {
+            onlineIdentityRepairs.add(
+                OnlineIdentityRepair(
+                    existing.id,
+                    item.sourceId,
+                    item.externalId,
+                    item.collectionKey,
+                    item.collectionTitle,
+                    item.artworkUrl,
+                ),
+            )
+        }
     }
-    return TrackReconcileResult(inserts, backfill, originRepairs)
+    return TrackReconcileResult(inserts, backfill, originRepairs, onlineIdentityRepairs)
 }
 
 /** Sessions are append-only; deduped by clientId so re-pulls never duplicate. */

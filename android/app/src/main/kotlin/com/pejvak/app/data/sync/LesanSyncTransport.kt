@@ -224,7 +224,9 @@ class LesanSyncTransport @Inject constructor(
     suspend fun fetchRemoteTracks(): List<com.pejvak.app.domain.RemoteTrack> {
         val get = buildJsonObject {
             put("_id", 1); put("contentHash", 1); put("title", 1); put("durationSec", 1)
-            put("fileSizeBytes", 1); put("isAudiobook", 1); put("author", 1); put("narrator", 1); put("origin", 1)
+            put("fileSizeBytes", 1); put("isAudiobook", 1); put("author", 1); put("narrator", 1)
+            put("origin", 1); put("artworkUrl", 1); put("sourceId", 1); put("externalId", 1)
+            put("collectionKey", 1); put("collectionTitle", 1)
         }
         val rows = lesan.callBody("track", "getMyTracks", pageSet(), get, token = token()).jsonArray
         return rows.mapNotNull { element ->
@@ -239,6 +241,11 @@ class LesanSyncTransport @Inject constructor(
                 isAudiobook = row.bool("isAudiobook") ?: false,
                 author = row.str("author"), narrator = row.str("narrator"),
                 origin = if (row.str("origin") == "online") com.pejvak.app.domain.Origin.Online else com.pejvak.app.domain.Origin.Local,
+                artworkUrl = row.str("artworkUrl"),
+                sourceId = row.str("sourceId"),
+                externalId = row.str("externalId"),
+                collectionKey = row.str("collectionKey"),
+                collectionTitle = row.str("collectionTitle"),
             )
         }
     }
