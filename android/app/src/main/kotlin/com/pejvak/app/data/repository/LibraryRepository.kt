@@ -219,6 +219,10 @@ class LibraryRepository @Inject constructor(
         trackDao.getByFolderKey(folderKey).map { it.toDomain() }
     }
 
+    suspend fun track(id: String): Track? = withContext(Dispatchers.IO) {
+        trackDao.getById(id)?.toDomain()
+    }
+
     suspend fun allTracks(): List<Track> = withContext(Dispatchers.IO) {
         trackDao.getAll().map { it.toDomain() }
     }

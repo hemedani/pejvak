@@ -3,12 +3,14 @@ package com.pejvak.app.ui.screens.player
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pejvak.app.data.media.WaveformAnalyzer
 import com.pejvak.app.data.repository.AnnotationRepository
 import com.pejvak.app.data.repository.LibraryRepository
 import com.pejvak.app.domain.Annotation
 import com.pejvak.app.domain.AudioEnhancerSettings
 import com.pejvak.app.domain.Track
 import com.pejvak.app.domain.clampSeconds
+import com.pejvak.app.domain.isWaiting
 import com.pejvak.app.domain.nextSpeed
 import com.pejvak.app.playback.AudioEffectsController
 import com.pejvak.app.playback.EnhancerStatus
@@ -26,7 +28,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -40,6 +44,7 @@ class PlayerViewModel @Inject constructor(
     private val engine: PlaybackEngine,
     private val library: LibraryRepository,
     private val annotations: AnnotationRepository,
+    private val waveforms: WaveformAnalyzer,
     private val effects: AudioEffectsController,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -64,16 +69,47 @@ class PlayerViewModel @Inject constructor(
     val mini: StateFlow<NowPlayingUi?> = engine.state
         .map { s ->
             if (!s.hasTrack) null
-            else NowPlayingUi(s.title, s.artist, s.isPlaying, s.artworkUrl, s.contentHash)
+            else NowPlayingUi(s.title, s.artist, s.isPlaying, s.artworkUrl, s.contentHash, isWaiting(s.phase))
         }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** The mini-player's wave, separated from [mini] so a once-a-second position
+     *  tick never recomposes the dock: only the leaf wave collects it. */
+    val miniProgress: StateFlow<Float> = engine.state
+        .map { s ->
+            if (s.durationSec > 0) (s.positionSec.toFloat() / s.durationSec).coerceIn(0f, 1f) else 0f
+        }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0f)
+
+    val openPlayer = engine.openPlayer
 
     val queue: StateFlow<List<Track>> = engine.state
         .map { it.queue }
         .distinctUntilChanged()
         .mapLatest { ids -> library.getTracks(ids) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * The current track's loudness strip for the scrubber. Only collected while the
+     * player is on screen, so decoding never runs for a track nobody is looking at;
+     * leaving the player cancels the analysis and the cache keeps what finished.
+     */
+    val waveform: StateFlow<FloatArray?> = engine.state
+        .map { it.trackId }
+        .distinctUntilChanged()
+        .flatMapLatest { id ->
+            if (id == null) {
+                flowOf<FloatArray?>(null)
+            } else {
+                flow<FloatArray?> {
+                    val track = library.track(id)
+                    if (track == null) emit(null) else emitAll(waveforms.waveform(track))
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     val notes: StateFlow<List<Annotation>> = engine.state
         .map { it.trackId }

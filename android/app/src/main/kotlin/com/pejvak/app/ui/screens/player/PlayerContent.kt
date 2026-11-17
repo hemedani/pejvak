@@ -62,6 +62,7 @@ fun PlayerContent(
     state: PlayerState,
     positionFlow: StateFlow<Int>,
     listened: StateFlow<Int>,
+    waveform: StateFlow<FloatArray?>,
     notes: List<Annotation>,
     enhancer: AudioEnhancerSettings,
     volume: Int,
@@ -177,6 +178,7 @@ fun PlayerContent(
             Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
                 ScrubberSection(
                     position = positionFlow,
+                    waveform = waveform,
                     durationSec = state.durationSec,
                     markers = notes.map { note ->
                         ScrubberMarker(note.id, note.positionSec, markerColor(note.color, tokens.accentTeal))
@@ -305,6 +307,7 @@ private fun ListenedReadout(listened: StateFlow<Int>) {
 @Composable
 private fun ScrubberSection(
     position: StateFlow<Int>,
+    waveform: StateFlow<FloatArray?>,
     durationSec: Int,
     markers: List<ScrubberMarker>,
     isPlaying: Boolean,
@@ -313,12 +316,14 @@ private fun ScrubberSection(
     onMarkerClick: (String) -> Unit,
 ) {
     val positionSec by position.collectAsStateWithLifecycle()
+    val bars by waveform.collectAsStateWithLifecycle()
     Scrubber(
         positionSec = positionSec,
         durationSec = durationSec,
         markers = markers,
         isPlaying = isPlaying,
         waiting = waiting,
+        waveform = bars,
         onSeek = onSeek,
         onMarkerClick = onMarkerClick,
     )
