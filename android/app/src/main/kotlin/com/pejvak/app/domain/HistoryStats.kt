@@ -108,6 +108,30 @@ fun computeDailyListen(items: List<HistoryItem>, zone: ZoneId = ZoneId.systemDef
     return buckets.entries.sortedBy { it.key }.map { DailyListen(it.key, it.value) }
 }
 
+/**
+ * The last [days] calendar days ending today, zero-filled.
+ *
+ * [computeDailyListen] returns only the days that were listened to, which is right
+ * for a total and wrong for a chart: with one day of history the "Last 14 days"
+ * strip collapsed into a single bar as wide as the card. A bar chart needs its
+ * empty days.
+ */
+fun dailyListenWindow(
+    items: List<HistoryItem>,
+    days: Int = 14,
+    zone: ZoneId = ZoneId.systemDefault(),
+    now: Long = System.currentTimeMillis(),
+): List<DailyListen> {
+    if (days <= 0) return emptyList()
+    val byDay = computeDailyListen(items, zone).associateBy { it.key }
+    val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
+    return (days - 1 downTo 0).map { back ->
+        val date = today.minusDays(back.toLong())
+        val key = "%04d-%02d-%02d".format(date.year, date.monthValue, date.dayOfMonth)
+        DailyListen(key, byDay[key]?.listenTimeSec ?: 0)
+    }
+}
+
 fun computeDayStreak(
     items: List<HistoryItem>,
     now: Long = System.currentTimeMillis(),

@@ -23,7 +23,7 @@ import com.pejvak.app.domain.MediaBreakdown
 import com.pejvak.app.domain.TrackLeader
 import com.pejvak.app.domain.buildStretchSections
 import com.pejvak.app.domain.computeBestStreak
-import com.pejvak.app.domain.computeDailyListen
+import com.pejvak.app.domain.dailyListenWindow
 import com.pejvak.app.domain.computeDayStreak
 import com.pejvak.app.domain.computeListeningStats
 import com.pejvak.app.domain.computeMediaBreakdown
@@ -273,7 +273,7 @@ class HistoryViewModel @Inject constructor(
                 hasMore = first.isNotEmpty(),
                 stats = stats,
                 leaders = computeTrackLeaders(withinRange),
-                daily = computeDailyListen(withinRange),
+                daily = dailyListenWindow(withinRange),
                 streak = computeDayStreak(withinRange),
                 bestStreak = computeBestStreak(withinRange),
                 media = computeMediaBreakdown(withinRange),

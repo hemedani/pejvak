@@ -93,6 +93,18 @@ class HistoryStatsTest {
     }
 
     @Test
+    fun `the daily window keeps its empty days`() {
+        val items = listOf(item("a", "2026-03-10", 30))
+        val window = dailyListenWindow(items, days = 5, zone = zone, now = at("2026-03-10", 20))
+
+        assertEquals(
+            listOf("2026-03-06", "2026-03-07", "2026-03-08", "2026-03-09", "2026-03-10"),
+            window.map { it.key },
+        )
+        assertEquals(listOf(0, 0, 0, 0, 30), window.map { it.listenTimeSec })
+    }
+
+    @Test
     fun `streak counts back from today or yesterday`() {
         val items = listOf(
             item("a", "2026-03-08", 10),
