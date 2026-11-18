@@ -1,5 +1,7 @@
 package com.pejvak.app.ui.screens.settings
 
+import android.content.Context
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,12 +32,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.BuildConfig
 import com.pejvak.app.R
+import com.pejvak.app.core.CrashLog
 import com.pejvak.app.domain.MotionPreference
 import com.pejvak.app.domain.SPEED_OPTIONS
 import com.pejvak.app.domain.ThemePreference
@@ -54,6 +59,7 @@ import com.pejvak.app.ui.components.ScreenHeader
 import com.pejvak.app.ui.components.SegmentedControl
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import java.io.File
 
 /**
  * Settings (SE-01..08, SY-10): account, playback speed, appearance, motion and
@@ -284,6 +290,24 @@ fun SettingsScreen(
             )
         }
 
+        val context = LocalContext.current
+        val crashReport = remember { CrashLog.latest(context) }
+        CardSection(
+            title = stringResource(R.string.settings_diagnostics),
+            footer = stringResource(R.string.settings_diagnostics_footer),
+        ) {
+            CardRow(
+                icon = "share",
+                label = stringResource(R.string.settings_crash_share),
+                detail = if (crashReport != null) {
+                    CrashLog.summary(context)
+                } else {
+                    stringResource(R.string.settings_crash_none)
+                },
+                onClick = crashReport?.let { file -> { shareCrash(context, file) } },
+            )
+        }
+
         if (BuildConfig.DEBUG) {
             CardSection(title = stringResource(R.string.settings_developer)) {
                 CardRow(
@@ -317,6 +341,24 @@ fun SettingsScreen(
 private fun displayName(user: com.pejvak.app.data.auth.AuthRepository.AuthUser?): String? {
     if (user == null) return null
     return user.displayName?.takeIf { it.isNotBlank() } ?: user.username.takeIf { it.isNotBlank() }
+}
+
+/**
+ * Hands the last crash to whichever app the owner picks — a messenger, mail, a
+ * notes app. The file is the only thing exposed by the app's `FileProvider`, and
+ * only for the duration of this grant.
+ */
+private fun shareCrash(context: Context, file: File) {
+    val uri = runCatching {
+        FileProvider.getUriForFile(context, "${context.packageName}.crashes", file)
+    }.getOrNull() ?: return
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_SUBJECT, "Pejvak crash report")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    runCatching { context.startActivity(Intent.createChooser(send, null)) }
 }
 
 private fun initialOf(user: com.pejvak.app.data.auth.AuthRepository.AuthUser?): String {

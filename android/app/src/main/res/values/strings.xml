@@ -466,6 +466,10 @@
     <string name="settings_developer">Developer</string>
     <string name="settings_gallery">Field gallery</string>
     <string name="settings_gallery_detail">Every input, in every state.</string>
+    <string name="settings_diagnostics">Diagnostics</string>
+    <string name="settings_diagnostics_footer">Crash reports stay on this phone until you share one.</string>
+    <string name="settings_crash_share">Send last crash report</string>
+    <string name="settings_crash_none">No crashes recorded</string>
     <string name="ai_action">AI tools</string>
     <string name="ai_overline">Pejvak AI</string>
     <string name="ai_title">Your library, understood.</string>

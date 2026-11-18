@@ -6,6 +6,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import com.pejvak.app.core.CrashLog
 import com.pejvak.app.data.auth.AuthSession
 import com.pejvak.app.data.download.DownloadService
 import com.pejvak.app.data.sync.SyncScheduler
@@ -43,6 +44,9 @@ class PejvakApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // First, before anything below can throw: a crash on a phone with no
+        // cable attached is otherwise only a dialog the owner has to photograph.
+        CrashLog.install(this)
         syncScheduler.schedulePeriodic()
         observeConnectivity()
         downloadService.resumeInterrupted()
