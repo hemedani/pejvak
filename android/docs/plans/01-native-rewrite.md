@@ -1317,3 +1317,90 @@ layout bugs that had been read as "unfinished design".
   1 untouched), swipe-down → mini player, tab swipe Library → History, queue/tone/enhancer
   sheets (frost + headers), session detail sheet, tone switch → row label follows.
   `testDebugUnitTest` 413/413, `assembleDebug` green.
+
+### 2026-11-18 — Owner round 5: the design system written down, the AI tools in a sheet, a strip for streams
+
+Three asks, in the order they were given.
+
+- **`AGENTS.md` now carries the design system.** Round 4 built a water language and kept it
+  in the agent's head; it is now a contract with a table of primitives, the "absolute
+  wavelength" rule, "anything that sits *on* the wave asks `waveOffsetAt`", `WaveSlider` as
+  the only slider, `WaveProgressBar` for read-only values, `GlassSheet(title, subtitle,
+  icon)` as the only sheet, `ActionCluster` for adjacent icon bubbles, the page-transition
+  vocabulary, and the `glassFill` alpha trap. A separate **Gesture rules** section records
+  the three hard-won facts (a scroll container consumes vertical drags → `NestedScrollConnection`
+  outside the scroller; two `pointerInput` on one node → only the inner one runs;
+  `Animatable.animateTo` cannot run inside `awaitEachGesture`). A **Roles** section names
+  owner / agent / reviewer and what each must not do.
+- **The AI button stopped navigating.** Every per-item AI button (library, folder, playlist,
+  history, online collection, and the player's own AI chip) used to push the AI tab and lose
+  the listener's place. It now opens `AiCatalogSheet` — the AI page's content in the sheet
+  language: `GlassSheet` header with the accent icon bubble, an `AiSeaBand` hero (three
+  crests behind the glyph, the same curve as the scrubber), the page's headline and lede, the
+  four tools as tinted rows with their `Soon` pill and a chevron, and the why panel. Tapping a
+  row opens `AiFeatureSheet` **stacked on top** — pinned coming-soon copy, "What it will do"
+  with `feature.detail`, and a way back — so closing a description lands on the list rather
+  than on nothing. `AiWhyPanel` is shared with the AI page, so the explanation cannot go
+  stale in one of the two places. The AI tab itself is unchanged.
+- **Streams get a sample strip instead of a rule.** `WaveformAnalyzer` emitted `null` for
+  anything it could not decode, and the scrubber drew a single flat line — which read as a
+  bug on every Manahej/Internet Archive track. `domain/sampleWaveformFor(seed)` now returns a
+  deterministic 84-bucket strip shaped like speech (phrase envelope + grain + a little tooth,
+  clamped between `WAVEFORM_MIN_HEIGHT` and 1), seeded by `contentHash` so a station always
+  looks the same. The analyzer emits it for stream URIs, for a track with no URI at all, and
+  as the fallback when a container will not decode — never cached to disk, so a file that
+  starts decoding later still gets its real strip. Local files are untouched.
+- **Verification:** API 35 emulator, light and dark. AI sheet opened from an online-collection
+  row, from a history row and from the player's AI chip; description sheet opened, closed by
+  button and by swipe-down (the catalogue stayed); sheet content scrolls to the why panel; the
+  AI tab still renders. A streamed track shows a varied strip with the played part lit in the
+  scrubber and in the dock. `testDebugUnitTest` 417/417 (4 new sample-strip tests),
+  `assembleDebug` green. Theme restored to `light`, language restored to English.
+
+
+### 2026-11-18 — Owner round 6: two swipe gestures that had to be finished properly
+
+- **The player's swipe-down always lands.** Two independent bugs produced the same "it stopped
+  half way" symptom. (1) The release was taken from `onPreFling`, which a slow lift never
+  dispatches — no velocity, no fling — so nothing settled the sheet. (2) When a fling *did*
+  happen it kept reporting leftover deltas to `onPostScroll` after the finger was gone, feeding
+  the pull while it was already settling. Now the release is taken from the pointer stream
+  (`PointerEventPass.Initial` on `PlayerContent`, never consuming) *and* `onPreFling`/
+  `onPostFling`, guarded by a one-shot `pullReleased` flag; `onPostScroll` only accepts
+  `NestedScrollSource.UserInput`. Below 110 dp it springs back to the top, above it the sheet is
+  carried to 460 dp and *then* dismissed, so it leaves downwards instead of dissolving in place.
+  The next open resets the offset.
+- **The Library's views swipe.** The chips are not routes, so the dock's swipe could not reach
+  them. `Modifier.pageSwipe(index, count, onSelect)` in `ui/components/PageSwipe.kt` follows the
+  finger at half rate, commits past 56 dp, and starts the incoming view from the side it should
+  arrive on. It measures the slop itself instead of using `detectHorizontalDragGestures`, because
+  that helper consumes the slop event — which would eat the gesture even when no view is left in
+  that direction. At either end it declines, so swiping past "Recent" moves the dock on to
+  History instead of dying at the edge. The chip row keeps its own horizontal scroll.
+- **Verification:** API 35, light and dark. Slow lift with a short drag → snaps back; slow lift
+  with a long drag → dismisses; fast flick both ways → the same two outcomes, never a stranded
+  sheet; reopen starts at the top. Library swiped Online → Tracks → Folders → Playlists → Recent
+  and back, past Recent into History, chip row still scrolls, vertical scrolling unaffected.
+  `testDebugUnitTest` 417/417, `assembleDebug` green. Theme restored to `light`, playback paused.
+
+### 2026-11-18 — Owner round 7: the Discover crash, and crash reports that survive the phone
+
+- **Duplicate Lazy keys closed the app on Discover.** `IllegalArgumentException: Key "…" was already
+  used` — `context_plays` keeps one row per *play*, so a collection resumed three times produced
+  three "continue" cards with the same context key, and `items(cards, key = { it.key })` rejects
+  that. `domain/resumableRuns()` now filters (online, not completed, not deleted), sorts by
+  `updatedAt` and keeps the **newest run per context key** before the 8-item cut; the view model
+  maps cards from that list. The list also stops showing the same collection twice, which it had
+  been doing all along. Four tests in `ResumeRunsTest` cover the dedupe, the filters, the
+  online-only rule and that the limit counts collections rather than runs.
+- **Crash reports no longer need a cable.** `core/CrashLog` installs an uncaught-exception handler
+  as the very first thing in `PejvakApp.onCreate`, writes `files/crashes/last-crash.txt` (time,
+  version, device, thread, exception, full stack) plus a dated copy, keeps five, and always calls
+  the previous handler so the platform's own reporting is unchanged. Settings → **Diagnostics →
+  Send last crash report** shows "18 Nov 09:30 · IllegalStateException" (or "No crashes recorded")
+  and shares the file through a `FileProvider` limited to that one folder.
+- **Verification:** seeded two runs for `manahej:190` → one card, no crash; a debug-only throwing
+  row produced `files/crashes/last-crash.txt` with the app frame in the stack, the Settings row
+  picked it up on the next launch, and the share sheet offered `last-crash.txt` (Bluetooth /
+  Messaging on the bare emulator). Probe row and seeded rows removed afterwards.
+  `testDebugUnitTest` 421/421, `assembleDebug` green.
