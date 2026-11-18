@@ -17,6 +17,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -24,10 +27,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,6 +71,7 @@ import com.pejvak.app.ui.components.field.SearchField
 import com.pejvak.app.ui.components.field.TextField
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import kotlinx.coroutines.launch
 
 private val LANGUAGE_OPTIONS = listOf(
     "en" to "English",
@@ -75,6 +79,16 @@ private val LANGUAGE_OPTIONS = listOf(
     "ar" to "العربية",
     "fr" to "Français",
 )
+
+/** The library's views in the order the chip row shows them, so the swipe and the
+ *  chips can never disagree about what "next" means. */
+private fun libraryViews(online: Boolean): List<LibraryView> = buildList {
+    if (online) add(LibraryView.Online)
+    add(LibraryView.Tracks)
+    add(LibraryView.Folders)
+    add(LibraryView.Playlists)
+    add(LibraryView.Recent)
+}
 
 @Composable
 fun LibraryScreen(
@@ -90,12 +104,9 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
-    LaunchedEffect(listState.isScrollInProgress, state.loading) {
-        if (!listState.isScrollInProgress && !state.loading) viewModel.backfillArtwork()
-    }
     val geo = LocalPejvakGeometry.current
     val tokens = LocalPejvakTokens.current
+    val scope = rememberCoroutineScope()
     var showLanguage by rememberSaveable { mutableStateOf(false) }
     var languageAsked by rememberSaveable { mutableStateOf(false) }
     var newPlaylist by remember { mutableStateOf("") }
@@ -108,18 +119,47 @@ fun LibraryScreen(
         }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = geo.spacing.xxl,
-            bottom = geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        item {
+    // The chips are the library's own tabs, and they are **pages**, not routes:
+    // five full-width pages the finger drags through, so half a swipe shows both
+    // neighbours instead of snapping to one. The dock is the only way between
+    // screens — there is no swipe out of the Library any more.
+    val views = remember(state.languageCode) { libraryViews(state.languageCode != null) }
+    val pagerState = rememberPagerState(
+        initialPage = views.indexOf(state.view).coerceAtLeast(0),
+    ) { views.size }
+    val chipState = rememberLazyListState()
+
+    // The page the finger lands on is the view. The chips read `currentPage`, not
+    // `state.view`, so the highlight crosses over with the content mid-drag.
+    LaunchedEffect(pagerState.settledPage) {
+        views.getOrNull(pagerState.settledPage)?.let(viewModel::setView)
+    }
+
+    // A language choice inserts "Online" at the front, which shifts every index;
+    // follow the view the user was actually on.
+    LaunchedEffect(views) {
+        val target = views.indexOf(state.view)
+        if (target >= 0 && target != pagerState.currentPage) pagerState.scrollToPage(target)
+    }
+
+    // Keep the selected chip on screen and carry it there with the page: on
+    // "Playlists" or "Recent" it used to sit outside the row entirely.
+    LaunchedEffect(pagerState.currentPage) {
+        chipState.animateScrollToItem((pagerState.currentPage - 1).coerceAtLeast(0))
+    }
+
+    LaunchedEffect(pagerState.settledPage, state.loading) {
+        if (!state.loading) viewModel.backfillArtwork()
+    }
+
+    Column(Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.padding(
+                start = geo.spacing.lg,
+                end = geo.spacing.lg,
+                top = geo.spacing.xxl,
+            ),
+        ) {
             ScreenHeader(
                 title = stringResource(R.string.library_title),
                 overline = stringResource(R.string.library_overline),
@@ -131,8 +171,7 @@ fun LibraryScreen(
                     )
                 },
             )
-        }
-        item {
+            Spacer(Modifier.height(geo.spacing.sm))
             Row(
                 horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
                 verticalAlignment = Alignment.CenterVertically,
@@ -145,67 +184,175 @@ fun LibraryScreen(
                     onClick = { showLanguage = true },
                 )
             }
-        }
-        item {
+            Spacer(Modifier.height(geo.spacing.sm))
             SearchField(
                 value = state.query,
                 onValueChange = viewModel::setQuery,
                 placeholder = stringResource(R.string.library_search_placeholder),
             )
         }
-        item {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                val views = if (state.languageCode != null) {
-                    listOf(LibraryView.Online) + listOf(
-                        LibraryView.Tracks,
-                        LibraryView.Folders,
-                        LibraryView.Playlists,
-                        LibraryView.Recent,
-                    )
-                } else {
-                    listOf(
-                        LibraryView.Tracks,
-                        LibraryView.Folders,
-                        LibraryView.Playlists,
-                        LibraryView.Recent,
-                    )
-                }
-                items(views) { view ->
-                    val count = state.counts[view]
-                    GlassChip(
-                        label = viewLabel(view),
-                        selected = state.view == view,
-                        icon = viewIcon(view),
-                        count = if (state.query.isNotEmpty() && count != null) count else null,
-                        onClick = { viewModel.setView(view) },
-                    )
-                }
+        Spacer(Modifier.height(geo.spacing.md))
+        LazyRow(
+            state = chipState,
+            contentPadding = PaddingValues(horizontal = geo.spacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+        ) {
+            itemsIndexed(views) { index, view ->
+                val count = state.counts[view]
+                GlassChip(
+                    label = viewLabel(view),
+                    selected = index == pagerState.currentPage,
+                    icon = viewIcon(view),
+                    count = if (state.query.isNotEmpty() && count != null) count else null,
+                    onClick = {
+                        scope.launch { pagerState.animateScrollToPage(index) }
+                    },
+                )
             }
         }
-        if (state.view == LibraryView.Tracks && state.hasBothOrigins) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxWidth().weight(1f),
+        ) { page ->
+            val view = views.getOrNull(page) ?: return@HorizontalPager
+            LibraryPage(
+                view = view,
+                state = state,
+                newPlaylist = newPlaylist,
+                onNewPlaylistChange = { newPlaylist = it },
+                onCreatePlaylist = {
+                    viewModel.createPlaylist(newPlaylist)
+                    newPlaylist = ""
+                },
+                onDeletePlaylist = { pendingDelete = it },
+                onOpenTrack = onOpenTrack,
+                onOpenFolder = onOpenFolder,
+                onOpenPlaylist = onOpenPlaylist,
+                onOpenSmart = onOpenSmart,
+                onOpenMissing = onOpenMissing,
+                onOpenSource = onOpenSource,
+                onOpenAi = onOpenAi,
+                onImport = onImport,
+                onSetOrigin = viewModel::setOrigin,
+                onPlayTrack = { card -> viewModel.playTrack(card.track, state.tracks.map { it.track }) },
+                onPlayRecent = viewModel::playRecent,
+            )
+        }
+    }
+
+    if (showLanguage) {
+        GlassSheet(
+            onDismiss = { showLanguage = false },
+            title = stringResource(R.string.library_language_prompt_title),
+        ) {
+            Text(
+                text = stringResource(R.string.library_language_prompt_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = tokens.textSecondary,
+                modifier = Modifier.padding(bottom = geo.spacing.md),
+            )
+            LANGUAGE_OPTIONS.forEach { (code, label) ->
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = geo.spacing.sm)
+                        .clickable {
+                            viewModel.setLanguage(code)
+                            showLanguage = false
+                        },
+                ) {
+                    Text(label, style = MaterialTheme.typography.titleMedium, color = tokens.text)
+                }
+            }
+            TextButton(onClick = { showLanguage = false }) {
+                Text(stringResource(R.string.library_language_not_now), color = tokens.textSecondary)
+            }
+            Spacer(Modifier.height(geo.spacing.xl))
+        }
+    }
+
+    pendingDelete?.let { summary ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            containerColor = tokens.canvasBase,
+            titleContentColor = tokens.text,
+            textContentColor = tokens.textSecondary,
+            title = { Text(stringResource(R.string.library_playlist_delete_title)) },
+            text = { Text(stringResource(R.string.library_playlist_delete_body)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deletePlaylist(summary.playlist.id)
+                    pendingDelete = null
+                }) {
+                    Text(stringResource(R.string.library_playlist_delete_action), color = tokens.danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text(stringResource(R.string.library_playlist_cancel), color = tokens.text)
+                }
+            },
+        )
+    }
+}
+
+/**
+ * One page of the library pager. Every page renders from the same [state] — the
+ * view model loads all five lists anyway — so a swipe only changes which page is
+ * on screen, never what is loaded.
+ */
+@Composable
+private fun LibraryPage(
+    view: LibraryView,
+    state: LibraryUiState,
+    newPlaylist: String,
+    onNewPlaylistChange: (String) -> Unit,
+    onCreatePlaylist: () -> Unit,
+    onDeletePlaylist: (PlaylistSummary) -> Unit,
+    onOpenTrack: (String) -> Unit,
+    onOpenFolder: (String) -> Unit,
+    onOpenPlaylist: (String) -> Unit,
+    onOpenSmart: (String) -> Unit,
+    onOpenMissing: () -> Unit,
+    onOpenSource: (String) -> Unit,
+    onOpenAi: () -> Unit,
+    onImport: () -> Unit,
+    onSetOrigin: (TrackOriginTab) -> Unit,
+    onPlayTrack: (TrackCard) -> Unit,
+    onPlayRecent: (RecentPlay) -> Unit,
+) {
+    val geo = LocalPejvakGeometry.current
+    val tokens = LocalPejvakTokens.current
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = geo.spacing.lg,
+            end = geo.spacing.lg,
+            top = geo.spacing.sm,
+            bottom = geo.spacing.xxl,
+        ),
+        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+    ) {
+        if (view == LibraryView.Tracks && state.hasBothOrigins) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
                     GlassChip(
                         label = stringResource(R.string.library_origin_local),
                         selected = state.origin == TrackOriginTab.Local,
                         count = state.localCount,
-                        onClick = { viewModel.setOrigin(TrackOriginTab.Local) },
+                        onClick = { onSetOrigin(TrackOriginTab.Local) },
                     )
                     GlassChip(
                         label = stringResource(R.string.library_origin_online),
                         selected = state.origin == TrackOriginTab.Online,
                         count = state.onlineCount,
-                        onClick = { viewModel.setOrigin(TrackOriginTab.Online) },
+                        onClick = { onSetOrigin(TrackOriginTab.Online) },
                     )
                 }
             }
         }
-        if (state.spotlight != null && state.query.isEmpty() && state.view != LibraryView.Online) {
-            item {
-                SpotlightCard(state.spotlight!!) { card ->
-                    viewModel.playTrack(card.track, state.tracks.map { it.track })
-                }
-            }
+        if (state.spotlight != null && state.query.isEmpty() && view != LibraryView.Online) {
+            item { SpotlightCard(state.spotlight!!, onPlayTrack) }
         }
         if (state.missingCount > 0) {
             item {
@@ -218,7 +365,7 @@ fun LibraryScreen(
                 }
             }
         }
-        if (state.elsewhere != null) {
+        if (state.elsewhere != null && state.view == view) {
             item {
                 Text(
                     text = state.elsewhere!!,
@@ -228,7 +375,7 @@ fun LibraryScreen(
             }
         }
 
-        when (state.view) {
+        when (view) {
             LibraryView.Online -> {
                 if (state.sources.isEmpty()) {
                     item {
@@ -314,17 +461,14 @@ fun LibraryScreen(
                             ) {
                                 TextField(
                                     value = newPlaylist,
-                                    onValueChange = { newPlaylist = it },
+                                    onValueChange = onNewPlaylistChange,
                                     modifier = Modifier.weight(1f),
                                     placeholder = stringResource(R.string.library_playlist_name),
                                 )
                                 BubbleButton(
                                     icon = ICON_GLYPHS.getValue("add"),
                                     contentDescription = stringResource(R.string.library_playlist_create),
-                                    onClick = {
-                                        viewModel.createPlaylist(newPlaylist)
-                                        newPlaylist = ""
-                                    },
+                                    onClick = onCreatePlaylist,
                                     enabled = newPlaylist.isNotBlank(),
                                 )
                             }
@@ -375,7 +519,7 @@ fun LibraryScreen(
                         summary = summary,
                         onOpenAi = onOpenAi,
                         onOpen = { onOpenPlaylist(summary.playlist.id) },
-                        onDelete = { pendingDelete = summary },
+                        onDelete = { onDeletePlaylist(summary) },
                     )
                 }
             }
@@ -407,7 +551,7 @@ fun LibraryScreen(
                                 is RecentPlay.TrackPlay -> onOpenTrack(play.track.id)
                             }
                         },
-                        onPlay = { viewModel.playRecent(play) },
+                        onPlay = { onPlayRecent(play) },
                     )
                 }
             }
@@ -419,61 +563,6 @@ fun LibraryScreen(
                 onClick = onImport,
             )
         }
-    }
-
-    if (showLanguage) {
-        GlassSheet(
-            onDismiss = { showLanguage = false },
-            title = stringResource(R.string.library_language_prompt_title),
-        ) {
-            Text(
-                text = stringResource(R.string.library_language_prompt_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = tokens.textSecondary,
-                modifier = Modifier.padding(bottom = geo.spacing.md),
-            )
-            LANGUAGE_OPTIONS.forEach { (code, label) ->
-                GlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = geo.spacing.sm)
-                        .clickable {
-                            viewModel.setLanguage(code)
-                            showLanguage = false
-                        },
-                ) {
-                    Text(label, style = MaterialTheme.typography.titleMedium, color = tokens.text)
-                }
-            }
-            TextButton(onClick = { showLanguage = false }) {
-                Text(stringResource(R.string.library_language_not_now), color = tokens.textSecondary)
-            }
-            Spacer(Modifier.height(geo.spacing.xl))
-        }
-    }
-
-    pendingDelete?.let { summary ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            containerColor = tokens.canvasBase,
-            titleContentColor = tokens.text,
-            textContentColor = tokens.textSecondary,
-            title = { Text(stringResource(R.string.library_playlist_delete_title)) },
-            text = { Text(stringResource(R.string.library_playlist_delete_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deletePlaylist(summary.playlist.id)
-                    pendingDelete = null
-                }) {
-                    Text(stringResource(R.string.library_playlist_delete_action), color = tokens.danger)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) {
-                    Text(stringResource(R.string.library_playlist_cancel), color = tokens.text)
-                }
-            },
-        )
     }
 }
 

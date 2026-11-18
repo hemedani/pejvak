@@ -15,7 +15,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -45,8 +44,6 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -67,7 +64,10 @@ import com.pejvak.app.ui.components.wavePath
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 import com.pejvak.app.ui.theme.useMotionEnabled
 import com.pejvak.app.ui.screens.GalleryScreen
+import com.pejvak.app.domain.AiFeature
+import com.pejvak.app.ui.screens.ai.AiCatalogSheet
 import com.pejvak.app.ui.screens.ai.AiFeatureScreen
+import com.pejvak.app.ui.screens.ai.AiFeatureSheet
 import com.pejvak.app.ui.screens.ai.AiScreen
 import com.pejvak.app.ui.screens.discover.DiscoverScreen
 import com.pejvak.app.ui.screens.discover.LanguageScreen
@@ -118,6 +118,11 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
     val playerVm: PlayerViewModel = hiltViewModel()
     val mini by playerVm.mini.collectAsStateWithLifecycle()
     var playerOpen by remember { mutableStateOf(false) }
+    // The AI catalogue is a sheet, not a destination: a row's AI button should open
+    // the tools where the listener already is. The description sheet stacks on top
+    // of it, so closing a description lands back on the list.
+    var aiSheet by remember { mutableStateOf(false) }
+    var aiFeature by remember { mutableStateOf<AiFeature?>(null) }
     val sheetPresence = remember { SheetPresence() }
     // Blur the shell behind the player or any open sheet so their translucent
     // surfaces read as real glass rather than a flat scrim. Sheets render in their
@@ -152,11 +157,6 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
         LaunchedEffect(currentDestination?.route) {
             if (currentDestination != null) sweep++
         }
-        val tabSwipe = rememberTabSwipe(
-            enabled = isTabRoute,
-            selectedRoute = selectedRoute,
-            onSelect = { route -> navController.navigateTab(route) },
-        )
         val motion = useMotionEnabled()
         Box(Modifier.fillMaxSize().blur(backdropBlur)) {
             AmbientCanvas()
@@ -170,8 +170,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
-                    .padding(bottom = bottomInset)
-                    .then(tabSwipe),
+                    .padding(bottom = bottomInset),
             ) {
                 composable(Tab.Library.route) {
                     LibraryScreen(
@@ -182,7 +181,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                         onOpenFolder = { key -> navController.navigate(folderRoute(key)) },
                         onOpenPlaylist = { id -> navController.navigate(playlistRoute(id)) },
                         onOpenSmart = { rule -> navController.navigate("smart/${Uri.encode(rule)}") },
-                        onOpenAi = { navController.navigate(Tab.Ai.route) },
+                        onOpenAi = { aiSheet = true },
                         onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
                     )
                 }
@@ -197,7 +196,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                 }
                 composable(Tab.History.route) {
                     HistoryScreen(
-                        onOpenAi = { navController.navigate(Tab.Ai.route) },
+                        onOpenAi = { aiSheet = true },
                         onOpenCollection = { run ->
                             when (run.contextType) {
                                 com.pejvak.app.domain.ContextType.Folder ->
@@ -257,14 +256,14 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                     FolderDetailScreen(
                         onBack = { navController.popBackStack() },
                         onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
-                        onOpenAi = { navController.navigate(Tab.Ai.route) },
+                        onOpenAi = { aiSheet = true },
                     )
                 }
                 composable("playlist/{id}") {
                     PlaylistDetailScreen(
                         onBack = { navController.popBackStack() },
                         onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
-                        onOpenAi = { navController.navigate(Tab.Ai.route) },
+                        onOpenAi = { aiSheet = true },
                     )
                 }
                 composable("online/source/{sourceId}") {
@@ -295,7 +294,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                 ) {
                     OnlineCollectionScreen(
                         onBack = { navController.popBackStack() },
-                        onOpenAi = { navController.navigate(Tab.Ai.route) },
+                        onOpenAi = { aiSheet = true },
                     )
                 }
                 composable("smart/{rule}") {
@@ -346,7 +345,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
             visible = playerOpen,
             onDismiss = { playerOpen = false },
             onOpenAi = {
-                navController.navigateTab(Tab.Ai.route)
+                aiSheet = true
             },
             onOpenContext = { context ->
                 val route = when (context.type) {
@@ -357,6 +356,20 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                 navController.navigate(route)
             },
         )
+
+        if (aiSheet) {
+            AiCatalogSheet(
+                onDismiss = {
+                    aiSheet = false
+                    aiFeature = null
+                },
+                onOpenFeature = { feature -> aiFeature = feature },
+            )
+        }
+        val described = aiFeature
+        if (described != null) {
+            AiFeatureSheet(feature = described, onDismiss = { aiFeature = null })
+        }
     }
     }
 }
@@ -394,47 +407,6 @@ private fun NavHostController.navigateTab(route: String) {
         popUpTo(graph.startDestinationId) { saveState = true }
         launchSingleTop = true
         restoreState = true
-    }
-}
-
-/**
- * Swipe left/right to move between the five tabs.
- *
- * The handler sits on the NavHost, which is the *parent* of the screen: Compose
- * delivers pointer events to the deepest node first, so a horizontal drag that a
- * chip row, a slider or the scrubber has already claimed never reaches this and a
- * tab change cannot be triggered by scrubbing the progress bar.
- */
-@Composable
-private fun rememberTabSwipe(
-    enabled: Boolean,
-    selectedRoute: String,
-    onSelect: (String) -> Unit,
-): Modifier {
-    val density = LocalDensity.current
-    val threshold = with(density) { 56.dp.toPx() }
-    return Modifier.pointerInput(enabled, selectedRoute, threshold) {
-        if (!enabled) return@pointerInput
-        var total = 0f
-        detectHorizontalDragGestures(
-            onDragStart = { total = 0f },
-            onDragCancel = { total = 0f },
-            onDragEnd = {
-                val index = Tab.entries.indexOfFirst { it.route == selectedRoute }
-                if (index < 0) return@detectHorizontalDragGestures
-                when {
-                    total <= -threshold && index < Tab.entries.lastIndex ->
-                        onSelect(Tab.entries[index + 1].route)
-                    total >= threshold && index > 0 ->
-                        onSelect(Tab.entries[index - 1].route)
-                }
-                total = 0f
-            },
-            onHorizontalDrag = { change, delta ->
-                total += delta
-                change.consume()
-            },
-        )
     }
 }
 
