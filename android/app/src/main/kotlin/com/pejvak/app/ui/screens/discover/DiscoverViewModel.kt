@@ -14,6 +14,7 @@ import com.pejvak.app.domain.online.LANGUAGES
 import com.pejvak.app.domain.online.OnlineLanguage
 import com.pejvak.app.domain.online.OnlineSource
 import com.pejvak.app.domain.online.parseCollectionKey
+import com.pejvak.app.domain.resumableRuns
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -122,11 +123,8 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch { collections.setFavorite(key, true) }
     }
 
-    private fun continueCards(runRows: List<ContextPlay>): List<ContinueCard> = runRows
+    private fun continueCards(runRows: List<ContextPlay>): List<ContinueCard> = resumableRuns(runRows)
         .asSequence()
-        .filter { it.contextType == ContextType.Online && !it.completed && it.deletedAt == null }
-        .sortedByDescending { it.updatedAt }
-        .take(8)
         .mapNotNull { run ->
             val (sourceId, collectionSlug) = parseCollectionKey(run.contextKey) ?: return@mapNotNull null
             val source = registry.source(sourceId) ?: return@mapNotNull null
