@@ -61,6 +61,7 @@ import com.pejvak.app.ui.components.notes.AnnotationComposerSheet
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import com.pejvak.app.ui.theme.useMotionEnabled
 
@@ -132,15 +133,42 @@ fun NowPlayingSheet(
         val density = LocalDensity.current
         val dismissAt = with(density) { 110.dp.toPx() }
         val travel = with(density) { 320.dp.toPx() }
-        val slop = with(density) { 14.dp.toPx() }
+        val exitTravel = with(density) { 460.dp.toPx() }
         var dragY by remember { mutableFloatStateOf(0f) }
+        var pullReleased by remember { mutableStateOf(false) }
+        var settleJob by remember { mutableStateOf<Job?>(null) }
         val sank = (dragY / travel).coerceIn(0f, 1f)
 
-        fun settle() {
+        // A pull ends exactly once, and either way it has to end in a position the
+        // player can rest in: all the way up, or all the way down. The end is
+        // reported twice — by the body's pointer release and by the fling callback —
+        // because the fling never fires for a slow lift with no velocity, which is
+        // how the player used to be left stranded half-way.
+        fun finishPull() {
+            if (pullReleased) return
+            pullReleased = true
             val from = dragY
             if (from <= 0f) return
-            scope.launch {
-                Animatable(from).animateTo(0f, tween(200)) { dragY = value }
+            settleJob?.cancel()
+            settleJob = scope.launch {
+                if (from > dismissAt) {
+                    // Carry it out of the way before the surface fades, so a dismissed
+                    // player leaves downwards instead of dissolving in place.
+                    Animatable(from).animateTo(exitTravel, tween(170)) { dragY = value }
+                    onDismiss()
+                } else {
+                    Animatable(from).animateTo(0f, tween(200)) { dragY = value }
+                }
+            }
+        }
+
+        // The sheet stays composed while it animates out, so the next open must start
+        // from rest rather than from wherever the last dismissal left it.
+        LaunchedEffect(visible) {
+            if (visible) {
+                settleJob?.cancel()
+                dragY = 0f
+                pullReleased = false
             }
         }
 
@@ -213,11 +241,12 @@ fun NowPlayingSheet(
                 },
                 modifier = Modifier.fillMaxSize(),
                 onPullDown = { dy ->
+                    settleJob?.cancel()
+                    settleJob = null
+                    pullReleased = false
                     dragY = (dragY + dy * 0.7f).coerceIn(0f, travel * 1.2f)
                 },
-                onPullEnd = {
-                    if (dragY > dismissAt) onDismiss() else settle()
-                },
+                onPullEnd = { finishPull() },
             )
         }
 

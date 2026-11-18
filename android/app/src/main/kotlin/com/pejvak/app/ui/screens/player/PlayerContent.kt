@@ -29,6 +29,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Velocity
@@ -117,7 +119,28 @@ fun PlayerContent(
         listOfNotNull(context.type.name.uppercase(), position?.uppercase()).joinToString(" \u00b7 ")
     } ?: stringResource(R.string.player_now_playing).uppercase()
 
-    Column(modifier.fillMaxSize()) {
+    // The pull has to end even when the finger leaves without a fling. `onPreFling`
+    // below covers a flick; a slow lift produces no velocity at all, so nothing
+    // fires and the sheet stays where it was dropped. Watching the pointer stream in
+    // the *initial* pass — before any child can consume it — and never consuming
+    // anything ourselves gives the release a reliable home without disturbing the
+    // scroll, the scrubber or the buttons.
+    val endPull by rememberUpdatedState(onPullEnd)
+
+    Column(
+        modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.changes.isNotEmpty() && event.changes.none { it.pressed }) {
+                            endPull()
+                        }
+                    }
+                }
+            },
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -148,6 +171,11 @@ fun PlayerContent(
         // gesture. Reporting the leftover from onPostScroll is what makes the two
         // coexist — grabbing the drag at the sheet level lost every gesture to this
         // scrollable, which is why swiping down did nothing.
+        //
+        // Only *user* scrolls count. A fling keeps reporting leftover deltas after
+        // the finger is gone, and feeding those to the pull meant a flick dragged
+        // the sheet further down while it was already settling — the "stops half
+        // way" symptom. Fling is reported as SideEffect, so it is ignored here.
         val bodyScroll = rememberScrollState()
         val pullDown by rememberUpdatedState(onPullDown)
         val pullEnd by rememberUpdatedState(onPullEnd)
@@ -158,6 +186,7 @@ fun PlayerContent(
                     available: Offset,
                     source: NestedScrollSource,
                 ): Offset {
+                    if (source != NestedScrollSource.UserInput) return Offset.Zero
                     if (available.y > 0f && bodyScroll.value <= 0) {
                         pullDown(available.y)
                         return Offset(0f, available.y)
@@ -166,6 +195,11 @@ fun PlayerContent(
                 }
 
                 override suspend fun onPreFling(available: Velocity): Velocity {
+                    pullEnd()
+                    return Velocity.Zero
+                }
+
+                override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                     pullEnd()
                     return Velocity.Zero
                 }
