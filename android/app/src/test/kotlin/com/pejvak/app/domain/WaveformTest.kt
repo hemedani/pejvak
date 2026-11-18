@@ -1,6 +1,7 @@
 package com.pejvak.app.domain
 
 import kotlin.math.pow
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -77,6 +78,46 @@ class WaveformTest {
         assertEquals(0.5f, rmsOf(0.25 * 4, 4), 0.0001f)
         assertEquals(1f, pcm16FullScale(Short.MAX_VALUE.toShort()).let { abs(it) }, 0.001f)
         assertEquals(0f, pcm16FullScale(0), 0.0001f)
+    }
+
+    @Test
+    fun sampleStripIsSeededAndStable() {
+        val first = sampleWaveformFor("online:manahej:radio")
+        val again = sampleWaveformFor("online:manahej:radio")
+        assertArrayEquals(first, again, 0f)
+        val other = sampleWaveformFor("online:another:station")
+        assertTrue("different tracks should not look identical", !first.contentEquals(other))
+    }
+
+    @Test
+    fun sampleStripNeverFlatAndNeverFull() {
+        val heights = sampleWaveformFor("online:manahej:radio")
+        assertEquals(WAVEFORM_BUCKETS, heights.size)
+        heights.forEach { height ->
+            assertTrue("sample must stay above the floor", height > WAVEFORM_MIN_HEIGHT)
+            assertTrue("sample must leave headroom", height < 1f)
+        }
+        val spread = (heights.maxOrNull() ?: 0f) - (heights.minOrNull() ?: 0f)
+        assertTrue("a sample strip needs shape, got $spread", spread > 0.2f)
+    }
+
+    @Test
+    fun sampleStripHandlesAnyBucketCount() {
+        assertEquals(0, sampleWaveformFor("x", 0).size)
+        assertEquals(1, sampleWaveformFor("", 1).size)
+        assertEquals(12, sampleWaveformFor("x", 12).size)
+    }
+
+    @Test
+    fun sampleStripSurvivesTheBarResampler() {
+        // What the scrubber actually draws: 84 buckets resampled to ~120 bars.
+        val bars = sampleWaveform(sampleWaveformFor("online:manahej:radio"), 120)
+        assertEquals(120, bars.size)
+        bars.forEach { bar ->
+            assertTrue(bar >= WAVEFORM_MIN_HEIGHT)
+            assertTrue(bar <= 1f)
+        }
+        assertTrue("bars should still vary", (bars.maxOrNull() ?: 0f) - (bars.minOrNull() ?: 0f) > 0.15f)
     }
 
     private fun dbToRms(db: Float): Float = 10.0.pow((db / 20f).toDouble()).toFloat()

@@ -1,6 +1,8 @@
 package com.pejvak.app.domain
 
+import kotlin.math.cos
 import kotlin.math.log10
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -68,4 +70,49 @@ fun sampleWaveform(values: FloatArray, bars: Int): FloatArray {
         out[bar] = if (peak > 0f) peak else values[start]
     }
     return out
+}
+
+/** One turn of the sample's sines. */
+private const val TWO_PI: Float = (2.0 * kotlin.math.PI).toFloat()
+
+/**
+ * A stand-in strip for audio that cannot be measured.
+ *
+ * A stream has no file to decode, so there is no loudness to read; a file the
+ * platform refuses is the same story. Drawing the plain rule in that case made the
+ * bar look broken, so those tracks get a *sample* instead of nothing — and it is
+ * labelled as one by its shape, not by a badge: phrases that swell out of a pause
+ * and fall back into one, a grain over the top, and neither extreme touched, so it
+ * never claims to be a measurement of silence or of a full-scale wall.
+ *
+ * Seeded by the track's identity, so a station always looks the same and skipping
+ * away and back does not reshuffle it. Pure and cheap: no allocation beyond the
+ * result, no clock, no random source.
+ */
+fun sampleWaveformFor(seed: String, buckets: Int = WAVEFORM_BUCKETS): FloatArray {
+    if (buckets <= 0) return FloatArray(0)
+    var state = seed.fold(0x9E3779B9.toInt()) { carry, char -> carry * 31 + char.code }
+    fun next(): Float {
+        state = state * 1_103_515_245 + 12_345
+        return ((state ushr 16) and 0x7FFF) / 32_767f
+    }
+
+    // Two scales, because three alias: a phrase is long enough to read as a
+    // sentence and the grain is short enough to read as words inside it.
+    val phrases = 2.5f + next() * 3f
+    val phrasePhase = next() * TWO_PI
+    val grain = 7f + next() * 5f
+    val grainPhase = next() * TWO_PI
+    val floor = 0.20f + next() * 0.06f
+    val ceiling = 0.84f + next() * 0.10f
+
+    return FloatArray(buckets) { index ->
+        val t = index / buckets.toFloat()
+        // 0 at a pause, 1 in the middle of a phrase.
+        val phrase = 0.5f - 0.5f * cos(t * phrases * TWO_PI + phrasePhase)
+        val grainWave = 0.5f + 0.5f * sin(t * grain * TWO_PI + grainPhase)
+        val tooth = next() * 0.16f - 0.08f
+        val loudness = phrase * (0.72f + 0.28f * grainWave) + tooth
+        (floor + (ceiling - floor) * loudness.coerceIn(0f, 1f)).coerceIn(WAVEFORM_MIN_HEIGHT, 1f)
+    }
 }

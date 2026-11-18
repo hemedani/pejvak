@@ -375,9 +375,10 @@ private const val PLAYED_VARIATION = 0.2f
 
 /**
  * The loudness strip: one vertical bar per window, the played ones lit and the rest
- * faded. Bars come from the measured waveform when there is one; without it (a
- * stream, a file the platform will not decode, or the moment before the analysis
- * lands) the strip degrades to a plain track line rather than to nothing.
+ * faded. Bars come from the measured waveform when there is one — and from the
+ * seeded sample strip for a stream or a file the platform will not decode, so the
+ * bar is never a bare line. Only the moment before the analysis lands is genuinely
+ * empty, and that is a frame or two.
  */
 private fun DrawScope.drawWaveformBars(
     values: FloatArray?,

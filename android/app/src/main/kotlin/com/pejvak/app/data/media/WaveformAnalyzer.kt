@@ -9,6 +9,7 @@ import com.pejvak.app.domain.WAVEFORM_BUCKETS
 import com.pejvak.app.domain.isStreamUri
 import com.pejvak.app.domain.pcm16FullScale
 import com.pejvak.app.domain.rmsOf
+import com.pejvak.app.domain.sampleWaveformFor
 import com.pejvak.app.domain.waveformHeight
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.DataInputStream
@@ -43,8 +44,9 @@ import kotlinx.coroutines.sync.withLock
  * left to right instead of appearing all at once.
  *
  * Streams are not decoded — there is no file to read — and neither is anything the
- * platform refuses; both yield no waveform and the scrubber falls back to its plain
- * track line.
+ * platform refuses. Those tracks are given the seeded sample strip from
+ * [sampleWaveformFor] instead of nothing: a bar that is a straight line reads as a
+ * bug, and the sample is honest about being a sample because its shape says so.
  */
 @Singleton
 class WaveformAnalyzer @Inject constructor(
@@ -56,14 +58,22 @@ class WaveformAnalyzer @Inject constructor(
             size > MEMORY_ENTRIES
     }
 
-    /** Emits the heights as they are measured; null when there is nothing to measure. */
+    /** Emits the heights as they are measured; a sample strip when nothing can be measured. */
     fun waveform(track: Track): Flow<FloatArray?> = flow {
         val key = track.contentHash
         cached(key)?.let { emit(it); return@flow }
 
         val uri = track.fileUri ?: track.streamUrl
-        if (uri.isNullOrEmpty() || isStreamUri(uri)) {
-            emit(null)
+        if (uri.isNullOrEmpty()) {
+            emit(sample(key))
+            return@flow
+        }
+        // A stream has no file to decode, so there is no loudness to read. Rather
+        // than the flat rule that made the bar look broken, those tracks get the
+        // seeded sample strip — deterministic, so a station looks the same every
+        // time it is opened.
+        if (isStreamUri(uri)) {
+            emit(sample(key))
             return@flow
         }
 
@@ -74,8 +84,14 @@ class WaveformAnalyzer @Inject constructor(
                 write(key, it)
             }
         }
-        emit(values)
+        // A container the platform refuses is indistinguishable, to the listener,
+        // from a stream: either way there is no measurement, and either way the
+        // sample is a better answer than a bare line. It is not cached, so a file
+        // that starts decoding later still gets its real strip.
+        emit(values ?: sample(key))
     }.flowOn(Dispatchers.IO)
+
+    private fun sample(key: String): FloatArray = sampleWaveformFor(key)
 
     private fun cached(key: String): FloatArray? = synchronized(memory) { memory[key] } ?: read(key)
 
