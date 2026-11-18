@@ -72,6 +72,136 @@ app/src/main/kotlin/com/pejvak/app/
 - The contrast contract is a test, not a formality — never weaken a threshold to make a palette pass.
 - Isolate the 1 Hz position tick to leaf composables; honor reduced motion.
 
+## Design system — the water language
+
+The app has one visual metaphor: **fish, sea, waves**. Anything that moves, drags, or reads a value
+draws the same sine, so the product feels like one body of water instead of a pile of unrelated
+animations. Two rules keep it that way:
+
+1. **One home for the curve.** `ui/components/Wave.kt` owns every primitive. Nothing else may
+   re-derive a sine, and no screen may invent its own wavelength.
+2. **Absolute wavelength.** Never tie a frequency to the width of the filled part of a bar — that is
+   what made the first seconds a tight scribble and the last stretch a straight line.
+
+| Primitive | Use |
+| --- | --- |
+| `WAVE_WAVELENGTH_DP = 64f` | the app's crest-to-crest span |
+| `waveOffsetAt(x, amplitude, wavelength, phase, variation)` | the *single* evaluation of the curve |
+| `wavePath(from, to, cy, amplitude, wavelength, phase, taper, variation, taperEnd)` | the stroke itself |
+| `ramp(distance, edge)` | smoothstep taper so a stroke never starts with a vertical jump |
+| `rememberWavePhase(periodMillis = 3_800)` | the drift; always called, never conditionally |
+| `drawWaveWake(...)` (internal) | the three-strand ripple behind a playhead |
+
+**Anything that sits *on* the wave** — a playhead, a slider thumb — must ask `waveOffsetAt` for the
+same number the path was built from. Re-deriving it from a separate animation is how the dot ends up
+floating off the line.
+
+**Controls.** `WaveSlider` is the only slider in the app; Material's `Slider` and `RadioButton` are
+gone. `WaveProgressBar` is the read-only sibling (dotted unfilled range, solid crest, head dot) and
+is what a progress value looks like outside the player. `LevelSliderRow` / `GainSliderRow` are the
+standard wrappers — reach for those before composing a slider inline.
+
+**Sheets.** `GlassSheet(onDismiss, modifier, title, subtitle, icon, content)` is the only bottom
+sheet. A titled sheet *must* pass `icon`: the header is an accent icon bubble, the headline, an
+optional subtitle, then a hairline wave rule. Do not mount a raw `ModalBottomSheet`.
+
+**Trailing icon groups.** Wrap adjacent action bubbles in `ActionCluster` so two icons can never butt
+together — the missing margins in round 4 were all this one mistake.
+
+**Tabs inside a screen.** The dock's tabs are routes; a screen's own tabs (the Library's Tracks /
+Folders / Playlists / Recent chips) are not — they are **pages of a `HorizontalPager`**, and the
+pager is the only accepted answer. A pager tracks the finger, so half a swipe shows both neighbours
+and the transition is continuous; a hand-rolled drag cannot, and every attempt so far read as a jump.
+The chips are a `LazyRow` beside the pager, not part of it: they read `pagerState.currentPage`
+(not the view-model's value, so the highlight crosses over *with* the content mid-drag), they
+`animateScrollToPage` on tap, and a `LaunchedEffect(currentPage)` calls
+`chipState.animateScrollToItem(currentPage - 1)` so the selected chip is carried into view — on
+Playlists or Recent it otherwise sits off-screen. The pager is bounded, so it does not and must not
+reach the dock: the header and chips are pinned outside it, and `Modifier.weight(1f)` on the pager
+keeps only the page content scrolling.
+
+**Motion.** Page changes use `pageEnter` / `pageExit` / `pagePopEnter` / `pagePopExit` (incoming rises,
+outgoing sinks, mirrored on pop) plus exactly one `WaveSweep` per route change. Tabs switch through
+`navigateTab` (saveState / restoreState / launchSingleTop) so the dock and the swipe gesture cannot
+drift apart. Everything is gated on `useMotionEnabled()`: with motion off, amplitudes animate to zero
+and `WaveSweep` composes nothing at all.
+
+**Colour and alpha.** `glassFill` is a ~6 % white — `copy(alpha = 1f)` paints *solid white*, which is
+how the player once went opaque. Always scale it: `copy(alpha = tokens.glassFill.alpha * factor)`.
+
+**Frosting.** `LocalSheetPresence` / `SheetPresence` counts open sheets; the shell blurs its own
+content and `NowPlayingSheet` frosts its own surface. `Modifier.blur` is a no-op below API 31, so a
+surface that relies on it also needs its alpha fallback.
+
+## Diagnostics
+
+Crashes are captured, not guessed at. `core/CrashLog` installs an
+`UncaughtExceptionHandler` first thing in `PejvakApp.onCreate`, writes
+`files/crashes/last-crash.txt` (time, version, device, thread, exception, stack) and keeps five
+dated copies; the previous handler still runs, so the platform's own reporting is unchanged.
+Settings → Diagnostics shares the newest file through a `FileProvider` scoped to that folder —
+the only files the app ever hands to another app. Never add a second reporter, and never log to
+`files/` from anywhere else.
+
+A Lazy list's `key` must be unique **by construction**. `context_plays` keeps one row per play, so
+anything keyed by a context (Continue cards, history collections) needs a dedupe like
+`domain/resumableRuns()` first — a repeated key is an `IllegalArgumentException`, not a cosmetic
+duplicate, and it closes the app.
+
+## Gesture rules (learned the hard way — do not re-litigate)
+
+- **Pointer events are delivered deepest node first, and a scroll container consumes them.** A
+  `verticalScroll` or `LazyColumn` eats *every* vertical drag, so a parent's
+  `detectVerticalDragGestures` / manual `awaitPointerEvent` loop never fires (`change.isConsumed` is
+  already true on the first move). For a "pull down to dismiss" gesture, use
+  `NestedScrollConnection.onPostScroll` (leftover while `scroll.value <= 0`) and put
+  `.nestedScroll(connection)` **before** `.verticalScroll(state)` in the modifier chain — the
+  connection has to be outside the scroller.
+- **A pull ends three ways, and all three must land somewhere.** A slow lift produces no velocity, so
+  no fling is dispatched and `onPreFling` never fires; a fling keeps reporting leftover deltas after
+  the finger is gone. Take the release from the pointer stream (`PointerEventPass.Initial`, never
+  consuming) **and** `onPreFling`/`onPostFling`, and accept `onPostScroll` leftover only for
+  `NestedScrollSource.UserInput`. Missing any of these is what leaves a sheet stranded half way.
+- **Two `pointerInput` modifiers on one node:** only the inner one receives events. Use one handler
+  that resolves the axis itself (see `Scrubber`).
+- **`Animatable.animateTo` cannot run inside `awaitEachGesture`** (restricted suspension). Launch it
+  in a `rememberCoroutineScope` and let the gesture function return.
+- **`detectHorizontalDragGestures` consumes the event that crosses the slop.** If the handler may
+  decline the gesture (no sibling view left in that direction), measure the slop yourself and
+  consume only after deciding. A helper that consumes first kills the parent's chance to act on the
+  same drag. This is the reason a hand-rolled tab swipe kept beating the scroll containers; a
+  `HorizontalPager` has the same discipline built in and declines at its ends by construction.
+- **The dock is the only way between screens.** Swiping never changes route: there is no tab swipe
+  on the NavHost, so a drag that runs out of pages inside a screen simply stops there instead of
+  jumping to the next screen (round 8: swiping right on the Library's last page used to land on
+  History). A screen's own tabs are a bounded `HorizontalPager`; if a new screen needs its own
+  tabs, give it one too rather than reaching for a gesture at the NavHost level.
+
+## Roles
+
+The work has three roles. They are not interchangeable — most wasted effort comes from one of them
+doing another's job.
+
+**Owner (product).** States problems in prose, from the running app: what looks wrong, what feels
+off, what is missing. Owns taste and priorities; accepts or rejects a result by looking at it. Does
+not read code, does not specify implementation, and is never asked to choose between internals.
+A round of issues arrives as a numbered list; the answer to it is a build they can tap, not an
+explanation.
+
+**Agent (implementer).** Owns everything between "here is the problem" and "here is a build". Reads
+the code before changing it, picks the approach, keeps the design system intact, updates the plan as
+each small task lands, and verifies on the emulator in both themes before reporting. Reports what
+changed in the owner's terms (what they will now see), and states plainly what is *not* done.
+Never invents a feature ID, never silently drops one, never weakens a test to make a palette pass.
+
+**Reviewer (verifier).** Checks the result against the owner's words, not against the agent's
+summary: does the described thing happen on screen, in light *and* dark, with motion on *and* off,
+offline, and after a retry? Confirms `assembleDebug` and `testDebugUnitTest` pass. Trust but verify —
+an agent's summary describes intent, so look at the diff and the screenshot.
+
+**Hand-off contract.** The owner's list is the spec; the plan (`docs/plans/01-native-rewrite.md`) is
+the record; the code is the truth. When the three disagree, fix the two that are wrong.
+
 ## Version pins (verified stable on this machine, from Hawraa)
 
 AGP 9.5.1 · Gradle 9.6.0 · Kotlin 2.4.21 (built-in) · KSP 2.3.13 · Hilt 2.60.1 · Compose BOM
