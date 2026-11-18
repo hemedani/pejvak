@@ -78,7 +78,7 @@ fun AiScreen(
                 }
             }
         }
-        WhyPanel()
+        AiWhyPanel()
         Spacer(Modifier.size(geo.spacing.sm))
     }
 }
@@ -156,46 +156,6 @@ private fun FeatureCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = tokens.textTertiary,
             )
-        }
-    }
-}
-
-@Composable
-private fun WhyPanel() {
-    val tokens = LocalPejvakTokens.current
-    val geo = LocalPejvakGeometry.current
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-            Text(
-                text = stringResource(R.string.ai_why_overline).uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = tokens.textTertiary,
-            )
-            Text(
-                text = stringResource(R.string.ai_why_title),
-                style = MaterialTheme.typography.headlineMedium,
-                color = tokens.text,
-            )
-            Text(
-                text = stringResource(R.string.ai_why_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = tokens.textSecondary,
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-            ) {
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .background(tokens.textTertiary, androidx.compose.foundation.shape.CircleShape),
-                )
-                Text(
-                    text = stringResource(R.string.ai_status),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = tokens.textTertiary,
-                )
-            }
         }
     }
 }
