@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -41,6 +40,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -58,7 +59,10 @@ import com.pejvak.app.BuildConfig
 import com.pejvak.app.R
 import com.pejvak.app.ui.components.AmbientCanvas
 import com.pejvak.app.ui.components.AppDock
+import com.pejvak.app.ui.components.LocalHazeState
+import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.LocalSheetPresence
+import com.pejvak.app.ui.components.ShellInsets
 import com.pejvak.app.ui.components.SheetPresence
 import com.pejvak.app.ui.components.wavePath
 import com.pejvak.app.ui.theme.LocalPejvakTokens
@@ -89,6 +93,7 @@ import com.pejvak.app.ui.screens.track.TrackDetailScreen
 import com.pejvak.app.domain.folderKeyToRouteSegment
 import com.pejvak.app.domain.ContextType
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
+import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -124,31 +129,35 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
     var aiSheet by remember { mutableStateOf(false) }
     var aiFeature by remember { mutableStateOf<AiFeature?>(null) }
     val sheetPresence = remember { SheetPresence() }
+    // One Haze graph for the whole shell: each screen marks its scroll body as the
+    // source, and the header/dock sample it. The dock lives outside the source so it
+    // never blurs itself.
+    val hazeState = rememberHazeState()
     // Blur the shell behind the player or any open sheet so their translucent
     // surfaces read as real glass rather than a flat scrim. Sheets render in their
     // own window, so the content frosts behind them while the sheet stays crisp.
     // Modifier.blur is a no-op before API 31; NowPlayingSheet keeps its fallback.
     val backdropBlur by animateDpAsState(
-        targetValue = if (playerOpen || sheetPresence.count > 0) 18.dp else 0.dp,
+        targetValue = if (playerOpen || sheetPresence.count > 0) geo.frost.backdrop else 0.dp,
         animationSpec = tween(220),
         label = "playerBackdropBlur",
     )
     LaunchedEffect(playerVm) {
         playerVm.openPlayer.collect { playerOpen = true }
     }
-    // The dock floats over the canvas; the content owes it exactly its measured
-    // height plus the system navigation inset. Reserving the dock's tallest
-    // (now-playing) height when nothing is playing leaves a dead green band.
+    // The dock floats over the canvas; its clearance is measured, not assumed. The
+    // seed value only covers the first frame before layout reports the real height.
     val navigationInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    val dockHeight = geo.dock.navHeight + geo.dock.margin * 2 +
-        if (mini != null) geo.dock.playerHeight else 0.dp
-    val bottomInset = when {
-        isTabRoute -> dockHeight + navigationInset
-        mini != null -> geo.dock.playerHeight + geo.dock.margin * 2 + navigationInset
-        else -> 0.dp
+    var dockClearance by remember {
+        mutableStateOf(geo.dock.dockInset + navigationInset)
     }
+    val density = LocalDensity.current
 
-    CompositionLocalProvider(LocalSheetPresence provides sheetPresence) {
+    CompositionLocalProvider(
+        LocalSheetPresence provides sheetPresence,
+        LocalHazeState provides hazeState,
+        LocalShellInsets provides ShellInsets(bottom = dockClearance),
+    ) {
     Box(modifier = modifier.fillMaxSize()) {
         // One swell per navigation. The route is the trigger, so pushing a detail
         // screen, popping back and switching tabs all get the same water passing
@@ -167,10 +176,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                 exitTransition = { pageExit(motion) },
                 popEnterTransition = { pagePopEnter(motion) },
                 popExitTransition = { pagePopExit(motion) },
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(bottom = bottomInset),
+                modifier = Modifier.fillMaxSize(),
             ) {
                 composable(Tab.Library.route) {
                     LibraryScreen(
@@ -317,7 +323,10 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
-                        .navigationBarsPadding(),
+                        .navigationBarsPadding()
+                        .onGloballyPositioned { coords ->
+                            if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
+                        },
                 )
             } else {
                 StandaloneMiniPlayer(
@@ -330,7 +339,10 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
-                        .navigationBarsPadding(),
+                        .navigationBarsPadding()
+                        .onGloballyPositioned { coords ->
+                            if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
+                        },
                 )
             }
         }

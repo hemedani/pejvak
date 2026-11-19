@@ -38,7 +38,9 @@ import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.InlineNotice
 import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.PrimaryButton
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 
@@ -55,24 +57,16 @@ fun SmartPlaylistScreen(
     val playlist = state.playlist
     var addOpen by remember { mutableStateOf(false) }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = geo.spacing.xxl,
-            bottom = geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        item {
-            ScreenHeader(
+    ScreenFrame(
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
                 title = rule.title,
                 overline = rule.tagline,
                 subtitle = playlist?.let {
                     "${it.summary} · ${formatDuration(it.totalDurationSec)}"
                 },
-                action = {
+                leading = {
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("back"),
                         contentDescription = stringResource(R.string.action_back),
@@ -80,7 +74,18 @@ fun SmartPlaylistScreen(
                     )
                 },
             )
-        }
+        },
+    ) { topInset ->
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = geo.spacing.lg,
+            end = geo.spacing.lg,
+            top = topInset + geo.spacing.md,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+        ),
+        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+    ) {
         if (state.ruleId == SmartRuleId.Commute) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
@@ -166,6 +171,7 @@ fun SmartPlaylistScreen(
                 )
             }
         }
+    }
     }
     if (addOpen) {
         AddToPlaylistSheet(

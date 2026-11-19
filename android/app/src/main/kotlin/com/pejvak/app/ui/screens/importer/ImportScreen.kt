@@ -31,7 +31,9 @@ import com.pejvak.app.ui.components.GlassCard
 import com.pejvak.app.ui.components.GlassChip
 import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.PrimaryButton
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
@@ -75,17 +77,15 @@ fun ImportScreen(
         if (uri != null) viewModel.onFolderPicked(uri)
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize().padding(horizontal = geo.spacing.xl),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = geo.spacing.xl),
-    ) {
-        item {
-            ScreenHeader(
+    ScreenFrame(
+        modifier = modifier,
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
                 overline = stringResource(R.string.import_overline),
                 title = stringResource(R.string.import_title),
                 subtitle = state.plan?.let { summaryLine(it) } ?: stringResource(R.string.import_subtitle),
-                action = {
+                leading = {
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("close"),
                         contentDescription = stringResource(R.string.import_close),
@@ -93,7 +93,16 @@ fun ImportScreen(
                     )
                 },
             )
-        }
+        },
+    ) { topInset ->
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(horizontal = geo.spacing.xl),
+        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(
+            top = topInset + geo.spacing.md,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+        ),
+    ) {
 
         when (state.phase) {
             ImportViewModel.Phase.Choose -> {
@@ -230,6 +239,7 @@ fun ImportScreen(
                 }
             }
         }
+    }
     }
 }
 

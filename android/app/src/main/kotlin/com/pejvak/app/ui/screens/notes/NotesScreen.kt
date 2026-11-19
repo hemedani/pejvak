@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,11 +31,17 @@ import com.pejvak.app.domain.NoteWithTrack
 import com.pejvak.app.domain.describeDateRange
 import com.pejvak.app.domain.isRangeActive
 import com.pejvak.app.domain.pickAnnotationColor
+import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.EmptyState
-import com.pejvak.app.ui.components.GlassChip
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.ICON_GLYPHS
+import com.pejvak.app.ui.components.GlassSheet
+import com.pejvak.app.ui.components.HeaderSearch
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.PejvakIcon
+import com.pejvak.app.ui.components.ScreenFrame
+import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.SkeletonRows
-import com.pejvak.app.ui.components.field.SearchField
 import com.pejvak.app.ui.components.notes.AnnotationComposerSheet
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
@@ -60,6 +68,7 @@ fun NotesScreen(
     var showDate by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<NoteWithTrack?>(null) }
     var pendingDelete by remember { mutableStateOf<NoteWithTrack?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
     val now = remember { System.currentTimeMillis() }
 
     val searching = state.query.isNotBlank()
@@ -74,41 +83,46 @@ fun NotesScreen(
         else -> null
     }
 
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = geo.spacing.xl, vertical = geo.spacing.xl),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-    ) {
-        item {
-            Column(
-                modifier = Modifier.padding(bottom = geo.spacing.md),
-                verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-            ) {
-                ScreenHeader(
-                    overline = stringResource(R.string.notes_overline),
-                    title = stringResource(R.string.notes_title),
-                    subtitle = subtitle,
-                )
-                SearchField(
+    ScreenFrame(
+        modifier = modifier,
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
+                overline = stringResource(R.string.notes_overline),
+                title = stringResource(R.string.notes_title),
+                subtitle = subtitle,
+                search = HeaderSearch(
                     value = state.query,
                     onValueChange = viewModel::setQuery,
                     placeholder = stringResource(R.string.notes_search_placeholder),
+                ),
+                actions = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("more"),
+                        contentDescription = stringResource(R.string.header_more),
+                        onClick = { menuOpen = true },
+                    )
+                },
+            )
+        },
+    ) { topInset ->
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = geo.spacing.xl,
+            end = geo.spacing.xl,
+            top = topInset + geo.spacing.sm,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+        ),
+        verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+    ) {
+        if (searching) {
+            item {
+                Text(
+                    text = stringResource(R.string.notes_search_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tokens.textTertiary,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                    GlassChip(
-                        label = describeDateRange(state.range, now),
-                        icon = "time",
-                        selected = rangeActive,
-                        onClick = { showDate = true },
-                    )
-                }
-                if (searching) {
-                    Text(
-                        text = stringResource(R.string.notes_search_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = tokens.textTertiary,
-                    )
-                }
             }
         }
 
@@ -146,6 +160,26 @@ fun NotesScreen(
                     onDelete = { pendingDelete = hit.note },
                 )
             }
+        }
+    }
+    }
+
+    if (menuOpen) {
+        GlassSheet(
+            onDismiss = { menuOpen = false },
+            title = stringResource(R.string.header_actions),
+            icon = "time",
+        ) {
+            ListRow(
+                title = stringResource(R.string.header_date_range),
+                subtitle = describeDateRange(state.range, now),
+                leading = { PejvakIcon("time", null, tint = tokens.textSecondary, size = geo.icons.md) },
+                onClick = {
+                    menuOpen = false
+                    showDate = true
+                },
+            )
+            Spacer(Modifier.height(geo.spacing.xl))
         }
     }
 

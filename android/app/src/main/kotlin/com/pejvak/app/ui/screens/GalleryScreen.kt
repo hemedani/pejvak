@@ -23,6 +23,9 @@ import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.EmptyState
 import com.pejvak.app.ui.components.GlassCard
 import com.pejvak.app.ui.components.GlassChip
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.HeaderSearch
+import com.pejvak.app.ui.components.AppDock
 import com.pejvak.app.ui.components.HighlightedText
 import com.pejvak.app.ui.components.InlineNotice
 import com.pejvak.app.ui.components.NoticeTone
@@ -87,6 +90,28 @@ fun GalleryScreen() {
                     RowDivider()
                     CardRow(label = "Email", icon = "person", value = "syd@example.com")
                 }
+            }
+
+            Section("Shell chrome") {
+                var query by remember { mutableStateOf("") }
+                GlassHeader(
+                    title = "Library",
+                    overline = "Pejvak",
+                    subtitle = "24 tracks · 3 folders",
+                    search = HeaderSearch(
+                        value = query,
+                        onValueChange = { query = it },
+                        placeholder = "Search tracks",
+                    ),
+                    actions = {
+                        BubbleButton(
+                            icon = com.pejvak.app.ui.components.ICON_GLYPHS.getValue("settings"),
+                            contentDescription = "Settings",
+                            onClick = {},
+                        )
+                    },
+                )
+                AppDock(selectedRoute = "library", onSelect = {})
             }
 
             Section("Controls") {

@@ -35,7 +35,9 @@ import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.row.RowAction
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -57,12 +59,13 @@ fun DiscoverScreen(
         if (pager.currentPage != state.page) pager.animateScrollToPage(state.page)
     }
 
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(start = geo.spacing.lg, end = geo.spacing.lg, top = geo.spacing.xxl)) {
-            ScreenHeader(
+    ScreenFrame(
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
                 title = stringResource(R.string.tab_discover),
                 subtitle = findLanguage(state.languageCode)?.let { "${it.nativeName} · ${it.name}" },
-                action = {
+                actions = {
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("language"),
                         contentDescription = stringResource(R.string.discover_choose_language),
@@ -70,7 +73,9 @@ fun DiscoverScreen(
                     )
                 },
             )
-        }
+        },
+    ) { topInset ->
+    Column(Modifier.fillMaxSize().padding(top = topInset)) {
         Row(
             modifier = Modifier.padding(horizontal = geo.spacing.lg, vertical = geo.spacing.md),
             horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
@@ -109,6 +114,7 @@ fun DiscoverScreen(
             }
         }
     }
+    }
     if (state.languageSheetOpen) {
         LanguagePickerSheet(
             languages = viewModel.languages,
@@ -135,7 +141,12 @@ private fun ContinuePage(
         return
     }
     LazyColumn(
-        contentPadding = PaddingValues(geo.spacing.lg, geo.spacing.sm, geo.spacing.lg, geo.spacing.xxl),
+        contentPadding = PaddingValues(
+            start = geo.spacing.lg,
+            end = geo.spacing.lg,
+            top = geo.spacing.sm,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+        ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
     ) {
         items(cards, key = { it.key }) { card ->
@@ -176,7 +187,12 @@ private fun FavoritesPage(
         return
     }
     LazyColumn(
-        contentPadding = PaddingValues(geo.spacing.lg, geo.spacing.sm, geo.spacing.lg, geo.spacing.xxl),
+        contentPadding = PaddingValues(
+            start = geo.spacing.lg,
+            end = geo.spacing.lg,
+            top = geo.spacing.sm,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+        ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
     ) {
         items(favorites, key = { it.key }) { saved ->
@@ -222,7 +238,12 @@ private fun BrowsePage(
     val geo = LocalPejvakGeometry.current
     val tokens = LocalPejvakTokens.current
     LazyColumn(
-        contentPadding = PaddingValues(geo.spacing.lg, geo.spacing.sm, geo.spacing.lg, geo.spacing.xxl),
+        contentPadding = PaddingValues(
+            start = geo.spacing.lg,
+            end = geo.spacing.lg,
+            top = geo.spacing.sm,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+        ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
     ) {
         item {

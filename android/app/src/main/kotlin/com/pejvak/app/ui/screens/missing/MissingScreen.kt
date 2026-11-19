@@ -28,7 +28,9 @@ import com.pejvak.app.ui.components.NoticeTone
 import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.components.PrimaryButton
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.components.SkeletonRows
 import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
@@ -54,25 +56,37 @@ fun MissingScreen(
         onPauseOrDispose { }
     }
 
+    ScreenFrame(
+        modifier = modifier,
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
+                overline = stringResource(R.string.missing_overline),
+                title = stringResource(R.string.missing_title),
+                subtitle = state.summary,
+                leading = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("back"),
+                        contentDescription = stringResource(R.string.back),
+                        onClick = onBack,
+                    )
+                },
+            )
+        },
+    ) { topInset ->
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
+            
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = geo.spacing.xl, vertical = geo.spacing.xl),
+            .padding(
+                start = geo.spacing.xl,
+                end = geo.spacing.xl,
+                top = topInset + geo.spacing.md,
+                bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+            ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.xl),
     ) {
-        ScreenHeader(
-            overline = stringResource(R.string.missing_overline),
-            title = stringResource(R.string.missing_title),
-            subtitle = state.summary,
-            action = {
-                BubbleButton(
-                    icon = ICON_GLYPHS.getValue("back"),
-                    contentDescription = stringResource(R.string.back),
-                    onClick = onBack,
-                )
-            },
-        )
 
         if (state.missing.isEmpty()) {
             if (state.loading) {
@@ -136,5 +150,6 @@ fun MissingScreen(
                 }
             }
         }
+    }
     }
 }

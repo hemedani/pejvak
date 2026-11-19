@@ -1,7 +1,6 @@
 package com.pejvak.app.ui.components
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -30,8 +29,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
@@ -163,27 +160,9 @@ private fun SheetHeader(title: String, subtitle: String?, icon: String?) {
                 }
             }
         }
-        Canvas(
+        HairlineWave(
             Modifier
-                .fillMaxWidth()
-                .padding(top = geo.spacing.md, bottom = geo.spacing.lg)
-                .height(6.dp),
-        ) {
-            val cy = size.height / 2f
-            drawPath(
-                path = wavePath(
-                    from = 0f,
-                    to = size.width,
-                    cy = cy,
-                    amplitude = 1.2.dp.toPx(),
-                    wavelength = 48.dp.toPx(),
-                    phase = 0.6f,
-                    taper = 12.dp.toPx(),
-                    variation = 0.5f,
-                ),
-                color = tokens.glassBorder,
-                style = Stroke(width = 1.dp.toPx(), cap = StrokeCap.Round),
-            )
-        }
+                .padding(top = geo.spacing.md, bottom = geo.spacing.lg),
+        )
     }
 }

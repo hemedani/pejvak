@@ -482,4 +482,13 @@
     <string name="ai_what_it_will_do">What it will do</string>
     <string name="ai_back_to_tools">Back to the tools</string>
     <string name="ai_card_a11y">%1$s. %2$s. Coming soon.</string>
+    <string name="header_search">Search</string>
+    <string name="header_close_search">Close search</string>
+    <string name="header_clear_search">Clear search</string>
+    <string name="header_more">More</string>
+    <string name="header_actions">Actions</string>
+    <string name="header_language">Language</string>
+    <string name="header_sort">Sort</string>
+    <string name="header_date_range">Date range</string>
+    <string name="header_screen_menu">Screen settings</string>
 </resources>

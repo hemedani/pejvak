@@ -62,12 +62,15 @@ import com.pejvak.app.ui.components.InlineNotice
 import com.pejvak.app.ui.components.NoticeTone
 import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.PrimaryButton
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.HeaderSearch
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.PejvakIcon
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.components.row.ActionCluster
 import com.pejvak.app.ui.components.row.AiActionButton
 import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
-import com.pejvak.app.ui.components.field.SearchField
 import com.pejvak.app.ui.components.field.TextField
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
@@ -111,6 +114,7 @@ fun LibraryScreen(
     var languageAsked by rememberSaveable { mutableStateOf(false) }
     var newPlaylist by remember { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<PlaylistSummary?>(null) }
+    var menuOpen by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.loading, state.languageCode) {
         if (!state.loading && state.languageCode == null && !languageAsked) {
@@ -152,91 +156,122 @@ fun LibraryScreen(
         if (!state.loading) viewModel.backfillArtwork()
     }
 
-    Column(Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.padding(
-                start = geo.spacing.lg,
-                end = geo.spacing.lg,
-                top = geo.spacing.xxl,
-            ),
-        ) {
-            ScreenHeader(
+    ScreenFrame(
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
                 title = stringResource(R.string.library_title),
                 overline = stringResource(R.string.library_overline),
-                action = {
+                search = HeaderSearch(
+                    value = state.query,
+                    onValueChange = viewModel::setQuery,
+                    placeholder = stringResource(R.string.library_search_placeholder),
+                ),
+                actions = {
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("settings"),
-                        contentDescription = stringResource(R.string.settings_title),
-                        onClick = onOpenSettings,
+                        contentDescription = stringResource(R.string.header_screen_menu),
+                        onClick = { menuOpen = true },
                     )
                 },
             )
-            Spacer(Modifier.height(geo.spacing.sm))
-            Row(
+        },
+    ) { topInset ->
+        Column(Modifier.fillMaxSize().padding(top = topInset + geo.spacing.sm)) {
+            LazyRow(
+                state = chipState,
+                contentPadding = PaddingValues(horizontal = geo.spacing.lg),
                 horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                GlassChip(
-                    label = state.languageCode?.let { code ->
-                        LANGUAGE_OPTIONS.firstOrNull { it.first == code }?.second ?: code
-                    } ?: stringResource(R.string.library_language_choose),
-                    icon = "language",
-                    onClick = { showLanguage = true },
-                )
+                itemsIndexed(views) { index, view ->
+                    val count = state.counts[view]
+                    GlassChip(
+                        label = viewLabel(view),
+                        selected = index == pagerState.currentPage,
+                        icon = viewIcon(view),
+                        count = if (state.query.isNotEmpty() && count != null) count else null,
+                        onClick = {
+                            scope.launch { pagerState.animateScrollToPage(index) }
+                        },
+                    )
+                }
             }
-            Spacer(Modifier.height(geo.spacing.sm))
-            SearchField(
-                value = state.query,
-                onValueChange = viewModel::setQuery,
-                placeholder = stringResource(R.string.library_search_placeholder),
-            )
-        }
-        Spacer(Modifier.height(geo.spacing.md))
-        LazyRow(
-            state = chipState,
-            contentPadding = PaddingValues(horizontal = geo.spacing.lg),
-            horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-        ) {
-            itemsIndexed(views) { index, view ->
-                val count = state.counts[view]
-                GlassChip(
-                    label = viewLabel(view),
-                    selected = index == pagerState.currentPage,
-                    icon = viewIcon(view),
-                    count = if (state.query.isNotEmpty() && count != null) count else null,
-                    onClick = {
-                        scope.launch { pagerState.animateScrollToPage(index) }
+            Spacer(Modifier.height(geo.spacing.md))
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            ) { page ->
+                val view = views.getOrNull(page) ?: return@HorizontalPager
+                LibraryPage(
+                    view = view,
+                    state = state,
+                    newPlaylist = newPlaylist,
+                    onNewPlaylistChange = { newPlaylist = it },
+                    onCreatePlaylist = {
+                        viewModel.createPlaylist(newPlaylist)
+                        newPlaylist = ""
                     },
+                    onDeletePlaylist = { pendingDelete = it },
+                    onOpenTrack = onOpenTrack,
+                    onOpenFolder = onOpenFolder,
+                    onOpenPlaylist = onOpenPlaylist,
+                    onOpenSmart = onOpenSmart,
+                    onOpenMissing = onOpenMissing,
+                    onOpenSource = onOpenSource,
+                    onOpenAi = onOpenAi,
+                    onImport = onImport,
+                    onSetOrigin = viewModel::setOrigin,
+                    onPlayTrack = { card -> viewModel.playTrack(card.track, state.tracks.map { it.track }) },
+                    onPlayRecent = viewModel::playRecent,
                 )
             }
         }
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        ) { page ->
-            val view = views.getOrNull(page) ?: return@HorizontalPager
-            LibraryPage(
-                view = view,
-                state = state,
-                newPlaylist = newPlaylist,
-                onNewPlaylistChange = { newPlaylist = it },
-                onCreatePlaylist = {
-                    viewModel.createPlaylist(newPlaylist)
-                    newPlaylist = ""
-                },
-                onDeletePlaylist = { pendingDelete = it },
-                onOpenTrack = onOpenTrack,
-                onOpenFolder = onOpenFolder,
-                onOpenPlaylist = onOpenPlaylist,
-                onOpenSmart = onOpenSmart,
-                onOpenMissing = onOpenMissing,
-                onOpenSource = onOpenSource,
-                onOpenAi = onOpenAi,
-                onImport = onImport,
-                onSetOrigin = viewModel::setOrigin,
-                onPlayTrack = { card -> viewModel.playTrack(card.track, state.tracks.map { it.track }) },
-                onPlayRecent = viewModel::playRecent,
-            )
+    }
+
+    if (menuOpen) {
+        GlassSheet(
+            onDismiss = { menuOpen = false },
+            title = stringResource(R.string.library_title),
+            icon = "settings",
+        ) {
+            ListGroup(items = listOf("settings", "language")) { item, _ ->
+                when (item) {
+                    "settings" -> ListRow(
+                        title = stringResource(R.string.settings_title),
+                        leading = {
+                            PejvakIcon(
+                                name = "settings",
+                                contentDescription = null,
+                                tint = tokens.textSecondary,
+                                size = geo.icons.md,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onOpenSettings()
+                        },
+                    )
+                    else -> ListRow(
+                        title = stringResource(R.string.header_language),
+                        subtitle = state.languageCode?.let { code ->
+                            LANGUAGE_OPTIONS.firstOrNull { it.first == code }?.second ?: code
+                        } ?: stringResource(R.string.library_language_choose),
+                        leading = {
+                            PejvakIcon(
+                                name = "language",
+                                contentDescription = null,
+                                tint = tokens.textSecondary,
+                                size = geo.icons.md,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            showLanguage = true
+                        },
+                    )
+                }
+            }
+            Spacer(Modifier.height(geo.spacing.xl))
         }
     }
 
@@ -329,7 +364,7 @@ private fun LibraryPage(
             start = geo.spacing.lg,
             end = geo.spacing.lg,
             top = geo.spacing.sm,
-            bottom = geo.spacing.xxl,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
         ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
     ) {

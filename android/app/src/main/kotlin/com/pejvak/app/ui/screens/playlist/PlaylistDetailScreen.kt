@@ -43,7 +43,9 @@ import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.PrimaryButton
 import com.pejvak.app.ui.components.field.TextField
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 
@@ -75,37 +77,41 @@ fun PlaylistDetailScreen(
         describeContextStats(state.stats)?.let { append(" · $it") }
     }
 
+    ScreenFrame(
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
+                title = playlist?.title ?: "",
+                overline = stringResource(R.string.library_view_playlists),
+                subtitle = subtitle,
+                userTitle = true,
+                leading = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("back"),
+                        contentDescription = stringResource(R.string.action_back),
+                        onClick = onBack,
+                    )
+                },
+                actions = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("history"),
+                        contentDescription = stringResource(R.string.context_history_title),
+                        onClick = { historyOpen = true },
+                    )
+                },
+            )
+        },
+    ) { topInset ->
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = geo.spacing.lg,
             end = geo.spacing.lg,
-            top = geo.spacing.xxl,
-            bottom = geo.spacing.xxl,
+            top = topInset + geo.spacing.md,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
         ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
     ) {
-        item {
-            ScreenHeader(
-                title = playlist?.title ?: "",
-                overline = stringResource(R.string.library_view_playlists),
-                subtitle = subtitle,
-                action = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue("history"),
-                            contentDescription = stringResource(R.string.context_history_title),
-                            onClick = { historyOpen = true },
-                        )
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue("back"),
-                            contentDescription = stringResource(R.string.action_back),
-                            onClick = onBack,
-                        )
-                    }
-                },
-            )
-        }
         item {
             PrimaryButton(
                 label = stringResource(R.string.library_play),
@@ -207,6 +213,7 @@ fun PlaylistDetailScreen(
                 }
             }
         }
+    }
     }
 
     if (renameOpen) {

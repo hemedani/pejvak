@@ -23,7 +23,9 @@ import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.PaletteTile
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 
@@ -38,17 +40,15 @@ fun LanguageScreen(
     val tokens = LocalPejvakTokens.current
     val language = findLanguage(viewModel.code)
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(geo.spacing.lg, geo.spacing.xxl, geo.spacing.lg, geo.spacing.xxl),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        item {
-            ScreenHeader(
+    ScreenFrame(
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
                 title = language?.nativeName ?: viewModel.code,
                 overline = language?.let { "${it.name} · ${it.code}" },
                 subtitle = stringResource(R.string.discover_language_sources_body),
-                action = {
+                userTitle = true,
+                leading = {
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("back"),
                         contentDescription = stringResource(R.string.action_back),
@@ -56,7 +56,18 @@ fun LanguageScreen(
                     )
                 },
             )
-        }
+        },
+    ) { topInset ->
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = geo.spacing.lg,
+            end = geo.spacing.lg,
+            top = topInset + geo.spacing.md,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+        ),
+        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+    ) {
         if (sources.isEmpty()) {
             item {
                 EmptyState(
@@ -92,5 +103,6 @@ fun LanguageScreen(
                 modifier = Modifier.padding(geo.spacing.md),
             )
         }
+    }
     }
 }

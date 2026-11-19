@@ -33,7 +33,9 @@ import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.row.RowAction
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 
@@ -49,20 +51,18 @@ fun SourceScreen(
     val uriHandler = LocalUriHandler.current
     val source = state.source
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(geo.spacing.lg, geo.spacing.xxl, geo.spacing.lg, geo.spacing.xxl),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        item {
-            ScreenHeader(
+    ScreenFrame(
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
                 title = source?.name ?: stringResource(R.string.tab_discover),
                 overline = source?.nativeName,
                 subtitle = source?.let {
                     findLanguage(it.languageCode)?.let { language -> "${language.nativeName} · ${it.description}" }
                         ?: it.description
                 },
-                action = {
+                userTitle = true,
+                leading = {
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("back"),
                         contentDescription = stringResource(R.string.action_back),
@@ -70,7 +70,18 @@ fun SourceScreen(
                     )
                 },
             )
-        }
+        },
+    ) { topInset ->
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = geo.spacing.lg,
+            end = geo.spacing.lg,
+            top = topInset + geo.spacing.md,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+        ),
+        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+    ) {
         if (source != null) {
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm), verticalAlignment = Alignment.CenterVertically) {
@@ -144,6 +155,7 @@ fun SourceScreen(
                 )
             }
         }
+    }
     }
 }
 

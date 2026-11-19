@@ -35,7 +35,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -115,9 +114,9 @@ fun NowPlayingSheet(
         var confirmDeleteNote by remember { mutableStateOf<Annotation?>(null) }
 
         // A sheet opened from the player renders in its own window, so the shell's
-        // backdrop blur only reaches the library behind the player — the player itself
-        // stayed crisp, which is why "the background does not blur" was most obvious
-        // here. Frost the player's own surface instead whenever one of its sheets is up.
+        // frost only reaches the library behind the player. Darken the player's own
+        // surface with the smoked frost while one of its sheets is up — `Modifier.blur`
+        // here would blur the player's whole tree and is not worth the render cost.
         val presence = LocalSheetPresence.current
         val sheetCount = presence?.count ?: 0
         val frost by animateDpAsState(
@@ -180,7 +179,6 @@ fun NowPlayingSheet(
                 // Scale the token's own alpha rather than replacing it: glassFill is a
                 // near-transparent white, and copy(alpha = 1f) painted the player solid.
                 .background(tokens.glassFill.copy(alpha = tokens.glassFill.alpha * (1f - 0.85f * sank)))
-                .blur(frost)
                 // The player is a full-screen surface, so a tap that no control claimed
                 // must stop here rather than reach the library behind it. A no-ripple
                 // clickable does that without stealing the drags the body scroll needs.
@@ -248,6 +246,13 @@ fun NowPlayingSheet(
                 },
                 onPullEnd = { finishPull() },
             )
+            if (frost > 0.5.dp) {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .background(tokens.frostFallback.copy(alpha = 0.30f * (frost.value / 16f))),
+                )
+            }
         }
 
         if (showQueue) {

@@ -44,7 +44,10 @@ import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.InlineNotice
 import com.pejvak.app.ui.components.NoticeTone
 import com.pejvak.app.ui.components.PrimaryButton
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.PejvakIcon
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.components.player.HeroArtwork
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
@@ -61,42 +64,46 @@ fun TrackDetailScreen(
     var addSheet by remember { mutableStateOf(false) }
 
     val track = state.track
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = geo.spacing.xxl,
-            bottom = geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        item {
-            ScreenHeader(
+    ScreenFrame(
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
                 title = track?.title ?: stringResource(R.string.track_detail_not_found),
                 overline = track?.let {
                     if (it.isAudiobook) stringResource(R.string.track_detail_audiobook)
                     else stringResource(R.string.track_detail_track)
                 },
                 subtitle = track?.author,
-                action = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
+                userTitle = true,
+                leading = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("back"),
+                        contentDescription = stringResource(R.string.action_back),
+                        onClick = onBack,
+                    )
+                },
+                actions = {
+                    if (track != null) {
                         BubbleButton(
-                            icon = ICON_GLYPHS.getValue("back"),
-                            contentDescription = stringResource(R.string.action_back),
-                            onClick = onBack,
+                            icon = ICON_GLYPHS.getValue("add"),
+                            contentDescription = stringResource(R.string.track_detail_add_playlist),
+                            onClick = { addSheet = true },
                         )
-                        if (track != null) {
-                            BubbleButton(
-                                icon = ICON_GLYPHS.getValue("add"),
-                                contentDescription = stringResource(R.string.track_detail_add_playlist),
-                                onClick = { addSheet = true },
-                            )
-                        }
                     }
                 },
             )
-        }
+        },
+    ) { topInset ->
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            start = geo.spacing.lg,
+            end = geo.spacing.lg,
+            top = topInset + geo.spacing.md,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+        ),
+        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+    ) {
         if (track == null && !state.loading) {
             item {
                 EmptyState(
@@ -276,6 +283,7 @@ fun TrackDetailScreen(
                 AnnotationRow(note, onPlay = { viewModel.play(note.positionSec) })
             }
         }
+    }
     }
 
     if (addSheet) {

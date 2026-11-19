@@ -67,8 +67,14 @@ import com.pejvak.app.ui.components.row.AiActionButton
 import com.pejvak.app.ui.components.GlassChip
 import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.PrimaryButton
-import com.pejvak.app.ui.components.ScreenHeader
-import com.pejvak.app.ui.components.field.SearchField
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.GlassSheet
+import com.pejvak.app.ui.components.PejvakIcon
+import com.pejvak.app.ui.components.HeaderSearch
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.ScreenFrame
+import com.pejvak.app.ui.components.row.ListGroup
+import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.history.DateRangeSheet
 import com.pejvak.app.ui.components.history.SessionDetailSheet
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
@@ -89,14 +95,16 @@ fun HistoryScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var rangeOpen by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(pagerState.currentPage) {
         viewModel.setPanel(if (pagerState.currentPage == 0) HistoryPanel.History else HistoryPanel.Stats)
     }
 
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.padding(horizontal = geo.spacing.lg, vertical = geo.spacing.lg)) {
-            ScreenHeader(
+    ScreenFrame(
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
                 title = stringResource(R.string.tab_history),
                 overline = stringResource(R.string.history_overline),
                 subtitle = stringResource(
@@ -104,33 +112,26 @@ fun HistoryScreen(
                     formatDuration(state.stats.totalListenTimeSec),
                     state.stats.sessionCount,
                 ),
-                action = {
-                    Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue("refresh"),
-                            contentDescription = stringResource(R.string.history_refresh),
-                            onClick = viewModel::refresh,
-                        )
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue("share"),
-                            contentDescription = stringResource(R.string.history_export),
-                            onClick = {
-                                val text = viewModel.markdown()
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "text/markdown"
-                                    putExtra(Intent.EXTRA_TEXT, text)
-                                    putExtra(Intent.EXTRA_SUBJECT, "Listening history")
-                                }
-                                context.startActivity(
-                                    Intent.createChooser(intent, context.getString(R.string.history_export)),
-                                )
-                            },
-                        )
-                    }
+                search = HeaderSearch(
+                    value = state.query,
+                    onValueChange = viewModel::setQuery,
+                    placeholder = stringResource(R.string.history_search_placeholder),
+                ),
+                actions = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("more"),
+                        contentDescription = stringResource(R.string.header_more),
+                        onClick = { menuOpen = true },
+                    )
                 },
             )
-            Spacer(Modifier.height(geo.spacing.md))
-            Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
+        },
+    ) { topInset ->
+        Column(Modifier.fillMaxSize().padding(top = topInset + geo.spacing.sm)) {
+            Row(
+                modifier = Modifier.padding(horizontal = geo.spacing.lg, vertical = geo.spacing.sm),
+                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+            ) {
                 GlassChip(
                     label = stringResource(R.string.history_panel_history),
                     selected = state.panel == HistoryPanel.History,
@@ -142,50 +143,107 @@ fun HistoryScreen(
                     onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                 )
             }
-        }
 
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize(),
-        ) { page ->
-            if (page == 0) {
-                PullToRefreshBox(
-                    isRefreshing = state.refreshing,
-                    onRefresh = viewModel::refresh,
-                    modifier = Modifier.fillMaxSize(),
-                ) {
-                    HistoryList(
-                        state = state,
-                        onQuery = viewModel::setQuery,
-                        onTab = viewModel::setTab,
-                        onSort = viewModel::setSort,
-                        onRange = { rangeOpen = true },
-                        onOpenStretch = { entry ->
-                            entry.end.let(viewModel::openSession)
-                        },
-                        onDeleteStretch = viewModel::deleteStretch,
-                        onOpenRun = { run ->
-                            if (onOpenCollection != null) onOpenCollection(run)
-                            else viewModel.openCollection(run)
-                        },
-                        onDeleteRun = viewModel::deleteRun,
-                        onLoadMore = viewModel::loadMore,
-                        onToggleSelectionMode = viewModel::toggleSelectionMode,
-                        onToggleSelected = viewModel::toggleSelected,
-                        onDeleteSelected = viewModel::deleteSelected,
-                        onOpenAi = onOpenAi,
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize().weight(1f),
+            ) { page ->
+                if (page == 0) {
+                    PullToRefreshBox(
+                        isRefreshing = state.refreshing,
+                        onRefresh = viewModel::refresh,
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        HistoryList(
+                            state = state,
+                            onTab = viewModel::setTab,
+                            onOpenStretch = { entry ->
+                                entry.end.let(viewModel::openSession)
+                            },
+                            onDeleteStretch = viewModel::deleteStretch,
+                            onOpenRun = { run ->
+                                if (onOpenCollection != null) onOpenCollection(run)
+                                else viewModel.openCollection(run)
+                            },
+                            onDeleteRun = viewModel::deleteRun,
+                            onLoadMore = viewModel::loadMore,
+                            onToggleSelectionMode = viewModel::toggleSelectionMode,
+                            onToggleSelected = viewModel::toggleSelected,
+                            onDeleteSelected = viewModel::deleteSelected,
+                            onOpenAi = onOpenAi,
+                        )
+                    }
+                } else {
+                    StatsPanel(
+                        stats = state.stats,
+                        leaders = state.leaders,
+                        daily = state.daily,
+                        streak = state.streak,
+                        bestStreak = state.bestStreak,
+                        media = state.media,
                     )
                 }
-            } else {
-                StatsPanel(
-                    stats = state.stats,
-                    leaders = state.leaders,
-                    daily = state.daily,
-                    streak = state.streak,
-                    bestStreak = state.bestStreak,
-                    media = state.media,
-                )
             }
+        }
+    }
+
+    if (menuOpen) {
+        GlassSheet(
+            onDismiss = { menuOpen = false },
+            title = stringResource(R.string.header_actions),
+            icon = "more",
+        ) {
+            ListGroup(items = listOf("refresh", "sort-newest", "sort-oldest", "sort-longest", "range", "export")) { item, _ ->
+                when {
+                    item == "refresh" -> ListRow(
+                        title = stringResource(R.string.history_refresh),
+                        leading = { PejvakIcon("refresh", null, tint = tokens.textSecondary, size = geo.icons.md) },
+                        onClick = { menuOpen = false; viewModel.refresh() },
+                    )
+                    item.startsWith("sort-") -> {
+                        val sort = when (item) {
+                            "sort-newest" -> HistorySort.Newest
+                            "sort-oldest" -> HistorySort.Oldest
+                            else -> HistorySort.Longest
+                        }
+                        ListRow(
+                            title = when (sort) {
+                                HistorySort.Newest -> stringResource(R.string.history_sort_newest)
+                                HistorySort.Oldest -> stringResource(R.string.history_sort_oldest)
+                                HistorySort.Longest -> stringResource(R.string.history_sort_longest)
+                            },
+                            leading = { PejvakIcon("sort", null, tint = tokens.textSecondary, size = geo.icons.md) },
+                            trailing = {
+                                if (state.sort == sort) PejvakIcon("check", null, tint = tokens.accent, size = geo.icons.md)
+                            },
+                            onClick = { menuOpen = false; viewModel.setSort(sort) },
+                        )
+                    }
+                    item == "range" -> ListRow(
+                        title = stringResource(R.string.header_date_range),
+                        subtitle = describeDateRange(state.range),
+                        leading = { PejvakIcon("time", null, tint = tokens.textSecondary, size = geo.icons.md) },
+                        onClick = { menuOpen = false; rangeOpen = true },
+                    )
+                    else -> ListRow(
+                        title = stringResource(R.string.history_export),
+                        leading = { PejvakIcon("share", null, tint = tokens.textSecondary, size = geo.icons.md) },
+                        onClick = {
+                            menuOpen = false
+                            val text = viewModel.markdown()
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/markdown"
+                                putExtra(Intent.EXTRA_TEXT, text)
+                                putExtra(Intent.EXTRA_SUBJECT, "Listening history")
+                            }
+                            context.startActivity(
+                                Intent.createChooser(intent, context.getString(R.string.history_export)),
+                            )
+                        },
+                    )
+                }
+            }
+            Spacer(Modifier.height(geo.spacing.xl))
         }
     }
 
@@ -222,10 +280,7 @@ fun HistoryScreen(
 @Composable
 private fun HistoryList(
     state: HistoryUiState,
-    onQuery: (String) -> Unit,
     onTab: (HistoryTab) -> Unit,
-    onSort: (HistorySort) -> Unit,
-    onRange: () -> Unit,
     onOpenStretch: (HistoryStretchEntry) -> Unit,
     onDeleteStretch: (HistoryStretchEntry) -> Unit,
     onOpenRun: (ContextPlay) -> Unit,
@@ -243,17 +298,10 @@ private fun HistoryList(
         contentPadding = PaddingValues(
             start = geo.spacing.lg,
             end = geo.spacing.lg,
-            bottom = geo.spacing.xxl,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
         ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
     ) {
-        item {
-            SearchField(
-                value = state.query,
-                onValueChange = onQuery,
-                placeholder = stringResource(R.string.history_search_placeholder),
-            )
-        }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
                 GlassChip(
@@ -266,27 +314,6 @@ private fun HistoryList(
                     selected = state.tab == HistoryTab.Collections,
                     onClick = { onTab(HistoryTab.Collections) },
                 )
-                GlassChip(
-                    label = describeDateRange(state.range),
-                    icon = "time",
-                    selected = state.range.from != null || state.range.to != null,
-                    onClick = onRange,
-                )
-            }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                HistorySort.entries.forEach { sort ->
-                    GlassChip(
-                        label = when (sort) {
-                            HistorySort.Newest -> stringResource(R.string.history_sort_newest)
-                            HistorySort.Oldest -> stringResource(R.string.history_sort_oldest)
-                            HistorySort.Longest -> stringResource(R.string.history_sort_longest)
-                        },
-                        selected = state.sort == sort,
-                        onClick = { onSort(sort) },
-                    )
-                }
                 if (state.tab == HistoryTab.Sessions) {
                     GlassChip(
                         label = if (state.selectionMode) stringResource(R.string.action_done)

@@ -46,7 +46,9 @@ import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.components.PrimaryButton
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.components.WaveProgressBar
 import com.pejvak.app.ui.components.row.ActionCluster
 import com.pejvak.app.ui.components.row.AiActionButton
@@ -78,37 +80,39 @@ fun FolderDetailScreen(
         append(formatDuration(state.rows.sumOf { it.track.durationSec }))
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            top = geo.spacing.xxl,
-            bottom = geo.spacing.xxl,
-        ),
-    ) {
-        val gutter = Modifier.padding(horizontal = geo.spacing.lg)
-        item {
-            ScreenHeader(
-                modifier = gutter,
+    ScreenFrame(
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
                 title = state.name,
                 overline = stringResource(R.string.library_view_folders),
                 subtitle = subtitle,
-                action = {
-                    ActionCluster {
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue("back"),
-                            contentDescription = stringResource(R.string.action_back),
-                            onClick = onBack,
-                        )
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue("history"),
-                            contentDescription = stringResource(R.string.folder_history),
-                            onClick = { historyOpen = true },
-                        )
-                    }
+                userTitle = true,
+                leading = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("back"),
+                        contentDescription = stringResource(R.string.action_back),
+                        onClick = onBack,
+                    )
+                },
+                actions = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("history"),
+                        contentDescription = stringResource(R.string.folder_history),
+                        onClick = { historyOpen = true },
+                    )
                 },
             )
-        }
-        item { Spacer(Modifier.height(geo.spacing.lg)) }
+        },
+    ) { topInset ->
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(
+            top = topInset + geo.spacing.sm,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+        ),
+    ) {
+        val gutter = Modifier.padding(horizontal = geo.spacing.lg)
         item {
             PrimaryButton(
                 modifier = gutter,
@@ -185,6 +189,7 @@ fun FolderDetailScreen(
                 onOpenAi = onOpenAi,
             )
         }
+    }
     }
 
     if (addOpen) {

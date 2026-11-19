@@ -1,5 +1,13 @@
 package com.pejvak.app.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,25 +22,31 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
+import com.pejvak.app.core.HapticIntent
+import com.pejvak.app.core.rememberHaptics
 import com.pejvak.app.ui.components.player.WavyProgress
 import com.pejvak.app.ui.navigation.Tab
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.useMotionEnabled
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 /** The dock's now-playing half. Only the fields the mini-player draws, so a
  *  once-a-second position tick never recomposes the dock; the progress wave
@@ -47,10 +61,10 @@ data class NowPlayingUi(
 )
 
 /**
- * The dock (DESING.md §9.5): mini-player + five icon-only destinations in ONE
- * strong-glass panel. One panel makes overlap structurally impossible; both halves
- * are equal height. Selected destination = a solid white accent circle with the
- * glyph knocked out. No raised centre action, no per-tab labels.
+ * The dock (DESING.md §9.5 / plan 02 §4): one heavy-frost capsule with a
+ * mini-player half and five icon-only destinations. The selected destination is a
+ * solid white accent circle with the glyph knocked out; there is no travel
+ * animation on tab switch — the press spring and haptic are the interaction.
  */
 @Composable
 fun AppDock(
@@ -66,22 +80,43 @@ fun AppDock(
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassSurface(
+    val motion = useMotionEnabled()
+    val shape = if (nowPlaying != null) {
+        RoundedCornerShape(geo.radius.xl)
+    } else {
+        RoundedCornerShape(geo.radius.pill)
+    }
+    FrostedSurface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(geo.radius.xl),
-        filled = false,
+        shape = shape,
+        frostBlur = geo.frost.backdrop,
+        softElevation = dockElevation(),
     ) {
         Column(Modifier.fillMaxWidth()) {
-            if (nowPlaying != null) {
-                MiniPlayerRow(
-                    nowPlaying = nowPlaying,
-                    miniProgress = miniProgress,
-                    miniWaveform = miniWaveform,
-                    onPlayPause = onPlayPause,
-                    onNext = onNext,
-                    onExpand = onExpand,
-                    modifier = Modifier.height(geo.dock.playerHeight),
-                )
+            AnimatedVisibility(
+                visible = nowPlaying != null,
+                enter = if (motion) expandVertically() + fadeIn() else expandVertically { 0 },
+                exit = if (motion) shrinkVertically() + fadeOut() else shrinkVertically { 0 },
+            ) {
+                nowPlaying?.let { playing ->
+                    Column {
+                        MiniPlayerRow(
+                            nowPlaying = playing,
+                            miniProgress = miniProgress,
+                            miniWaveform = miniWaveform,
+                            onPlayPause = onPlayPause,
+                            onNext = onNext,
+                            onExpand = onExpand,
+                            modifier = Modifier.height(geo.dock.playerHeight),
+                        )
+                        HairlineWave(
+                            Modifier
+                                .padding(horizontal = geo.dock.inset)
+                                .height(geo.spacing.sm),
+                            color = tokens.glassBorder,
+                        )
+                    }
+                }
             }
             Row(
                 modifier = Modifier
@@ -93,7 +128,12 @@ fun AppDock(
             ) {
                 Tab.entries.forEach { tab ->
                     val selected = tab.route == selectedRoute
-                    DockItem(tab = tab, selected = selected, onClick = { onSelect(tab) })
+                    DockItem(
+                        tab = tab,
+                        selected = selected,
+                        description = stringResource(tab.labelRes),
+                        onClick = { onSelect(tab) },
+                    )
                 }
             }
         }
@@ -101,17 +141,43 @@ fun AppDock(
 }
 
 @Composable
-private fun DockItem(tab: Tab, selected: Boolean, onClick: () -> Unit) {
+private fun DockItem(tab: Tab, selected: Boolean, description: String, onClick: () -> Unit) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
+    val motion = useMotionEnabled()
+    val haptics = rememberHaptics()
+    val scope = rememberCoroutineScope()
+    val scale = remember { Animatable(1f) }
     Box(
         modifier = Modifier
             .size(geo.dock.touch)
+            .graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            }
             .clip(CircleShape)
-            .clickable(onClick = onClick),
+            .clickable {
+                haptics.trigger(HapticIntent.Select)
+                if (motion) {
+                    scope.launch {
+                        scale.animateTo(0.92f, spring(stiffness = Spring.StiffnessHigh))
+                        scale.animateTo(1.05f, spring(stiffness = Spring.StiffnessHigh))
+                        scale.animateTo(1f, spring(stiffness = Spring.StiffnessMedium))
+                    }
+                }
+                onClick()
+            },
         contentAlignment = Alignment.Center,
     ) {
         if (selected) {
+            // A static halo, not a moving ring: it lifts the white circle off the
+            // dock without becoming a second animation.
+            Box(
+                modifier = Modifier
+                    .size(geo.dock.indicator + geo.spacing.xs)
+                    .clip(CircleShape)
+                    .background(tokens.accent.copy(alpha = 0.18f)),
+            )
             Box(
                 modifier = Modifier
                     .size(geo.dock.indicator)
@@ -119,26 +185,35 @@ private fun DockItem(tab: Tab, selected: Boolean, onClick: () -> Unit) {
                     .background(tokens.accent),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(
-                    imageVector = tab.icon,
-                    contentDescription = null,
+                PejvakIcon(
+                    name = tabRouteGlyph(tab),
+                    contentDescription = description,
                     tint = tokens.onAccent,
-                    modifier = Modifier.size(geo.dock.iconActive),
+                    size = geo.dock.iconActive,
                 )
             }
         } else {
-            Icon(
-                imageVector = tab.icon,
-                contentDescription = null,
+            PejvakIcon(
+                name = tabRouteGlyph(tab),
+                contentDescription = description,
                 tint = tokens.textSecondary,
-                modifier = Modifier.size(geo.dock.icon),
+                size = geo.dock.icon,
             )
         }
     }
 }
 
+/** The dock's glyph names, routed through the one icon family. */
+private fun tabRouteGlyph(tab: Tab): String = when (tab) {
+    Tab.Library -> "music"
+    Tab.History -> "history"
+    Tab.Discover -> "discover"
+    Tab.Notes -> "notes"
+    Tab.Ai -> "ai"
+}
+
 @Composable
-private fun MiniPlayerRow(
+fun MiniPlayerRow(
     nowPlaying: NowPlayingUi,
     miniProgress: StateFlow<Float>?,
     miniWaveform: StateFlow<FloatArray?>?,
@@ -156,7 +231,6 @@ private fun MiniPlayerRow(
             .padding(horizontal = geo.dock.inset),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Artwork tile, or the track's deterministic aurora ramp when none.
         PaletteTile(
             contentHash = nowPlaying.contentHash,
             label = nowPlaying.title,
@@ -165,19 +239,17 @@ private fun MiniPlayerRow(
         )
         Spacer(Modifier.width(geo.spacing.md))
         Column(Modifier.weight(1f)) {
-            Text(
+            UserText(
                 text = nowPlaying.title,
-                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleMedium,
                 color = tokens.text,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
-            Text(
+            UserText(
                 text = nowPlaying.artist,
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = tokens.textSecondary,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             if (miniProgress != null) {
                 MiniWave(
@@ -205,6 +277,7 @@ private fun MiniPlayerRow(
         )
     }
 }
+
 @Composable
 private fun MiniWave(
     progress: StateFlow<Float>,

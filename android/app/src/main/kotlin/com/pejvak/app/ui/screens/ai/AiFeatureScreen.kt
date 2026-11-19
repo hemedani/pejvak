@@ -32,7 +32,9 @@ import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.GlassCard
 import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.PrimaryButton
-import com.pejvak.app.ui.components.ScreenHeader
+import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.components.ai.AiGlyph
 import com.pejvak.app.ui.theme.AuroraRamps
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
@@ -54,24 +56,36 @@ fun AiFeatureScreen(
     val feature = aiFeatureFor(featureId) ?: AI_FALLBACK_FEATURE
     val tint = AuroraRamps[aiGlyphRamp(feature, tokens.isDark)].toList()[aiGlyphStop(tokens.isDark)]
 
+    ScreenFrame(
+        modifier = modifier,
+        header = { headerModifier ->
+            GlassHeader(
+                modifier = headerModifier,
+                overline = stringResource(R.string.ai_overline),
+                title = feature.title,
+                leading = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("back"),
+                        contentDescription = stringResource(R.string.back),
+                        onClick = onBack,
+                    )
+                },
+            )
+        },
+    ) { topInset ->
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxSize()
+            
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = geo.spacing.xl, vertical = geo.spacing.xl),
+            .padding(
+                start = geo.spacing.xl,
+                end = geo.spacing.xl,
+                top = topInset + geo.spacing.md,
+                bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+            ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.xxl),
     ) {
-        ScreenHeader(
-            overline = stringResource(R.string.ai_overline),
-            title = feature.title,
-            action = {
-                BubbleButton(
-                    icon = ICON_GLYPHS.getValue("back"),
-                    contentDescription = stringResource(R.string.back),
-                    onClick = onBack,
-                )
-            },
-        )
 
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -123,5 +137,6 @@ fun AiFeatureScreen(
 
         PrimaryButton(label = stringResource(R.string.ai_back_to_tools), onClick = onBack)
         Spacer(Modifier.size(geo.spacing.sm))
+    }
     }
 }
