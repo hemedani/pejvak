@@ -91,6 +91,20 @@ ramp **mid** stop (not the light stop) so the field stays colorful without blowi
 The **double-border effect** from the mockup = `glassFill` + a distinct brighter `glassBorder` stroke
 + a subtle top `glassHighlight`. That trio is what makes a pane read as a glass edge catching light.
 
+**Shell frost (header, dock, standalone mini-player only).** The shell chrome is a heavier material
+than content glass: sampled with Haze, blurred 48 dp, smoked so the content behind reads as colour
+washes rather than shapes.
+
+| Token | Light | Dark | Role |
+|---|---|---|---|
+| `frostBase` | `rgba(51,80,95,0.55)` | `rgba(10,15,22,0.62)` | pane body over the sampled backdrop |
+| `frostScrim` | `rgba(51,80,95,0.62)` | `rgba(6,9,15,0.68)` | smoky tint that extinguishes residual detail |
+| `frostSheen` | `rgba(255,255,255,0.10)` | `rgba(255,255,255,0.06)` | seasons the surface |
+| `frostFallback` | `rgba(51,80,95,0.82)` | `rgba(6,9,15,0.86)` | API 29–30, no blur |
+
+Grain `0.12`, edge treatment `Rectangle`, 1 dp `glassBorder`, 3 dp top rim. The recipe lives once in
+`ui/theme/Frost.kt` (`rememberPejvakFrost`); panes are `FrostedSurface`. Content cards never use it.
+
 ### 3.3 Text on glass
 
 | Token | Light | Dark | Contrast target |
@@ -185,15 +199,21 @@ One strictly-increasing, even-numbered **radius ramp** with semantic aliases —
 | Layout | `maxContentWidth 760` |
 
 **Dock geometry:** `playerHeight == navHeight == 58`, indicator circle 40, icon 22 (active 20), touch
-target 44, margin 10, inset 12. Screens owe the dock `dockInset` (sized for the dock at its tallest),
-never a literal.
+target 44, margin 10, inset 12. The dock's backdrop uses the same 18 dp blur as a modal backdrop, so
+the content under it reads as depth rather than a flat tint. Screens read `LocalShellInsets.bottom` (measured clearance, never a
+literal).
+
+**Header geometry:** `margin 10`, `minHeight 72`, `contentPadding 20`. `GlassHeader` owns the status
+bar inset and the morphing search capsule; screens mount it through `ScreenFrame`, which reports the
+measured height so the scroll body can clear it.
 
 ## 6. Depth: blur, borders & elevation
 
 The mockup has **no harsh drop shadows**. Depth is a three-part recipe, in order of importance:
 
-1. **Background blur** (`RenderEffect.createBlurEffect`, API 31+): content panes 24 dp, dock/sheets
-   40 dp. This is what makes glass *glass*.
+1. **Background blur** (Haze 2.1 backdrop sampling, API 31+): content panes 24 dp, shell chrome
+   (`frost`) 48 dp. This is what makes glass *glass*. One `HazeState` per shell; content is the
+   source, header/dock/mini-player are crisp consumers. Never `isPlatformBackdropEnabled`.
 2. **Bright hairline border** (`glassBorder`, 1–1.5 dp) — the pane's edge catching light.
 3. **Top rim light** (`glassHighlight`, 3 dp on the top edge only) — never a highlight spread over the
    upper half (it blows out).
@@ -208,8 +228,9 @@ get **no shadow**; their fill + border draw the edge.
 | `dock` | the dock + mini-player (soft, low) |
 | `float` | sheets, modals, menus (soft) |
 
-**API 29–30 fallback:** no blur; raise fill to `glassFillFallback` and keep border + rim light. The
-pane still reads as a distinct surface.
+**API 29–30 fallback:** no blur; content glass raises to `glassFillFallback`, shell chrome paints
+`frostFallback`, and border + rim stay. The pane still reads as a distinct surface; legibility never
+depends on blur.
 
 ## 7. Iconography
 
@@ -296,7 +317,9 @@ Every component is a glass pane unless noted. Compose names in parentheses.
   in-player note list.
 
 ### 9.5 The dock
-- **AppDock** (`AppDock`): **mini-player + 5-icon nav in ONE `glassFillStrong` panel** (`radius.xl`).
+- **AppDock** (`AppDock`): **mini-player + 5-icon nav in ONE frosted panel** — `radius.xl` with the
+  mini half, `radius.pill` when nav-only, animated between them. The halves are separated by
+  `HairlineWave`.
   One panel makes overlap structurally impossible. Both halves equal height (58). Nav is **icon-only**
   (five peers, no raised centre action); selected = **solid white accent circle** with the glyph
   knocked out + filled-vs-outlined swap + 3 dp top rim light. The dock is a **sibling** of the blurred

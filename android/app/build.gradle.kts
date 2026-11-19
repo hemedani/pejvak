@@ -110,6 +110,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.coil.compose)
+    implementation(libs.haze)
+    implementation(libs.haze.blur)
     implementation(libs.coil.network.okhttp)
 
     testImplementation(libs.junit)

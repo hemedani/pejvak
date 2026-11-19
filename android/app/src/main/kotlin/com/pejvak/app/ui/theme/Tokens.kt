@@ -68,6 +68,23 @@ data class DockGeometry(
     val dockInset: Dp get() = playerHeight + navHeight + margin * 2 + inset
 }
 
+/** Frost geometry (DESING.md §6 / plan 02). Shell chrome only. */
+@Immutable
+data class FrostGeometry(
+    val blur: Dp = 48.dp,
+    /** The modal-backdrop blur; the dock uses the same strength so both read alike. */
+    val backdrop: Dp = 18.dp,
+    val noise: Float = 0.12f,
+)
+
+/** Floating header geometry. Height is a floor; a subtitle may grow it. */
+@Immutable
+data class HeaderGeometry(
+    val margin: Dp = 10.dp,
+    val minHeight: Dp = 72.dp,
+    val contentPadding: Dp = 20.dp,
+)
+
 @Immutable
 data class PejvakGeometry(
     val radius: Radius = Radius(),
@@ -77,6 +94,8 @@ data class PejvakGeometry(
     val bars: Bars = Bars(),
     val icons: IconSizes = IconSizes(),
     val dock: DockGeometry = DockGeometry(),
+    val frost: FrostGeometry = FrostGeometry(),
+    val header: HeaderGeometry = HeaderGeometry(),
     val maxContentWidth: Dp = 760.dp,
 )
 

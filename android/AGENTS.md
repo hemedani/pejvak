@@ -207,7 +207,7 @@ the record; the code is the truth. When the three disagree, fix the two that are
 AGP 9.5.1 · Gradle 9.6.0 · Kotlin 2.4.21 (built-in) · KSP 2.3.13 · Hilt 2.60.1 · Compose BOM
 2026.09.00 · Room 2.8.5 · Media3 1.11.1 · WorkManager 2.12.0 · Navigation 2.10.2 · Lifecycle 2.11.0 ·
 Activity 1.13.0 · DataStore 1.3.0 · Ktor 3.6.1 · kotlinx-serialization 1.13.0 · coroutines 1.11.0 ·
-Coil 3 (latest stable). Bump only with a stated reason; check AGP compatibility first.
+Coil 3 (latest stable) · Haze 2.1.0 (`haze` + `haze-blur`, shell frost only). Bump only with a stated reason; check AGP compatibility first.
 
 ## Documentation & plan discipline
 
