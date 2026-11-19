@@ -85,4 +85,52 @@ class ContrastContractTest {
     fun onAccent_clears45() {
         assertTrue(contrast(OnAccent, Accent) >= 4.5)
     }
+
+    /** Composite a token that already carries its own alpha. */
+    private fun blend(fg: Color, bg: Color): Color = over(fg, bg, fg.alpha)
+
+    /** The shell frost stack (base → scrim → sheen) over the worst-case bloom. */
+    private fun worstFrost(canvas: Color, base: Color, scrim: Color, sheen: Color, bloomAlpha: Float): Color {
+        val brightestBloom = AuroraRamps
+            .map { over(it.second, canvas, bloomAlpha) }
+            .maxBy { luminance(it) }
+        return blend(sheen, blend(scrim, blend(base, brightestBloom)))
+    }
+
+    @Test
+    fun lightFrostPrimaryText_clears45() {
+        val base = worstFrost(CanvasBaseLight, FrostBaseLight, FrostScrimLight, FrostSheenLight, 0.20f)
+        val ratio = contrast(TextLight, base)
+        assertTrue("light frost text contrast was $ratio", ratio >= 4.5)
+    }
+
+    @Test
+    fun darkFrostPrimaryText_clears45() {
+        val base = worstFrost(CanvasBaseDark, FrostBaseDark, FrostScrimDark, FrostSheenDark, 0.22f)
+        val ratio = contrast(TextDark, base)
+        assertTrue("dark frost text contrast was $ratio", ratio >= 4.5)
+    }
+
+    @Test
+    fun lightFrostSecondaryText_clears3() {
+        val base = worstFrost(CanvasBaseLight, FrostBaseLight, FrostScrimLight, FrostSheenLight, 0.20f)
+        val ratio = contrast(blend(TextSecondaryLight, base), base)
+        assertTrue("light frost secondary contrast was $ratio", ratio >= 3.0)
+    }
+
+    @Test
+    fun darkFrostSecondaryText_clears3() {
+        val base = worstFrost(CanvasBaseDark, FrostBaseDark, FrostScrimDark, FrostSheenDark, 0.22f)
+        val ratio = contrast(blend(TextSecondaryDark, base), base)
+        assertTrue("dark frost secondary contrast was $ratio", ratio >= 3.0)
+    }
+
+    /** API 29–30 draws the fallback scrim, never blur: text must still clear. */
+    @Test
+    fun frostFallback_clears45() {
+        val light = blend(FrostFallbackLight, over(AuroraRamps[1].third, CanvasBaseLight, 0.20f))
+        val dark = blend(FrostFallbackDark, over(AuroraRamps[1].third, CanvasBaseDark, 0.22f))
+        assertTrue("light fallback contrast was ${contrast(TextLight, light)}", contrast(TextLight, light) >= 4.5)
+        assertTrue("dark fallback contrast was ${contrast(TextDark, dark)}", contrast(TextDark, dark) >= 4.5)
+    }
 }
