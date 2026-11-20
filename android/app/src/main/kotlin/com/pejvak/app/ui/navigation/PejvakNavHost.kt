@@ -319,48 +319,48 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                         )
                     }
                 }
-            }
 
-            if (isTabRoute) {
-                AppDock(
-                    selectedRoute = selectedRoute,
-                    onSelect = { tab -> navController.navigateTab(tab.route) },
-                    nowPlaying = mini,
-                    miniProgress = playerVm.miniProgress,
-                    miniWaveform = playerVm.waveform,
-                    onPlayPause = playerVm::toggle,
-                    onNext = playerVm::next,
-                    onExpand = { playerOpen = true },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
-                        .navigationBarsPadding()
-                        .onGloballyPositioned { coords ->
-                            if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
-                        },
-                )
-            } else {
-                StandaloneMiniPlayer(
-                    nowPlaying = mini,
-                    miniProgress = playerVm.miniProgress,
-                    miniWaveform = playerVm.waveform,
-                    onExpand = { playerOpen = true },
-                    onPlayPause = playerVm::toggle,
-                    onNext = playerVm::next,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
-                        .navigationBarsPadding()
-                        .onGloballyPositioned { coords ->
-                            if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
-                        },
+                if (isTabRoute) {
+                    AppDock(
+                        selectedRoute = selectedRoute,
+                        onSelect = { tab -> navController.navigateTab(tab.route) },
+                        nowPlaying = mini,
+                        miniProgress = playerVm.miniProgress,
+                        miniWaveform = playerVm.waveform,
+                        onPlayPause = playerVm::toggle,
+                        onNext = playerVm::next,
+                        onExpand = { playerOpen = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
+                            .navigationBarsPadding()
+                            .onGloballyPositioned { coords ->
+                                if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
+                            },
+                    )
+                } else {
+                    StandaloneMiniPlayer(
+                        nowPlaying = mini,
+                        miniProgress = playerVm.miniProgress,
+                        miniWaveform = playerVm.waveform,
+                        onExpand = { playerOpen = true },
+                        onPlayPause = playerVm::toggle,
+                        onNext = playerVm::next,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
+                            .navigationBarsPadding()
+                            .onGloballyPositioned { coords ->
+                                if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
+                            },
+                    )
+                }
+
+                WaveSweep(
+                    trigger = sweep,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
-
-            WaveSweep(
-                trigger = sweep,
-                modifier = Modifier.fillMaxSize(),
-            )
 
             NowPlayingSheet(
                 vm = playerVm,
