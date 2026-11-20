@@ -59,7 +59,8 @@ import com.pejvak.app.BuildConfig
 import com.pejvak.app.R
 import com.pejvak.app.ui.components.AmbientCanvas
 import com.pejvak.app.ui.components.AppDock
-import com.pejvak.app.ui.components.LocalHazeState
+import com.pejvak.app.ui.components.LocalBackdrop
+import com.pejvak.app.ui.components.rememberBackdrop
 import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.LocalSheetPresence
 import com.pejvak.app.ui.components.ShellInsets
@@ -93,7 +94,6 @@ import com.pejvak.app.ui.screens.track.TrackDetailScreen
 import com.pejvak.app.domain.folderKeyToRouteSegment
 import com.pejvak.app.domain.ContextType
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
-import dev.chrisbanes.haze.rememberHazeState
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -129,10 +129,10 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
     var aiSheet by remember { mutableStateOf(false) }
     var aiFeature by remember { mutableStateOf<AiFeature?>(null) }
     val sheetPresence = remember { SheetPresence() }
-    // One Haze graph for the whole shell: each screen marks its scroll body as the
-    // source, and the header/dock sample it. The dock lives outside the source so it
-    // never blurs itself.
-    val hazeState = rememberHazeState()
+    // One recorded backdrop for the whole shell: each screen marks its scroll body as
+    // the source, and the header/dock draw it back blurred. The chrome lives outside
+    // the source node so it can never sample itself.
+    val backdrop = rememberBackdrop()
     // Blur the shell behind the player or any open sheet so their translucent
     // surfaces read as real glass rather than a flat scrim. Sheets render in their
     // own window, so the content frosts behind them while the sheet stays crisp.
@@ -155,7 +155,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
 
     CompositionLocalProvider(
         LocalSheetPresence provides sheetPresence,
-        LocalHazeState provides hazeState,
+        LocalBackdrop provides backdrop,
         LocalShellInsets provides ShellInsets(bottom = dockClearance),
     ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -310,41 +310,42 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                     )
                 }
             }
-            if (isTabRoute) {
-                AppDock(
-                    selectedRoute = selectedRoute,
-                    onSelect = { tab -> navController.navigateTab(tab.route) },
-                    nowPlaying = mini,
-                    miniProgress = playerVm.miniProgress,
-                    miniWaveform = playerVm.waveform,
-                    onPlayPause = playerVm::toggle,
-                    onNext = playerVm::next,
-                    onExpand = { playerOpen = true },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
-                        .navigationBarsPadding()
-                        .onGloballyPositioned { coords ->
-                            if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
-                        },
-                )
-            } else {
-                StandaloneMiniPlayer(
-                    nowPlaying = mini,
-                    miniProgress = playerVm.miniProgress,
-                    miniWaveform = playerVm.waveform,
-                    onExpand = { playerOpen = true },
-                    onPlayPause = playerVm::toggle,
-                    onNext = playerVm::next,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
-                        .navigationBarsPadding()
-                        .onGloballyPositioned { coords ->
-                            if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
-                        },
-                )
-            }
+        }
+
+        if (isTabRoute) {
+            AppDock(
+                selectedRoute = selectedRoute,
+                onSelect = { tab -> navController.navigateTab(tab.route) },
+                nowPlaying = mini,
+                miniProgress = playerVm.miniProgress,
+                miniWaveform = playerVm.waveform,
+                onPlayPause = playerVm::toggle,
+                onNext = playerVm::next,
+                onExpand = { playerOpen = true },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
+                    .navigationBarsPadding()
+                    .onGloballyPositioned { coords ->
+                        if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
+                    },
+            )
+        } else {
+            StandaloneMiniPlayer(
+                nowPlaying = mini,
+                miniProgress = playerVm.miniProgress,
+                miniWaveform = playerVm.waveform,
+                onExpand = { playerOpen = true },
+                onPlayPause = playerVm::toggle,
+                onNext = playerVm::next,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
+                    .navigationBarsPadding()
+                    .onGloballyPositioned { coords ->
+                        if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
+                    },
+            )
         }
 
         WaveSweep(

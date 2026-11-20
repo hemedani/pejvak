@@ -14,14 +14,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
-import dev.chrisbanes.haze.hazeSource
 import androidx.compose.ui.unit.Dp
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 
 /**
  * Wraps a screen with the floating [GlassHeader] and tells the body exactly how much
  * top padding the header occupies. The header is a sibling of the body — so it is
- * crisp and can sample the body with Haze — and the body scrolls behind it.
+ * crisp and samples the recorded body — and the body scrolls behind it.
  */
 @Composable
 fun ScreenFrame(
@@ -31,18 +30,18 @@ fun ScreenFrame(
 ) {
     val geo = LocalPejvakGeometry.current
     val density = LocalDensity.current
-    val haze = LocalHazeState.current
+    val backdrop = LocalBackdrop.current
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     var headerHeight by remember {
         mutableStateOf(statusTop + geo.header.minHeight + geo.header.margin * 2)
     }
     Box(modifier.fillMaxSize()) {
-        // The Haze source wraps the body; the shell's modal blur lives on an ancestor
-        // of this node, never on the source node itself.
+        // The recorded backdrop is the body; the header pane above samples it. The
+        // shell's modal blur lives on an ancestor of this node, never on it.
         Box(
             Modifier
                 .fillMaxSize()
-                .then(if (haze != null) Modifier.hazeSource(haze) else Modifier),
+                .backdropSource(backdrop),
         ) {
             content(headerHeight)
         }

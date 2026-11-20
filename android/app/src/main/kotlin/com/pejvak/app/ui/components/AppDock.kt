@@ -89,7 +89,6 @@ fun AppDock(
     FrostedSurface(
         modifier = modifier.fillMaxWidth(),
         shape = shape,
-        frostBlur = geo.frost.backdrop,
         softElevation = dockElevation(),
     ) {
         Column(Modifier.fillMaxWidth()) {
