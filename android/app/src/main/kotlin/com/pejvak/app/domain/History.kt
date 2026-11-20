@@ -153,6 +153,11 @@ fun historySearchFields(item: HistoryItem): List<SearchField> = buildList {
     item.contextTitle?.let { add(SearchField(LibraryField.Folder, it)) }
 }
 
+fun HistoryItem.playbackConditionsForDisplay(): PlaybackConditions {
+    val conditions = session.playbackConditions()
+    return if (conditions.contextTitle == null) conditions.copy(contextTitle = contextTitle) else conditions
+}
+
 fun historyMarkdown(entries: List<HistoryStretchEntry>, now: Long = System.currentTimeMillis()): String {
     val lines = mutableListOf("# Listening history")
     val days = groupByDay(entries, { it.stretch.startedAt }, now)
@@ -173,10 +178,13 @@ fun historyMarkdown(entries: List<HistoryStretchEntry>, now: Long = System.curre
                 StretchOutcome.Open -> ""
             }
             val tracks = if (stretch.trackCount > 1) " · ${describeStretchTracks(stretch)}" else ""
+            val context = playbackMarkdownContext(entry.start.playbackConditionsForDisplay())
+            val contextSuffix = if (context.isBlank()) "" else " — $context"
             lines.add(
                 "- **${describeStretchTitle(entry)}** — ${formatTimeRange(stretch.startedAt, stretch.endedAt)} · " +
                     "${formatDuration(stretch.listenedSec)} · ${formatSpeed(stretch.playbackSpeed)} · " +
-                    formatPositionRange(stretch.startPositionSec, stretch.endPositionSec) + tracks + outcome,
+                    formatPositionRange(stretch.startPositionSec, stretch.endPositionSec) + tracks + outcome +
+                    contextSuffix,
             )
         }
     }

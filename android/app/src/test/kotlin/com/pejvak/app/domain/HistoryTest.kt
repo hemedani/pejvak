@@ -3,6 +3,7 @@ package com.pejvak.app.domain
 import java.time.LocalDate
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,6 +34,19 @@ class HistoryTest {
         startPositionSec: Int = 0,
         endPositionSec: Int? = 60,
         seeked: Boolean = false,
+        contextType: ContextType? = null,
+        contextTitle: String? = null,
+        collectionSort: CollectionSort? = null,
+        collectionSortDirection: SortDirection? = null,
+        collectionIndex: Int? = null,
+        collectionSize: Int? = null,
+        ambientTone: String? = null,
+        ambientLevel: Int? = null,
+        volumePercent: Int? = null,
+        enhancerEnabled: Boolean? = null,
+        enhancerBoostDb: Double? = null,
+        enhancerBassDb: Double? = null,
+        enhancerTrebleDb: Double? = null,
     ) = Session(
         id = id,
         trackId = trackId,
@@ -48,6 +62,19 @@ class HistoryTest {
         updatedAt = startedAt,
         stretchId = stretchId,
         seeked = seeked,
+        contextType = contextType,
+        contextTitle = contextTitle,
+        collectionSort = collectionSort,
+        collectionSortDirection = collectionSortDirection,
+        collectionIndex = collectionIndex,
+        collectionSize = collectionSize,
+        ambientTone = ambientTone,
+        ambientLevel = ambientLevel,
+        volumePercent = volumePercent,
+        enhancerEnabled = enhancerEnabled,
+        enhancerBoostDb = enhancerBoostDb,
+        enhancerBassDb = enhancerBassDb,
+        enhancerTrebleDb = enhancerTrebleDb,
     )
 
     @Test
@@ -151,5 +178,91 @@ class HistoryTest {
     @Test
     fun `empty history still renders a valid document`() {
         assertEquals("# Listening history\n\n_No listens recorded yet._", historyMarkdown(emptyList()))
+    }
+
+    private fun richConditions() = PlaybackConditions(
+        contextTitle = "Lectures",
+        collectionSort = CollectionSort.Manual,
+        collectionSortDirection = SortDirection.Desc,
+        collectionIndex = 2,
+        collectionSize = 5,
+        ambientTone = "forest",
+        ambientLevel = 30,
+        volumePercent = 70,
+        enhancerEnabled = true,
+        enhancerBoostDb = 3.0,
+    )
+
+    @Test
+    fun `described context includes direction when asked`() {
+        assertEquals(
+            listOf("Manual · Descending · 3 of 5", "Forest, level 30", "Volume 70%", "Enhancer +3 dB"),
+            describePlaybackConditions(richConditions(), includeDirection = true),
+        )
+        assertEquals(
+            listOf("Manual, 3 of 5", "Forest, level 30", "Volume 70%", "Enhancer +3 dB"),
+            describePlaybackConditions(richConditions()),
+        )
+    }
+
+    @Test
+    fun `markdown context joins title and facts`() {
+        assertEquals(
+            "Lectures · Manual, 3 of 5 · Forest, level 30 · Volume 70% · Enhancer +3 dB",
+            playbackMarkdownContext(richConditions()),
+        )
+        assertEquals("Volume 100%", playbackMarkdownContext(PlaybackConditions()))
+    }
+
+    @Test
+    fun `history markdown appends the start item context`() {
+        val start = HistoryItem(
+            session(
+                "a",
+                stretchId = "s1",
+                startedAt = at("2026-03-09", 9),
+                contextType = ContextType.Playlist,
+                contextTitle = "Lectures",
+                collectionSort = CollectionSort.Manual,
+                collectionSortDirection = SortDirection.Desc,
+                collectionIndex = 2,
+                collectionSize = 5,
+                ambientTone = "forest",
+                ambientLevel = 30,
+                volumePercent = 70,
+                enhancerEnabled = true,
+                enhancerBoostDb = 3.0,
+            ),
+            track("a", "Intro"),
+            "Lectures",
+        )
+        val end = HistoryItem(
+            session(
+                "b",
+                stretchId = "s1",
+                startedAt = at("2026-03-09", 10),
+                contextType = ContextType.Playlist,
+                contextTitle = "Later",
+                collectionSort = CollectionSort.Name,
+                volumePercent = 40,
+            ),
+            track("b", "Chapter 1"),
+            "Later",
+        )
+        val markdown = historyMarkdown(groupHistoryIntoStretches(listOf(start, end)), at("2026-03-10"))
+        assertTrue(markdown.contains("Lectures · Manual, 3 of 5 · Forest, level 30 · Volume 70% · Enhancer +3 dB"))
+        assertFalse(markdown.contains("Later"))
+        assertFalse(markdown.contains("Volume 40%"))
+    }
+
+    @Test
+    fun `legacy history markdown falls back to live title and defaults`() {
+        val item = HistoryItem(
+            session("a", stretchId = "s1", startedAt = at("2026-03-09", 9)),
+            track("a", "Intro"),
+            "Lectures",
+        )
+        val markdown = historyMarkdown(groupHistoryIntoStretches(listOf(item)), at("2026-03-10"))
+        assertTrue(markdown.contains("Lectures · Volume 100%"))
     }
 }

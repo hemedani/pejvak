@@ -14,11 +14,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.pejvak.app.R
+import com.pejvak.app.domain.CollectionKind
+import com.pejvak.app.domain.CollectionSort
+import com.pejvak.app.domain.DEFAULT_AMBIENT_TONE
 import com.pejvak.app.domain.HistoryItem
+import com.pejvak.app.domain.collectionKind
+import com.pejvak.app.domain.describePlaybackConditions
 import com.pejvak.app.domain.describeSessionStatus
 import com.pejvak.app.domain.formatDuration
 import com.pejvak.app.domain.formatSpeed
 import com.pejvak.app.domain.formatTimeRange
+import com.pejvak.app.domain.playbackConditions
 import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.GlassCard
 import com.pejvak.app.ui.components.GlassSheet
@@ -71,6 +77,7 @@ fun SessionDetailSheet(
                     }
                 }
             }
+            PlaybackContextCard(item)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -90,6 +97,51 @@ fun SessionDetailSheet(
                     contentDescription = stringResource(R.string.action_delete),
                     onClick = onDelete,
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaybackContextCard(item: HistoryItem) {
+    val session = item.session
+    val conditions = session.playbackConditions()
+    val described = describePlaybackConditions(conditions, includeDirection = true).iterator()
+    val kind = item.collectionKind()
+    val title = session.contextTitle?.takeIf { it.isNotBlank() } ?: item.contextTitle
+    val tone = conditions.ambientTone.trim()
+    val hasAmbience = (tone.isNotEmpty() && !tone.equals(DEFAULT_AMBIENT_TONE, ignoreCase = true)) ||
+        conditions.ambientLevel > 0
+    val hasEnhancer = conditions.enhancerEnabled ||
+        conditions.enhancerBoostDb != 0.0 ||
+        conditions.enhancerBassDb != 0.0 ||
+        conditions.enhancerTrebleDb != 0.0
+    GlassCard(Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(LocalPejvakGeometry.current.spacing.sm)) {
+            Fact(
+                stringResource(R.string.history_fact_collection_kind),
+                stringResource(
+                    if (kind == CollectionKind.Collection) {
+                        R.string.history_collection_kind_collection
+                    } else {
+                        R.string.history_collection_kind_standalone
+                    },
+                ),
+            )
+            if ((session.contextTitle != null || kind == CollectionKind.Collection) && title != null) {
+                Fact(stringResource(R.string.history_fact_collection_title), title)
+            }
+            if (conditions.collectionSort != CollectionSort.Unknown && described.hasNext()) {
+                Fact(stringResource(R.string.history_fact_order), described.next())
+            }
+            if (hasAmbience && described.hasNext()) {
+                Fact(stringResource(R.string.history_fact_ambience), described.next())
+            }
+            if (described.hasNext()) {
+                Fact(stringResource(R.string.history_fact_volume), described.next())
+            }
+            if (hasEnhancer && described.hasNext()) {
+                Fact(stringResource(R.string.history_fact_enhancer), described.next())
             }
         }
     }

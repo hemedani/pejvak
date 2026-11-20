@@ -111,10 +111,19 @@ fun HistoryItem.collectionKind(): CollectionKind =
     if (session.contextType == null) CollectionKind.Standalone else CollectionKind.Collection
 
 /** The facts a history detail card shows, in order. Empty pieces are omitted. */
-fun describePlaybackConditions(conditions: PlaybackConditions): List<String> = buildList {
+fun describePlaybackConditions(
+    conditions: PlaybackConditions,
+    includeDirection: Boolean = false,
+): List<String> = buildList {
     if (conditions.collectionSort != CollectionSort.Unknown) {
         val position = formatContextPosition(conditions.collectionIndex, conditions.collectionSize)
-        add(listOfNotNull(conditions.collectionSort.label, position.ifBlank { null }).joinToString(", "))
+        add(
+            listOfNotNull(
+                conditions.collectionSort.label,
+                if (includeDirection) conditions.collectionSortDirection.label else null,
+                position.ifBlank { null },
+            ).joinToString(if (includeDirection) " \u00b7 " else ", "),
+        )
     }
     ambienceDescription(conditions.ambientTone, conditions.ambientLevel)?.let { add(it) }
     add("Volume ${conditions.volumePercent}%")

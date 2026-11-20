@@ -368,6 +368,14 @@
     <string name="history_fact_speed">Speed</string>
     <string name="history_fact_status">Status</string>
     <string name="history_fact_device">Device</string>
+    <string name="history_fact_collection_kind">Collection type</string>
+    <string name="history_fact_collection_title">Collection</string>
+    <string name="history_fact_order">Order</string>
+    <string name="history_fact_ambience">Ambience</string>
+    <string name="history_fact_volume">Volume</string>
+    <string name="history_fact_enhancer">Enhancer</string>
+    <string name="history_collection_kind_collection">Collection</string>
+    <string name="history_collection_kind_standalone">Standalone</string>
     <string name="history_stat_total">Total listened</string>
     <string name="history_stat_sessions">Sessions</string>
     <string name="history_stat_tracks">Tracks</string>
