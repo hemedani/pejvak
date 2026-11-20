@@ -18,13 +18,16 @@ import com.pejvak.app.domain.FolderPlayableTrack
 import com.pejvak.app.domain.FolderTrackProgress
 import com.pejvak.app.domain.FolderTrackState
 import com.pejvak.app.domain.Playlist
+import com.pejvak.app.domain.SortDirection
 import com.pejvak.app.domain.Track
 import com.pejvak.app.domain.buildFolderPlan
 import com.pejvak.app.domain.describeFolderTrackStatus
 import com.pejvak.app.domain.folderKeyFromRouteSegment
 import com.pejvak.app.domain.folderNameFromKey
 import com.pejvak.app.domain.folderTrackProgress
+import com.pejvak.app.domain.orderCollectionRows
 import com.pejvak.app.domain.toFolderPlayable
+import com.pejvak.app.playback.CollectionPlaybackLauncher
 import com.pejvak.app.playback.PlaybackEngine
 import com.pejvak.app.playback.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -50,6 +53,8 @@ data class FolderDetailUiState(
     val rows: List<FolderTrackRow> = emptyList(),
     val plan: FolderPlayPlan? = null,
     val mode: FolderPlayMode = FolderPlayMode.Resume,
+    val sort: CollectionSort = CollectionSort.Folder,
+    val direction: SortDirection = SortDirection.Asc,
     val stats: ContextStats = ContextStats(),
     val runs: List<ContextPlay> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
@@ -62,6 +67,7 @@ class FolderDetailViewModel @Inject constructor(
     private val playlists: PlaylistRepository,
     private val runs: ContextPlayRepository,
     private val engine: PlaybackEngine,
+    private val launcher: CollectionPlaybackLauncher,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val folderKey = folderKeyFromRouteSegment(savedStateHandle["key"]) ?: ""
@@ -74,27 +80,43 @@ class FolderDetailViewModel @Inject constructor(
         load()
     }
 
-    fun setMode(mode: FolderPlayMode) {
-        _state.value = _state.value.copy(mode = mode, plan = planFor(tracks, progress, mode))
+    fun setMode(mode: FolderPlayMode) = reorder(mode = mode)
+
+    fun setSort(sort: CollectionSort, direction: SortDirection) =
+        reorder(sort = sort, direction = direction)
+
+    /** The list reorders with every sort/mode change, from the same plan the queue uses. */
+    private fun reorder(
+        sort: CollectionSort = _state.value.sort,
+        direction: SortDirection = _state.value.direction,
+        mode: FolderPlayMode = _state.value.mode,
+    ) {
+        val plan = planFor(tracks, progress, mode, sort, direction)
+        _state.value = _state.value.copy(
+            sort = sort,
+            direction = direction,
+            mode = mode,
+            plan = plan,
+            rows = orderCollectionRows(_state.value.rows, plan.queueIds) { it.track.id },
+        )
     }
 
     fun play(index: Int? = null) {
         val plan = _state.value.plan ?: return
         val start = index ?: plan.startIndex
-        val entry = tracks.firstOrNull { it.id == plan.queueIds.getOrNull(start) } ?: return
+        val startId = plan.queueIds.getOrNull(start) ?: return
+        val startPosition = if (index == null) plan.startPositionSec else 0
         viewModelScope.launch {
             PlaybackService.start(context)
-            engine.loadAndPlay(
-                entry,
-                if (index == null) plan.startPositionSec else 0,
-                com.pejvak.app.playback.PlaybackContext(
-                    ContextType.Folder,
-                    folderKey,
-                    _state.value.name,
-                    if (_state.value.mode == FolderPlayMode.Shuffle) CollectionSort.Shuffle else CollectionSort.Folder,
-                ),
-                plan.queueIds,
-                start,
+            launcher.playFolder(
+                folderKey = folderKey,
+                folderName = _state.value.name,
+                mode = _state.value.mode,
+                sort = _state.value.sort,
+                direction = _state.value.direction,
+                startTrackId = startId,
+                startPositionSec = startPosition,
+                plan = plan,
             )
         }
     }
@@ -154,6 +176,7 @@ class FolderDetailViewModel @Inject constructor(
                     playCount = plays[track.id] ?: 0,
                 )
             }
+            val plan = planFor(tracks, progress, FolderPlayMode.Resume)
             _state.value = FolderDetailUiState(
                 loading = false,
                 folderKey = folderKey,
@@ -162,8 +185,8 @@ class FolderDetailViewModel @Inject constructor(
                 // already carries the name the user saw in the picker.
                 name = tracks.firstNotNullOfOrNull { it.folderName?.takeIf(String::isNotBlank) }
                     ?: folderNameFromKey(folderKey),
-                rows = rows,
-                plan = planFor(tracks, progress, FolderPlayMode.Resume),
+                rows = orderCollectionRows(rows, plan.queueIds) { it.track.id },
+                plan = plan,
                 stats = runs.statsFor(ContextType.Folder, folderKey),
                 runs = runs.getByKey(ContextType.Folder, folderKey),
                 playlists = playlists.getAll(),
@@ -175,9 +198,11 @@ class FolderDetailViewModel @Inject constructor(
         tracks: List<Track>,
         progress: Map<String, FolderTrackProgress>,
         mode: FolderPlayMode,
+        sort: CollectionSort = _state.value.sort,
+        direction: SortDirection = _state.value.direction,
     ): FolderPlayPlan = buildFolderPlan(
         tracks.map { it.toFolderPlayable() },
         progress,
-        FolderPlayOptions(mode),
+        FolderPlayOptions(mode, sort, direction),
     )
 }

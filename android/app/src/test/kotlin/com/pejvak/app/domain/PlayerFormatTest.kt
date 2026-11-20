@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import com.pejvak.app.ui.components.sortDirectionArrow
 import org.junit.Test
 
 class PlayerFormatTest {
@@ -33,6 +34,13 @@ class PlayerFormatTest {
         assertEquals("59 min", formatListened(3599))
         assertEquals("1 h 0 min", formatListened(3600))
         assertEquals("2 h 5 min", formatListened(7500))
+    }
+
+    @Test
+    fun `sort chip arrow follows direction and disappears for shuffle`() {
+        assertEquals(" \u2191", sortDirectionArrow(CollectionSort.Name, SortDirection.Asc))
+        assertEquals(" \u2193", sortDirectionArrow(CollectionSort.Folder, SortDirection.Desc))
+        assertEquals("", sortDirectionArrow(CollectionSort.Shuffle, SortDirection.Desc))
     }
 
     @Test

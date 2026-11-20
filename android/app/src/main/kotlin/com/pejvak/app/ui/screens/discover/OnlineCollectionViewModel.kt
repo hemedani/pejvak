@@ -11,12 +11,13 @@ import com.pejvak.app.data.repository.LibraryRepository
 import com.pejvak.app.data.repository.OnlineCatalogService
 import com.pejvak.app.data.repository.OnlineCollectionRepository
 import com.pejvak.app.domain.CollectionSort
+import com.pejvak.app.domain.SortDirection
 import com.pejvak.app.domain.OnlineCollection
 import com.pejvak.app.domain.Track
 import com.pejvak.app.domain.online.OnlineSourceException
+import com.pejvak.app.domain.orderCollectionTracks
 import com.pejvak.app.domain.online.parseCollectionKey
-import com.pejvak.app.playback.PlaybackContext
-import com.pejvak.app.playback.PlaybackEngine
+import com.pejvak.app.playback.CollectionPlaybackLauncher
 import com.pejvak.app.playback.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -26,7 +27,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import com.pejvak.app.domain.ContextType
 
 data class OnlineTrackRow(
     val track: Track,
@@ -45,6 +45,8 @@ data class OnlineCollectionUiState(
     val trackCount: Int = 0,
     val saved: OnlineCollection? = null,
     val tracks: List<OnlineTrackRow> = emptyList(),
+    val sort: CollectionSort = CollectionSort.Source,
+    val direction: SortDirection = SortDirection.Asc,
     val loading: Boolean = true,
     val refreshing: Boolean = false,
     val offline: Boolean = false,
@@ -64,7 +66,7 @@ class OnlineCollectionViewModel @Inject constructor(
     private val catalog: OnlineCatalogService,
     private val collections: OnlineCollectionRepository,
     private val library: LibraryRepository,
-    private val engine: PlaybackEngine,
+    private val launcher: CollectionPlaybackLauncher,
     private val downloads: DownloadService,
 ) : ViewModel() {
     private val key: String = savedStateHandle["key"] ?: ""
@@ -144,7 +146,8 @@ class OnlineCollectionViewModel @Inject constructor(
                     pageUrl = loaded.info.pageUrl,
                     languageCode = loaded.info.languageCode,
                     trackCount = loaded.tracks.size,
-                    tracks = materialised.map { OnlineTrackRow(it, 0, 0.0) },
+                    tracks = orderedRows(materialised, _state.value.sort, _state.value.direction)
+                        .map { OnlineTrackRow(it, 0, 0.0) },
                     loading = false,
                     refreshing = false,
                     offline = false,
@@ -162,7 +165,12 @@ class OnlineCollectionViewModel @Inject constructor(
                     refreshing = false,
                     offline = materialised.isEmpty(),
                     stale = materialised.isNotEmpty(),
-                    tracks = if (materialised.isEmpty()) _state.value.tracks else materialised.map { OnlineTrackRow(it, 0, 0.0) },
+                    tracks = if (materialised.isEmpty()) {
+                        _state.value.tracks
+                    } else {
+                        orderedRows(materialised, _state.value.sort, _state.value.direction)
+                            .map { OnlineTrackRow(it, 0, 0.0) }
+                    },
                     error = error.message,
                     title = saved?.title ?: _state.value.title,
                     subtitle = saved?.subtitle ?: _state.value.subtitle,
@@ -173,17 +181,47 @@ class OnlineCollectionViewModel @Inject constructor(
         }
     }
 
+    fun setSort(sort: CollectionSort, direction: SortDirection) {
+        _state.value = _state.value.copy(
+            sort = sort,
+            direction = direction,
+            tracks = reorderRows(_state.value.tracks, sort, direction),
+        )
+    }
+
     fun play(index: Int = 0, positionSec: Int = 0) {
-        val tracks = _state.value.tracks.map { it.track }
-        val entry = tracks.getOrNull(index) ?: return
-        val playbackContext = PlaybackContext(ContextType.Online, key, _state.value.title, CollectionSort.Source)
+        val rows = _state.value.tracks
+        val entry = rows.getOrNull(index) ?: return
         viewModelScope.launch {
-            _state.value = _state.value.copy(playingTrackId = entry.id)
+            _state.value = _state.value.copy(playingTrackId = entry.track.id)
             // The engine is useless without the media service that owns ExoPlayer.
             // Library/history start it; this screen must too.
             PlaybackService.start(context)
-            engine.loadAndPlay(entry, positionSec, playbackContext, tracks.map { it.id }, index)
+            launcher.playOnline(
+                collectionKey = key,
+                title = _state.value.title,
+                startTrackId = entry.track.id,
+                startPositionSec = positionSec,
+                sort = _state.value.sort,
+                direction = _state.value.direction,
+                orderedTracks = rows.map { it.track },
+            )
         }
+    }
+
+    private fun orderedRows(
+        tracks: List<Track>,
+        sort: CollectionSort,
+        direction: SortDirection,
+    ): List<Track> = orderCollectionTracks(tracks, sort, direction)
+
+    private fun reorderRows(
+        rows: List<OnlineTrackRow>,
+        sort: CollectionSort,
+        direction: SortDirection,
+    ): List<OnlineTrackRow> {
+        val byId = rows.associateBy { it.track.id }
+        return orderedRows(rows.map { it.track }, sort, direction).mapNotNull { byId[it.id] }
     }
 
     fun playTrack(trackId: String) {
