@@ -585,10 +585,16 @@ token: {{token}}
       "durationListenedSec": 1,
       "contextTitle": 1,
       "collectionSort": 1,
+      "collectionSortDirection": 1,
       "collectionIndex": 1,
-      "volumePercent": 1,
+      "collectionSize": 1,
       "ambientTone": 1,
+      "ambientLevel": 1,
+      "volumePercent": 1,
       "enhancerEnabled": 1,
+      "enhancerBoostDb": 1,
+      "enhancerBassDb": 1,
+      "enhancerTrebleDb": 1,
       "track": { "_id": 1, "title": 1 }
     }
   }
@@ -600,10 +606,16 @@ jsonpath "$.success" == true
 jsonpath "$.body" count >= 1
 jsonpath "$.body[0].contextTitle" == "Test Book"
 jsonpath "$.body[0].collectionSort" == "manual"
+jsonpath "$.body[0].collectionSortDirection" == "asc"
 jsonpath "$.body[0].collectionIndex" == 2
-jsonpath "$.body[0].volumePercent" == 70
+jsonpath "$.body[0].collectionSize" == 5
 jsonpath "$.body[0].ambientTone" == "forest"
+jsonpath "$.body[0].ambientLevel" == 30
+jsonpath "$.body[0].volumePercent" == 70
 jsonpath "$.body[0].enhancerEnabled" == true
+jsonpath "$.body[0].enhancerBoostDb" == 3
+jsonpath "$.body[0].enhancerBassDb" == 2
+jsonpath "$.body[0].enhancerTrebleDb" == 1
 
 [Captures]
 sessionClientId: jsonpath "$.body[0].clientId"
@@ -660,6 +672,87 @@ HTTP 200
 jsonpath "$.success" == true
 jsonpath "$.body.totalPlayCount" == 1
 jsonpath "$.body.totalListenTimeSec" == 300
+
+
+# A session synced without the snapshot fields (an older client) still reads
+# back from history; the snapshot is simply absent, not an ingest failure.
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "track",
+  "act": "syncLocalData",
+  "details": {
+    "set": {
+      "sessions": [
+        {
+          "clientId": "legacy-session-{{unique}}",
+          "contentHash": "{{contentHash}}",
+          "startedAt": 1756000000000,
+          "endedAt": 1756000300000,
+          "startPositionSec": 0,
+          "endPositionSec": 300,
+          "durationListenedSec": 300,
+          "playbackSpeed": 1,
+          "completed": false,
+          "interrupted": false
+        }
+      ],
+      "annotations": []
+    },
+    "get": { "syncedSessions": 1, "syncedAnnotations": 1, "annotations": [] }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.syncedSessions" == 1
+
+
+POST {{serverAddress}}/lesan
+token: {{token}}
+{
+  "model": "playbackSession",
+  "act": "getMyListeningHistory",
+  "details": {
+    "set": { "page": 1, "limit": 10 },
+    "get": {
+      "_id": 1,
+      "clientId": 1,
+      "startedAt": 1,
+      "contextTitle": 1,
+      "collectionSort": 1,
+      "collectionSortDirection": 1,
+      "collectionIndex": 1,
+      "collectionSize": 1,
+      "ambientTone": 1,
+      "ambientLevel": 1,
+      "volumePercent": 1,
+      "enhancerEnabled": 1,
+      "enhancerBoostDb": 1,
+      "enhancerBassDb": 1,
+      "enhancerTrebleDb": 1
+    }
+  }
+}
+
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body" count >= 2
+jsonpath "$.body[1].clientId" == "legacy-session-{{unique}}"
+jsonpath "$.body[1].contextTitle" not exists
+jsonpath "$.body[1].collectionSort" not exists
+jsonpath "$.body[1].collectionSortDirection" not exists
+jsonpath "$.body[1].collectionIndex" not exists
+jsonpath "$.body[1].collectionSize" not exists
+jsonpath "$.body[1].ambientTone" not exists
+jsonpath "$.body[1].ambientLevel" not exists
+jsonpath "$.body[1].volumePercent" not exists
+jsonpath "$.body[1].enhancerEnabled" not exists
+jsonpath "$.body[1].enhancerBoostDb" not exists
+jsonpath "$.body[1].enhancerBassDb" not exists
+jsonpath "$.body[1].enhancerTrebleDb" not exists
 
 
 POST {{serverAddress}}/lesan
