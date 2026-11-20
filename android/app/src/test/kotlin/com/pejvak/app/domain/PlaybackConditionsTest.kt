@@ -134,6 +134,20 @@ class PlaybackConditionsTest {
     }
 
     @Test
+    fun `inheritance normalises level zero and clamps values`() {
+        val inherited = PlaybackConditions(
+            ambientTone = "room",
+            ambientLevel = 0,
+            volumePercent = 140,
+            enhancerBassDb = Double.NaN,
+        ).forInheritance()
+        assertEquals("none", inherited.ambientTone)
+        assertEquals(0, inherited.ambientLevel)
+        assertEquals(100, inherited.volumePercent)
+        assertEquals(0.0, inherited.enhancerBassDb, 0.0)
+    }
+
+    @Test
     fun `describe builds ordered facts and omits empty ones`() {
         val conditions = PlaybackConditions(
             collectionSort = CollectionSort.Manual,

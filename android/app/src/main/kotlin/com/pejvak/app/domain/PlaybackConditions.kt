@@ -106,6 +106,22 @@ fun normalizePlaybackConditions(
 
 private fun Double?.finiteOrZero(): Double = if (this != null && isFinite()) this else 0.0
 
+/** A stored snapshot made safe to apply as the next item's starting conditions. */
+fun PlaybackConditions.forInheritance(): PlaybackConditions = normalizePlaybackConditions(
+    contextTitle = contextTitle,
+    collectionSort = collectionSort,
+    collectionSortDirection = collectionSortDirection,
+    collectionIndex = collectionIndex,
+    collectionSize = collectionSize,
+    ambientTone = ambientTone,
+    ambientLevel = ambientLevel,
+    volumePercent = volumePercent,
+    enhancerEnabled = enhancerEnabled,
+    enhancerBoostDb = enhancerBoostDb,
+    enhancerBassDb = enhancerBassDb,
+    enhancerTrebleDb = enhancerTrebleDb,
+)
+
 /** Read a session's stored snapshot with every legacy gap filled in. */
 fun Session.playbackConditions(): PlaybackConditions = normalizePlaybackConditions(
     contextTitle = contextTitle,

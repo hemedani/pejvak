@@ -14,6 +14,7 @@ import com.pejvak.app.domain.SessionTrackerState
 import com.pejvak.app.domain.Track
 import com.pejvak.app.domain.applyProgress
 import com.pejvak.app.domain.createSessionTracker
+import com.pejvak.app.domain.orderCollectionTracks
 import com.pejvak.app.domain.resolvePlaybackPhase
 import com.pejvak.app.domain.PlaybackStatus
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -55,7 +56,7 @@ class PlaybackEngine(
 
     private class ActiveRun(
         val id: String,
-        val context: PlaybackContext,
+        var context: PlaybackContext,
         val trackCount: Int,
         var listenedSec: Int = 0,
         var finishedCount: Int = 0,
@@ -374,6 +375,48 @@ class PlaybackEngine(
         command.setSpeed(speed)
         patch { it.copy(playbackSpeed = speed) }
     }
+    /** Reorders the live collection without interrupting play; patches the active session. */
+    suspend fun setCollectionSort(sort: CollectionSort, direction: SortDirection) = mutex.withLock {
+        val s = _state.value
+        val context = s.context ?: return@withLock
+        val currentId = s.trackId ?: return@withLock
+        val tracks = s.queue.mapNotNull { store.getTrack(it) }
+        if (tracks.size != s.queue.size) return@withLock
+        val orderedIds = orderCollectionTracks(tracks, sort, direction).map { it.id }
+        if (orderedIds == s.queue && context.sort == sort && context.direction == direction) return@withLock
+        val newContext = context.copy(sort = sort, direction = direction)
+        activeRun?.context = newContext
+        patch { it.copy(queue = orderedIds, queueIndex = orderedIds.indexOf(currentId).coerceAtLeast(0), context = newContext) }
+        val sessionId = active?.sessionId ?: return@withLock
+        store.updateSessionCollectionOrder(sessionId, sort, direction, orderedIds.indexOf(currentId).coerceAtLeast(0), orderedIds.size, clock())
+    }
+
+    /** Copies the live audio-treatment settings onto the playing session, if changed. */
+    suspend fun refreshActiveConditions() = mutex.withLock {
+        val sessionId = active?.sessionId ?: return@withLock
+        val conditions = runCatching { conditionsProvider?.invoke() }.getOrNull() ?: return@withLock
+        val current = store.getSession(sessionId) ?: return@withLock
+        if (current.ambientTone == conditions.ambientTone &&
+            current.ambientLevel == conditions.ambientLevel &&
+            current.volumePercent == conditions.volumePercent &&
+            current.enhancerEnabled == conditions.enhancerEnabled &&
+            current.enhancerBoostDb == conditions.enhancerBoostDb &&
+            current.enhancerBassDb == conditions.enhancerBassDb &&
+            current.enhancerTrebleDb == conditions.enhancerTrebleDb
+        ) return@withLock
+        store.updateSessionAudioConditions(
+            sessionId,
+            conditions.ambientTone,
+            conditions.ambientLevel,
+            conditions.volumePercent,
+            conditions.enhancerEnabled,
+            conditions.enhancerBoostDb,
+            conditions.enhancerBassDb,
+            conditions.enhancerTrebleDb,
+            clock(),
+        )
+    }
+
     suspend fun setVolume(percent: Int) = mutex.withLock {
         command.setVolume(volumeAmplitude(percent))
         patch { it.copy(volume = percent) }

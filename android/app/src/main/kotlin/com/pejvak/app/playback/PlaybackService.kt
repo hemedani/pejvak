@@ -22,6 +22,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -109,6 +112,14 @@ class PlaybackService : MediaSessionService() {
                 enhancerBassDb = effectsState.enhancer.bassDb,
                 enhancerTrebleDb = effectsState.enhancer.trebleDb,
             )
+        }
+        // A changed treatment is patched onto the session already playing. The
+        // settle delay keeps a drag from producing a write per pixel.
+        engineScope.launch {
+            effects.state.drop(1).collectLatest {
+                delay(600)
+                engine.refreshActiveConditions()
+            }
         }
         effects.syncPlayback(false)
         engineScope.launch { engine.recoverOrphanedSessions() }
