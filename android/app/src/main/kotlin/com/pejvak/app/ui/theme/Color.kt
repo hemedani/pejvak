@@ -24,20 +24,16 @@ val GlassFillFallbackLight = Color(0x4DFFFFFF)// white 30% (API 29-30)
 val GlassFillFallbackDark = Color(0xB8141C26) // dark 72% (API 29-30)
 
 // --- Frost material (shell chrome only: header, dock, mini-player) ---
-// The pane must REVEAL the blurred backdrop as a coloured wash, not a grey film: the
-// base fills the sample's transparent pixels, the scrim is a TEAL smoke that gives the
-// glass its "lit from within" cast (the reference reads teal/cyan, never neutral), and
-// the sheen is a pale-cyan milk. The stack leaves ~29 % of the blurred sample visible —
-// content dissolves to soft washes (owner spec) while the field's colour still seasons
-// the pane. Values are pinned by ContrastContractTest at the matching bloom alpha
-// (dark 0.38 / light 0.20); percentages are of the pane's own alpha, so the
-// alpha-scaling rule applies when composed.
-val FrostBaseLight = Color(0x522E4C5A)        // teal-slate 32%
-val FrostBaseDark = Color(0x61071A20)         // deep teal 38%
-val FrostScrimLight = Color(0x5227525E)       // teal-slate 32%
-val FrostScrimDark = Color(0x6B0E4A52)        // teal 42%
-val FrostSheenLight = Color(0x2EFFFFFF)       // white 18%
-val FrostSheenDark = Color(0x2EDCF7FF)        // pale cyan 18%
+// The pane must REVEAL the blurred backdrop as a luminous crystalline wash, not an
+// opaque grey/teal slab. Keeping base + scrim + sheen around ~48-49% combined opacity
+// leaves ~51-52% of the blurred canvas and scrolling artwork glowing through, while
+// still passing ContrastContractTest against the brightest aurora bloom.
+val FrostBaseLight = Color(0x38284452)        // deep teal-slate 22%
+val FrostBaseDark = Color(0x3D08121A)         // deep slate 24%
+val FrostScrimLight = Color(0x381E4752)       // cool teal 22%
+val FrostScrimDark = Color(0x3D0B2830)        // crystalline teal 24%
+val FrostSheenLight = Color(0x24E6F9FF)       // ice highlight 14%
+val FrostSheenDark = Color(0x1FDFF6FF)        // pale cyan ice 12%
 val FrostFallbackLight = Color(0xD133505F)    // canvasBase 82% (API 29-30)
 val FrostFallbackDark = Color(0xDB06090F)     // #06090F 86% (API 29-30)
 

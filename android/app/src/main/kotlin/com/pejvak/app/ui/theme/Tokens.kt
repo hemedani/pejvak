@@ -72,15 +72,14 @@ data class DockGeometry(
 @Immutable
 data class FrostGeometry(
     /**
-     * Chrome-pane blur. 64 dp fully dissolves a scrolling row into a soft wash (owner
-     * spec: "content barely visible, just soft washes of colour") — 48 dp still left
-     * recognisable edges behind the dock.
+     * Chrome-pane blur. 22 dp at 0.5x sample scale dissolves scrolling rows into
+     * luminous colour washes without hitting Skia/HWUI kernel limits or muddying
+     * the glass into a flat tint.
      */
-    val blur: Dp = 64.dp,
+    val blur: Dp = 22.dp,
     /**
      * The full-screen modal-backdrop blur (shell content hidden behind a sheet or the
-     * player). Chrome panes — header, dock, mini-player — use [blur] instead: a pane
-     * samples the water at full strength, a backdrop only needs to lose its detail.
+     * player). Chrome panes — header, dock, mini-player — use [blur] instead.
      */
     val backdrop: Dp = 18.dp,
     val noise: Float = 0.12f,
