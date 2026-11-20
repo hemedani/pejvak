@@ -26,6 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -152,6 +155,8 @@ fun HeroArtwork(
     title: String,
     artworkUrl: String?,
     modifier: Modifier = Modifier,
+    tileAlpha: Float = 1f,
+    onTilePositioned: ((LayoutCoordinates) -> Unit)? = null,
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
@@ -170,6 +175,9 @@ fun HeroArtwork(
             artworkUrl = artworkUrl,
             size = size - 10.dp,
             radius = geo.radius.lg - 4.dp,
+            modifier = Modifier
+                .then(if (tileAlpha < 1f) Modifier.graphicsLayer { alpha = tileAlpha } else Modifier)
+                .then(if (onTilePositioned != null) Modifier.onGloballyPositioned(onTilePositioned) else Modifier),
         )
     }
 }

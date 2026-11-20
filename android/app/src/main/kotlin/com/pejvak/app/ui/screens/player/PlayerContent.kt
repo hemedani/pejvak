@@ -1,6 +1,9 @@
 package com.pejvak.app.ui.screens.player
 
 import androidx.compose.animation.core.animate
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -31,6 +34,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Velocity
@@ -98,10 +103,15 @@ fun PlayerContent(
     onOpenAi: () -> Unit,
     onOpenContext: () -> Unit,
     modifier: Modifier = Modifier,
-    /** Downward pull the body could not scroll any further, in px. */
+    /** Downward (or pull-back upward) delta the body could not scroll, in px. */
     onPullDown: (Float) -> Unit = {},
-    /** The pull gesture ended — the caller decides whether it meant anything. */
-    onPullEnd: () -> Unit = {},
+    /** The pull gesture ended with vertical release velocity in px/s (`0f` on slow lift). */
+    onPullEnd: (Float) -> Unit = {},
+    /** True while the sheet has been pulled partway down from its resting height. */
+    isPulled: () -> Boolean = { false },
+    heroTileAlpha: Float = 1f,
+    onPlayerRootPositioned: ((LayoutCoordinates) -> Unit)? = null,
+    onHeroTilePositioned: ((LayoutCoordinates) -> Unit)? = null,
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
@@ -125,17 +135,23 @@ fun PlayerContent(
     // the *initial* pass — before any child can consume it — and never consuming
     // anything ourselves gives the release a reliable home without disturbing the
     // scroll, the scrubber or the buttons.
-    val endPull by rememberUpdatedState(onPullEnd)
+    val pullDown by rememberUpdatedState(onPullDown)
+    val pullEnd by rememberUpdatedState(onPullEnd)
+    val pulled by rememberUpdatedState(isPulled)
+    val headerDragState = rememberDraggableState { dy ->
+        if (dy > 0f || pulled()) pullDown(dy)
+    }
 
     Column(
         modifier
             .fillMaxSize()
+            .then(if (onPlayerRootPositioned != null) Modifier.onGloballyPositioned(onPlayerRootPositioned) else Modifier)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
                         if (event.changes.isNotEmpty() && event.changes.none { it.pressed }) {
-                            endPull()
+                            if (pulled()) pullEnd(0f)
                         }
                     }
                 }
@@ -144,6 +160,13 @@ fun PlayerContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .draggable(
+                    orientation = Orientation.Vertical,
+                    state = headerDragState,
+                    onDragStopped = { velocity ->
+                        if (pulled()) pullEnd(velocity)
+                    },
+                )
                 .padding(horizontal = geo.spacing.lg, vertical = geo.spacing.sm),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -177,10 +200,16 @@ fun PlayerContent(
         // the sheet further down while it was already settling — the "stops half
         // way" symptom. Fling is reported as SideEffect, so it is ignored here.
         val bodyScroll = rememberScrollState()
-        val pullDown by rememberUpdatedState(onPullDown)
-        val pullEnd by rememberUpdatedState(onPullEnd)
         val pullConnection = remember(bodyScroll) {
             object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (source == NestedScrollSource.UserInput && available.y < 0f && pulled()) {
+                        pullDown(available.y)
+                        return Offset(0f, available.y)
+                    }
+                    return Offset.Zero
+                }
+
                 override fun onPostScroll(
                     consumed: Offset,
                     available: Offset,
@@ -195,12 +224,15 @@ fun PlayerContent(
                 }
 
                 override suspend fun onPreFling(available: Velocity): Velocity {
-                    pullEnd()
+                    if (pulled()) {
+                        pullEnd(available.y)
+                        return available
+                    }
                     return Velocity.Zero
                 }
 
                 override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                    pullEnd()
+                    if (pulled()) pullEnd(available.y)
                     return Velocity.Zero
                 }
             }
@@ -220,6 +252,8 @@ fun PlayerContent(
                     contentHash = state.contentHash,
                     title = state.title,
                     artworkUrl = state.artworkUrl,
+                    tileAlpha = heroTileAlpha,
+                    onTilePositioned = onHeroTilePositioned,
                     modifier = Modifier.scale(scale).align(Alignment.Center),
                 )
             }

@@ -220,6 +220,7 @@ fun MiniPlayerRow(
     onNext: () -> Unit,
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
+    tileAlpha: Float = 1f,
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
@@ -235,6 +236,7 @@ fun MiniPlayerRow(
             label = nowPlaying.title,
             artworkUrl = nowPlaying.artworkUrl,
             size = geo.tiles.md,
+            modifier = if (tileAlpha < 1f) Modifier.graphicsLayer { alpha = tileAlpha } else Modifier,
         )
         Spacer(Modifier.width(geo.spacing.md))
         Column(Modifier.weight(1f)) {

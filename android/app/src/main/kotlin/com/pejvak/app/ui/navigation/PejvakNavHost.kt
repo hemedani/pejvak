@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.StrokeCap
@@ -130,19 +133,23 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
     var aiSheet by remember { mutableStateOf(false) }
     var aiFeature by remember { mutableStateOf<AiFeature?>(null) }
     val sheetPresence = remember { SheetPresence() }
+    var playerExpandProgress by remember { mutableFloatStateOf(0f) }
+    var miniPlayerRect by remember { mutableStateOf<Rect?>(null) }
     // One recorded backdrop for the whole shell: each screen marks its scroll body as
     // the source, and the header/dock draw it back blurred. The chrome lives outside
     // the source node so it can never sample itself.
     val backdrop = rememberBackdrop()
     // Blur the shell behind the player or any open sheet so their translucent
-    // surfaces read as real glass rather than a flat scrim. Sheets render in their
-    // own window, so the content frosts behind them while the sheet stays crisp.
+    // surfaces read as real glass rather than a flat scrim. Synchronizing with
+    // `playerExpandProgress` unblurs the shell smoothly as the player shrinks
+    // back onto the mini-player.
     // Modifier.blur is a no-op before API 31; NowPlayingSheet keeps its fallback.
-    val backdropBlur by animateDpAsState(
-        targetValue = if (playerOpen || sheetPresence.count > 0) geo.frost.backdrop else 0.dp,
+    val sheetBackdropBlur by animateDpAsState(
+        targetValue = if (sheetPresence.count > 0) geo.frost.backdrop else 0.dp,
         animationSpec = tween(220),
-        label = "playerBackdropBlur",
+        label = "sheetBackdropBlur",
     )
+    val backdropBlur = maxOf(sheetBackdropBlur, geo.frost.backdrop * playerExpandProgress)
     LaunchedEffect(playerVm) {
         playerVm.openPlayer.collect { playerOpen = true }
     }
@@ -335,7 +342,12 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                             .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
                             .navigationBarsPadding()
                             .onGloballyPositioned { coords ->
-                                if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
+                                if (coords.isAttached && coords.size.height > 0) {
+                                    dockClearance = with(density) { coords.size.height.toDp() }
+                                    val b = coords.boundsInRoot()
+                                    val rowH = with(density) { geo.dock.playerHeight.toPx() }
+                                    miniPlayerRect = Rect(b.left, b.top, b.right, (b.top + rowH).coerceAtMost(b.bottom))
+                                }
                             },
                     )
                 } else {
@@ -351,7 +363,10 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                             .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
                             .navigationBarsPadding()
                             .onGloballyPositioned { coords ->
-                                if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
+                                if (coords.isAttached && coords.size.height > 0) {
+                                    dockClearance = with(density) { coords.size.height.toDp() }
+                                    miniPlayerRect = coords.boundsInRoot()
+                                }
                             },
                     )
                 }
@@ -377,6 +392,9 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                     }
                     navController.navigate(route)
                 },
+                targetRect = miniPlayerRect,
+                isStandaloneMini = !isTabRoute,
+                onExpandProgress = { playerExpandProgress = it },
             )
 
             if (aiSheet) {
