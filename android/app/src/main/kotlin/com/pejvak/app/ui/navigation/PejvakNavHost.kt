@@ -5,14 +5,16 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
@@ -22,7 +24,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.EditNote
@@ -41,13 +42,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.layout.boundsInRoot
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -60,20 +65,22 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.pejvak.app.BuildConfig
 import com.pejvak.app.R
+import com.pejvak.app.domain.AiFeature
+import com.pejvak.app.domain.ContextType
+import com.pejvak.app.domain.folderKeyToRouteSegment
 import com.pejvak.app.ui.components.AmbientCanvas
 import com.pejvak.app.ui.components.AppDock
 import com.pejvak.app.ui.components.LocalBackdrop
-import com.pejvak.app.ui.components.backdropSource
-import com.pejvak.app.ui.components.rememberBackdrop
-import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.LocalSheetPresence
-import com.pejvak.app.ui.components.ShellInsets
+import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.SheetPresence
+import com.pejvak.app.ui.components.ShellInsets
+import com.pejvak.app.ui.components.backdropSource
+import com.pejvak.app.ui.components.drawWaveWake
+import com.pejvak.app.ui.components.rememberBackdrop
+import com.pejvak.app.ui.components.waveOffsetAt
 import com.pejvak.app.ui.components.wavePath
-import com.pejvak.app.ui.theme.LocalPejvakTokens
-import com.pejvak.app.ui.theme.useMotionEnabled
 import com.pejvak.app.ui.screens.GalleryScreen
-import com.pejvak.app.domain.AiFeature
 import com.pejvak.app.ui.screens.ai.AiCatalogSheet
 import com.pejvak.app.ui.screens.ai.AiFeatureScreen
 import com.pejvak.app.ui.screens.ai.AiFeatureSheet
@@ -95,9 +102,10 @@ import com.pejvak.app.ui.screens.playlist.PlaylistDetailScreen
 import com.pejvak.app.ui.screens.settings.SettingsScreen
 import com.pejvak.app.ui.screens.smart.SmartPlaylistScreen
 import com.pejvak.app.ui.screens.track.TrackDetailScreen
-import com.pejvak.app.domain.folderKeyToRouteSegment
-import com.pejvak.app.domain.ContextType
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
+import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.RampCyan
+import com.pejvak.app.ui.theme.useMotionEnabled
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -167,12 +175,42 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
         LocalShellInsets provides ShellInsets(bottom = dockClearance),
     ) {
         Box(modifier = modifier.fillMaxSize()) {
-            // One swell per navigation. The route is the trigger, so pushing a detail
-            // screen, popping back and switching tabs all get the same water passing
-            // through instead of three different feels.
+            // One directional swell per navigation: lateral drift across dock tabs, buoyant
+            // rise when diving into a detail screen, and gentle descent when surfacing back.
+            var previousBackStackId by remember { mutableStateOf<String?>(null) }
+            var previousRoute by remember { mutableStateOf<String?>(null) }
             var sweep by remember { mutableIntStateOf(0) }
-            LaunchedEffect(currentDestination?.route) {
-                if (currentDestination != null) sweep++
+            var navKind by remember { mutableStateOf<NavWaveKind>(NavWaveKind.Push) }
+            LaunchedEffect(backStackEntry?.id) {
+                val entry = backStackEntry ?: return@LaunchedEffect
+                val toRoute = entry.destination.route
+                if (previousBackStackId == null) {
+                    previousBackStackId = entry.id
+                    previousRoute = toRoute
+                    return@LaunchedEffect
+                }
+                if (entry.id != previousBackStackId) {
+                    val fromRoute = previousRoute
+                    val fromTab = tabOrderIndex(fromRoute)
+                    val toTab = tabOrderIndex(toRoute)
+                    navKind = when {
+                        fromTab >= 0 && toTab >= 0 && fromTab != toTab ->
+                            NavWaveKind.TabDrift(if (toTab > fromTab) 1 else -1)
+
+                        fromTab >= 0 && toTab < 0 -> NavWaveKind.Push
+                        fromTab < 0 && toTab >= 0 -> NavWaveKind.Pop
+                        navController.previousBackStackEntry?.destination?.route == fromRoute -> NavWaveKind.Push
+                        else -> NavWaveKind.Pop
+                    }
+                    previousBackStackId = entry.id
+                    previousRoute = toRoute
+                    sweep++
+                }
+            }
+            val (canvasShiftX, canvasShiftY) = when (val k = navKind) {
+                is NavWaveKind.TabDrift -> (if (k.dir >= 0) -1f else 1f) to -0.25f
+                NavWaveKind.Push -> 0.25f to -1f
+                NavWaveKind.Pop -> -0.25f to 1f
             }
             val motion = useMotionEnabled()
             val modalOpen = backdropBlur > 0.dp
@@ -182,14 +220,43 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                     .fillMaxSize()
                     .then(if (modalOpen) Modifier.blur(backdropBlur) else Modifier),
             ) {
-                AmbientCanvas(Modifier.backdropSource(backdrop, zIndex = 0f))
+                AmbientCanvas(
+                    modifier = Modifier.backdropSource(backdrop, zIndex = 0f),
+                    navTrigger = sweep,
+                    navShiftX = canvasShiftX,
+                    navShiftY = canvasShiftY,
+                )
                 NavHost(
                     navController = navController,
                     startDestination = Tab.Library.route,
-                    enterTransition = { pageEnter(motion) },
-                    exitTransition = { pageExit(motion) },
-                    popEnterTransition = { pagePopEnter(motion) },
-                    popExitTransition = { pagePopExit(motion) },
+                    enterTransition = {
+                        oceanEnter(
+                            motion,
+                            initialState.destination.route,
+                            targetState.destination.route
+                        )
+                    },
+                    exitTransition = {
+                        oceanExit(
+                            motion,
+                            initialState.destination.route,
+                            targetState.destination.route
+                        )
+                    },
+                    popEnterTransition = {
+                        oceanPopEnter(
+                            motion,
+                            initialState.destination.route,
+                            targetState.destination.route
+                        )
+                    },
+                    popExitTransition = {
+                        oceanPopExit(
+                            motion,
+                            initialState.destination.route,
+                            targetState.destination.route
+                        )
+                    },
                     modifier = Modifier.fillMaxSize(),
                 ) {
                     composable(Tab.Library.route) {
@@ -373,6 +440,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
 
                 WaveSweep(
                     trigger = sweep,
+                    kind = navKind,
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -450,91 +518,258 @@ private fun NavHostController.navigateTab(route: String) {
     }
 }
 
+private sealed interface NavWaveKind {
+    data class TabDrift(val dir: Int) : NavWaveKind
+    data object Push : NavWaveKind
+    data object Pop : NavWaveKind
+}
+
+private fun tabOrderIndex(route: String?): Int = Tab.entries.indexOfFirst { it.route == route }
+
+/** Ocean-current easing: crisp gentle surge followed by a long silky glide to rest. */
+private val OceanSwellEasing = CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)
+
 /**
- * Page transitions in the app's own vocabulary: the outgoing page sinks and thins
- * out while the incoming one rises into place, so navigating reads as water moving
- * rather than as two rectangles swapping. Forward and back are mirror images, and
- * the scale is deliberately small — enough to suggest depth, never enough to make
- * text swim while it settles.
+ * Page transitions in Pejvak's ocean vocabulary:
+ * - Switching dock tabs glides laterally along the tab order with a subtle buoyant crest.
+ * - Pushing a detail route surfaces buoyantly into clarity while the parent recedes deeper.
+ * - Popping back mirrors the dive smoothly.
+ * Scale stays intentionally subtle so typography never swims while settling.
  */
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.pageEnter(motion: Boolean): EnterTransition =
-    if (!motion) {
-        EnterTransition.None
-    } else {
-        fadeIn(tween(260)) +
-                slideInVertically(tween(360, easing = FastOutSlowInEasing)) { it / 12 } +
-                scaleIn(tween(360, easing = FastOutSlowInEasing), initialScale = 0.975f)
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.oceanEnter(
+    motion: Boolean,
+    fromRoute: String?,
+    toRoute: String?,
+): EnterTransition {
+    if (!motion) return EnterTransition.None
+    val fromTab = tabOrderIndex(fromRoute)
+    val toTab = tabOrderIndex(toRoute)
+    if (fromTab >= 0 && toTab >= 0 && fromTab != toTab) {
+        val dir = if (toTab > fromTab) 1 else -1
+        return fadeIn(tween(240, easing = OceanSwellEasing)) +
+                slideInHorizontally(tween(380, easing = OceanSwellEasing)) { dir * it / 8 } +
+                slideInVertically(tween(380, easing = OceanSwellEasing)) { it / 48 } +
+                scaleIn(tween(380, easing = OceanSwellEasing), initialScale = 0.978f)
     }
+    return fadeIn(tween(260, easing = OceanSwellEasing)) +
+            slideInVertically(tween(420, easing = OceanSwellEasing)) { it / 10 } +
+            scaleIn(tween(420, easing = OceanSwellEasing), initialScale = 0.945f)
+}
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.pageExit(motion: Boolean): ExitTransition =
-    if (!motion) {
-        ExitTransition.None
-    } else {
-        fadeOut(tween(180)) +
-                slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { -it / 20 } +
-                scaleOut(tween(300, easing = FastOutSlowInEasing), targetScale = 0.985f)
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.oceanExit(
+    motion: Boolean,
+    fromRoute: String?,
+    toRoute: String?,
+): ExitTransition {
+    if (!motion) return ExitTransition.None
+    val fromTab = tabOrderIndex(fromRoute)
+    val toTab = tabOrderIndex(toRoute)
+    if (fromTab >= 0 && toTab >= 0 && fromTab != toTab) {
+        val dir = if (toTab > fromTab) 1 else -1
+        return fadeOut(tween(200)) +
+                slideOutHorizontally(tween(320, easing = OceanSwellEasing)) { -dir * it / 10 } +
+                scaleOut(tween(320, easing = OceanSwellEasing), targetScale = 0.975f)
     }
+    return fadeOut(tween(210)) +
+            slideOutVertically(tween(360, easing = OceanSwellEasing)) { -it / 22 } +
+            scaleOut(tween(360, easing = OceanSwellEasing), targetScale = 0.96f)
+}
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.pagePopEnter(motion: Boolean): EnterTransition =
-    if (!motion) {
-        EnterTransition.None
-    } else {
-        fadeIn(tween(240)) +
-                slideInVertically(tween(320, easing = FastOutSlowInEasing)) { -it / 20 } +
-                scaleIn(tween(320, easing = FastOutSlowInEasing), initialScale = 0.985f)
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.oceanPopEnter(
+    motion: Boolean,
+    fromRoute: String?,
+    toRoute: String?,
+): EnterTransition {
+    if (!motion) return EnterTransition.None
+    val fromTab = tabOrderIndex(fromRoute)
+    val toTab = tabOrderIndex(toRoute)
+    if (fromTab >= 0 && toTab >= 0 && fromTab != toTab) {
+        return oceanEnter(motion, fromRoute, toRoute)
     }
+    return fadeIn(tween(260, easing = OceanSwellEasing)) +
+            slideInVertically(tween(380, easing = OceanSwellEasing)) { -it / 22 } +
+            scaleIn(tween(380, easing = OceanSwellEasing), initialScale = 0.96f)
+}
 
-private fun AnimatedContentTransitionScope<NavBackStackEntry>.pagePopExit(motion: Boolean): ExitTransition =
-    if (!motion) {
-        ExitTransition.None
-    } else {
-        fadeOut(tween(200)) +
-                slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { it / 12 } +
-                scaleOut(tween(300, easing = FastOutSlowInEasing), targetScale = 0.985f)
+private fun AnimatedContentTransitionScope<NavBackStackEntry>.oceanPopExit(
+    motion: Boolean,
+    fromRoute: String?,
+    toRoute: String?,
+): ExitTransition {
+    if (!motion) return ExitTransition.None
+    val fromTab = tabOrderIndex(fromRoute)
+    val toTab = tabOrderIndex(toRoute)
+    if (fromTab >= 0 && toTab >= 0 && fromTab != toTab) {
+        return oceanExit(motion, fromRoute, toRoute)
     }
+    return fadeOut(tween(210)) +
+            slideOutVertically(tween(360, easing = OceanSwellEasing)) { it / 9 } +
+            scaleOut(tween(360, easing = OceanSwellEasing), targetScale = 0.95f)
+}
+
+private val WaveSweepEasing = CubicBezierEasing(0.22f, 0.72f, 0.32f, 1f)
 
 /**
- * The swell that crosses the screen once per navigation.
+ * The luminous ocean crest and gliding wake that crosses the screen on navigation.
  *
- * Two crests — the second fainter and lagging — travel from the top edge to the
- * bottom while fading in and out at the ends, so the change of page happens *behind*
- * a ripple instead of being a hard cut. Purely decorative: it draws no input, and it
- * disappears completely (no composition work at all) when motion is off.
+ * A sheer translucent aqua band, dual sine crests, and a single gliding pearl swimmer
+ * trailing twin dotted wake strands (via [drawWaveWake]) sweep smoothly in the current's
+ * direction and vanish completely when idle or under reduced motion.
  */
 @Composable
-private fun WaveSweep(trigger: Int, modifier: Modifier = Modifier) {
+private fun WaveSweep(
+    trigger: Int,
+    kind: NavWaveKind,
+    modifier: Modifier = Modifier,
+) {
     val tokens = LocalPejvakTokens.current
     val motion = useMotionEnabled()
     val sweep = remember { Animatable(0f) }
-    LaunchedEffect(trigger) {
-        if (trigger <= 0 || !motion) return@LaunchedEffect
+    LaunchedEffect(trigger, motion) {
+        if (trigger <= 0 || !motion) {
+            sweep.snapTo(0f)
+            return@LaunchedEffect
+        }
         sweep.snapTo(0f)
-        sweep.animateTo(1f, tween(640, easing = LinearEasing))
+        sweep.animateTo(1f, tween(660, easing = WaveSweepEasing))
     }
     val eased = sweep.value
     if (!motion || eased <= 0f || eased >= 1f) return
     Canvas(modifier) {
-        val y = size.height * eased
+        val w = size.width
+        val h = size.height
+        if (w <= 1f || h <= 1f) return@Canvas
         val fade = sin(eased * PI).toFloat()
         val wavelength = 88.dp.toPx()
+
+        val cyBase: Float
+        val headX: Float
+        val swimDir: Float
+        val amp: Float
+        val phase: Float
+        val echoLag: Float
+
+        when (kind) {
+            is NavWaveKind.TabDrift -> {
+                swimDir = if (kind.dir >= 0) -1f else 1f
+                headX = if (swimDir < 0f) w * (1f - eased) else w * eased
+                cyBase = h * 0.48f - 18.dp.toPx() * fade
+                amp = 8.dp.toPx()
+                phase = eased * 4.2f * -swimDir
+                echoLag = -22.dp.toPx()
+            }
+
+            NavWaveKind.Push -> {
+                swimDir = 1f
+                headX = w * (0.12f + 0.76f * eased)
+                cyBase = h * (0.88f - 0.76f * eased)
+                amp = 7.dp.toPx()
+                phase = eased * 3.6f
+                echoLag = 24.dp.toPx()
+            }
+
+            NavWaveKind.Pop -> {
+                swimDir = -1f
+                headX = w * (0.88f - 0.76f * eased)
+                cyBase = h * (0.14f + 0.74f * eased)
+                amp = 6.5.dp.toPx()
+                phase = -eased * 3.4f
+                echoLag = -24.dp.toPx()
+            }
+        }
+
+        // Sheer translucent water wash riding behind the crest.
+        val bandHalf = 58.dp.toPx()
+        val bandTop = (cyBase - bandHalf).coerceIn(0f, (h - 2f).coerceAtLeast(0f))
+        val bandBottom = (cyBase + bandHalf).coerceIn(bandTop + 1f, h.coerceAtLeast(bandTop + 1f))
+        drawRect(
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    RampCyan.third.copy(alpha = 0.065f * fade),
+                    tokens.accentTeal.copy(alpha = 0.045f * fade),
+                    Color.Transparent,
+                ),
+                startY = bandTop,
+                endY = bandBottom,
+            ),
+            topLeft = Offset(0f, bandTop),
+            size = Size(w, bandBottom - bandTop),
+        )
+
+        // Primary and secondary wave crests.
         listOf(
-            Triple(0f, 7.dp.toPx(), 0.34f),
-            Triple(-26.dp.toPx(), 4.dp.toPx(), 0.16f),
-        ).forEach { (lag, amplitude, alpha) ->
+            Triple(0f, amp, tokens.accent.copy(alpha = 0.28f * fade) to 1.6.dp.toPx()),
+            Triple(echoLag, amp * 0.62f, RampCyan.third.copy(alpha = 0.22f * fade) to 1.1.dp.toPx()),
+        ).forEach { (lag, crestAmp, strokeStyle) ->
             drawPath(
                 path = wavePath(
                     from = 0f,
-                    to = size.width,
-                    cy = y + lag,
-                    amplitude = amplitude,
+                    to = w,
+                    cy = cyBase + lag,
+                    amplitude = crestAmp,
                     wavelength = wavelength,
-                    phase = eased * 3.4f,
+                    phase = phase,
                     taper = 28.dp.toPx(),
-                    variation = 0.4f,
+                    variation = 0.35f,
                 ),
-                color = tokens.accent.copy(alpha = alpha * fade),
-                style = Stroke(width = 1.6.dp.toPx(), cap = StrokeCap.Round),
+                color = strokeStyle.first,
+                style = Stroke(width = strokeStyle.second, cap = StrokeCap.Round),
             )
         }
+
+        // Gliding swimmer + twin flanking wake strands following the primary wave curve.
+        val headY = cyBase + waveOffsetAt(headX, amp, wavelength, phase, 0.35f)
+        drawWaveWake(
+            headX = headX,
+            cy = cyBase,
+            spread = -8.5.dp.toPx(),
+            phaseShift = 0.85f,
+            amplitude = amp,
+            phase = phase,
+            color = RampCyan.third,
+            scale = 1f,
+            lengthDp = 128f,
+            wavelength = wavelength,
+            alphaBase = 0.34f * fade,
+            amplitudeScale = 0.42f,
+            direction = swimDir,
+        )
+        drawWaveWake(
+            headX = headX,
+            cy = cyBase,
+            spread = 8.5.dp.toPx(),
+            phaseShift = -0.85f,
+            amplitude = amp,
+            phase = phase,
+            color = tokens.accent,
+            scale = 1f,
+            lengthDp = 112f,
+            wavelength = wavelength,
+            alphaBase = 0.28f * fade,
+            amplitudeScale = 0.42f,
+            direction = swimDir,
+        )
+
+        // Streamlined swimmer crest + soft bioluminescent halo.
+        drawCircle(
+            color = RampCyan.third.copy(alpha = 0.18f * fade),
+            radius = 8.dp.toPx(),
+            center = Offset(headX, headY),
+        )
+        val tailX = (headX - swimDir * 11.dp.toPx()).coerceIn(0f, w)
+        val tailY = cyBase + waveOffsetAt(tailX, amp, wavelength, phase, 0.35f)
+        drawLine(
+            color = tokens.accent.copy(alpha = 0.55f * fade),
+            start = Offset(tailX, tailY),
+            end = Offset(headX, headY),
+            strokeWidth = 2.4.dp.toPx(),
+            cap = StrokeCap.Round,
+        )
+        drawCircle(
+            color = tokens.accent.copy(alpha = 0.86f * fade),
+            radius = 2.8.dp.toPx(),
+            center = Offset(headX, headY),
+        )
     }
 }

@@ -144,8 +144,12 @@ internal fun DrawScope.drawWaveWake(
     wavelength: Float,
     alphaBase: Float,
     amplitudeScale: Float = 0.35f,
+    direction: Float = 1f,
+    cyAt: ((Float) -> Float)? = null,
 ) {
-    val length = min(lengthDp * scale, headX)
+    val dir = if (direction >= 0f) 1f else -1f
+    val available = if (dir > 0f) headX else (size.width - headX)
+    val length = min(lengthDp * scale, available.coerceAtLeast(0f))
     if (length <= 1f) return
     val k = (2f * PI / wavelength).toFloat()
     val dashLong = 9.dp.toPx() * scale
@@ -164,19 +168,21 @@ internal fun DrawScope.drawWaveWake(
         val dotted = near * near
         val dash = dashShort + (dashLong - dashShort) * near.pow(2.2f)
         val gap = gapWide - (gapWide - gapTight) * dotted
-        val x0 = headX - travelled
-        val x1 = (x0 - dash).coerceAtLeast(0f)
-        if (x1 >= x0) break
+        val x0 = headX - dir * travelled
+        val x1 = (x0 - dir * dash).coerceIn(0f, size.width)
+        if ((dir > 0f && x1 >= x0) || (dir < 0f && x1 <= x0)) break
         // The fan holds its width for most of the wake and closes near the tail, so it
         // reads as ripples running out of energy rather than as a bracket drawn round
         // the playhead.
         val close = 1f - (1f - near) * (1f - near)
         val offset = offsetMax * close
         val shift = phaseShift * near.pow(1.2f)
+        val baseY0 = cyAt?.invoke(x0) ?: cy
+        val baseY1 = cyAt?.invoke(x1) ?: cy
         drawLine(
             color = color.copy(alpha = alpha),
-            start = Offset(x0, cy + offset + sin(x0 * k + phase + shift) * amplitude * amplitudeScale),
-            end = Offset(x1, cy + offset + sin(x1 * k + phase + shift) * amplitude * amplitudeScale),
+            start = Offset(x0, baseY0 + offset + sin(x0 * k + phase + shift) * amplitude * amplitudeScale),
+            end = Offset(x1, baseY1 + offset + sin(x1 * k + phase + shift) * amplitude * amplitudeScale),
             strokeWidth = thin + (thick - thin) * near,
             cap = StrokeCap.Round,
         )
