@@ -509,7 +509,19 @@ token: {{token}}
           "durationListenedSec": 300,
           "playbackSpeed": 1,
           "completed": false,
-          "interrupted": false
+          "interrupted": false,
+          "contextTitle": "Test Book",
+          "collectionSort": "manual",
+          "collectionSortDirection": "asc",
+          "collectionIndex": 2,
+          "collectionSize": 5,
+          "ambientTone": "forest",
+          "ambientLevel": 30,
+          "volumePercent": 70,
+          "enhancerEnabled": true,
+          "enhancerBoostDb": 3,
+          "enhancerBassDb": 2,
+          "enhancerTrebleDb": 1
         }
       ],
       "annotations": [
@@ -571,6 +583,12 @@ token: {{token}}
       "clientId": 1,
       "startedAt": 1,
       "durationListenedSec": 1,
+      "contextTitle": 1,
+      "collectionSort": 1,
+      "collectionIndex": 1,
+      "volumePercent": 1,
+      "ambientTone": 1,
+      "enhancerEnabled": 1,
       "track": { "_id": 1, "title": 1 }
     }
   }
@@ -580,6 +598,12 @@ HTTP 200
 [Asserts]
 jsonpath "$.success" == true
 jsonpath "$.body" count >= 1
+jsonpath "$.body[0].contextTitle" == "Test Book"
+jsonpath "$.body[0].collectionSort" == "manual"
+jsonpath "$.body[0].collectionIndex" == 2
+jsonpath "$.body[0].volumePercent" == 70
+jsonpath "$.body[0].ambientTone" == "forest"
+jsonpath "$.body[0].enhancerEnabled" == true
 
 [Captures]
 sessionClientId: jsonpath "$.body[0].clientId"

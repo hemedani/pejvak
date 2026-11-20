@@ -38,6 +38,18 @@ type SessionRow = {
   contextKey?: string;
   stretchId?: string;
   seeked: boolean;
+  contextTitle?: string;
+  collectionSort?: string;
+  collectionSortDirection?: string;
+  collectionIndex?: number;
+  collectionSize?: number;
+  ambientTone?: string;
+  ambientLevel?: number;
+  volumePercent?: number;
+  enhancerEnabled?: boolean;
+  enhancerBoostDb?: number;
+  enhancerBassDb?: number;
+  enhancerTrebleDb?: number;
 };
 
 export const syncLocalDataFn: ActFn = async (body) => {
@@ -226,6 +238,18 @@ export const syncLocalDataFn: ActFn = async (body) => {
         contextKey: session.contextKey,
         stretchId: session.stretchId,
         seeked: session.seeked,
+        contextTitle: session.contextTitle,
+        collectionSort: session.collectionSort,
+        collectionSortDirection: session.collectionSortDirection,
+        collectionIndex: session.collectionIndex,
+        collectionSize: session.collectionSize,
+        ambientTone: session.ambientTone,
+        ambientLevel: session.ambientLevel,
+        volumePercent: session.volumePercent,
+        enhancerEnabled: session.enhancerEnabled,
+        enhancerBoostDb: session.enhancerBoostDb,
+        enhancerBassDb: session.enhancerBassDb,
+        enhancerTrebleDb: session.enhancerTrebleDb,
         createdAt: new Date(),
         updatedAt: new Date(),
       },

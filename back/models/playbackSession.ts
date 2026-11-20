@@ -55,6 +55,26 @@ export const session_pure = {
    * indistinguishable from listening, and would read as a complete listen.
    */
   seeked: defaulted(boolean(), false),
+  /**
+   * The playback-context snapshot for this session.
+   *
+   * Captured at listen time so a history entry can be rendered long after the
+   * run has ended, even if the collection, sort order or audio settings have
+   * since changed. Optional because every row written before these fields
+   * existed has no snapshot, and the device may not know them in every case.
+   */
+  contextTitle: optional(string()),
+  collectionSort: optional(string()),
+  collectionSortDirection: optional(string()),
+  collectionIndex: optional(number()),
+  collectionSize: optional(number()),
+  ambientTone: optional(string()),
+  ambientLevel: optional(number()),
+  volumePercent: optional(number()),
+  enhancerEnabled: optional(boolean()),
+  enhancerBoostDb: optional(number()),
+  enhancerBassDb: optional(number()),
+  enhancerTrebleDb: optional(number()),
   ...createUpdateAt,
 };
 
