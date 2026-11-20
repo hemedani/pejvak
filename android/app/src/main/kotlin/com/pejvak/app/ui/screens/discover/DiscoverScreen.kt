@@ -2,6 +2,7 @@ package com.pejvak.app.ui.screens.discover
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -17,9 +18,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
@@ -75,45 +84,68 @@ fun DiscoverScreen(
             )
         },
     ) { topInset ->
-    Column(Modifier.fillMaxSize().padding(top = topInset)) {
-        Row(
-            modifier = Modifier.padding(horizontal = geo.spacing.lg, vertical = geo.spacing.md),
-            horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-        ) {
-            GlassChip(
-                label = stringResource(R.string.discover_continue),
-                selected = state.page == 0,
-                onClick = { viewModel.setPage(0) },
-            )
-            GlassChip(
-                label = stringResource(R.string.discover_favorites),
-                selected = state.page == 1,
-                count = state.favorites.size.takeIf { it > 0 },
-                onClick = { viewModel.setPage(1) },
-            )
-            GlassChip(
-                label = stringResource(R.string.discover_browse),
-                selected = state.page == 2,
-                onClick = { viewModel.setPage(2) },
-            )
-        }
-        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
-            when (page) {
-                0 -> ContinuePage(state.continueRuns, state.downloadStates, onOpenCollection)
-                1 -> FavoritesPage(
-                    favorites = state.favorites,
-                    onOpen = { key -> onOpenCollection(key, null, 0) },
-                    onUnfavorite = viewModel::unfavorite,
+        val density = LocalDensity.current
+        var chipsHeight by remember { mutableStateOf(40.dp) }
+        val topContentInset = topInset + geo.spacing.xs + chipsHeight + geo.spacing.sm
+        Box(Modifier.fillMaxSize()) {
+            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
+                when (page) {
+                    0 -> ContinuePage(
+                        cards = state.continueRuns,
+                        downloadStates = state.downloadStates,
+                        topInset = topContentInset,
+                        onOpen = onOpenCollection,
+                    )
+
+                    1 -> FavoritesPage(
+                        favorites = state.favorites,
+                        topInset = topContentInset,
+                        onOpen = { key -> onOpenCollection(key, null, 0) },
+                        onUnfavorite = viewModel::unfavorite,
+                    )
+
+                    else -> BrowsePage(
+                        state = state,
+                        topInset = topContentInset,
+                        onOpenSource = onOpenSource,
+                        onOpenLanguage = onOpenLanguage,
+                        onOpenLanguageSheet = viewModel::openLanguageSheet,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(
+                        start = geo.spacing.lg,
+                        end = geo.spacing.lg,
+                        top = topInset + geo.spacing.xs,
+                    )
+                    .onGloballyPositioned { coords ->
+                        if (coords.size.height > 0) {
+                            chipsHeight = with(density) { coords.size.height.toDp() }
+                        }
+                    },
+                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+            ) {
+                GlassChip(
+                    label = stringResource(R.string.discover_continue),
+                    selected = state.page == 0,
+                    onClick = { viewModel.setPage(0) },
                 )
-                else -> BrowsePage(
-                    state = state,
-                    onOpenSource = onOpenSource,
-                    onOpenLanguage = onOpenLanguage,
-                    onOpenLanguageSheet = viewModel::openLanguageSheet,
+                GlassChip(
+                    label = stringResource(R.string.discover_favorites),
+                    selected = state.page == 1,
+                    count = state.favorites.size.takeIf { it > 0 },
+                    onClick = { viewModel.setPage(1) },
+                )
+                GlassChip(
+                    label = stringResource(R.string.discover_browse),
+                    selected = state.page == 2,
+                    onClick = { viewModel.setPage(2) },
                 )
             }
         }
-    }
     }
     if (state.languageSheetOpen) {
         LanguagePickerSheet(
@@ -129,6 +161,7 @@ fun DiscoverScreen(
 private fun ContinuePage(
     cards: List<ContinueCard>,
     downloadStates: Map<String, com.pejvak.app.domain.DownloadState>,
+    topInset: Dp,
     onOpen: (key: String, trackId: String?, positionSec: Int) -> Unit,
 ) {
     val geo = LocalPejvakGeometry.current
@@ -136,15 +169,17 @@ private fun ContinuePage(
         EmptyState(
             icon = "play",
             title = stringResource(R.string.discover_no_continue),
+            modifier = Modifier.padding(top = topInset),
             body = stringResource(R.string.discover_no_continue_body),
         )
         return
     }
     LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = geo.spacing.lg,
             end = geo.spacing.lg,
-            top = geo.spacing.sm,
+            top = topInset,
             bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
         ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
@@ -153,8 +188,16 @@ private fun ContinuePage(
             ListGroup(items = listOf(card)) { _, _ ->
                 ListRow(
                     title = card.title,
-                    subtitle = "${card.sourceName} · ${stringResource(R.string.discover_resume_at, formatResume(card.lastPositionSec))}",
-                    meta = listOfNotNull(resumeMeta(card).ifBlank { null }, describeDownloadState(downloadStates[card.key]))
+                    subtitle = "${card.sourceName} · ${
+                        stringResource(
+                            R.string.discover_resume_at,
+                            formatResume(card.lastPositionSec)
+                        )
+                    }",
+                    meta = listOfNotNull(
+                        resumeMeta(card).ifBlank { null },
+                        describeDownloadState(downloadStates[card.key])
+                    )
                         .joinToString(" · ")
                         .ifBlank { null },
                     leading = {
@@ -174,6 +217,7 @@ private fun ContinuePage(
 @Composable
 private fun FavoritesPage(
     favorites: List<OnlineCollection>,
+    topInset: Dp,
     onOpen: (String) -> Unit,
     onUnfavorite: (String) -> Unit,
 ) {
@@ -182,15 +226,17 @@ private fun FavoritesPage(
         EmptyState(
             icon = "favorite",
             title = stringResource(R.string.discover_no_favorites),
+            modifier = Modifier.padding(top = topInset),
             body = stringResource(R.string.discover_no_favorites_body),
         )
         return
     }
     LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = geo.spacing.lg,
             end = geo.spacing.lg,
-            top = geo.spacing.sm,
+            top = topInset,
             bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
         ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
@@ -231,6 +277,7 @@ private fun FavoritesPage(
 @Composable
 private fun BrowsePage(
     state: DiscoverUiState,
+    topInset: Dp,
     onOpenSource: (String) -> Unit,
     onOpenLanguage: (String) -> Unit,
     onOpenLanguageSheet: () -> Unit,
@@ -238,10 +285,11 @@ private fun BrowsePage(
     val geo = LocalPejvakGeometry.current
     val tokens = LocalPejvakTokens.current
     LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(
             start = geo.spacing.lg,
             end = geo.spacing.lg,
-            top = geo.spacing.sm,
+            top = topInset,
             bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
         ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
@@ -301,7 +349,11 @@ private fun SourceRow(source: OnlineSource, onClick: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
                 Text(source.name, style = MaterialTheme.typography.titleMedium, color = tokens.text)
                 if (source.live) {
-                    Text(stringResource(R.string.discover_live), style = MaterialTheme.typography.labelSmall, color = tokens.accentTeal)
+                    Text(
+                        stringResource(R.string.discover_live),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tokens.accentTeal
+                    )
                 }
             }
             Text(source.description, style = MaterialTheme.typography.bodySmall, color = tokens.textSecondary)

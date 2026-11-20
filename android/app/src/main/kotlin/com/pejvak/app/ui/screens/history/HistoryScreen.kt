@@ -25,6 +25,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,9 +37,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -127,35 +132,34 @@ fun HistoryScreen(
             )
         },
     ) { topInset ->
-        Column(Modifier.fillMaxSize().padding(top = topInset + geo.spacing.sm)) {
-            Row(
-                modifier = Modifier.padding(horizontal = geo.spacing.lg, vertical = geo.spacing.sm),
-                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-            ) {
-                GlassChip(
-                    label = stringResource(R.string.history_panel_history),
-                    selected = state.panel == HistoryPanel.History,
-                    onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                )
-                GlassChip(
-                    label = stringResource(R.string.history_panel_stats),
-                    selected = state.panel == HistoryPanel.Stats,
-                    onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
-                )
-            }
-
+        val density = LocalDensity.current
+        var chipsHeight by remember { mutableStateOf(40.dp) }
+        val topContentInset = topInset + geo.spacing.xs + chipsHeight + geo.spacing.sm
+        val pullState = rememberPullToRefreshState()
+        Box(Modifier.fillMaxSize()) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize().weight(1f),
+                modifier = Modifier.fillMaxSize(),
             ) { page ->
                 if (page == 0) {
                     PullToRefreshBox(
                         isRefreshing = state.refreshing,
                         onRefresh = viewModel::refresh,
+                        state = pullState,
                         modifier = Modifier.fillMaxSize(),
+                        indicator = {
+                            PullToRefreshDefaults.Indicator(
+                                state = pullState,
+                                isRefreshing = state.refreshing,
+                                modifier = Modifier
+                                    .align(Alignment.TopCenter)
+                                    .padding(top = topContentInset),
+                            )
+                        },
                     ) {
                         HistoryList(
                             state = state,
+                            topInset = topContentInset,
                             onTab = viewModel::setTab,
                             onOpenStretch = { entry ->
                                 entry.end.let(viewModel::openSession)
@@ -181,8 +185,36 @@ fun HistoryScreen(
                         streak = state.streak,
                         bestStreak = state.bestStreak,
                         media = state.media,
+                        topInset = topContentInset,
                     )
                 }
+            }
+
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(
+                        start = geo.spacing.lg,
+                        end = geo.spacing.lg,
+                        top = topInset + geo.spacing.xs,
+                    )
+                    .onGloballyPositioned { coords ->
+                        if (coords.size.height > 0) {
+                            chipsHeight = with(density) { coords.size.height.toDp() }
+                        }
+                    },
+                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+            ) {
+                GlassChip(
+                    label = stringResource(R.string.history_panel_history),
+                    selected = state.panel == HistoryPanel.History,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                )
+                GlassChip(
+                    label = stringResource(R.string.history_panel_stats),
+                    selected = state.panel == HistoryPanel.Stats,
+                    onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                )
             }
         }
     }
@@ -193,13 +225,23 @@ fun HistoryScreen(
             title = stringResource(R.string.header_actions),
             icon = "more",
         ) {
-            ListGroup(items = listOf("refresh", "sort-newest", "sort-oldest", "sort-longest", "range", "export")) { item, _ ->
+            ListGroup(
+                items = listOf(
+                    "refresh",
+                    "sort-newest",
+                    "sort-oldest",
+                    "sort-longest",
+                    "range",
+                    "export"
+                )
+            ) { item, _ ->
                 when {
                     item == "refresh" -> ListRow(
                         title = stringResource(R.string.history_refresh),
                         leading = { PejvakIcon("refresh", null, tint = tokens.textSecondary, size = geo.icons.md) },
                         onClick = { menuOpen = false; viewModel.refresh() },
                     )
+
                     item.startsWith("sort-") -> {
                         val sort = when (item) {
                             "sort-newest" -> HistorySort.Newest
@@ -214,17 +256,24 @@ fun HistoryScreen(
                             },
                             leading = { PejvakIcon("sort", null, tint = tokens.textSecondary, size = geo.icons.md) },
                             trailing = {
-                                if (state.sort == sort) PejvakIcon("check", null, tint = tokens.accent, size = geo.icons.md)
+                                if (state.sort == sort) PejvakIcon(
+                                    "check",
+                                    null,
+                                    tint = tokens.accent,
+                                    size = geo.icons.md
+                                )
                             },
                             onClick = { menuOpen = false; viewModel.setSort(sort) },
                         )
                     }
+
                     item == "range" -> ListRow(
                         title = stringResource(R.string.header_date_range),
                         subtitle = describeDateRange(state.range),
                         leading = { PejvakIcon("time", null, tint = tokens.textSecondary, size = geo.icons.md) },
                         onClick = { menuOpen = false; rangeOpen = true },
                     )
+
                     else -> ListRow(
                         title = stringResource(R.string.history_export),
                         leading = { PejvakIcon("share", null, tint = tokens.textSecondary, size = geo.icons.md) },
@@ -280,6 +329,7 @@ fun HistoryScreen(
 @Composable
 private fun HistoryList(
     state: HistoryUiState,
+    topInset: Dp,
     onTab: (HistoryTab) -> Unit,
     onOpenStretch: (HistoryStretchEntry) -> Unit,
     onDeleteStretch: (HistoryStretchEntry) -> Unit,
@@ -298,6 +348,7 @@ private fun HistoryList(
         contentPadding = PaddingValues(
             start = geo.spacing.lg,
             end = geo.spacing.lg,
+            top = topInset,
             bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
         ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
@@ -496,7 +547,7 @@ private fun RunCard(
                 )
                 Text(
                     text = "${describeContextType(run.contextType)} · ${describeRunOutcome(run.shape()).label} · " +
-                        "${run.finishedCount}/${run.trackCount} · ${formatDuration(run.listenedSec)}",
+                            "${run.finishedCount}/${run.trackCount} · ${formatDuration(run.listenedSec)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = tokens.textSecondary,
                     maxLines = 1,
@@ -587,6 +638,7 @@ private fun StatsPanel(
     streak: Int,
     bestStreak: Int,
     media: com.pejvak.app.domain.MediaBreakdown,
+    topInset: Dp,
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
@@ -595,7 +647,8 @@ private fun StatsPanel(
         contentPadding = PaddingValues(
             start = geo.spacing.lg,
             end = geo.spacing.lg,
-            bottom = geo.spacing.xxl,
+            top = topInset,
+            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
         ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
     ) {
@@ -635,7 +688,7 @@ private fun StatsPanel(
                     StatRow(
                         stringResource(R.string.history_stat_media),
                         "${stringResource(R.string.history_stat_audiobooks)} ${formatDuration(media.audiobookSec)} · " +
-                            "${stringResource(R.string.history_stat_music)} ${formatDuration(media.musicSec)}",
+                                "${stringResource(R.string.history_stat_music)} ${formatDuration(media.musicSec)}",
                     )
                 }
             }

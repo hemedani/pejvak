@@ -36,8 +36,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -177,34 +180,19 @@ fun LibraryScreen(
             )
         },
     ) { topInset ->
-        Column(Modifier.fillMaxSize().padding(top = topInset + geo.spacing.sm)) {
-            LazyRow(
-                state = chipState,
-                contentPadding = PaddingValues(horizontal = geo.spacing.lg),
-                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-            ) {
-                itemsIndexed(views) { index, view ->
-                    val count = state.counts[view]
-                    GlassChip(
-                        label = viewLabel(view),
-                        selected = index == pagerState.currentPage,
-                        icon = viewIcon(view),
-                        count = if (state.query.isNotEmpty() && count != null) count else null,
-                        onClick = {
-                            scope.launch { pagerState.animateScrollToPage(index) }
-                        },
-                    )
-                }
-            }
-            Spacer(Modifier.height(geo.spacing.md))
+        val density = LocalDensity.current
+        var chipsHeight by remember { mutableStateOf(40.dp) }
+        val topContentInset = topInset + geo.spacing.xs + chipsHeight + geo.spacing.sm
+        Box(Modifier.fillMaxSize()) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxWidth().weight(1f),
+                modifier = Modifier.fillMaxSize(),
             ) { page ->
                 val view = views.getOrNull(page) ?: return@HorizontalPager
                 LibraryPage(
                     view = view,
                     state = state,
+                    topInset = topContentInset,
                     newPlaylist = newPlaylist,
                     onNewPlaylistChange = { newPlaylist = it },
                     onCreatePlaylist = {
@@ -224,6 +212,33 @@ fun LibraryScreen(
                     onPlayTrack = { card -> viewModel.playTrack(card.track, state.tracks.map { it.track }) },
                     onPlayRecent = viewModel::playRecent,
                 )
+            }
+            LazyRow(
+                state = chipState,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .padding(top = topInset + geo.spacing.xs)
+                    .onGloballyPositioned { coords ->
+                        if (coords.size.height > 0) {
+                            chipsHeight = with(density) { coords.size.height.toDp() }
+                        }
+                    },
+                contentPadding = PaddingValues(horizontal = geo.spacing.lg),
+                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+            ) {
+                itemsIndexed(views) { index, view ->
+                    val count = state.counts[view]
+                    GlassChip(
+                        label = viewLabel(view),
+                        selected = index == pagerState.currentPage,
+                        icon = viewIcon(view),
+                        count = if (state.query.isNotEmpty() && count != null) count else null,
+                        onClick = {
+                            scope.launch { pagerState.animateScrollToPage(index) }
+                        },
+                    )
+                }
             }
         }
     }
@@ -251,6 +266,7 @@ fun LibraryScreen(
                             onOpenSettings()
                         },
                     )
+
                     else -> ListRow(
                         title = stringResource(R.string.header_language),
                         subtitle = state.languageCode?.let { code ->
@@ -340,6 +356,7 @@ fun LibraryScreen(
 private fun LibraryPage(
     view: LibraryView,
     state: LibraryUiState,
+    topInset: Dp,
     newPlaylist: String,
     onNewPlaylistChange: (String) -> Unit,
     onCreatePlaylist: () -> Unit,
@@ -363,7 +380,7 @@ private fun LibraryPage(
         contentPadding = PaddingValues(
             start = geo.spacing.lg,
             end = geo.spacing.lg,
-            top = geo.spacing.sm,
+            top = topInset,
             bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
         ),
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
@@ -435,6 +452,7 @@ private fun LibraryPage(
                     }
                 }
             }
+
             LibraryView.Tracks -> {
                 if (state.tracks.isEmpty() && !state.loading) {
                     item {
@@ -459,6 +477,7 @@ private fun LibraryPage(
                     }
                 }
             }
+
             LibraryView.Folders -> {
                 if (state.folders.isEmpty() && !state.loading) {
                     item {
@@ -481,6 +500,7 @@ private fun LibraryPage(
                     FolderRow(summary, onOpenAi = onOpenAi) { onOpenFolder(summary.folder.key) }
                 }
             }
+
             LibraryView.Playlists -> {
                 item {
                     GlassCard {
@@ -522,7 +542,11 @@ private fun LibraryPage(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text(rule.title, style = MaterialTheme.typography.titleMedium, color = tokens.text)
-                                Text(rule.tagline, style = MaterialTheme.typography.bodySmall, color = tokens.textSecondary)
+                                Text(
+                                    rule.tagline,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = tokens.textSecondary
+                                )
                             }
                             BubbleButton(
                                 icon = ICON_GLYPHS.getValue("play"),
@@ -558,6 +582,7 @@ private fun LibraryPage(
                     )
                 }
             }
+
             LibraryView.Recent -> {
                 if (state.recents.isEmpty() && !state.loading) {
                     item {
@@ -746,7 +771,11 @@ private fun FolderRow(summary: FolderSummary, onOpenAi: () -> Unit, onClick: () 
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "${describeFolderProgress(summary.finishedCount, summary.trackCount)} · ${formatDuration(summary.totalDurationSec)}",
+                    text = "${describeFolderProgress(summary.finishedCount, summary.trackCount)} · ${
+                        formatDuration(
+                            summary.totalDurationSec
+                        )
+                    }",
                     style = MaterialTheme.typography.bodySmall,
                     color = tokens.textSecondary,
                 )
