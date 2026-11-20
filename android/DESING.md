@@ -263,8 +263,11 @@ Governed by `useMotionEnabled()` = OS reduced-motion × in-app `motionPreference
 When false, substitute the final value — never rely on the platform flag alone.
 
 - **Springs** for press/sheet/dock (bouncy press scale 1 → 0.92 → 1.05; sheet settle; dock press).
-- **Now Playing morph:** the full player expands from the mini-player's rect (shared-element style),
-  not a generic slide. Dismiss reverses it.
+- **Now Playing morph:** the full player expands from the mini-player's measured root rect
+  (shared-element style with floating artwork hand-off, corner-radius morph, and `PlayerContent`
+  ↔ `MiniPlayerRow` cross-dissolve), not a generic fade/slide. Close, back, and downward swipe
+  (from the header or top-of-scroll body, velocity-aware) reverse it smoothly back onto the dock
+  while unblurring the underlying shell in lockstep.
 - **Reveal stagger** for list entrance (index-derived, arithmetic — never hand-numbered).
 - **The only unbounded animation** is `WavyProgress` (the player's ambient wave) and the slow canvas
   wash. Everything else is bounded; decorative loops are static under reduced motion.
