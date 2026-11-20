@@ -1404,3 +1404,25 @@ Three asks, in the order they were given.
   picked it up on the next launch, and the share sheet offered `last-crash.txt` (Bluetooth /
   Messaging on the bare emulator). Probe row and seeded rows removed afterwards.
   `testDebugUnitTest` 421/421, `assembleDebug` green.
+
+### 2026-11-20 — Playback context captured on session start
+
+- **Both `PlaybackContext` copies carry the collection's order.** `domain.PlaybackContext` and
+  `playback.PlaybackContext` gained `sort: CollectionSort = Unknown` and
+  `direction: SortDirection = Asc`, so the ordering that produced the queue travels with the run
+  and survives a resume.
+- **The engine owns collection facts; the service supplies only audio treatment.**
+  `PlaybackEngine.conditionsProvider` returns the effects snapshot (ambient tone, level, volume,
+  enhancer bands). `beginSession` builds the base from the active run (title, sort, direction) and
+  the live queue (`queueIndex`, `queue.size`), then overlays only the provider's audio fields with
+  `copy`. A provider can never erase where the track was played from, and every field lands on the
+  `Session` row in the same insert.
+- **Call sites name their ordering.** Manual playlist (`PlaylistDetailViewModel`,
+  `PlaylistRepository.contextFor`), folder (`FolderDetailViewModel` / `LibraryViewModel.playFolder`,
+  `Shuffle` when shuffled, else `Folder`), smart (`SmartPlaylistViewModel`, `Smart`), online
+  (`OnlineCollectionViewModel`, `Source`); history resumes keep `Unknown` by default, and
+  `LibraryViewModel.playTrack` stays standalone with a null context.
+- **Test:** `PlaybackEngineTest.sessionCapturesPlaybackConditions` installs a provider carrying only
+  audio fields, plays a two-track playlist context, and asserts the stored session keeps
+  `contextTitle` / `Manual` / index / size while taking all seven audio fields from the provider.
+- **Verification:** `testDebugUnitTest` 440/440, `assembleDebug` green.
