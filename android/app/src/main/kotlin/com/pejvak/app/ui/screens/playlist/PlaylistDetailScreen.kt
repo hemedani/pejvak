@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
@@ -48,6 +49,8 @@ import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 
 @Composable
 fun PlaylistDetailScreen(
@@ -102,118 +105,127 @@ fun PlaylistDetailScreen(
             )
         },
     ) { topInset ->
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = topInset + geo.spacing.md,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        item {
-            PrimaryButton(
-                label = stringResource(R.string.library_play),
-                enabled = state.rows.isNotEmpty(),
-                onClick = { viewModel.play() },
-            )
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                GlassChip(
-                    label = stringResource(R.string.playlist_add_tracks),
-                    onClick = { addOpen = true },
-                )
-                GlassChip(
-                    label = if (state.editing) stringResource(R.string.action_done)
-                    else stringResource(R.string.action_edit),
-                    selected = state.editing,
-                    onClick = viewModel::toggleEditing,
-                )
-                GlassChip(
-                    label = stringResource(R.string.action_rename),
-                    onClick = {
-                        draftTitle = playlist?.title.orEmpty()
-                        renameOpen = true
-                    },
-                )
-                GlassChip(
-                    label = stringResource(R.string.action_delete),
-                    onClick = { deleteOpen = true },
-                )
-            }
-        }
-        if (state.rows.isEmpty() && !state.loading) {
-            item {
-                EmptyState(
-                    icon = "playlist",
-                    title = stringResource(R.string.playlist_empty),
-                    body = stringResource(R.string.playlist_empty_body),
-                )
-            }
-        }
-        // A playlist may hold the same track twice, so the index is part of the key.
-        itemsIndexed(state.rows, key = { index, row -> "$index:${row.track.id}" }) { index, row ->
-            GlassCard(
-                modifier = Modifier.clickable {
-                    if (state.editing) onOpenTrack(row.track.id) else viewModel.play(index)
-                },
+        OceanCascade(key = state.rows.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = geo.spacing.lg,
+                    end = geo.spacing.lg,
+                    top = topInset + geo.spacing.md,
+                    bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+                ),
+                verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    PaletteTile(
-                        contentHash = row.track.contentHash,
-                        label = row.track.title,
-                        artworkUrl = row.track.artworkUrl,
-                        size = geo.tiles.md,
+                item {
+                    PrimaryButton(
+                        label = stringResource(R.string.library_play),
+                        enabled = state.rows.isNotEmpty(),
+                        onClick = { viewModel.play() },
+                        modifier = Modifier.oceanEntrance(0, swayDp = 0.dp),
                     )
-                    Spacer(Modifier.size(geo.spacing.md))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = row.track.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = tokens.text,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                }
+                item {
+                    Row(
+                        modifier = Modifier.oceanEntrance(1, swayDp = 0.dp),
+                        horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                    ) {
+                        GlassChip(
+                            label = stringResource(R.string.playlist_add_tracks),
+                            onClick = { addOpen = true },
                         )
-                        Text(
-                            text = formatDuration(row.track.durationSec),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = tokens.textSecondary,
+                        GlassChip(
+                            label = if (state.editing) stringResource(R.string.action_done)
+                            else stringResource(R.string.action_edit),
+                            selected = state.editing,
+                            onClick = viewModel::toggleEditing,
+                        )
+                        GlassChip(
+                            label = stringResource(R.string.action_rename),
+                            onClick = {
+                                draftTitle = playlist?.title.orEmpty()
+                                renameOpen = true
+                            },
+                        )
+                        GlassChip(
+                            label = stringResource(R.string.action_delete),
+                            onClick = { deleteOpen = true },
                         )
                     }
-                    ActionCluster {
-                        if (state.editing) {
-                            BubbleButton(
-                                icon = ICON_GLYPHS.getValue("chevronLeft"),
-                                contentDescription = stringResource(R.string.playlist_move_up),
-                                onClick = { if (index > 0) viewModel.move(index, index - 1) },
+                }
+                if (state.rows.isEmpty() && !state.loading) {
+                    item {
+                        EmptyState(
+                            icon = "playlist",
+                            title = stringResource(R.string.playlist_empty),
+                            body = stringResource(R.string.playlist_empty_body),
+                            modifier = Modifier.oceanEntrance(2, swayDp = 0.dp),
+                        )
+                    }
+                }
+                // A playlist may hold the same track twice, so the index is part of the key.
+                itemsIndexed(state.rows, key = { index, row -> "$index:${row.track.id}" }) { index, row ->
+                    GlassCard(
+                        modifier = Modifier
+                            .oceanEntrance(2 + index)
+                            .clickable {
+                                if (state.editing) onOpenTrack(row.track.id) else viewModel.play(index)
+                            },
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            PaletteTile(
+                                contentHash = row.track.contentHash,
+                                label = row.track.title,
+                                artworkUrl = row.track.artworkUrl,
+                                size = geo.tiles.md,
                             )
-                            BubbleButton(
-                                icon = ICON_GLYPHS.getValue("chevronRight"),
-                                contentDescription = stringResource(R.string.playlist_move_down),
-                                onClick = {
-                                    if (index < state.rows.lastIndex) viewModel.move(index, index + 1)
-                                },
-                            )
-                            BubbleButton(
-                                icon = ICON_GLYPHS.getValue("delete"),
-                                contentDescription = stringResource(R.string.playlist_remove),
-                                onClick = { viewModel.removeTrack(row.track.id) },
-                            )
-                        } else {
-                            AiActionButton(onClick = onOpenAi)
-                            BubbleButton(
-                                icon = ICON_GLYPHS.getValue("play"),
-                                contentDescription = stringResource(R.string.library_play),
-                                onClick = { viewModel.play(index) },
-                            )
+                            Spacer(Modifier.size(geo.spacing.md))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = row.track.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = tokens.text,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = formatDuration(row.track.durationSec),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = tokens.textSecondary,
+                                )
+                            }
+                            ActionCluster {
+                                if (state.editing) {
+                                    BubbleButton(
+                                        icon = ICON_GLYPHS.getValue("chevronLeft"),
+                                        contentDescription = stringResource(R.string.playlist_move_up),
+                                        onClick = { if (index > 0) viewModel.move(index, index - 1) },
+                                    )
+                                    BubbleButton(
+                                        icon = ICON_GLYPHS.getValue("chevronRight"),
+                                        contentDescription = stringResource(R.string.playlist_move_down),
+                                        onClick = {
+                                            if (index < state.rows.lastIndex) viewModel.move(index, index + 1)
+                                        },
+                                    )
+                                    BubbleButton(
+                                        icon = ICON_GLYPHS.getValue("delete"),
+                                        contentDescription = stringResource(R.string.playlist_remove),
+                                        onClick = { viewModel.removeTrack(row.track.id) },
+                                    )
+                                } else {
+                                    AiActionButton(onClick = onOpenAi)
+                                    BubbleButton(
+                                        icon = ICON_GLYPHS.getValue("play"),
+                                        contentDescription = stringResource(R.string.library_play),
+                                        onClick = { viewModel.play(index) },
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
         }
-    }
     }
 
     if (renameOpen) {
@@ -239,7 +251,11 @@ fun PlaylistDetailScreen(
     if (addOpen) {
         val existing = state.rows.map { it.track.id }.toSet()
         val candidates = state.allTracks.filterNot { it.id in existing }
-        GlassSheet(onDismiss = { addOpen = false }, title = stringResource(R.string.playlist_add_tracks), icon = "addToPlaylist") {
+        GlassSheet(
+            onDismiss = { addOpen = false },
+            title = stringResource(R.string.playlist_add_tracks),
+            icon = "addToPlaylist"
+        ) {
             if (candidates.isEmpty()) {
                 Text(
                     text = stringResource(R.string.playlist_no_more_tracks),

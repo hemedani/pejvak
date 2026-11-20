@@ -28,6 +28,7 @@ import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.components.RowDivider
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.oceanEntrance
 
 enum class RowPosition { First, Middle, Last, Only }
 
@@ -149,9 +150,14 @@ fun RowShell(
 fun <T> ListGroup(
     items: List<T>,
     modifier: Modifier = Modifier,
+    staggerRows: Boolean = false,
     rowContent: @Composable (item: T, position: RowPosition) -> Unit,
 ) {
-    GlassCard(modifier = modifier, rimLight = false, contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)) {
+    GlassCard(
+        modifier = modifier,
+        rimLight = false,
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp)
+    ) {
         Column(Modifier.fillMaxWidth()) {
             items.forEachIndexed { index, item ->
                 val position = when {
@@ -160,7 +166,18 @@ fun <T> ListGroup(
                     index == items.lastIndex -> RowPosition.Last
                     else -> RowPosition.Middle
                 }
-                rowContent(item, position)
+                val rowModifier = if (staggerRows && items.size > 1 && index < 10) {
+                    Modifier.oceanEntrance(
+                        index = index,
+                        riseDp = 8.dp,
+                        swayDp = 3.dp,
+                        startScale = 0.99f,
+                        durationMs = 280,
+                    )
+                } else {
+                    Modifier
+                }
+                Box(rowModifier) { rowContent(item, position) }
                 if (index != items.lastIndex) RowDivider()
             }
         }

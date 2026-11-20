@@ -39,6 +39,8 @@ import com.pejvak.app.ui.components.ai.AiGlyph
 import com.pejvak.app.ui.theme.AuroraRamps
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 
 /**
  * One tool before it exists: the pinned coming-soon message as headline + body,
@@ -73,70 +75,77 @@ fun AiFeatureScreen(
             )
         },
     ) { topInset ->
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            
-            .verticalScroll(rememberScrollState())
-            .padding(
-                start = geo.spacing.xl,
-                end = geo.spacing.xl,
-                top = topInset + geo.spacing.md,
-                bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-            ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.xxl),
-    ) {
+        OceanCascade {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = geo.spacing.xl,
+                        end = geo.spacing.xl,
+                        top = topInset + geo.spacing.md,
+                        bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(geo.spacing.xxl),
+            ) {
 
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-        ) {
-            Box(Modifier.size(232.dp), contentAlignment = Alignment.Center) {
-                Box(
-                    Modifier
-                        .size(232.dp)
-                        .border(1.dp, tint.copy(alpha = 0.10f), CircleShape),
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .oceanEntrance(0, swayDp = 0.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+                ) {
+                    Box(Modifier.size(232.dp), contentAlignment = Alignment.Center) {
+                        Box(
+                            Modifier
+                                .size(232.dp)
+                                .border(1.dp, tint.copy(alpha = 0.10f), CircleShape),
+                        )
+                        Box(
+                            Modifier
+                                .size(168.dp)
+                                .border(1.dp, tint.copy(alpha = 0.20f), CircleShape),
+                        )
+                        AiGlyph(feature = feature, size = 104.dp, hero = true)
+                    }
+                    Text(
+                        text = AI_COMING_SOON_HEADLINE,
+                        style = MaterialTheme.typography.displayLarge,
+                        color = tokens.text,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        text = AI_COMING_SOON_BODY,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = tokens.textSecondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.widthIn(max = 320.dp),
+                    )
+                }
+
+                GlassCard(modifier = Modifier.fillMaxWidth().oceanEntrance(1)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
+                        Text(
+                            text = stringResource(R.string.ai_what_it_will_do).uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = tokens.textTertiary,
+                        )
+                        Text(
+                            text = feature.detail,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = tokens.textSecondary,
+                        )
+                    }
+                }
+
+                PrimaryButton(
+                    label = stringResource(R.string.ai_back_to_tools),
+                    onClick = onBack,
+                    modifier = Modifier.oceanEntrance(2, swayDp = 0.dp),
                 )
-                Box(
-                    Modifier
-                        .size(168.dp)
-                        .border(1.dp, tint.copy(alpha = 0.20f), CircleShape),
-                )
-                AiGlyph(feature = feature, size = 104.dp, hero = true)
+                Spacer(Modifier.size(geo.spacing.sm))
             }
-            Text(
-                text = AI_COMING_SOON_HEADLINE,
-                style = MaterialTheme.typography.displayLarge,
-                color = tokens.text,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = AI_COMING_SOON_BODY,
-                style = MaterialTheme.typography.bodyLarge,
-                color = tokens.textSecondary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = 320.dp),
-            )
         }
-
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                Text(
-                    text = stringResource(R.string.ai_what_it_will_do).uppercase(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = tokens.textTertiary,
-                )
-                Text(
-                    text = feature.detail,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = tokens.textSecondary,
-                )
-            }
-        }
-
-        PrimaryButton(label = stringResource(R.string.ai_back_to_tools), onClick = onBack)
-        Spacer(Modifier.size(geo.spacing.sm))
-    }
     }
 }

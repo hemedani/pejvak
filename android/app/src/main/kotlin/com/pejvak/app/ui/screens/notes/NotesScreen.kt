@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,6 +45,8 @@ import com.pejvak.app.ui.components.SkeletonRows
 import com.pejvak.app.ui.components.notes.AnnotationComposerSheet
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 
 /**
  * Every note the listener has written, in one searchable list. Notes are created
@@ -106,62 +108,67 @@ fun NotesScreen(
             )
         },
     ) { topInset ->
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.xl,
-            end = geo.spacing.xl,
-            top = topInset + geo.spacing.sm,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-    ) {
-        if (searching) {
-            item {
-                Text(
-                    text = stringResource(R.string.notes_search_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = tokens.textTertiary,
-                )
-            }
-        }
+        OceanCascade(key = state.rows.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = geo.spacing.xl,
+                    end = geo.spacing.xl,
+                    top = topInset + geo.spacing.sm,
+                    bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+                ),
+                verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+            ) {
+                if (searching) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.notes_search_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = tokens.textTertiary,
+                        )
+                    }
+                }
 
-        when {
-            state.loading -> item { SkeletonRows(count = 4) }
+                when {
+                    state.loading -> item { SkeletonRows(count = 4) }
 
-            state.rows.isEmpty() -> item {
-                if (filtering) {
-                    EmptyState(
-                        icon = "search",
-                        title = if (searching) {
-                            stringResource(R.string.notes_no_match_title, state.query.trim())
+                    state.rows.isEmpty() -> item {
+                        if (filtering) {
+                            EmptyState(
+                                icon = "search",
+                                title = if (searching) {
+                                    stringResource(R.string.notes_no_match_title, state.query.trim())
+                                } else {
+                                    stringResource(R.string.notes_no_range_title)
+                                },
+                                body = when {
+                                    searching && rangeActive -> stringResource(R.string.notes_no_match_body_range)
+                                    searching -> stringResource(R.string.notes_no_match_body)
+                                    else -> stringResource(R.string.notes_no_range_body)
+                                },
+                                modifier = Modifier.oceanEntrance(0),
+                            )
                         } else {
-                            stringResource(R.string.notes_no_range_title)
-                        },
-                        body = when {
-                            searching && rangeActive -> stringResource(R.string.notes_no_match_body_range)
-                            searching -> stringResource(R.string.notes_no_match_body)
-                            else -> stringResource(R.string.notes_no_range_body)
-                        },
-                    )
-                } else {
-                    EmptyState(
-                        icon = "notes",
-                        title = stringResource(R.string.notes_empty_title),
-                        body = stringResource(R.string.notes_empty_body),
-                    )
+                            EmptyState(
+                                icon = "notes",
+                                title = stringResource(R.string.notes_empty_title),
+                                body = stringResource(R.string.notes_empty_body),
+                                modifier = Modifier.oceanEntrance(0),
+                            )
+                        }
+                    }
+
+                    else -> itemsIndexed(state.rows, key = { _, hit -> hit.note.annotation.id }) { idx, hit ->
+                        NoteRow(
+                            hit = hit,
+                            onOpen = { viewModel.open(hit.note) },
+                            onDelete = { pendingDelete = hit.note },
+                            modifier = Modifier.oceanEntrance(idx, staggerEnabled = !searching),
+                        )
+                    }
                 }
             }
-
-            else -> items(state.rows, key = { it.note.annotation.id }) { hit ->
-                NoteRow(
-                    hit = hit,
-                    onOpen = { viewModel.open(hit.note) },
-                    onDelete = { pendingDelete = hit.note },
-                )
-            }
         }
-    }
     }
 
     if (menuOpen) {

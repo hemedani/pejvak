@@ -39,6 +39,8 @@ import com.pejvak.app.ui.components.ai.AiGlyph
 import com.pejvak.app.ui.theme.AuroraRamps
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 
 /**
  * The AI catalogue: four tools, each visibly pending, with the reason stated once
@@ -54,41 +56,46 @@ fun AiScreen(
     val geo = LocalPejvakGeometry.current
     val rows = listOf(AI_FEATURES.take(2), AI_FEATURES.drop(2))
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = geo.spacing.xl, vertical = geo.spacing.xl),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.xxl),
-    ) {
-        Hero()
-        Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
-            rows.forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
-                ) {
-                    row.forEach { feature ->
-                        FeatureCard(
-                            feature = feature,
-                            onClick = { onOpenTool(feature.id.wire) },
-                            modifier = Modifier.weight(1f).fillMaxHeight(),
-                        )
+    OceanCascade {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = geo.spacing.xl, vertical = geo.spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(geo.spacing.xxl),
+        ) {
+            Hero(modifier = Modifier.oceanEntrance(0, swayDp = 0.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
+                rows.forEachIndexed { rowIdx, row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                        horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
+                    ) {
+                        row.forEachIndexed { colIdx, feature ->
+                            FeatureCard(
+                                feature = feature,
+                                onClick = { onOpenTool(feature.id.wire) },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .oceanEntrance(1 + rowIdx * 2 + colIdx),
+                            )
+                        }
                     }
                 }
             }
+            AiWhyPanel(modifier = Modifier.oceanEntrance(1 + AI_FEATURES.size, swayDp = 0.dp))
+            Spacer(Modifier.size(geo.spacing.sm))
         }
-        AiWhyPanel()
-        Spacer(Modifier.size(geo.spacing.sm))
     }
 }
 
 @Composable
-private fun Hero() {
+private fun Hero(modifier: Modifier = Modifier) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
     val tint = AuroraRamps[aiGlyphRamp(AI_FALLBACK_FEATURE, tokens.isDark)].toList()[aiGlyphStop(tokens.isDark)]
-    Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
         Box(Modifier.size(120.dp), contentAlignment = Alignment.Center) {
             AiBloom(tint = tint, size = 120.dp)
             AiGlyph(feature = AI_FALLBACK_FEATURE, size = 72.dp, hero = true)

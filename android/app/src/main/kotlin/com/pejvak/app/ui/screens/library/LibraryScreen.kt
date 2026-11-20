@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -75,6 +74,8 @@ import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.field.TextField
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 import kotlinx.coroutines.launch
 
 private val LANGUAGE_OPTIONS = listOf(
@@ -363,253 +364,317 @@ private fun LibraryPage(
 ) {
     val geo = LocalPejvakGeometry.current
     val tokens = LocalPejvakTokens.current
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = topInset,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        if (view == LibraryView.Tracks && state.hasBothOrigins) {
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                    GlassChip(
-                        label = stringResource(R.string.library_origin_local),
-                        selected = state.origin == TrackOriginTab.Local,
-                        count = state.localCount,
-                        onClick = { onSetOrigin(TrackOriginTab.Local) },
-                    )
-                    GlassChip(
-                        label = stringResource(R.string.library_origin_online),
-                        selected = state.origin == TrackOriginTab.Online,
-                        count = state.onlineCount,
-                        onClick = { onSetOrigin(TrackOriginTab.Online) },
-                    )
-                }
-            }
-        }
-        if (state.spotlight != null && state.query.isEmpty() && view != LibraryView.Online) {
-            item { SpotlightCard(state.spotlight, onPlayTrack) }
-        }
-        if (state.missingCount > 0) {
-            item {
-                GlassCard(modifier = Modifier.clickable(onClick = onOpenMissing)) {
-                    InlineNotice(
-                        tone = NoticeTone.Danger,
-                        title = stringResource(R.string.library_missing_title),
-                        message = stringResource(R.string.library_missing_body),
-                    )
-                }
-            }
-        }
-        if (state.elsewhere != null && state.view == view) {
-            item {
-                Text(
-                    text = state.elsewhere,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = tokens.textSecondary,
-                )
-            }
-        }
+    val hasViewData = when (view) {
+        LibraryView.Online -> state.sources.isNotEmpty()
+        LibraryView.Tracks -> state.tracks.isNotEmpty()
+        LibraryView.Folders -> state.folders.isNotEmpty()
+        LibraryView.Playlists -> state.playlists.isNotEmpty()
+        LibraryView.Recent -> state.recents.isNotEmpty()
+    }
+    val staggerList = state.query.isEmpty()
 
-        when (view) {
-            LibraryView.Online -> {
-                if (state.sources.isEmpty()) {
-                    item {
-                        EmptyState(
-                            icon = "language",
-                            title = stringResource(R.string.discover_no_sources),
-                            body = stringResource(R.string.discover_no_sources_body),
+    OceanCascade(key = Triple(view, state.origin, hasViewData)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = geo.spacing.lg,
+                end = geo.spacing.lg,
+                top = topInset,
+                bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+            ),
+            verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+        ) {
+            var order = 0
+            if (view == LibraryView.Tracks && state.hasBothOrigins) {
+                val idx = order++
+                item {
+                    Row(
+                        modifier = Modifier.oceanEntrance(idx, staggerEnabled = staggerList, swayDp = 0.dp),
+                        horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                    ) {
+                        GlassChip(
+                            label = stringResource(R.string.library_origin_local),
+                            selected = state.origin == TrackOriginTab.Local,
+                            count = state.localCount,
+                            onClick = { onSetOrigin(TrackOriginTab.Local) },
+                        )
+                        GlassChip(
+                            label = stringResource(R.string.library_origin_online),
+                            selected = state.origin == TrackOriginTab.Online,
+                            count = state.onlineCount,
+                            onClick = { onSetOrigin(TrackOriginTab.Online) },
                         )
                     }
-                } else {
+                }
+            }
+            if (state.spotlight != null && state.query.isEmpty() && view != LibraryView.Online) {
+                val idx = order++
+                item { SpotlightCard(state.spotlight, onPlayTrack, modifier = Modifier.oceanEntrance(idx)) }
+            }
+            if (state.missingCount > 0) {
+                val idx = order++
+                item {
+                    GlassCard(
+                        modifier = Modifier
+                            .oceanEntrance(idx)
+                            .clickable(onClick = onOpenMissing),
+                    ) {
+                        InlineNotice(
+                            tone = NoticeTone.Danger,
+                            title = stringResource(R.string.library_missing_title),
+                            message = stringResource(R.string.library_missing_body),
+                        )
+                    }
+                }
+            }
+            if (state.elsewhere != null && state.view == view) {
+                item {
+                    Text(
+                        text = state.elsewhere,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.textSecondary,
+                    )
+                }
+            }
+
+            when (view) {
+                LibraryView.Online -> {
+                    if (state.sources.isEmpty()) {
+                        val idx = order++
+                        item {
+                            EmptyState(
+                                icon = "language",
+                                title = stringResource(R.string.discover_no_sources),
+                                body = stringResource(R.string.discover_no_sources_body),
+                                modifier = Modifier.oceanEntrance(idx, swayDp = 0.dp),
+                            )
+                        }
+                    } else {
+                        item {
+                            Text(
+                                text = stringResource(R.string.discover_sources_here),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = tokens.textSecondary,
+                            )
+                        }
+                        val idx = order++
+                        item {
+                            ListGroup(
+                                items = state.sources,
+                                modifier = Modifier.oceanEntrance(idx),
+                                staggerRows = true,
+                            ) { source, _ ->
+                                SourceShelfRow(source = source, onClick = { onOpenSource(source.id) })
+                            }
+                        }
+                    }
+                }
+
+                LibraryView.Tracks -> {
+                    if (state.tracks.isEmpty() && !state.loading) {
+                        val idx = order++
+                        item {
+                            EmptyState(
+                                icon = "music",
+                                title = if (state.query.isEmpty()) {
+                                    stringResource(R.string.library_empty_tracks)
+                                } else {
+                                    stringResource(R.string.library_no_match)
+                                },
+                                body = if (state.query.isEmpty()) {
+                                    stringResource(R.string.library_empty_tracks_body)
+                                } else {
+                                    stringResource(R.string.library_no_match_body, state.query)
+                                },
+                                modifier = Modifier.oceanEntrance(idx, swayDp = 0.dp),
+                            )
+                        }
+                    }
+                    val baseIndex = order
+                    order += state.tracks.size
+                    itemsIndexed(state.tracks, key = { _, card -> card.track.id }) { idx, card ->
+                        TrackRow(
+                            card = card,
+                            onOpenAi = onOpenAi,
+                            modifier = Modifier.oceanEntrance(baseIndex + idx, staggerEnabled = staggerList),
+                        ) {
+                            onOpenTrack(card.track.id)
+                        }
+                    }
+                }
+
+                LibraryView.Folders -> {
+                    if (state.folders.isEmpty() && !state.loading) {
+                        val idx = order++
+                        item {
+                            EmptyState(
+                                icon = "folder",
+                                title = if (state.query.isEmpty()) {
+                                    stringResource(R.string.library_empty_folders)
+                                } else {
+                                    stringResource(R.string.library_no_match)
+                                },
+                                body = if (state.query.isEmpty()) {
+                                    stringResource(R.string.library_empty_folders_body)
+                                } else {
+                                    stringResource(R.string.library_no_match_body, state.query)
+                                },
+                                modifier = Modifier.oceanEntrance(idx, swayDp = 0.dp),
+                            )
+                        }
+                    }
+                    val baseIndex = order
+                    order += state.folders.size
+                    itemsIndexed(state.folders, key = { _, summary -> summary.folder.key }) { idx, summary ->
+                        FolderRow(
+                            summary = summary,
+                            onOpenAi = onOpenAi,
+                            modifier = Modifier.oceanEntrance(baseIndex + idx, staggerEnabled = staggerList),
+                        ) { onOpenFolder(summary.folder.key) }
+                    }
+                }
+
+                LibraryView.Playlists -> {
+                    val createIdx = order++
+                    item {
+                        GlassCard(modifier = Modifier.oceanEntrance(createIdx, staggerEnabled = staggerList)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
+                                Text(
+                                    text = stringResource(R.string.library_playlist_new),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = tokens.text,
+                                )
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    TextField(
+                                        value = newPlaylist,
+                                        onValueChange = onNewPlaylistChange,
+                                        modifier = Modifier.weight(1f),
+                                        placeholder = stringResource(R.string.library_playlist_name),
+                                    )
+                                    BubbleButton(
+                                        icon = ICON_GLYPHS.getValue("add"),
+                                        contentDescription = stringResource(R.string.library_playlist_create),
+                                        onClick = onCreatePlaylist,
+                                        enabled = newPlaylist.isNotBlank(),
+                                    )
+                                }
+                            }
+                        }
+                    }
                     item {
                         Text(
-                            text = stringResource(R.string.discover_sources_here),
+                            text = "SMART",
                             style = MaterialTheme.typography.labelSmall,
                             color = tokens.textSecondary,
                         )
                     }
-                    item {
-                        ListGroup(items = state.sources) { source, _ ->
-                            SourceShelfRow(source = source, onClick = { onOpenSource(source.id) })
-                        }
-                    }
-                }
-            }
-
-            LibraryView.Tracks -> {
-                if (state.tracks.isEmpty() && !state.loading) {
-                    item {
-                        EmptyState(
-                            icon = "music",
-                            title = if (state.query.isEmpty()) {
-                                stringResource(R.string.library_empty_tracks)
-                            } else {
-                                stringResource(R.string.library_no_match)
-                            },
-                            body = if (state.query.isEmpty()) {
-                                stringResource(R.string.library_empty_tracks_body)
-                            } else {
-                                stringResource(R.string.library_no_match_body, state.query)
-                            },
-                        )
-                    }
-                }
-                items(state.tracks, key = { it.track.id }) { card ->
-                    TrackRow(card, onOpenAi = onOpenAi) {
-                        onOpenTrack(card.track.id)
-                    }
-                }
-            }
-
-            LibraryView.Folders -> {
-                if (state.folders.isEmpty() && !state.loading) {
-                    item {
-                        EmptyState(
-                            icon = "folder",
-                            title = if (state.query.isEmpty()) {
-                                stringResource(R.string.library_empty_folders)
-                            } else {
-                                stringResource(R.string.library_no_match)
-                            },
-                            body = if (state.query.isEmpty()) {
-                                stringResource(R.string.library_empty_folders_body)
-                            } else {
-                                stringResource(R.string.library_no_match_body, state.query)
-                            },
-                        )
-                    }
-                }
-                items(state.folders, key = { it.folder.key }) { summary ->
-                    FolderRow(summary, onOpenAi = onOpenAi) { onOpenFolder(summary.folder.key) }
-                }
-            }
-
-            LibraryView.Playlists -> {
-                item {
-                    GlassCard {
-                        Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                            Text(
-                                text = stringResource(R.string.library_playlist_new),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = tokens.text,
-                            )
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                TextField(
-                                    value = newPlaylist,
-                                    onValueChange = onNewPlaylistChange,
-                                    modifier = Modifier.weight(1f),
-                                    placeholder = stringResource(R.string.library_playlist_name),
-                                )
+                    val smartBase = order
+                    order += SMART_RULES.size
+                    itemsIndexed(SMART_RULES) { idx, rule ->
+                        GlassCard(
+                            modifier = Modifier
+                                .oceanEntrance(smartBase + idx, staggerEnabled = staggerList)
+                                .clickable { onOpenSmart(rule.id.wire) },
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(rule.title, style = MaterialTheme.typography.titleMedium, color = tokens.text)
+                                    Text(
+                                        rule.tagline,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = tokens.textSecondary
+                                    )
+                                }
                                 BubbleButton(
-                                    icon = ICON_GLYPHS.getValue("add"),
-                                    contentDescription = stringResource(R.string.library_playlist_create),
-                                    onClick = onCreatePlaylist,
-                                    enabled = newPlaylist.isNotBlank(),
+                                    icon = ICON_GLYPHS.getValue("play"),
+                                    contentDescription = rule.title,
+                                    onClick = { onOpenSmart(rule.id.wire) },
                                 )
                             }
                         }
                     }
-                }
-                item {
-                    Text(
-                        text = "SMART",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = tokens.textSecondary,
-                    )
-                }
-                items(SMART_RULES) { rule ->
-                    GlassCard(modifier = Modifier.clickable { onOpenSmart(rule.id.wire) }) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(rule.title, style = MaterialTheme.typography.titleMedium, color = tokens.text)
-                                Text(
-                                    rule.tagline,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = tokens.textSecondary
-                                )
-                            }
-                            BubbleButton(
-                                icon = ICON_GLYPHS.getValue("play"),
-                                contentDescription = rule.title,
-                                onClick = { onOpenSmart(rule.id.wire) },
+                    if (state.playlists.isEmpty() && !state.loading) {
+                        val idx = order++
+                        item {
+                            EmptyState(
+                                icon = "playlist",
+                                title = if (state.query.isEmpty()) {
+                                    stringResource(R.string.library_empty_playlists)
+                                } else {
+                                    stringResource(R.string.library_no_match)
+                                },
+                                body = if (state.query.isEmpty()) {
+                                    stringResource(R.string.library_empty_playlists_body)
+                                } else {
+                                    stringResource(R.string.library_no_match_body, state.query)
+                                },
+                                modifier = Modifier.oceanEntrance(idx, swayDp = 0.dp),
                             )
                         }
                     }
-                }
-                if (state.playlists.isEmpty() && !state.loading) {
-                    item {
-                        EmptyState(
-                            icon = "playlist",
-                            title = if (state.query.isEmpty()) {
-                                stringResource(R.string.library_empty_playlists)
-                            } else {
-                                stringResource(R.string.library_no_match)
-                            },
-                            body = if (state.query.isEmpty()) {
-                                stringResource(R.string.library_empty_playlists_body)
-                            } else {
-                                stringResource(R.string.library_no_match_body, state.query)
-                            },
+                    val playlistBase = order
+                    order += state.playlists.size
+                    itemsIndexed(state.playlists, key = { _, summary -> summary.playlist.id }) { idx, summary ->
+                        PlaylistRow(
+                            summary = summary,
+                            onOpenAi = onOpenAi,
+                            modifier = Modifier.oceanEntrance(playlistBase + idx, staggerEnabled = staggerList),
+                            onOpen = { onOpenPlaylist(summary.playlist.id) },
+                            onDelete = { onDeletePlaylist(summary) },
                         )
                     }
                 }
-                items(state.playlists, key = { it.playlist.id }) { summary ->
-                    PlaylistRow(
-                        summary = summary,
-                        onOpenAi = onOpenAi,
-                        onOpen = { onOpenPlaylist(summary.playlist.id) },
-                        onDelete = { onDeletePlaylist(summary) },
-                    )
-                }
-            }
 
-            LibraryView.Recent -> {
-                if (state.recents.isEmpty() && !state.loading) {
-                    item {
-                        EmptyState(
-                            icon = "time",
-                            title = if (state.query.isEmpty()) {
-                                stringResource(R.string.library_empty_recent)
-                            } else {
-                                stringResource(R.string.library_no_match)
+                LibraryView.Recent -> {
+                    if (state.recents.isEmpty() && !state.loading) {
+                        val idx = order++
+                        item {
+                            EmptyState(
+                                icon = "time",
+                                title = if (state.query.isEmpty()) {
+                                    stringResource(R.string.library_empty_recent)
+                                } else {
+                                    stringResource(R.string.library_no_match)
+                                },
+                                body = if (state.query.isEmpty()) {
+                                    stringResource(R.string.library_empty_recent_body)
+                                } else {
+                                    stringResource(R.string.library_no_match_body, state.query)
+                                },
+                                modifier = Modifier.oceanEntrance(idx, swayDp = 0.dp),
+                            )
+                        }
+                    }
+                    val recentBase = order
+                    order += state.recents.size
+                    itemsIndexed(state.recents) { idx, play ->
+                        RecentRow(
+                            play = play,
+                            modifier = Modifier.oceanEntrance(recentBase + idx, staggerEnabled = staggerList),
+                            onOpen = {
+                                when (play) {
+                                    is RecentPlay.FolderPlay -> onOpenFolder(play.folder.key)
+                                    is RecentPlay.PlaylistPlay -> onOpenPlaylist(play.playlist.id)
+                                    is RecentPlay.TrackPlay -> onOpenTrack(play.track.id)
+                                }
                             },
-                            body = if (state.query.isEmpty()) {
-                                stringResource(R.string.library_empty_recent_body)
-                            } else {
-                                stringResource(R.string.library_no_match_body, state.query)
-                            },
+                            onPlay = { onPlayRecent(play) },
                         )
                     }
                 }
-                items(state.recents) { play ->
-                    RecentRow(
-                        play = play,
-                        onOpen = {
-                            when (play) {
-                                is RecentPlay.FolderPlay -> onOpenFolder(play.folder.key)
-                                is RecentPlay.PlaylistPlay -> onOpenPlaylist(play.playlist.id)
-                                is RecentPlay.TrackPlay -> onOpenTrack(play.track.id)
-                            }
-                        },
-                        onPlay = { onPlayRecent(play) },
-                    )
-                }
             }
-        }
 
-        item {
-            PrimaryButton(
-                label = stringResource(R.string.library_add_audio),
-                onClick = onImport,
-            )
+            val footerIdx = order
+            item {
+                PrimaryButton(
+                    label = stringResource(R.string.library_add_audio),
+                    onClick = onImport,
+                    modifier = Modifier.oceanEntrance(footerIdx, staggerEnabled = staggerList, swayDp = 0.dp),
+                )
+            }
         }
     }
 }
@@ -632,10 +697,14 @@ private fun viewIcon(view: LibraryView): String = when (view) {
 }
 
 @Composable
-private fun SpotlightCard(card: TrackCard, onPlay: (TrackCard) -> Unit) {
+private fun SpotlightCard(
+    card: TrackCard,
+    onPlay: (TrackCard) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassCard {
+    GlassCard(modifier = modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PaletteTile(
                 contentHash = card.track.contentHash,
@@ -688,10 +757,15 @@ private fun SourceShelfRow(source: OnlineSource, onClick: () -> Unit) {
 }
 
 @Composable
-private fun TrackRow(card: TrackCard, onOpenAi: () -> Unit, onClick: () -> Unit) {
+private fun TrackRow(
+    card: TrackCard,
+    onOpenAi: () -> Unit,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassCard(modifier = Modifier.clickable(onClick = onClick)) {
+    GlassCard(modifier = modifier.clickable(onClick = onClick)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PaletteTile(
                 contentHash = card.track.contentHash,
@@ -739,10 +813,15 @@ private fun trackMeta(card: TrackCard): String {
 }
 
 @Composable
-private fun FolderRow(summary: FolderSummary, onOpenAi: () -> Unit, onClick: () -> Unit) {
+private fun FolderRow(
+    summary: FolderSummary,
+    onOpenAi: () -> Unit,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassCard(modifier = Modifier.clickable(onClick = onClick)) {
+    GlassCard(modifier = modifier.clickable(onClick = onClick)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PaletteTile(
                 contentHash = summary.folder.key,
@@ -797,10 +876,11 @@ private fun PlaylistRow(
     onOpenAi: () -> Unit,
     onOpen: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassCard(modifier = Modifier.clickable(onClick = onOpen)) {
+    GlassCard(modifier = modifier.clickable(onClick = onOpen)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PaletteTile(
                 contentHash = summary.playlist.id,
@@ -835,7 +915,12 @@ private fun PlaylistRow(
 }
 
 @Composable
-private fun RecentRow(play: RecentPlay, onOpen: () -> Unit, onPlay: () -> Unit) {
+private fun RecentRow(
+    play: RecentPlay,
+    onOpen: () -> Unit,
+    onPlay: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
     val title = when (play) {
@@ -848,7 +933,7 @@ private fun RecentRow(play: RecentPlay, onOpen: () -> Unit, onPlay: () -> Unit) 
         is RecentPlay.PlaylistPlay -> stringResource(R.string.library_view_playlists)
         is RecentPlay.TrackPlay -> play.track.author ?: formatDuration(play.track.durationSec)
     }
-    GlassCard(modifier = Modifier.clickable(onClick = onOpen)) {
+    GlassCard(modifier = modifier.clickable(onClick = onOpen)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PaletteTile(
                 contentHash = when (play) {

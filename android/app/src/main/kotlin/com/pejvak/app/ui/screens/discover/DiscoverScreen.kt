@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
@@ -21,6 +21,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
@@ -41,6 +42,8 @@ import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
@@ -155,41 +158,46 @@ private fun ContinuePage(
         )
         return
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = topInset,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        items(cards, key = { it.key }) { card ->
-            ListGroup(items = listOf(card)) { _, _ ->
-                ListRow(
-                    title = card.title,
-                    subtitle = "${card.sourceName} · ${
-                        stringResource(
-                            R.string.discover_resume_at,
-                            formatResume(card.lastPositionSec)
+    OceanCascade(key = cards.isNotEmpty()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = geo.spacing.lg,
+                end = geo.spacing.lg,
+                top = topInset,
+                bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+            ),
+            verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+        ) {
+            itemsIndexed(cards, key = { _, card -> card.key }) { idx, card ->
+                ListGroup(
+                    items = listOf(card),
+                    modifier = Modifier.oceanEntrance(idx),
+                ) { _, _ ->
+                    ListRow(
+                        title = card.title,
+                        subtitle = "${card.sourceName} · ${
+                            stringResource(
+                                R.string.discover_resume_at,
+                                formatResume(card.lastPositionSec)
+                            )
+                        }",
+                        meta = listOfNotNull(
+                            resumeMeta(card).ifBlank { null },
+                            describeDownloadState(downloadStates[card.key])
                         )
-                    }",
-                    meta = listOfNotNull(
-                        resumeMeta(card).ifBlank { null },
-                        describeDownloadState(downloadStates[card.key])
+                            .joinToString(" · ")
+                            .ifBlank { null },
+                        leading = {
+                            PaletteTile(
+                                contentHash = card.key,
+                                label = card.title,
+                                size = geo.tiles.md,
+                            )
+                        },
+                        onClick = { onOpen(card.key, card.lastTrackId, card.lastPositionSec) },
                     )
-                        .joinToString(" · ")
-                        .ifBlank { null },
-                    leading = {
-                        PaletteTile(
-                            contentHash = card.key,
-                            label = card.title,
-                            size = geo.tiles.md,
-                        )
-                    },
-                    onClick = { onOpen(card.key, card.lastTrackId, card.lastPositionSec) },
-                )
+                }
             }
         }
     }
@@ -212,44 +220,49 @@ private fun FavoritesPage(
         )
         return
     }
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = topInset,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        items(favorites, key = { it.key }) { saved ->
-            ListGroup(items = listOf(saved)) { _, _ ->
-                ListRow(
-                    title = saved.title,
-                    subtitle = saved.subtitle ?: saved.sourceId,
-                    meta = listOfNotNull(
-                        stringResource(R.string.discover_track_count, saved.trackCount),
-                        describeDownloadState(saved.downloadState),
-                    ).joinToString(" · "),
-                    leading = {
-                        PaletteTile(
-                            contentHash = saved.key,
-                            label = saved.title,
-                            artworkUrl = saved.artworkUrl,
-                            size = geo.tiles.md,
-                        )
-                    },
-                    actions = listOf(
-                        RowAction(
-                            id = "unfavorite",
-                            icon = "favorite",
-                            label = stringResource(R.string.discover_unfavorite),
-                            priority = 0,
-                            onClick = { onUnfavorite(saved.key) },
+    OceanCascade(key = favorites.isNotEmpty()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = geo.spacing.lg,
+                end = geo.spacing.lg,
+                top = topInset,
+                bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+            ),
+            verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+        ) {
+            itemsIndexed(favorites, key = { _, saved -> saved.key }) { idx, saved ->
+                ListGroup(
+                    items = listOf(saved),
+                    modifier = Modifier.oceanEntrance(idx),
+                ) { _, _ ->
+                    ListRow(
+                        title = saved.title,
+                        subtitle = saved.subtitle ?: saved.sourceId,
+                        meta = listOfNotNull(
+                            stringResource(R.string.discover_track_count, saved.trackCount),
+                            describeDownloadState(saved.downloadState),
+                        ).joinToString(" · "),
+                        leading = {
+                            PaletteTile(
+                                contentHash = saved.key,
+                                label = saved.title,
+                                artworkUrl = saved.artworkUrl,
+                                size = geo.tiles.md,
+                            )
+                        },
+                        actions = listOf(
+                            RowAction(
+                                id = "unfavorite",
+                                icon = "favorite",
+                                label = stringResource(R.string.discover_unfavorite),
+                                priority = 0,
+                                onClick = { onUnfavorite(saved.key) },
+                            ),
                         ),
-                    ),
-                    onClick = { onOpen(saved.key) },
-                )
+                        onClick = { onOpen(saved.key) },
+                    )
+                }
             }
         }
     }
@@ -265,51 +278,61 @@ private fun BrowsePage(
 ) {
     val geo = LocalPejvakGeometry.current
     val tokens = LocalPejvakTokens.current
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = topInset,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        item {
-            GlassChip(
-                label = stringResource(R.string.discover_browse_all_languages),
-                icon = "language",
-                onClick = onOpenLanguageSheet,
-            )
-        }
-        item {
-            Text(
-                text = stringResource(R.string.discover_sources_here),
-                style = MaterialTheme.typography.labelSmall,
-                color = tokens.textSecondary,
-            )
-        }
-        if (state.sources.isEmpty()) {
+    OceanCascade(key = state.sources.isNotEmpty()) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = geo.spacing.lg,
+                end = geo.spacing.lg,
+                top = topInset,
+                bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+            ),
+            verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+        ) {
             item {
-                EmptyState(
+                GlassChip(
+                    label = stringResource(R.string.discover_browse_all_languages),
                     icon = "language",
-                    title = stringResource(R.string.discover_no_sources),
-                    body = stringResource(R.string.discover_no_sources_body),
+                    modifier = Modifier.oceanEntrance(0, swayDp = 0.dp),
+                    onClick = onOpenLanguageSheet,
                 )
             }
-        } else {
             item {
-                ListGroup(items = state.sources) { source, _ ->
-                    SourceRow(source = source, onClick = { onOpenSource(source.id) })
+                Text(
+                    text = stringResource(R.string.discover_sources_here),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = tokens.textSecondary,
+                    modifier = Modifier.oceanEntrance(1, swayDp = 0.dp, riseDp = 8.dp),
+                )
+            }
+            if (state.sources.isEmpty()) {
+                item {
+                    EmptyState(
+                        icon = "language",
+                        title = stringResource(R.string.discover_no_sources),
+                        body = stringResource(R.string.discover_no_sources_body),
+                        modifier = Modifier.oceanEntrance(2, swayDp = 0.dp),
+                    )
+                }
+            } else {
+                item {
+                    ListGroup(
+                        items = state.sources,
+                        modifier = Modifier.oceanEntrance(2),
+                        staggerRows = true,
+                    ) { source, _ ->
+                        SourceRow(source = source, onClick = { onOpenSource(source.id) })
+                    }
                 }
             }
-        }
-        item {
-            GlassChip(
-                label = stringResource(R.string.discover_language_sources),
-                icon = "language",
-                onClick = { onOpenLanguage(state.languageCode) },
-            )
+            item {
+                GlassChip(
+                    label = stringResource(R.string.discover_language_sources),
+                    icon = "language",
+                    modifier = Modifier.oceanEntrance(3, swayDp = 0.dp),
+                    onClick = { onOpenLanguage(state.languageCode) },
+                )
+            }
         }
     }
 }

@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -61,6 +62,8 @@ import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.components.SegmentedControl
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 import java.io.File
 
 /**
@@ -123,233 +126,251 @@ fun SettingsScreen(
             )
         },
     ) { topInset ->
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            
-            .verticalScroll(rememberScrollState())
-            .padding(
-                start = geo.spacing.xl,
-                end = geo.spacing.xl,
-                top = topInset + geo.spacing.md,
-                bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-            ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.xl),
-    ) {
-
-        CardSection(title = stringResource(R.string.settings_account)) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(geo.spacing.lg),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
+        OceanCascade {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(
+                        start = geo.spacing.xl,
+                        end = geo.spacing.xl,
+                        top = topInset + geo.spacing.md,
+                        bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(geo.spacing.xl),
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(geo.tiles.md)
-                        .clip(CircleShape)
-                        .background(tokens.glassFill),
-                    contentAlignment = Alignment.Center,
+
+                CardSection(
+                    title = stringResource(R.string.settings_account),
+                    modifier = Modifier.oceanEntrance(0),
                 ) {
-                    Text(
-                        text = initialOf(state.user),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = tokens.accent,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(geo.spacing.lg),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(geo.tiles.md)
+                                .clip(CircleShape)
+                                .background(tokens.glassFill),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = initialOf(state.user),
+                                style = MaterialTheme.typography.titleLarge,
+                                color = tokens.accent,
+                            )
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = displayName(state.user) ?: stringResource(R.string.settings_signed_in),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = tokens.text,
+                            )
+                            state.user?.email?.takeIf { it.isNotBlank() }?.let { email ->
+                                Text(
+                                    text = email,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = tokens.textTertiary,
+                                )
+                            }
+                        }
+                    }
                 }
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = displayName(state.user) ?: stringResource(R.string.settings_signed_in),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = tokens.text,
-                    )
-                    state.user?.email?.takeIf { it.isNotBlank() }?.let { email ->
-                        Text(
-                            text = email,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = tokens.textTertiary,
+
+                CardSection(
+                    title = stringResource(R.string.settings_playback),
+                    footer = stringResource(R.string.settings_playback_footer),
+                    modifier = Modifier.oceanEntrance(1),
+                ) {
+                    Box(Modifier.fillMaxWidth().padding(geo.spacing.lg)) {
+                        SegmentedControl(
+                            options = SPEED_OPTIONS.map { formatSpeed(it) },
+                            selectedIndex = SPEED_OPTIONS.indexOf(prefs.defaultSpeed).coerceAtLeast(0),
+                            onSelect = { index -> viewModel.setDefaultSpeed(SPEED_OPTIONS[index]) },
                         )
                     }
                 }
-            }
-        }
 
-        CardSection(
-            title = stringResource(R.string.settings_playback),
-            footer = stringResource(R.string.settings_playback_footer),
-        ) {
-            Box(Modifier.fillMaxWidth().padding(geo.spacing.lg)) {
-                SegmentedControl(
-                    options = SPEED_OPTIONS.map { formatSpeed(it) },
-                    selectedIndex = SPEED_OPTIONS.indexOf(prefs.defaultSpeed).coerceAtLeast(0),
-                    onSelect = { index -> viewModel.setDefaultSpeed(SPEED_OPTIONS[index]) },
-                )
-            }
-        }
-
-        CardSection(
-            title = stringResource(R.string.settings_appearance),
-            footer = stringResource(R.string.settings_appearance_footer),
-        ) {
-            Box(Modifier.fillMaxWidth().padding(geo.spacing.lg)) {
-                SegmentedControl(
-                    options = listOf(
-                        stringResource(R.string.settings_theme_system),
-                        stringResource(R.string.settings_theme_light),
-                        stringResource(R.string.settings_theme_dark),
-                    ),
-                    selectedIndex = when (prefs.themePreference) {
-                        ThemePreference.System -> 0
-                        ThemePreference.Light -> 1
-                        ThemePreference.Dark -> 2
-                    },
-                    onSelect = { index ->
-                        viewModel.setTheme(
-                            when (index) {
-                                1 -> ThemePreference.Light
-                                2 -> ThemePreference.Dark
-                                else -> ThemePreference.System
+                CardSection(
+                    title = stringResource(R.string.settings_appearance),
+                    footer = stringResource(R.string.settings_appearance_footer),
+                    modifier = Modifier.oceanEntrance(2),
+                ) {
+                    Box(Modifier.fillMaxWidth().padding(geo.spacing.lg)) {
+                        SegmentedControl(
+                            options = listOf(
+                                stringResource(R.string.settings_theme_system),
+                                stringResource(R.string.settings_theme_light),
+                                stringResource(R.string.settings_theme_dark),
+                            ),
+                            selectedIndex = when (prefs.themePreference) {
+                                ThemePreference.System -> 0
+                                ThemePreference.Light -> 1
+                                ThemePreference.Dark -> 2
+                            },
+                            onSelect = { index ->
+                                viewModel.setTheme(
+                                    when (index) {
+                                        1 -> ThemePreference.Light
+                                        2 -> ThemePreference.Dark
+                                        else -> ThemePreference.System
+                                    },
+                                )
                             },
                         )
-                    },
-                )
-            }
-        }
+                    }
+                }
 
-        CardSection(
-            title = stringResource(R.string.settings_motion),
-            footer = stringResource(R.string.settings_motion_footer),
-        ) {
-            Box(Modifier.fillMaxWidth().padding(geo.spacing.lg)) {
-                SegmentedControl(
-                    options = listOf(
-                        stringResource(R.string.settings_motion_system),
-                        stringResource(R.string.settings_motion_full),
-                        stringResource(R.string.settings_motion_reduced),
-                    ),
-                    selectedIndex = when (prefs.motionPreference) {
-                        MotionPreference.System -> 0
-                        MotionPreference.Full -> 1
-                        MotionPreference.Reduced -> 2
-                    },
-                    onSelect = { index ->
-                        viewModel.setMotionPreference(
-                            when (index) {
-                                1 -> MotionPreference.Full
-                                2 -> MotionPreference.Reduced
-                                else -> MotionPreference.System
+                CardSection(
+                    title = stringResource(R.string.settings_motion),
+                    footer = stringResource(R.string.settings_motion_footer),
+                    modifier = Modifier.oceanEntrance(3),
+                ) {
+                    Box(Modifier.fillMaxWidth().padding(geo.spacing.lg)) {
+                        SegmentedControl(
+                            options = listOf(
+                                stringResource(R.string.settings_motion_system),
+                                stringResource(R.string.settings_motion_full),
+                                stringResource(R.string.settings_motion_reduced),
+                            ),
+                            selectedIndex = when (prefs.motionPreference) {
+                                MotionPreference.System -> 0
+                                MotionPreference.Full -> 1
+                                MotionPreference.Reduced -> 2
+                            },
+                            onSelect = { index ->
+                                viewModel.setMotionPreference(
+                                    when (index) {
+                                        1 -> MotionPreference.Full
+                                        2 -> MotionPreference.Reduced
+                                        else -> MotionPreference.System
+                                    },
+                                )
                             },
                         )
-                    },
-                )
-            }
-            RowDivider()
-            CardRow(
-                icon = "sparkle",
-                label = stringResource(R.string.settings_haptics),
-                detail = stringResource(R.string.settings_haptics_detail),
-                trailing = {
-                    Switch(
-                        checked = prefs.hapticsEnabled,
-                        onCheckedChange = { viewModel.setHapticsEnabled(it) },
+                    }
+                    RowDivider()
+                    CardRow(
+                        icon = "sparkle",
+                        label = stringResource(R.string.settings_haptics),
+                        detail = stringResource(R.string.settings_haptics_detail),
+                        trailing = {
+                            Switch(
+                                checked = prefs.hapticsEnabled,
+                                onCheckedChange = { viewModel.setHapticsEnabled(it) },
+                            )
+                        },
                     )
-                },
-            )
-        }
+                }
 
-        CardSection(
-            title = stringResource(R.string.settings_storage_sync),
-            footer = describeHistoryQuota(state.quota),
-        ) {
-            CardRow(
-                icon = "library",
-                label = stringResource(R.string.settings_imported_audio),
-                value = formatBytes(state.storageBytes),
-            )
-            RowDivider()
-            CardRow(
-                icon = "sync",
-                label = stringResource(R.string.settings_pending_queue),
-                value = state.pending.total.toString(),
-                detail = describePendingQueue(
-                    tracks = state.pending.tracks,
-                    sessions = state.pending.sessions,
-                    annotations = state.pending.annotations,
-                    playlists = state.pending.playlists,
-                    contextPlays = state.pending.contextPlays,
-                    onlineCollections = state.pending.onlineCollections,
-                ),
-            )
-            RowDivider()
-            CardRow(
-                icon = "time",
-                label = stringResource(R.string.settings_last_synced),
-                value = describeLastSync(state.lastSyncAt, System.currentTimeMillis()),
-            )
-            RowDivider()
-            Box(Modifier.fillMaxWidth().padding(geo.spacing.lg)) {
-                PrimaryButton(
-                    label = stringResource(R.string.settings_sync_now),
-                    loading = state.syncing,
-                    onClick = { viewModel.syncNow() },
-                )
+                CardSection(
+                    title = stringResource(R.string.settings_storage_sync),
+                    footer = describeHistoryQuota(state.quota),
+                    modifier = Modifier.oceanEntrance(4),
+                ) {
+                    CardRow(
+                        icon = "library",
+                        label = stringResource(R.string.settings_imported_audio),
+                        value = formatBytes(state.storageBytes),
+                    )
+                    RowDivider()
+                    CardRow(
+                        icon = "sync",
+                        label = stringResource(R.string.settings_pending_queue),
+                        value = state.pending.total.toString(),
+                        detail = describePendingQueue(
+                            tracks = state.pending.tracks,
+                            sessions = state.pending.sessions,
+                            annotations = state.pending.annotations,
+                            playlists = state.pending.playlists,
+                            contextPlays = state.pending.contextPlays,
+                            onlineCollections = state.pending.onlineCollections,
+                        ),
+                    )
+                    RowDivider()
+                    CardRow(
+                        icon = "time",
+                        label = stringResource(R.string.settings_last_synced),
+                        value = describeLastSync(state.lastSyncAt, System.currentTimeMillis()),
+                    )
+                    RowDivider()
+                    Box(Modifier.fillMaxWidth().padding(geo.spacing.lg)) {
+                        PrimaryButton(
+                            label = stringResource(R.string.settings_sync_now),
+                            loading = state.syncing,
+                            onClick = { viewModel.syncNow() },
+                        )
+                    }
+                }
+
+                CardSection(
+                    title = stringResource(R.string.settings_library),
+                    modifier = Modifier.oceanEntrance(5),
+                ) {
+                    CardRow(
+                        icon = "notes",
+                        label = stringResource(R.string.settings_all_notes),
+                        detail = stringResource(R.string.settings_all_notes_detail),
+                        onClick = onOpenNotes,
+                    )
+                }
+
+                val context = LocalContext.current
+                val crashReport = remember { CrashLog.latest(context) }
+                CardSection(
+                    title = stringResource(R.string.settings_diagnostics),
+                    footer = stringResource(R.string.settings_diagnostics_footer),
+                    modifier = Modifier.oceanEntrance(6),
+                ) {
+                    CardRow(
+                        icon = "share",
+                        label = stringResource(R.string.settings_crash_share),
+                        detail = if (crashReport != null) {
+                            CrashLog.summary(context)
+                        } else {
+                            stringResource(R.string.settings_crash_none)
+                        },
+                        onClick = crashReport?.let { file -> { shareCrash(context, file) } },
+                    )
+                }
+
+                if (BuildConfig.DEBUG) {
+                    CardSection(
+                        title = stringResource(R.string.settings_developer),
+                        modifier = Modifier.oceanEntrance(7),
+                    ) {
+                        CardRow(
+                            icon = "settings",
+                            label = stringResource(R.string.settings_gallery),
+                            detail = stringResource(R.string.settings_gallery_detail),
+                            onClick = onOpenGallery,
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = { confirmSignOut = true },
+                    enabled = !state.signingOut,
+                    shape = RoundedCornerShape(geo.radius.pill),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = tokens.danger,
+                        contentColor = tokens.onAccent,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(geo.controls.xl)
+                        .oceanEntrance(if (BuildConfig.DEBUG) 8 else 7, swayDp = 0.dp),
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_sign_out),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+                Spacer(Modifier.size(geo.spacing.sm))
             }
         }
-
-        CardSection(title = stringResource(R.string.settings_library)) {
-            CardRow(
-                icon = "notes",
-                label = stringResource(R.string.settings_all_notes),
-                detail = stringResource(R.string.settings_all_notes_detail),
-                onClick = onOpenNotes,
-            )
-        }
-
-        val context = LocalContext.current
-        val crashReport = remember { CrashLog.latest(context) }
-        CardSection(
-            title = stringResource(R.string.settings_diagnostics),
-            footer = stringResource(R.string.settings_diagnostics_footer),
-        ) {
-            CardRow(
-                icon = "share",
-                label = stringResource(R.string.settings_crash_share),
-                detail = if (crashReport != null) {
-                    CrashLog.summary(context)
-                } else {
-                    stringResource(R.string.settings_crash_none)
-                },
-                onClick = crashReport?.let { file -> { shareCrash(context, file) } },
-            )
-        }
-
-        if (BuildConfig.DEBUG) {
-            CardSection(title = stringResource(R.string.settings_developer)) {
-                CardRow(
-                    icon = "settings",
-                    label = stringResource(R.string.settings_gallery),
-                    detail = stringResource(R.string.settings_gallery_detail),
-                    onClick = onOpenGallery,
-                )
-            }
-        }
-
-        Button(
-            onClick = { confirmSignOut = true },
-            enabled = !state.signingOut,
-            shape = RoundedCornerShape(geo.radius.pill),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = tokens.danger,
-                contentColor = tokens.onAccent,
-            ),
-            modifier = Modifier.fillMaxWidth().height(geo.controls.xl),
-        ) {
-            Text(
-                text = stringResource(R.string.settings_sign_out),
-                style = MaterialTheme.typography.labelLarge,
-            )
-        }
-        Spacer(Modifier.size(geo.spacing.sm))
-    }
     }
 }
 

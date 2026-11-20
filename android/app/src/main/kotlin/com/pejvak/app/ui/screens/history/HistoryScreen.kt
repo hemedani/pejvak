@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -82,6 +82,8 @@ import com.pejvak.app.ui.components.history.DateRangeSheet
 import com.pejvak.app.ui.components.history.SessionDetailSheet
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -327,109 +329,144 @@ private fun HistoryList(
     onOpenAi: () -> Unit,
 ) {
     val geo = LocalPejvakGeometry.current
-    val tokens = LocalPejvakTokens.current
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = topInset,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-    ) {
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                GlassChip(
-                    label = stringResource(R.string.history_tab_sessions),
-                    selected = state.tab == HistoryTab.Sessions,
-                    onClick = { onTab(HistoryTab.Sessions) },
-                )
-                GlassChip(
-                    label = stringResource(R.string.history_tab_collections),
-                    selected = state.tab == HistoryTab.Collections,
-                    onClick = { onTab(HistoryTab.Collections) },
-                )
-                if (state.tab == HistoryTab.Sessions) {
-                    GlassChip(
-                        label = if (state.selectionMode) stringResource(R.string.action_done)
-                        else stringResource(R.string.history_select),
-                        selected = state.selectionMode,
-                        onClick = onToggleSelectionMode,
-                    )
-                }
-            }
-        }
-        if (state.selectionMode && state.selected.isNotEmpty()) {
-            item {
-                PrimaryButton(
-                    label = stringResource(R.string.history_delete_selected, state.selected.size),
-                    onClick = onDeleteSelected,
-                )
-            }
-        }
+    val hasData =
+        if (state.tab == HistoryTab.Sessions) state.sections.isNotEmpty() else state.filteredCollections.isNotEmpty()
+    val staggerList = state.query.isBlank()
 
-        if (state.tab == HistoryTab.Sessions) {
-            if (state.sections.isEmpty() && !state.loading) {
-                item {
-                    EmptyState(
-                        icon = "history",
-                        title = stringResource(R.string.history_empty),
-                        body = stringResource(R.string.history_empty_body),
+    OceanCascade(key = Pair(state.tab, hasData)) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = geo.spacing.lg,
+                end = geo.spacing.lg,
+                top = topInset,
+                bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+            ),
+            verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+        ) {
+            var order = 0
+            val chipIdx = order++
+            item {
+                Row(
+                    modifier = Modifier.oceanEntrance(chipIdx, staggerEnabled = staggerList, swayDp = 0.dp),
+                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                ) {
+                    GlassChip(
+                        label = stringResource(R.string.history_tab_sessions),
+                        selected = state.tab == HistoryTab.Sessions,
+                        onClick = { onTab(HistoryTab.Sessions) },
                     )
+                    GlassChip(
+                        label = stringResource(R.string.history_tab_collections),
+                        selected = state.tab == HistoryTab.Collections,
+                        onClick = { onTab(HistoryTab.Collections) },
+                    )
+                    if (state.tab == HistoryTab.Sessions) {
+                        GlassChip(
+                            label = if (state.selectionMode) stringResource(R.string.action_done)
+                            else stringResource(R.string.history_select),
+                            selected = state.selectionMode,
+                            onClick = onToggleSelectionMode,
+                        )
+                    }
                 }
             }
-            state.sections.forEach { section ->
-                item(key = "h-${section.key}") { SectionHeader(section) }
-                items(section.data, key = { it.stretch.id }) { entry ->
-                    StretchCard(
-                        entry = entry,
-                        selectionMode = state.selectionMode,
-                        selected = state.selected.containsAll(entry.items.map { it.session.id }),
-                        onToggle = { onToggleSelected(entry) },
-                        onOpen = { onOpenStretch(entry) },
-                        onDelete = { onDeleteStretch(entry) },
-                        onOpenAi = onOpenAi,
-                    )
-                }
-            }
-            if (state.hasMore && state.query.isBlank()) {
+            if (state.selectionMode && state.selected.isNotEmpty()) {
                 item {
                     PrimaryButton(
-                        label = stringResource(R.string.history_load_more),
-                        onClick = onLoadMore,
+                        label = stringResource(R.string.history_delete_selected, state.selected.size),
+                        onClick = onDeleteSelected,
                     )
                 }
             }
-        } else {
-            if (state.filteredCollections.isEmpty() && !state.loading) {
-                item {
-                    EmptyState(
-                        icon = "queue",
-                        title = stringResource(R.string.history_no_collections),
-                        body = stringResource(R.string.history_no_collections_body),
+
+            if (state.tab == HistoryTab.Sessions) {
+                if (state.sections.isEmpty() && !state.loading) {
+                    val emptyIdx = order++
+                    item {
+                        EmptyState(
+                            icon = "history",
+                            title = stringResource(R.string.history_empty),
+                            body = stringResource(R.string.history_empty_body),
+                            modifier = Modifier.oceanEntrance(emptyIdx, swayDp = 0.dp),
+                        )
+                    }
+                }
+                state.sections.forEach { section ->
+                    val headerIdx = order++
+                    item(key = "h-${section.key}") {
+                        SectionHeader(
+                            section = section,
+                            modifier = Modifier.oceanEntrance(
+                                index = headerIdx,
+                                staggerEnabled = staggerList,
+                                riseDp = 8.dp,
+                                swayDp = 0.dp,
+                                startScale = 1f,
+                            ),
+                        )
+                    }
+                    val sectionBase = order
+                    order += section.data.size
+                    itemsIndexed(section.data, key = { _, entry -> entry.stretch.id }) { idx, entry ->
+                        StretchCard(
+                            entry = entry,
+                            selectionMode = state.selectionMode,
+                            selected = state.selected.containsAll(entry.items.map { it.session.id }),
+                            onToggle = { onToggleSelected(entry) },
+                            onOpen = { onOpenStretch(entry) },
+                            onDelete = { onDeleteStretch(entry) },
+                            onOpenAi = onOpenAi,
+                            modifier = Modifier.oceanEntrance(sectionBase + idx, staggerEnabled = staggerList),
+                        )
+                    }
+                }
+                if (state.hasMore && state.query.isBlank()) {
+                    item {
+                        PrimaryButton(
+                            label = stringResource(R.string.history_load_more),
+                            onClick = onLoadMore,
+                        )
+                    }
+                }
+            } else {
+                if (state.filteredCollections.isEmpty() && !state.loading) {
+                    val emptyIdx = order++
+                    item {
+                        EmptyState(
+                            icon = "queue",
+                            title = stringResource(R.string.history_no_collections),
+                            body = stringResource(R.string.history_no_collections_body),
+                            modifier = Modifier.oceanEntrance(emptyIdx, swayDp = 0.dp),
+                        )
+                    }
+                }
+                val runBase = order
+                order += state.filteredCollections.size
+                itemsIndexed(state.filteredCollections, key = { _, run -> run.id }) { idx, run ->
+                    RunCard(
+                        run = run,
+                        onOpen = { onOpenRun(run) },
+                        onDelete = { onDeleteRun(run) },
+                        onOpenAi = onOpenAi,
+                        modifier = Modifier.oceanEntrance(runBase + idx, staggerEnabled = staggerList),
                     )
                 }
             }
-            items(state.filteredCollections, key = { it.id }) { run ->
-                RunCard(
-                    run = run,
-                    onOpen = { onOpenRun(run) },
-                    onDelete = { onDeleteRun(run) },
-                    onOpenAi = onOpenAi,
-                )
-            }
+            item { Spacer(Modifier.height(geo.spacing.xxl)) }
         }
-        item { Spacer(Modifier.height(geo.spacing.xxl)) }
     }
 }
 
 @Composable
-private fun SectionHeader(section: HistorySection<HistoryStretchEntry>) {
+private fun SectionHeader(
+    section: HistorySection<HistoryStretchEntry>,
+    modifier: Modifier = Modifier,
+) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
     Row(
-        Modifier.fillMaxWidth().padding(top = geo.spacing.md),
+        modifier.fillMaxWidth().padding(top = geo.spacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -455,11 +492,12 @@ private fun StretchCard(
     onOpen: () -> Unit,
     onDelete: () -> Unit,
     onOpenAi: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
     val stretch = entry.stretch
-    GlassCard(modifier = Modifier.clickable(onClick = if (selectionMode) onToggle else onOpen)) {
+    GlassCard(modifier = modifier.clickable(onClick = if (selectionMode) onToggle else onOpen)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -517,10 +555,11 @@ private fun RunCard(
     onOpen: () -> Unit,
     onDelete: () -> Unit,
     onOpenAi: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassCard(modifier = Modifier.clickable(onClick = onOpen)) {
+    GlassCard(modifier = modifier.clickable(onClick = onOpen)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -627,120 +666,128 @@ private fun StatsPanel(
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = topInset,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        item {
-            GlassCard(Modifier.fillMaxWidth()) {
-                Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
-                    StatRow(
-                        stringResource(R.string.history_stat_total),
-                        formatDuration(stats.totalListenTimeSec),
-                    )
-                    StatRow(
-                        stringResource(R.string.history_stat_sessions),
-                        stats.sessionCount.toString(),
-                    )
-                    StatRow(
-                        stringResource(R.string.history_stat_tracks),
-                        stats.trackCount.toString(),
-                    )
-                    StatRow(
-                        stringResource(R.string.history_stat_days),
-                        stats.activeDayCount.toString(),
-                    )
-                    StatRow(
-                        stringResource(R.string.history_stat_average),
-                        formatDuration(stats.averageSessionSec),
-                    )
-                    StatRow(
-                        stringResource(R.string.history_stat_longest),
-                        stats.longestSessionTitle?.let {
-                            "$it · ${formatDuration(stats.longestSessionSec)}"
-                        } ?: formatDuration(stats.longestSessionSec),
-                    )
-                    StatRow(
-                        stringResource(R.string.history_stat_streak),
-                        "$streak · ${stringResource(R.string.history_stat_best, bestStreak)}",
-                    )
-                    StatRow(
-                        stringResource(R.string.history_stat_media),
-                        "${stringResource(R.string.history_stat_audiobooks)} ${formatDuration(media.audiobookSec)} · " +
-                                "${stringResource(R.string.history_stat_music)} ${formatDuration(media.musicSec)}",
-                    )
-                }
-            }
-        }
-        item {
-            Text(
-                text = stringResource(R.string.history_stat_daily),
-                style = MaterialTheme.typography.labelLarge,
-                color = tokens.textSecondary,
-            )
-        }
-        item {
-            val recent = daily.takeLast(14)
-            val max = recent.maxOfOrNull { it.listenTimeSec }?.coerceAtLeast(1) ?: 1
-            Row(
-                Modifier.fillMaxWidth().height(120.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.Bottom,
-            ) {
-                recent.forEach { day ->
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight(day.listenTimeSec.toFloat() / max)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(tokens.accent),
-                    )
-                }
-            }
-        }
-        item {
-            Text(
-                text = stringResource(R.string.history_stat_leaders),
-                style = MaterialTheme.typography.labelLarge,
-                color = tokens.textSecondary,
-            )
-        }
-        if (leaders.isEmpty()) {
+    OceanCascade(key = stats.sessionCount > 0) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                start = geo.spacing.lg,
+                end = geo.spacing.lg,
+                top = topInset,
+                bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+            ),
+            verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+        ) {
             item {
-                EmptyState(
-                    icon = "equalizer",
-                    title = stringResource(R.string.history_stat_no_leaders),
-                )
-            }
-        }
-        items(leaders, key = { it.trackId }) { leader ->
-            GlassCard(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = leader.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = tokens.text,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                GlassCard(Modifier.fillMaxWidth().oceanEntrance(0)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
+                        StatRow(
+                            stringResource(R.string.history_stat_total),
+                            formatDuration(stats.totalListenTimeSec),
                         )
-                        Text(
-                            text = stringResource(R.string.history_leader_plays, leader.playCount),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = tokens.textSecondary,
+                        StatRow(
+                            stringResource(R.string.history_stat_sessions),
+                            stats.sessionCount.toString(),
+                        )
+                        StatRow(
+                            stringResource(R.string.history_stat_tracks),
+                            stats.trackCount.toString(),
+                        )
+                        StatRow(
+                            stringResource(R.string.history_stat_days),
+                            stats.activeDayCount.toString(),
+                        )
+                        StatRow(
+                            stringResource(R.string.history_stat_average),
+                            formatDuration(stats.averageSessionSec),
+                        )
+                        StatRow(
+                            stringResource(R.string.history_stat_longest),
+                            stats.longestSessionTitle?.let {
+                                "$it · ${formatDuration(stats.longestSessionSec)}"
+                            } ?: formatDuration(stats.longestSessionSec),
+                        )
+                        StatRow(
+                            stringResource(R.string.history_stat_streak),
+                            "$streak · ${stringResource(R.string.history_stat_best, bestStreak)}",
+                        )
+                        StatRow(
+                            stringResource(R.string.history_stat_media),
+                            "${stringResource(R.string.history_stat_audiobooks)} ${formatDuration(media.audiobookSec)} · " +
+                                    "${stringResource(R.string.history_stat_music)} ${formatDuration(media.musicSec)}",
                         )
                     }
-                    Text(
-                        text = formatDuration(leader.listenTimeSec),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = tokens.text,
+                }
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.history_stat_daily),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = tokens.textSecondary,
+                    modifier = Modifier.oceanEntrance(1, swayDp = 0.dp, riseDp = 8.dp),
+                )
+            }
+            item {
+                val recent = daily.takeLast(14)
+                val max = recent.maxOfOrNull { it.listenTimeSec }?.coerceAtLeast(1) ?: 1
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .oceanEntrance(2, swayDp = 0.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
+                    recent.forEach { day ->
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight(day.listenTimeSec.toFloat() / max)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(tokens.accent),
+                        )
+                    }
+                }
+            }
+            item {
+                Text(
+                    text = stringResource(R.string.history_stat_leaders),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = tokens.textSecondary,
+                    modifier = Modifier.oceanEntrance(3, swayDp = 0.dp, riseDp = 8.dp),
+                )
+            }
+            if (leaders.isEmpty()) {
+                item {
+                    EmptyState(
+                        icon = "equalizer",
+                        title = stringResource(R.string.history_stat_no_leaders),
+                        modifier = Modifier.oceanEntrance(4, swayDp = 0.dp),
                     )
+                }
+            }
+            itemsIndexed(leaders, key = { _, leader -> leader.trackId }) { idx, leader ->
+                GlassCard(Modifier.fillMaxWidth().oceanEntrance(4 + idx)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = leader.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = tokens.text,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = stringResource(R.string.history_leader_plays, leader.playCount),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = tokens.textSecondary,
+                            )
+                        }
+                        Text(
+                            text = formatDuration(leader.listenTimeSec),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = tokens.text,
+                        )
+                    }
                 }
             }
         }

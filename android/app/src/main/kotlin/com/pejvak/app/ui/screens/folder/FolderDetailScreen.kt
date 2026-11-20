@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -54,6 +54,8 @@ import com.pejvak.app.ui.components.row.ActionCluster
 import com.pejvak.app.ui.components.row.AiActionButton
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 
 @Composable
 fun FolderDetailScreen(
@@ -105,91 +107,94 @@ fun FolderDetailScreen(
             )
         },
     ) { topInset ->
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            top = topInset + geo.spacing.sm,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-    ) {
-        val gutter = Modifier.padding(horizontal = geo.spacing.lg)
-        item {
-            PrimaryButton(
-                modifier = gutter,
-                label = when {
-                    state.rows.isEmpty() -> stringResource(R.string.folder_play_folder)
-                    allFinished -> stringResource(R.string.folder_play_again)
-                    finishedCount == 0 -> stringResource(R.string.folder_play_folder)
-                    else -> stringResource(R.string.folder_continue)
-                },
-                enabled = state.rows.isNotEmpty(),
-                onClick = {
-                    if (allFinished) viewModel.setMode(FolderPlayMode.Restart)
-                    viewModel.play()
-                },
-            )
-        }
-        item { Spacer(Modifier.height(geo.spacing.md)) }
-        item {
-            // Scrolls instead of wrapping: four chips do not fit a phone's width, and a
-            // chip broken over two lines reads as a layout bug, not as a label. The row
-            // runs edge to edge so the next chip is visibly waiting off-screen.
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+        OceanCascade(key = state.rows.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    top = topInset + geo.spacing.sm,
+                    bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+                ),
             ) {
-                Spacer(Modifier.size(geo.spacing.lg))
-                GlassChip(
-                    label = stringResource(R.string.folder_unfinished, state.rows.size - finishedCount),
-                    selected = state.mode == FolderPlayMode.Unfinished,
-                    onClick = {
-                        viewModel.setMode(
-                            if (state.mode == FolderPlayMode.Unfinished) FolderPlayMode.Resume
-                            else FolderPlayMode.Unfinished,
+                val gutter = Modifier.padding(horizontal = geo.spacing.lg)
+                item {
+                    PrimaryButton(
+                        modifier = gutter.oceanEntrance(0, swayDp = 0.dp),
+                        label = when {
+                            state.rows.isEmpty() -> stringResource(R.string.folder_play_folder)
+                            allFinished -> stringResource(R.string.folder_play_again)
+                            finishedCount == 0 -> stringResource(R.string.folder_play_folder)
+                            else -> stringResource(R.string.folder_continue)
+                        },
+                        enabled = state.rows.isNotEmpty(),
+                        onClick = {
+                            if (allFinished) viewModel.setMode(FolderPlayMode.Restart)
+                            viewModel.play()
+                        },
+                    )
+                }
+                item { Spacer(Modifier.height(geo.spacing.md)) }
+                item {
+                    // Scrolls instead of wrapping: four chips do not fit a phone's width, and a
+                    // chip broken over two lines reads as a layout bug, not as a label. The row
+                    // runs edge to edge so the next chip is visibly waiting off-screen.
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .oceanEntrance(1, swayDp = 0.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                    ) {
+                        Spacer(Modifier.size(geo.spacing.lg))
+                        GlassChip(
+                            label = stringResource(R.string.folder_unfinished, state.rows.size - finishedCount),
+                            selected = state.mode == FolderPlayMode.Unfinished,
+                            onClick = {
+                                viewModel.setMode(
+                                    if (state.mode == FolderPlayMode.Unfinished) FolderPlayMode.Resume
+                                    else FolderPlayMode.Unfinished,
+                                )
+                            },
                         )
-                    },
-                )
-                GlassChip(
-                    label = stringResource(R.string.folder_save_playlist),
-                    onClick = viewModel::saveAsPlaylist,
-                )
-                GlassChip(
-                    label = stringResource(R.string.folder_add_all_playlist),
-                    onClick = { addOpen = true },
-                )
-                GlassChip(
-                    label = stringResource(R.string.folder_add_queue),
-                    onClick = viewModel::addAllToQueue,
-                )
-                Spacer(Modifier.size(geo.spacing.lg))
+                        GlassChip(
+                            label = stringResource(R.string.folder_save_playlist),
+                            onClick = viewModel::saveAsPlaylist,
+                        )
+                        GlassChip(
+                            label = stringResource(R.string.folder_add_all_playlist),
+                            onClick = { addOpen = true },
+                        )
+                        GlassChip(
+                            label = stringResource(R.string.folder_add_queue),
+                            onClick = viewModel::addAllToQueue,
+                        )
+                        Spacer(Modifier.size(geo.spacing.lg))
+                    }
+                }
+                item { Spacer(Modifier.height(geo.spacing.xl)) }
+                if (state.rows.isEmpty() && !state.loading) {
+                    item {
+                        EmptyState(
+                            modifier = gutter.oceanEntrance(2, swayDp = 0.dp),
+                            icon = "folder",
+                            title = stringResource(R.string.folder_empty),
+                            body = stringResource(R.string.folder_empty_body),
+                        )
+                    }
+                }
+                itemsIndexed(state.rows, key = { _, row -> row.track.id }) { idx, row ->
+                    val index = plan?.queueIds?.indexOf(row.track.id) ?: -1
+                    FolderTrackCard(
+                        modifier = gutter.oceanEntrance(2 + idx),
+                        row = row,
+                        onOpen = {
+                            if (index >= 0) viewModel.play(index) else onOpenTrack(row.track.id)
+                        },
+                        onPlay = { if (index >= 0) viewModel.play(index) else viewModel.play() },
+                        onOpenAi = onOpenAi,
+                    )
+                }
             }
         }
-        item { Spacer(Modifier.height(geo.spacing.xl)) }
-        if (state.rows.isEmpty() && !state.loading) {
-            item {
-                EmptyState(
-                    modifier = gutter,
-                    icon = "folder",
-                    title = stringResource(R.string.folder_empty),
-                    body = stringResource(R.string.folder_empty_body),
-                )
-            }
-        }
-        items(state.rows, key = { it.track.id }) { row ->
-            val index = plan?.queueIds?.indexOf(row.track.id) ?: -1
-            FolderTrackCard(
-                modifier = gutter,
-                row = row,
-                onOpen = {
-                    if (index >= 0) viewModel.play(index) else onOpenTrack(row.track.id)
-                },
-                onPlay = { if (index >= 0) viewModel.play(index) else viewModel.play() },
-                onOpenAi = onOpenAi,
-            )
-        }
-    }
     }
 
     if (addOpen) {
@@ -279,9 +284,9 @@ private fun FolderTrackCard(
     val geo = LocalPejvakGeometry.current
     val progress = row.progress
     val partial = progress != null &&
-        !progress.finished &&
-        progress.resumeSec > 0 &&
-        row.track.durationSec > 0
+            !progress.finished &&
+            progress.resumeSec > 0 &&
+            row.track.durationSec > 0
     val fraction = if (partial) {
         progress.resumeSec.toFloat() / row.track.durationSec.toFloat()
     } else {

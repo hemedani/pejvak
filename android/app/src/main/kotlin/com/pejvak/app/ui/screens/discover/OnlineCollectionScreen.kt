@@ -54,6 +54,8 @@ import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 
 @Composable
 fun OnlineCollectionScreen(
@@ -91,133 +93,163 @@ fun OnlineCollectionScreen(
             )
         },
     ) { topInset ->
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = topInset + geo.spacing.md,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        if (state.stale) {
-            item {
-                InlineNotice(
-                    message = stringResource(R.string.discover_stale_body),
-                    title = stringResource(R.string.discover_stale),
-                    tone = NoticeTone.Warning,
-                    retryLabel = stringResource(R.string.action_retry),
-                    onRetry = { viewModel.load(refresh = true) },
-                )
-            }
-        }
-        if (state.offline) {
-            item {
-                InlineNotice(
-                    message = state.error ?: stringResource(R.string.discover_offline_body),
-                    title = stringResource(R.string.discover_offline),
-                    tone = NoticeTone.Warning,
-                    retryLabel = stringResource(R.string.action_retry),
-                    onRetry = { viewModel.load(refresh = true) },
-                )
-            }
-        }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-                PrimaryButton(
-                    label = stringResource(if (resumable != null) R.string.discover_continue else R.string.discover_play),
-                    enabled = state.tracks.isNotEmpty(),
-                    onClick = { viewModel.play(playIndex, resumable?.positionSec ?: 0) },
-                    modifier = Modifier.weight(1f),
-                )
-                GlassChip(
-                    label = if (state.saved?.isFavorite == true) stringResource(R.string.discover_favorited)
-                    else stringResource(R.string.discover_favorite),
-                    icon = "favorite",
-                    onClick = viewModel::toggleFavorite,
-                )
-            }
-        }
-        item {
-            DownloadControl(
-                summary = state.download,
-                onStart = viewModel::startDownload,
-                onCancel = viewModel::cancelDownload,
-                onRetry = viewModel::retryDownload,
-                onDelete = { confirmDelete = true },
-                busy = state.downloadBusy,
-            )
-        }
-        state.downloadError?.let { message ->
-            item { InlineNotice(message = message, tone = NoticeTone.Danger) }
-        }
-        if (state.pageUrl != null) {
-            item {
-                GlassChip(
-                    label = stringResource(R.string.discover_open_page),
-                    icon = "share",
-                    onClick = { state.pageUrl?.let { uriHandler.openUri(it) } },
-                )
-            }
-        }
-        if (state.tracks.isEmpty() && !state.loading) {
-            item {
-                EmptyState(
-                    icon = "play",
-                    title = stringResource(R.string.discover_empty_collection),
-                    body = stringResource(R.string.discover_empty_collection_body),
-                )
-            }
-        }
-        if (state.tracks.isNotEmpty() && sections.size == 1 && sections[0].standalone) {
-            item {
-                ListGroup(items = state.tracks) { row, _ ->
-                    OnlineTrackRowView(
-                        row = row,
-                        playing = state.playingTrackId == row.track.id,
-                        onClick = { viewModel.playTrack(row.track.id) },
-                        onOpenAi = onOpenAi,
+        OceanCascade(key = state.tracks.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = geo.spacing.lg,
+                    end = geo.spacing.lg,
+                    top = topInset + geo.spacing.md,
+                    bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+                ),
+                verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+            ) {
+                var order = 0
+                if (state.stale) {
+                    val idx = order++
+                    item {
+                        InlineNotice(
+                            message = stringResource(R.string.discover_stale_body),
+                            title = stringResource(R.string.discover_stale),
+                            tone = NoticeTone.Warning,
+                            retryLabel = stringResource(R.string.action_retry),
+                            onRetry = { viewModel.load(refresh = true) },
+                            modifier = Modifier.oceanEntrance(idx, swayDp = 0.dp),
+                        )
+                    }
+                }
+                if (state.offline) {
+                    val idx = order++
+                    item {
+                        InlineNotice(
+                            message = state.error ?: stringResource(R.string.discover_offline_body),
+                            title = stringResource(R.string.discover_offline),
+                            tone = NoticeTone.Warning,
+                            retryLabel = stringResource(R.string.action_retry),
+                            onRetry = { viewModel.load(refresh = true) },
+                            modifier = Modifier.oceanEntrance(idx, swayDp = 0.dp),
+                        )
+                    }
+                }
+                val playRowIdx = order++
+                item {
+                    Row(
+                        modifier = Modifier.oceanEntrance(playRowIdx, swayDp = 0.dp),
+                        horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        PrimaryButton(
+                            label = stringResource(if (resumable != null) R.string.discover_continue else R.string.discover_play),
+                            enabled = state.tracks.isNotEmpty(),
+                            onClick = { viewModel.play(playIndex, resumable?.positionSec ?: 0) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        GlassChip(
+                            label = if (state.saved?.isFavorite == true) stringResource(R.string.discover_favorited)
+                            else stringResource(R.string.discover_favorite),
+                            icon = "favorite",
+                            onClick = viewModel::toggleFavorite,
+                        )
+                    }
+                }
+                val downloadIdx = order++
+                item {
+                    DownloadControl(
+                        summary = state.download,
+                        onStart = viewModel::startDownload,
+                        onCancel = viewModel::cancelDownload,
+                        onRetry = viewModel::retryDownload,
+                        onDelete = { confirmDelete = true },
+                        busy = state.downloadBusy,
+                        modifier = Modifier.oceanEntrance(downloadIdx, swayDp = 0.dp),
                     )
                 }
-            }
-        } else {
-            sections.forEach { section ->
-                item {
-                    SeriesHeader(
-                        section = section,
-                        onDownload = {
-                            viewModel.downloadSeries(
-                                section.title,
-                                section.key,
-                                section.tracks.map { it.track.id },
+                state.downloadError?.let { message ->
+                    item { InlineNotice(message = message, tone = NoticeTone.Danger) }
+                }
+                if (state.pageUrl != null) {
+                    val urlIdx = order++
+                    item {
+                        GlassChip(
+                            label = stringResource(R.string.discover_open_page),
+                            icon = "share",
+                            modifier = Modifier.oceanEntrance(urlIdx, swayDp = 0.dp),
+                            onClick = { state.pageUrl?.let { uriHandler.openUri(it) } },
+                        )
+                    }
+                }
+                if (state.tracks.isEmpty() && !state.loading) {
+                    val emptyIdx = order++
+                    item {
+                        EmptyState(
+                            icon = "play",
+                            title = stringResource(R.string.discover_empty_collection),
+                            body = stringResource(R.string.discover_empty_collection_body),
+                            modifier = Modifier.oceanEntrance(emptyIdx, swayDp = 0.dp),
+                        )
+                    }
+                }
+                if (state.tracks.isNotEmpty() && sections.size == 1 && sections[0].standalone) {
+                    val listIdx = order++
+                    item {
+                        ListGroup(
+                            items = state.tracks,
+                            modifier = Modifier.oceanEntrance(listIdx),
+                            staggerRows = true,
+                        ) { row, _ ->
+                            OnlineTrackRowView(
+                                row = row,
+                                playing = state.playingTrackId == row.track.id,
+                                onClick = { viewModel.playTrack(row.track.id) },
+                                onOpenAi = onOpenAi,
                             )
-                        },
-                    )
+                        }
+                    }
+                } else {
+                    sections.forEach { section ->
+                        val hdrIdx = order++
+                        item {
+                            SeriesHeader(
+                                section = section,
+                                onDownload = {
+                                    viewModel.downloadSeries(
+                                        section.title,
+                                        section.key,
+                                        section.tracks.map { it.track.id },
+                                    )
+                                },
+                                modifier = Modifier.oceanEntrance(hdrIdx, swayDp = 0.dp, riseDp = 8.dp),
+                            )
+                        }
+                        val groupIdx = order++
+                        item {
+                            ListGroup(
+                                items = section.tracks,
+                                modifier = Modifier.oceanEntrance(groupIdx),
+                                staggerRows = true,
+                            ) { row, _ ->
+                                OnlineTrackRowView(
+                                    row = row,
+                                    playing = state.playingTrackId == row.track.id,
+                                    onClick = { viewModel.playTrack(row.track.id) },
+                                    onOpenAi = onOpenAi,
+                                )
+                            }
+                        }
+                    }
                 }
-                item {
-                    ListGroup(items = section.tracks) { row, _ ->
-                        OnlineTrackRowView(
-                            row = row,
-                            playing = state.playingTrackId == row.track.id,
-                            onClick = { viewModel.playTrack(row.track.id) },
-                            onOpenAi = onOpenAi,
+                if (state.loading) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.discover_loading),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = tokens.textSecondary,
+                            modifier = Modifier.padding(geo.spacing.md),
                         )
                     }
                 }
             }
         }
-        if (state.loading) {
-            item {
-                Text(
-                    text = stringResource(R.string.discover_loading),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = tokens.textSecondary,
-                    modifier = Modifier.padding(geo.spacing.md),
-                )
-            }
-        }
-    }
     }
     if (confirmDelete) {
         AlertDialog(
@@ -240,11 +272,15 @@ fun OnlineCollectionScreen(
 }
 
 @Composable
-private fun SeriesHeader(section: SeriesSection<OnlineTrackRow>, onDownload: () -> Unit) {
+private fun SeriesHeader(
+    section: SeriesSection<OnlineTrackRow>,
+    onDownload: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val geo = LocalPejvakGeometry.current
     val tokens = LocalPejvakTokens.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(top = geo.spacing.sm),
+        modifier = modifier.fillMaxWidth().padding(top = geo.spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
     ) {
@@ -274,7 +310,12 @@ private fun OnlineTrackRowView(
         subtitle = row.track.author,
         meta = buildString {
             append(formatClock(row.track.durationSec))
-            if (row.positionSec > 0) append(" · ").append(stringResource(R.string.discover_resume_at, formatClock(row.positionSec)))
+            if (row.positionSec > 0) append(" · ").append(
+                stringResource(
+                    R.string.discover_resume_at,
+                    formatClock(row.positionSec)
+                )
+            )
         },
         status = if (row.progressRatio > 0.01) {
             com.pejvak.app.ui.components.row.StatusSpec(

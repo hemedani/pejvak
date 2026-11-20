@@ -292,10 +292,10 @@ private fun SoonPill() {
  * explanation can never be right in one place and stale in the other.
  */
 @Composable
-fun AiWhyPanel() {
+fun AiWhyPanel(modifier: Modifier = Modifier) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
+    GlassCard(modifier = modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
             Text(
                 text = stringResource(R.string.ai_why_overline).uppercase(),

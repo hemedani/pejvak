@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
@@ -28,6 +29,8 @@ import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.OceanCascade
+import com.pejvak.app.ui.theme.oceanEntrance
 
 @Composable
 fun LanguageScreen(
@@ -58,51 +61,60 @@ fun LanguageScreen(
             )
         },
     ) { topInset ->
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(
-            start = geo.spacing.lg,
-            end = geo.spacing.lg,
-            top = topInset + geo.spacing.md,
-            bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
-        ),
-        verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
-    ) {
-        if (sources.isEmpty()) {
-            item {
-                EmptyState(
-                    icon = "language",
-                    title = stringResource(R.string.discover_no_sources),
-                    body = stringResource(R.string.discover_no_sources_body),
-                )
-            }
-        } else {
-            item {
-                ListGroup(items = sources) { source, _ ->
-                    ListRow(
-                        title = source.name,
-                        subtitle = source.nativeName,
-                        meta = source.description,
-                        leading = {
-                            PaletteTile(
-                                contentHash = source.id,
-                                label = source.name,
-                                size = geo.tiles.md,
+        OceanCascade(key = sources.isNotEmpty()) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = geo.spacing.lg,
+                    end = geo.spacing.lg,
+                    top = topInset + geo.spacing.md,
+                    bottom = LocalShellInsets.current.bottom + geo.spacing.xxl,
+                ),
+                verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+            ) {
+                if (sources.isEmpty()) {
+                    item {
+                        EmptyState(
+                            icon = "language",
+                            title = stringResource(R.string.discover_no_sources),
+                            body = stringResource(R.string.discover_no_sources_body),
+                            modifier = Modifier.oceanEntrance(0, swayDp = 0.dp),
+                        )
+                    }
+                } else {
+                    item {
+                        ListGroup(
+                            items = sources,
+                            modifier = Modifier.oceanEntrance(0),
+                            staggerRows = true,
+                        ) { source, _ ->
+                            ListRow(
+                                title = source.name,
+                                subtitle = source.nativeName,
+                                meta = source.description,
+                                leading = {
+                                    PaletteTile(
+                                        contentHash = source.id,
+                                        label = source.name,
+                                        size = geo.tiles.md,
+                                    )
+                                },
+                                onClick = { onOpenSource(source.id) },
                             )
-                        },
-                        onClick = { onOpenSource(source.id) },
+                        }
+                    }
+                }
+                item {
+                    Text(
+                        text = stringResource(R.string.discover_attribution_note),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.textTertiary,
+                        modifier = Modifier
+                            .oceanEntrance(1, swayDp = 0.dp, riseDp = 8.dp)
+                            .padding(geo.spacing.md),
                     )
                 }
             }
         }
-        item {
-            Text(
-                text = stringResource(R.string.discover_attribution_note),
-                style = MaterialTheme.typography.bodySmall,
-                color = tokens.textTertiary,
-                modifier = Modifier.padding(geo.spacing.md),
-            )
-        }
-    }
     }
 }
