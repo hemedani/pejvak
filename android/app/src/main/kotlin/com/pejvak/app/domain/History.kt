@@ -153,19 +153,21 @@ fun historySearchFields(item: HistoryItem): List<SearchField> = buildList {
     item.contextTitle?.let { add(SearchField(LibraryField.Folder, it)) }
 }
 
-fun HistoryItem.playbackConditionsForDisplay(): PlaybackConditions {
-    val conditions = session.playbackConditions()
-    val title = conditions.contextTitle?.takeIf { it.isNotBlank() }
-        ?: contextTitle?.takeIf { it.isNotBlank() }
-        ?: track.title.takeIf { it.isNotBlank() }
-    return conditions.copy(contextTitle = title)
-}
-
-/** Snapshot title first, then the live lookup, then the track's own title. */
+/**
+ * Snapshot title first, then the live lookup, then the track's own title — but the
+ * track title only stands in for a collection. A standalone listen has no collection
+ * title, and borrowing the track's own title would just repeat the sheet headline.
+ */
 fun HistoryItem.playbackContextTitle(): String? =
-    playbackConditionsForDisplay().contextTitle?.takeIf { it.isNotBlank() }
+    session.playbackConditions().contextTitle?.takeIf { it.isNotBlank() }
+        ?: contextTitle?.takeIf { it.isNotBlank() }
+        ?: track.title.takeIf { it.isNotBlank() && collectionKind() == CollectionKind.Collection }
 
-fun HistoryItem.historySubtitle(): String = playbackContextTitle() ?: track.title
+fun HistoryItem.playbackConditionsForDisplay(): PlaybackConditions =
+    session.playbackConditions().copy(contextTitle = playbackContextTitle())
+
+/** The sheet subtitle: the collection title, or null when a standalone listen has none. */
+fun HistoryItem.historySubtitle(): String? = playbackContextTitle()
 
 data class PlaybackContextFacts(
     val kind: CollectionKind,

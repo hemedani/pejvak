@@ -51,7 +51,7 @@ fun SessionDetailSheet(
     GlassSheet(
         onDismiss = onDismiss,
         title = item.track.title,
-        subtitle = item.historySubtitle(),
+        subtitle = item.historySubtitle() ?: stringResource(R.string.history_single_track),
         icon = "history",
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.lg)) {

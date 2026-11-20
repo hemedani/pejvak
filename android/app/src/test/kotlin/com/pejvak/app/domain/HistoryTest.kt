@@ -318,6 +318,32 @@ class HistoryTest {
             "  ",
         )
         assertEquals("Intro", untitled.playbackContextFacts().title)
+        assertTrue(
+            historyMarkdown(groupHistoryIntoStretches(listOf(untitled)), at("2026-03-10"))
+                .contains("Intro · Volume 100%"),
+        )
+    }
+
+    @Test
+    fun `standalone listens show no collection title`() {
+        val item = HistoryItem(
+            session("a", stretchId = "s1", startedAt = at("2026-03-09", 9)),
+            track("a", "Intro"),
+        )
+        assertNull(item.playbackContextTitle())
+        assertNull(item.historySubtitle())
+        val facts = item.playbackContextFacts()
+        assertEquals(CollectionKind.Standalone, facts.kind)
+        assertNull(facts.title)
+
+        val markdown = historyMarkdown(groupHistoryIntoStretches(listOf(item)), at("2026-03-10"))
+        assertTrue(markdown.contains("**Intro** —"))
+        assertTrue(markdown.contains("Volume 100%"))
+        assertFalse(markdown.contains("Intro · Volume 100%"))
+
+        val live = HistoryItem(session("b"), track("b", "Song"), "Lectures")
+        assertEquals("Lectures", live.playbackContextTitle())
+        assertEquals("Lectures", live.historySubtitle())
     }
 
     @Test
