@@ -241,50 +241,63 @@ internal class BackdropBlurNode(
     }
 
     override fun ContentDrawScope.draw() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !backdrop.paused) {
-            val sources = backdrop.orderedSources()
-            if (sources.isNotEmpty() && size.width >= 1f && size.height >= 1f) {
-                val radiusPx = radius.toPx()
-                if (radiusPx > 0f) {
-                    val scale = BACKDROP_SAMPLE_SCALE
-                    val sigmaScaled = (radiusPx * scale).coerceIn(1f, 72f)
-                    val padScaled = ceil(sigmaScaled).toInt().coerceAtLeast(1)
-                    val scaledW = ceil(size.width * scale).toInt().coerceAtLeast(1)
-                    val scaledH = ceil(size.height * scale).toInt().coerceAtLeast(1)
-                    val layerW = scaledW + padScaled * 2
-                    val layerH = scaledH + padScaled * 2
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (!backdrop.paused) {
+                val sources = backdrop.orderedSources()
+                if (sources.isNotEmpty() && size.width >= 1f && size.height >= 1f) {
+                    val radiusPx = radius.toPx()
+                    if (radiusPx > 0f) {
+                        val scale = BACKDROP_SAMPLE_SCALE
+                        val sigmaScaled = (radiusPx * scale).coerceIn(1f, 72f)
+                        val padScaled = ceil(sigmaScaled).toInt().coerceAtLeast(1)
+                        val scaledW = ceil(size.width * scale).toInt().coerceAtLeast(1)
+                        val scaledH = ceil(size.height * scale).toInt().coerceAtLeast(1)
+                        val layerW = scaledW + padScaled * 2
+                        val layerH = scaledH + padScaled * 2
 
-                    val target = effectLayer ?: requireGraphicsContext().createGraphicsLayer().also {
-                        effectLayer = it
-                    }
-                    if (cachedSigma != sigmaScaled || cachedEffect == null) {
-                        cachedSigma = sigmaScaled
-                        cachedEffect = createBackdropRenderEffect(sigmaScaled)
-                    }
-                    target.compositingStrategy = CompositingStrategy.Offscreen
-                    target.renderEffect = cachedEffect
+                        val target = effectLayer ?: requireGraphicsContext().createGraphicsLayer().also {
+                            effectLayer = it
+                        }
+                        if (cachedSigma != sigmaScaled || cachedEffect == null) {
+                            cachedSigma = sigmaScaled
+                            cachedEffect = createBackdropRenderEffect(sigmaScaled)
+                        }
+                        target.compositingStrategy = CompositingStrategy.Offscreen
+                        target.renderEffect = cachedEffect
 
-                    target.record(IntSize(layerW, layerH)) {
-                        translate(left = padScaled.toFloat(), top = padScaled.toFloat()) {
-                            scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero) {
-                                for (i in sources.indices) {
-                                    val entry = sources[i]
-                                    val sourceLayer = entry.layer ?: continue
-                                    translate(
-                                        left = entry.originInRoot.x - paneOriginInRoot.x,
-                                        top = entry.originInRoot.y - paneOriginInRoot.y,
-                                    ) {
-                                        drawLayer(sourceLayer)
+                        target.record(IntSize(layerW, layerH)) {
+                            translate(left = padScaled.toFloat(), top = padScaled.toFloat()) {
+                                scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero) {
+                                    for (i in sources.indices) {
+                                        val entry = sources[i]
+                                        val sourceLayer = entry.layer ?: continue
+                                        translate(
+                                            left = entry.originInRoot.x - paneOriginInRoot.x,
+                                            top = entry.originInRoot.y - paneOriginInRoot.y,
+                                        ) {
+                                            drawLayer(sourceLayer)
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    val invScale = 1f / scale
+                        val invScale = 1f / scale
+                        scale(scaleX = invScale, scaleY = invScale, pivot = Offset.Zero) {
+                            translate(left = -padScaled.toFloat(), top = -padScaled.toFloat()) {
+                                drawLayer(target)
+                            }
+                        }
+                    }
+                }
+            } else {
+                val cached = effectLayer
+                if (cached != null && cachedSigma > 0f) {
+                    val padScaled = ceil(cachedSigma).toInt().coerceAtLeast(1)
+                    val invScale = 1f / BACKDROP_SAMPLE_SCALE
                     scale(scaleX = invScale, scaleY = invScale, pivot = Offset.Zero) {
                         translate(left = -padScaled.toFloat(), top = -padScaled.toFloat()) {
-                            drawLayer(target)
+                            drawLayer(cached)
                         }
                     }
                 }
