@@ -60,6 +60,18 @@ data class PlaybackConditions(
 const val DEFAULT_AMBIENT_TONE: String = "none"
 const val DEFAULT_VOLUME_PERCENT: Int = 100
 
+/**
+ * Level 0 is the off switch, not a silent version of the last tone: the picker
+ * keeps the selected tone id when the listener drags the level to zero, so that
+ * id must never be captured as an active ambience.
+ */
+fun capturedAmbientTone(toneId: String?, level: Int): String =
+    if (level <= 0) {
+        DEFAULT_AMBIENT_TONE
+    } else {
+        toneId?.takeIf { it.isNotBlank() } ?: DEFAULT_AMBIENT_TONE
+    }
+
 /** The single place every nullable session field becomes a usable snapshot. */
 fun normalizePlaybackConditions(
     contextTitle: String? = null,
@@ -74,20 +86,23 @@ fun normalizePlaybackConditions(
     enhancerBoostDb: Double? = null,
     enhancerBassDb: Double? = null,
     enhancerTrebleDb: Double? = null,
-): PlaybackConditions = PlaybackConditions(
-    contextTitle = contextTitle,
-    collectionSort = collectionSort ?: CollectionSort.Unknown,
-    collectionSortDirection = collectionSortDirection ?: SortDirection.Asc,
-    collectionIndex = (collectionIndex ?: 0).coerceAtLeast(0),
-    collectionSize = (collectionSize ?: 0).coerceAtLeast(0),
-    ambientTone = ambientTone?.takeIf { it.isNotBlank() } ?: DEFAULT_AMBIENT_TONE,
-    ambientLevel = (ambientLevel ?: 0).coerceIn(0, 100),
-    volumePercent = (volumePercent ?: DEFAULT_VOLUME_PERCENT).coerceIn(0, 100),
-    enhancerEnabled = enhancerEnabled ?: false,
-    enhancerBoostDb = enhancerBoostDb.finiteOrZero(),
-    enhancerBassDb = enhancerBassDb.finiteOrZero(),
-    enhancerTrebleDb = enhancerTrebleDb.finiteOrZero(),
-)
+): PlaybackConditions {
+    val level = (ambientLevel ?: 0).coerceIn(0, 100)
+    return PlaybackConditions(
+        contextTitle = contextTitle,
+        collectionSort = collectionSort ?: CollectionSort.Unknown,
+        collectionSortDirection = collectionSortDirection ?: SortDirection.Asc,
+        collectionIndex = (collectionIndex ?: 0).coerceAtLeast(0),
+        collectionSize = (collectionSize ?: 0).coerceAtLeast(0),
+        ambientTone = capturedAmbientTone(ambientTone, level),
+        ambientLevel = level,
+        volumePercent = (volumePercent ?: DEFAULT_VOLUME_PERCENT).coerceIn(0, 100),
+        enhancerEnabled = enhancerEnabled ?: false,
+        enhancerBoostDb = enhancerBoostDb.finiteOrZero(),
+        enhancerBassDb = enhancerBassDb.finiteOrZero(),
+        enhancerTrebleDb = enhancerTrebleDb.finiteOrZero(),
+    )
+}
 
 private fun Double?.finiteOrZero(): Double = if (this != null && isFinite()) this else 0.0
 
@@ -160,15 +175,11 @@ fun playbackMarkdownContext(conditions: PlaybackConditions): String {
 }
 
 private fun ambienceDescription(tone: String, level: Int): String? {
+    if (level <= 0) return null
     val id = tone.trim()
     val hasTone = id.isNotEmpty() && !id.equals(DEFAULT_AMBIENT_TONE, ignoreCase = true)
     val label = if (!hasTone) null else findTone(id)?.label ?: id.replaceFirstChar { it.uppercase() }
-    return when {
-        label != null && level > 0 -> "$label, level $level"
-        label != null -> label
-        level > 0 -> "Level $level"
-        else -> null
-    }
+    return if (label != null) "$label, level $level" else "Level $level"
 }
 
 private fun formatGainDb(value: Double): String {

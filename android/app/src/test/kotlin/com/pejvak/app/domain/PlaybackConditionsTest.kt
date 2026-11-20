@@ -94,6 +94,16 @@ class PlaybackConditionsTest {
     }
 
     @Test
+    fun `level zero means ambience is off even when a tone id is stored`() {
+        val normalized = normalizePlaybackConditions(ambientTone = "room", ambientLevel = 0)
+        assertEquals("none", normalized.ambientTone)
+        assertNull(playbackAmbienceValue(normalized))
+
+        val inconsistent = PlaybackConditions(ambientTone = "room", ambientLevel = 0)
+        assertNull(playbackAmbienceValue(inconsistent))
+    }
+
+    @Test
     fun `collection kind is derived from context type`() {
         assertEquals(CollectionKind.Standalone, HistoryItem(session(), track()).collectionKind())
         assertEquals(

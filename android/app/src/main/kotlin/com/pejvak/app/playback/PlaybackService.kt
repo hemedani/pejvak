@@ -16,6 +16,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.pejvak.app.data.remote.online.OnlineRegistry
 import com.pejvak.app.domain.PlaybackConditions
+import com.pejvak.app.domain.capturedAmbientTone
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -100,7 +101,7 @@ class PlaybackService : MediaSessionService() {
         engine.conditionsProvider = {
             val effectsState = effects.state.value
             PlaybackConditions(
-                ambientTone = effectsState.toneId,
+                ambientTone = capturedAmbientTone(effectsState.toneId, effectsState.toneLevel),
                 ambientLevel = effectsState.toneLevel,
                 volumePercent = effectsState.volume,
                 enhancerEnabled = effectsState.enhancer.enabled,

@@ -155,13 +155,17 @@ fun historySearchFields(item: HistoryItem): List<SearchField> = buildList {
 
 fun HistoryItem.playbackConditionsForDisplay(): PlaybackConditions {
     val conditions = session.playbackConditions()
-    val liveTitle = contextTitle?.takeIf { it.isNotBlank() }
-    return if (conditions.contextTitle?.isNotBlank() == true) {
-        conditions
-    } else {
-        conditions.copy(contextTitle = liveTitle)
-    }
+    val title = conditions.contextTitle?.takeIf { it.isNotBlank() }
+        ?: contextTitle?.takeIf { it.isNotBlank() }
+        ?: track.title.takeIf { it.isNotBlank() }
+    return conditions.copy(contextTitle = title)
 }
+
+/** Snapshot title first, then the live lookup, then the track's own title. */
+fun HistoryItem.playbackContextTitle(): String? =
+    playbackConditionsForDisplay().contextTitle?.takeIf { it.isNotBlank() }
+
+fun HistoryItem.historySubtitle(): String = playbackContextTitle() ?: track.title
 
 data class PlaybackContextFacts(
     val kind: CollectionKind,
@@ -174,11 +178,9 @@ data class PlaybackContextFacts(
 
 fun HistoryItem.playbackContextFacts(): PlaybackContextFacts {
     val conditions = playbackConditionsForDisplay()
-    val kind = collectionKind()
-    val title = conditions.contextTitle?.takeIf { it.isNotBlank() }
     return PlaybackContextFacts(
-        kind = kind,
-        title = if (title != null || kind == CollectionKind.Collection) title else null,
+        kind = collectionKind(),
+        title = conditions.contextTitle?.takeIf { it.isNotBlank() },
         order = playbackOrderValue(conditions),
         ambience = playbackAmbienceValue(conditions),
         volume = playbackVolumeValue(conditions),

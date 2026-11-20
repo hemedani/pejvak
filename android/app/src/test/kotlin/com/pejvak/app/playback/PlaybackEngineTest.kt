@@ -1,11 +1,15 @@
 package com.pejvak.app.playback
 
+import com.pejvak.app.data.repository.AudioEffectsState
 import com.pejvak.app.domain.Checkpoint
+import com.pejvak.app.domain.CollectionSort
 import com.pejvak.app.domain.ContextPlay
 import com.pejvak.app.domain.ContextType
 import com.pejvak.app.domain.PlaybackConditions
 import com.pejvak.app.domain.Session
 import com.pejvak.app.domain.Track
+import com.pejvak.app.domain.capturedAmbientTone
+import com.pejvak.app.domain.playbackAmbienceValue
 import com.pejvak.app.domain.playbackConditions
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -313,6 +317,72 @@ class PlaybackEngineTest {
         assertEquals(3.0, conditions.enhancerBoostDb, 0.0001)
         assertEquals(2.0, conditions.enhancerBassDb, 0.0001)
         assertEquals(1.0, conditions.enhancerTrebleDb, 0.0001)
+    }
+
+    @Test
+    fun `default effects state captures no ambience when the level is off`() = runTest {
+        val (engine, store, _) = setup()
+        val t = track("t1"); store.tracks["t1"] = t
+        val effects = AudioEffectsState()
+        assertEquals("room", effects.toneId)
+        assertEquals(0, effects.toneLevel)
+        engine.conditionsProvider = {
+            PlaybackConditions(
+                ambientTone = capturedAmbientTone(effects.toneId, effects.toneLevel),
+                ambientLevel = effects.toneLevel,
+            )
+        }
+        engine.loadAndPlay(t, 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        val stored = store.sessions.values.first()
+        assertEquals("none", stored.ambientTone)
+        assertEquals(0, stored.ambientLevel)
+        assertNull(playbackAmbienceValue(stored.playbackConditions()))
+    }
+
+    @Test
+    fun `standalone session records no collection position`() = runTest {
+        val (engine, store, _) = setup()
+        val t1 = track("t1"); val t2 = track("t2")
+        store.tracks["t1"] = t1; store.tracks["t2"] = t2
+        engine.loadAndPlay(t1, 0, queue = listOf("t1", "t2"), index = 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        val stored = store.sessions.values.first()
+        assertNull(stored.contextTitle)
+        assertNull(stored.collectionSort)
+        assertNull(stored.collectionSortDirection)
+        assertNull(stored.collectionIndex)
+        assertNull(stored.collectionSize)
+    }
+
+    @Test
+    fun `resume with a real run records a one track queue`() = runTest {
+        val (engine, store, _) = setup()
+        val t = track("t1"); store.tracks["t1"] = t
+        val context = PlaybackContext(ContextType.Playlist, "p1", "Morning", CollectionSort.Manual)
+        engine.loadAndPlay(t, 0, context = context, queue = listOf("t1"), index = 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        val stored = store.sessions.values.first()
+        assertEquals("Morning", stored.contextTitle)
+        assertEquals(CollectionSort.Manual, stored.collectionSort)
+        assertEquals(0, stored.collectionIndex)
+        assertEquals(1, stored.collectionSize)
+    }
+
+    @Test
+    fun `throwing conditions provider falls back to the base snapshot`() = runTest {
+        val (engine, store, _) = setup()
+        val t = track("t1"); store.tracks["t1"] = t
+        engine.conditionsProvider = { error("provider failed") }
+        val context = PlaybackContext(ContextType.Playlist, "p1", "Morning", CollectionSort.Manual)
+        engine.loadAndPlay(t, 0, context = context, queue = listOf("t1"), index = 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        val conditions = store.sessions.values.first().playbackConditions()
+        assertEquals("Morning", conditions.contextTitle)
+        assertEquals(CollectionSort.Manual, conditions.collectionSort)
+        assertEquals(100, conditions.volumePercent)
+        assertEquals(0, conditions.ambientLevel)
+        assertEquals("none", conditions.ambientTone)
     }
 
     @Test

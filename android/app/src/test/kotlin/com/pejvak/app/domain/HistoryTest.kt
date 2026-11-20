@@ -303,7 +303,7 @@ class HistoryTest {
     }
 
     @Test
-    fun `blank snapshot titles fall back to live titles or stay absent`() {
+    fun `blank snapshot titles fall back to live titles or the track title`() {
         val fallback = HistoryItem(
             session("a", contextType = ContextType.Playlist, contextTitle = "   "),
             track("a", "Intro"),
@@ -317,6 +317,30 @@ class HistoryTest {
             track("b", "Intro"),
             "  ",
         )
-        assertNull(untitled.playbackContextFacts().title)
+        assertEquals("Intro", untitled.playbackContextFacts().title)
+    }
+
+    @Test
+    fun `detail subtitle prefers the snapshot then live then track title`() {
+        val snapshot = HistoryItem(
+            session("a", contextType = ContextType.Playlist, contextTitle = "Snapshot"),
+            track("a", "Song"),
+            "Live",
+        )
+        assertEquals("Snapshot", snapshot.historySubtitle())
+
+        val live = HistoryItem(
+            session("b", contextType = ContextType.Playlist, contextTitle = "  "),
+            track("b", "Song"),
+            "Live",
+        )
+        assertEquals("Live", live.historySubtitle())
+
+        val trackFallback = HistoryItem(
+            session("c", contextType = ContextType.Playlist, contextTitle = ""),
+            track("c", "Song"),
+            "  ",
+        )
+        assertEquals("Song", trackFallback.historySubtitle())
     }
 }

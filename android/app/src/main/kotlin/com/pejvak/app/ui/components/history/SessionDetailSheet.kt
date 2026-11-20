@@ -20,6 +20,7 @@ import com.pejvak.app.domain.describeSessionStatus
 import com.pejvak.app.domain.formatDuration
 import com.pejvak.app.domain.formatSpeed
 import com.pejvak.app.domain.formatTimeRange
+import com.pejvak.app.domain.historySubtitle
 import com.pejvak.app.domain.playbackContextFacts
 import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.GlassCard
@@ -50,7 +51,7 @@ fun SessionDetailSheet(
     GlassSheet(
         onDismiss = onDismiss,
         title = item.track.title,
-        subtitle = item.contextTitle ?: stringResource(R.string.history_single_track),
+        subtitle = item.historySubtitle(),
         icon = "history",
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.lg)) {

@@ -180,22 +180,24 @@ class PlaybackEngine(
         }
         seekReported = false
         val sessionId = newId()
+        val inCollection = run != null
         val base = PlaybackConditions(
             contextTitle = run?.context?.title,
             collectionSort = run?.context?.sort ?: CollectionSort.Unknown,
             collectionSortDirection = run?.context?.direction ?: SortDirection.Asc,
-            collectionIndex = _state.value.queueIndex,
-            collectionSize = _state.value.queue.size,
+            collectionIndex = if (inCollection) _state.value.queueIndex else 0,
+            collectionSize = if (inCollection) _state.value.queue.size else 0,
         )
-        val conditions = conditionsProvider?.invoke()?.let { provided ->
+        val provided = runCatching { conditionsProvider?.invoke() }.getOrNull()
+        val conditions = provided?.let {
             base.copy(
-                ambientTone = provided.ambientTone,
-                ambientLevel = provided.ambientLevel,
-                volumePercent = provided.volumePercent,
-                enhancerEnabled = provided.enhancerEnabled,
-                enhancerBoostDb = provided.enhancerBoostDb,
-                enhancerBassDb = provided.enhancerBassDb,
-                enhancerTrebleDb = provided.enhancerTrebleDb,
+                ambientTone = it.ambientTone,
+                ambientLevel = it.ambientLevel,
+                volumePercent = it.volumePercent,
+                enhancerEnabled = it.enhancerEnabled,
+                enhancerBoostDb = it.enhancerBoostDb,
+                enhancerBassDb = it.enhancerBassDb,
+                enhancerTrebleDb = it.enhancerTrebleDb,
             )
         } ?: base
         store.insertSession(
@@ -203,11 +205,11 @@ class PlaybackEngine(
                 id = sessionId, trackId = track.id, contentHash = track.contentHash, startedAt = startedAt,
                 startPositionSec = startPositionSec, playbackSpeed = speed,
                 contextPlayId = run?.id, contextType = run?.context?.type, contextKey = run?.context?.key,
-                contextTitle = conditions.contextTitle,
-                collectionSort = conditions.collectionSort,
-                collectionSortDirection = conditions.collectionSortDirection,
-                collectionIndex = conditions.collectionIndex,
-                collectionSize = conditions.collectionSize,
+                contextTitle = if (inCollection) conditions.contextTitle else null,
+                collectionSort = if (inCollection) conditions.collectionSort else null,
+                collectionSortDirection = if (inCollection) conditions.collectionSortDirection else null,
+                collectionIndex = if (inCollection) conditions.collectionIndex else null,
+                collectionSize = if (inCollection) conditions.collectionSize else null,
                 ambientTone = conditions.ambientTone,
                 ambientLevel = conditions.ambientLevel,
                 volumePercent = conditions.volumePercent,
