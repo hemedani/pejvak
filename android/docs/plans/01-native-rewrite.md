@@ -1426,3 +1426,22 @@ Three asks, in the order they were given.
   audio fields, plays a two-track playlist context, and asserts the stored session keeps
   `contextTitle` / `Manual` / index / size while taking all seven audio fields from the provider.
 - **Verification:** `testDebugUnitTest` 440/440, `assembleDebug` green.
+
+### 2026-11-20 — Playback context persisted, synced, and shown in history
+
+- **Room v2 keeps the snapshot nullable.** `sessions` gained the 12 nullable snapshot columns through
+  an additive `Migration(1, 2)`, with no SQL defaults; `Mappers.kt` writes `NULL` through and
+  `Session.playbackConditions()` applies the documented defaults on read, so a legacy row stays
+  distinguishable from a genuinely flat new one. The v2 schema is committed.
+- **Sync carries the same 12 keys.** Push omits nulls, pull projects and parses them into
+  `RemoteSession`, and `SyncRepository` maps them onto the inserted local `Session`; reconciliation
+  stays append-only by `clientId`.
+- **History shows it.** `SessionDetailSheet` renders a Playback context card (kind, snapshot title,
+  ordering with direction, ambience, volume, enhancer) and the markdown export appends the start
+  item's context. Standalone listens record no collection/order position; a resume with a real run
+  records `0/1`. Ambient level 0 is captured and displayed as off, never as the last tone id.
+- **Final review fixes:** snapshot-first detail subtitle, guarded provider call, blank-safe title
+  fallbacks, and no track-title duplication for standalone rows.
+- **Verification:** `testDebugUnitTest` 453/453, `assembleDebug` green. Deferred: Android push/pull
+  round-trip unit test, Room `MigrationTestHelper` test, hurl `clientId` lookup instead of a
+  positional assertion.
