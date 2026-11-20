@@ -268,11 +268,17 @@ When false, substitute the final value — never rely on the platform flag alone
   ↔ `MiniPlayerRow` cross-dissolve), not a generic fade/slide. Close, back, and downward swipe
   (from the header or top-of-scroll body, velocity-aware) reverse it smoothly back onto the dock
   while unblurring the underlying shell in lockstep.
+- **Page transitions (ocean current & wake):** dock tab switches glide laterally along the tab
+  order with `OceanSwellEasing` (`CubicBezierEasing(0.22f, 1.0f, 0.36f, 1.0f)`), detail pushes
+  rise buoyantly while the parent recedes, and pops reverse cleanly. Each transition triggers a
+  bounded `AmbientCanvas` aurora surge and a directional `WaveSweep` (translucent aqua crest +
+  dual sine waves + pearl swimmer trailing twin `drawWaveWake` strands), both static/disabled under
+  reduced motion.
 - **Reveal stagger** for list entrance (index-derived, arithmetic — never hand-numbered).
-- **The only unbounded animation** is `WavyProgress` (the player's ambient wave) and the slow canvas
-  wash. Everything else is bounded; decorative loops are static under reduced motion.
-- **No motion on tab switch** (happens hundreds of times a day) — the pressed spring is the whole
-  interaction.
+- **The only unbounded animation** is `WavyProgress` (the player's ambient wave). Everything else
+  (including the navigation canvas surge) is bounded; decorative loops are static under reduced motion.
+- **No travel motion on the dock indicator itself** (tab switches happen hundreds of times a day) —
+  the pressed spring is the whole dock-item interaction.
 - Haptics via `triggerHaptic(intent)` (tap/select/press/success/warning/error/scrub), master switch,
   fires once on press.
 
