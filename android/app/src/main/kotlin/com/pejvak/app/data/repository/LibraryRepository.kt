@@ -219,6 +219,10 @@ class LibraryRepository @Inject constructor(
         trackDao.getByFolderKey(folderKey).map { it.toDomain() }
     }
 
+    suspend fun latestSessionForRun(runId: String): Session? = withContext(Dispatchers.IO) {
+        sessionDao.latestForRun(runId)?.toDomain()
+    }
+
     suspend fun track(id: String): Track? = withContext(Dispatchers.IO) {
         trackDao.getById(id)?.toDomain()
     }
