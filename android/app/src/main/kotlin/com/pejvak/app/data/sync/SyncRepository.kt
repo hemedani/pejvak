@@ -171,6 +171,13 @@ class SyncRepository @Inject constructor(
                 completed = item.completed, interrupted = item.interrupted,
                 contextPlayId = item.contextPlayId, contextType = item.contextType, contextKey = item.contextKey,
                 stretchId = item.stretchId ?: id, seeked = item.seeked,
+                contextTitle = item.contextTitle, collectionSort = item.collectionSort,
+                collectionSortDirection = item.collectionSortDirection,
+                collectionIndex = item.collectionIndex, collectionSize = item.collectionSize,
+                ambientTone = item.ambientTone, ambientLevel = item.ambientLevel,
+                volumePercent = item.volumePercent, enhancerEnabled = item.enhancerEnabled,
+                enhancerBoostDb = item.enhancerBoostDb, enhancerBassDb = item.enhancerBassDb,
+                enhancerTrebleDb = item.enhancerTrebleDb,
                 syncStatus = SyncStatus.Synced, createdAt = item.startedAt, updatedAt = item.endedAt ?: item.startedAt,
             )
             sessionDao.insertIgnore(session.toEntity())

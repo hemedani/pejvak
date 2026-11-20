@@ -126,6 +126,18 @@ class LesanSyncTransport @Inject constructor(
                     session.contextPlayId?.let { put("contextPlayId", it) }
                     session.contextType?.let { put("contextType", it.wire) }
                     session.contextKey?.let { put("contextKey", it) }
+                    session.contextTitle?.let { put("contextTitle", it) }
+                    session.collectionSort?.let { put("collectionSort", it.wire) }
+                    session.collectionSortDirection?.let { put("collectionSortDirection", it.wire) }
+                    session.collectionIndex?.let { put("collectionIndex", it) }
+                    session.collectionSize?.let { put("collectionSize", it) }
+                    session.ambientTone?.let { put("ambientTone", it) }
+                    session.ambientLevel?.let { put("ambientLevel", it) }
+                    session.volumePercent?.let { put("volumePercent", it) }
+                    session.enhancerEnabled?.let { put("enhancerEnabled", it) }
+                    session.enhancerBoostDb?.let { put("enhancerBoostDb", it) }
+                    session.enhancerBassDb?.let { put("enhancerBassDb", it) }
+                    session.enhancerTrebleDb?.let { put("enhancerTrebleDb", it) }
                     put("stretchId", session.stretchId); put("seeked", session.seeked)
                 }
             }))
@@ -256,6 +268,10 @@ class LesanSyncTransport @Inject constructor(
             put("startPositionSec", 1); put("endPositionSec", 1); put("durationListenedSec", 1); put("playbackSpeed", 1)
             put("completed", 1); put("interrupted", 1); put("contextPlayId", 1); put("contextType", 1)
             put("contextKey", 1); put("stretchId", 1); put("seeked", 1)
+            put("contextTitle", 1); put("collectionSort", 1); put("collectionSortDirection", 1)
+            put("collectionIndex", 1); put("collectionSize", 1); put("ambientTone", 1)
+            put("ambientLevel", 1); put("volumePercent", 1); put("enhancerEnabled", 1)
+            put("enhancerBoostDb", 1); put("enhancerBassDb", 1); put("enhancerTrebleDb", 1)
             put("track", buildJsonObject { put("contentHash", 1) })
         }
         val rows = lesan.callBody("playbackSession", "getMyListeningHistory", pageSet(), get, token = token()).jsonArray
@@ -273,6 +289,18 @@ class LesanSyncTransport @Inject constructor(
                 contextPlayId = row.str("contextPlayId"),
                 contextType = com.pejvak.app.domain.ContextType.from(row.str("contextType")),
                 contextKey = row.str("contextKey"), stretchId = row.str("stretchId"), seeked = row.bool("seeked") ?: false,
+                contextTitle = row.str("contextTitle"),
+                collectionSort = com.pejvak.app.domain.CollectionSort.from(row.str("collectionSort")),
+                collectionSortDirection = com.pejvak.app.domain.SortDirection.from(row.str("collectionSortDirection")),
+                collectionIndex = row.int("collectionIndex"),
+                collectionSize = row.int("collectionSize"),
+                ambientTone = row.str("ambientTone"),
+                ambientLevel = row.int("ambientLevel"),
+                volumePercent = row.int("volumePercent"),
+                enhancerEnabled = row.bool("enhancerEnabled"),
+                enhancerBoostDb = row.double("enhancerBoostDb"),
+                enhancerBassDb = row.double("enhancerBassDb"),
+                enhancerTrebleDb = row.double("enhancerTrebleDb"),
             )
         }
     }
