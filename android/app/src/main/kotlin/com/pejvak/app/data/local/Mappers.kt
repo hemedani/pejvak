@@ -3,6 +3,7 @@ package com.pejvak.app.data.local
 import com.pejvak.app.domain.Annotation
 import com.pejvak.app.domain.Availability
 import com.pejvak.app.domain.Checkpoint
+import com.pejvak.app.domain.CollectionSort
 import com.pejvak.app.domain.ContextPlay
 import com.pejvak.app.domain.ContextType
 import com.pejvak.app.domain.DownloadFile
@@ -17,6 +18,7 @@ import com.pejvak.app.domain.Origin
 import com.pejvak.app.domain.Playlist
 import com.pejvak.app.domain.PlaylistItem
 import com.pejvak.app.domain.Session
+import com.pejvak.app.domain.SortDirection
 import com.pejvak.app.domain.SyncStatus
 import com.pejvak.app.domain.Track
 import kotlinx.serialization.Serializable
@@ -63,6 +65,11 @@ fun SessionEntity.toDomain() = Session(
     deviceInfo = device_info, syncStatus = SyncStatus.from(sync_status), createdAt = created_at, updatedAt = updated_at,
     deletedAt = deleted_at, contextPlayId = context_play_id, contextType = ContextType.from(context_type), contextKey = context_key,
     stretchId = stretch_id, seeked = seeked,
+    contextTitle = context_title, collectionSort = CollectionSort.from(collection_sort),
+    collectionSortDirection = SortDirection.from(collection_sort_direction),
+    collectionIndex = collection_index, collectionSize = collection_size, ambientTone = ambient_tone,
+    ambientLevel = ambient_level, volumePercent = volume_percent, enhancerEnabled = enhancer_enabled,
+    enhancerBoostDb = enhancer_boost_db, enhancerBassDb = enhancer_bass_db, enhancerTrebleDb = enhancer_treble_db,
 )
 
 fun Session.toEntity() = SessionEntity(
@@ -72,6 +79,11 @@ fun Session.toEntity() = SessionEntity(
     device_info = deviceInfo, sync_status = syncStatus.wire, created_at = createdAt, updated_at = updatedAt,
     deleted_at = deletedAt, context_play_id = contextPlayId, context_type = contextType?.wire, context_key = contextKey,
     stretch_id = stretchId, seeked = seeked,
+    context_title = contextTitle, collection_sort = collectionSort?.wire,
+    collection_sort_direction = collectionSortDirection?.wire, collection_index = collectionIndex,
+    collection_size = collectionSize, ambient_tone = ambientTone, ambient_level = ambientLevel,
+    volume_percent = volumePercent, enhancer_enabled = enhancerEnabled, enhancer_boost_db = enhancerBoostDb,
+    enhancer_bass_db = enhancerBassDb, enhancer_treble_db = enhancerTrebleDb,
 )
 
 // --- Annotation ---

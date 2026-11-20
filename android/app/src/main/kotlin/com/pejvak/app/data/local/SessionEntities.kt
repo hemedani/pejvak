@@ -38,6 +38,18 @@ data class SessionEntity(
     val context_key: String?,
     val stretch_id: String,
     val seeked: Boolean = false,
+    val context_title: String?,
+    val collection_sort: String?,
+    val collection_sort_direction: String?,
+    val collection_index: Int?,
+    val collection_size: Int?,
+    val ambient_tone: String?,
+    val ambient_level: Int?,
+    val volume_percent: Int?,
+    val enhancer_enabled: Boolean?,
+    val enhancer_boost_db: Double?,
+    val enhancer_bass_db: Double?,
+    val enhancer_treble_db: Double?,
 )
 
 /** Local-only kill-recovery checkpoint; never synced. */

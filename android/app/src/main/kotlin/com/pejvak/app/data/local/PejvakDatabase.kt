@@ -2,6 +2,8 @@ package com.pejvak.app.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * Offline-first source of truth. The schema mirrors the RN SQLite database 1:1
@@ -25,7 +27,7 @@ import androidx.room.RoomDatabase
         DownloadScopeEntity::class,
         DownloadFileEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class PejvakDatabase : RoomDatabase() {
@@ -41,4 +43,26 @@ abstract class PejvakDatabase : RoomDatabase() {
     abstract fun downloadJobDao(): DownloadJobDao
     abstract fun downloadScopeDao(): DownloadScopeDao
     abstract fun downloadFileDao(): DownloadFileDao
+}
+
+/**
+ * v2 adds the playback-context snapshot to sessions. Every column is nullable and
+ * has no SQL default, so a legacy row stays NULL and the mapper can tell it apart
+ * from a new row that genuinely used no ambience or full volume.
+ */
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE sessions ADD COLUMN context_title TEXT")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN collection_sort TEXT")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN collection_sort_direction TEXT")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN collection_index INTEGER")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN collection_size INTEGER")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN ambient_tone TEXT")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN ambient_level INTEGER")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN volume_percent INTEGER")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN enhancer_enabled INTEGER")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN enhancer_boost_db REAL")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN enhancer_bass_db REAL")
+        db.execSQL("ALTER TABLE sessions ADD COLUMN enhancer_treble_db REAL")
+    }
 }

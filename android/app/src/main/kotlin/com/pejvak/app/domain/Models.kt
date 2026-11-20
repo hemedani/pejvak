@@ -92,6 +92,18 @@ data class Session(
     val contextKey: String? = null,
     val stretchId: String,
     val seeked: Boolean = false,
+    val contextTitle: String? = null,
+    val collectionSort: CollectionSort? = null,
+    val collectionSortDirection: SortDirection? = null,
+    val collectionIndex: Int? = null,
+    val collectionSize: Int? = null,
+    val ambientTone: String? = null,
+    val ambientLevel: Int? = null,
+    val volumePercent: Int? = null,
+    val enhancerEnabled: Boolean? = null,
+    val enhancerBoostDb: Double? = null,
+    val enhancerBassDb: Double? = null,
+    val enhancerTrebleDb: Double? = null,
 )
 
 data class Annotation(
