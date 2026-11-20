@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -15,17 +17,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 
 /**
- * Wraps a screen with the floating [GlassHeader] and tells the body exactly how much
- * top padding the header occupies. The header is a sibling of the body — so it is
- * crisp and samples the recorded body — and the body scrolls behind it.
+ * Wraps a screen with the floating [GlassHeader] and optional [subHeader] (e.g. a
+ * floating tab-chip row) and tells the body the total top padding those chrome layers
+ * occupy. Both [header] and [subHeader] live as siblings outside the [backdropSource]
+ * body so they never sample themselves while the list scrolls smoothly behind them.
  */
 @Composable
 fun ScreenFrame(
     modifier: Modifier = Modifier,
     header: @Composable (Modifier) -> Unit,
+    subHeader: (@Composable () -> Unit)? = null,
     content: @Composable (topInset: Dp) -> Unit,
 ) {
     val geo = LocalPejvakGeometry.current
@@ -35,15 +40,22 @@ fun ScreenFrame(
     var headerHeight by remember {
         mutableStateOf(statusTop + geo.header.minHeight + geo.header.margin * 2)
     }
+    var subHeaderHeight by remember { mutableStateOf(0.dp) }
+    val contentTopInset = if (subHeader != null) {
+        headerHeight + geo.spacing.xs + subHeaderHeight + geo.spacing.sm
+    } else {
+        headerHeight
+    }
+
     Box(modifier.fillMaxSize()) {
-        // The recorded backdrop is the body; the header pane above samples it. The
-        // shell's modal blur lives on an ancestor of this node, never on it.
+        // The recorded backdrop is the body; the header and sub-header panes above
+        // sample it. The shell's modal blur lives on an ancestor of this node, never on it.
         Box(
             Modifier
                 .fillMaxSize()
                 .backdropSource(backdrop, zIndex = 1f),
         ) {
-            content(headerHeight)
+            content(contentTopInset)
         }
         header(
             Modifier
@@ -54,5 +66,21 @@ fun ScreenFrame(
                     }
                 },
         )
+        if (subHeader != null) {
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .padding(top = headerHeight + geo.spacing.xs)
+                    .onGloballyPositioned { coords ->
+                        if (coords.size.height > 0) {
+                            val measured = with(density) { coords.size.height.toDp() }
+                            if (subHeaderHeight != measured) subHeaderHeight = measured
+                        }
+                    },
+            ) {
+                subHeader()
+            }
+        }
     }
 }
