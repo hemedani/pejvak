@@ -155,7 +155,35 @@ fun historySearchFields(item: HistoryItem): List<SearchField> = buildList {
 
 fun HistoryItem.playbackConditionsForDisplay(): PlaybackConditions {
     val conditions = session.playbackConditions()
-    return if (conditions.contextTitle == null) conditions.copy(contextTitle = contextTitle) else conditions
+    val liveTitle = contextTitle?.takeIf { it.isNotBlank() }
+    return if (conditions.contextTitle?.isNotBlank() == true) {
+        conditions
+    } else {
+        conditions.copy(contextTitle = liveTitle)
+    }
+}
+
+data class PlaybackContextFacts(
+    val kind: CollectionKind,
+    val title: String?,
+    val order: String?,
+    val ambience: String?,
+    val volume: String,
+    val enhancer: String?,
+)
+
+fun HistoryItem.playbackContextFacts(): PlaybackContextFacts {
+    val conditions = playbackConditionsForDisplay()
+    val kind = collectionKind()
+    val title = conditions.contextTitle?.takeIf { it.isNotBlank() }
+    return PlaybackContextFacts(
+        kind = kind,
+        title = if (title != null || kind == CollectionKind.Collection) title else null,
+        order = playbackOrderValue(conditions),
+        ambience = playbackAmbienceValue(conditions),
+        volume = playbackVolumeValue(conditions),
+        enhancer = playbackEnhancerValue(conditions),
+    )
 }
 
 fun historyMarkdown(entries: List<HistoryStretchEntry>, now: Long = System.currentTimeMillis()): String {

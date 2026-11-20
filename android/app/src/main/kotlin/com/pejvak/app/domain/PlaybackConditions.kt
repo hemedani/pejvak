@@ -110,24 +110,47 @@ fun Session.playbackConditions(): PlaybackConditions = normalizePlaybackConditio
 fun HistoryItem.collectionKind(): CollectionKind =
     if (session.contextType == null) CollectionKind.Standalone else CollectionKind.Collection
 
+fun playbackOrderValue(
+    conditions: PlaybackConditions,
+    includeDirection: Boolean = true,
+): String? {
+    if (conditions.collectionSort == CollectionSort.Unknown) return null
+    val position = formatContextPosition(conditions.collectionIndex, conditions.collectionSize)
+    return listOfNotNull(
+        conditions.collectionSort.label,
+        if (includeDirection) conditions.collectionSortDirection.label else null,
+        position.ifBlank { null },
+    ).joinToString(if (includeDirection) " \u00b7 " else ", ")
+}
+
+fun playbackAmbienceValue(conditions: PlaybackConditions): String? =
+    ambienceDescription(conditions.ambientTone, conditions.ambientLevel)
+
+fun playbackVolumeValue(conditions: PlaybackConditions): String = "${conditions.volumePercent}%"
+
+fun playbackEnhancerValue(conditions: PlaybackConditions): String? {
+    val boost = conditions.enhancerBoostDb
+    val bass = conditions.enhancerBassDb
+    val treble = conditions.enhancerTrebleDb
+    val flat = boost == 0.0 && bass == 0.0 && treble == 0.0
+    if (!conditions.enhancerEnabled && flat) return null
+    val bands = buildList {
+        if (boost != 0.0) add(formatGainDb(boost))
+        if (bass != 0.0) add("bass ${formatGainDb(bass)}")
+        if (treble != 0.0) add("treble ${formatGainDb(treble)}")
+    }
+    return if (bands.isEmpty()) "on" else bands.joinToString(", ")
+}
+
 /** The facts a history detail card shows, in order. Empty pieces are omitted. */
 fun describePlaybackConditions(
     conditions: PlaybackConditions,
     includeDirection: Boolean = false,
 ): List<String> = buildList {
-    if (conditions.collectionSort != CollectionSort.Unknown) {
-        val position = formatContextPosition(conditions.collectionIndex, conditions.collectionSize)
-        add(
-            listOfNotNull(
-                conditions.collectionSort.label,
-                if (includeDirection) conditions.collectionSortDirection.label else null,
-                position.ifBlank { null },
-            ).joinToString(if (includeDirection) " \u00b7 " else ", "),
-        )
-    }
-    ambienceDescription(conditions.ambientTone, conditions.ambientLevel)?.let { add(it) }
-    add("Volume ${conditions.volumePercent}%")
-    enhancerDescription(conditions)?.let { add(it) }
+    playbackOrderValue(conditions, includeDirection)?.let(::add)
+    playbackAmbienceValue(conditions)?.let(::add)
+    add("Volume ${playbackVolumeValue(conditions)}")
+    playbackEnhancerValue(conditions)?.let { add("Enhancer $it") }
 }
 
 /** A compact markdown fragment appended to a history export line. */
@@ -146,20 +169,6 @@ private fun ambienceDescription(tone: String, level: Int): String? {
         level > 0 -> "Level $level"
         else -> null
     }
-}
-
-private fun enhancerDescription(conditions: PlaybackConditions): String? {
-    val boost = conditions.enhancerBoostDb
-    val bass = conditions.enhancerBassDb
-    val treble = conditions.enhancerTrebleDb
-    val flat = boost == 0.0 && bass == 0.0 && treble == 0.0
-    if (!conditions.enhancerEnabled && flat) return null
-    val bands = buildList {
-        if (boost != 0.0) add(formatGainDb(boost))
-        if (bass != 0.0) add("bass ${formatGainDb(bass)}")
-        if (treble != 0.0) add("treble ${formatGainDb(treble)}")
-    }
-    return if (bands.isEmpty()) "Enhancer on" else "Enhancer ${bands.joinToString(", ")}"
 }
 
 private fun formatGainDb(value: Double): String {

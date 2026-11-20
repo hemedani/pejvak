@@ -203,6 +203,8 @@ class HistoryTest {
             listOf("Manual, 3 of 5", "Forest, level 30", "Volume 70%", "Enhancer +3 dB"),
             describePlaybackConditions(richConditions()),
         )
+        assertEquals("70%", playbackVolumeValue(richConditions()))
+        assertEquals("+3 dB", playbackEnhancerValue(richConditions()))
     }
 
     @Test
@@ -264,5 +266,57 @@ class HistoryTest {
         )
         val markdown = historyMarkdown(groupHistoryIntoStretches(listOf(item)), at("2026-03-10"))
         assertTrue(markdown.contains("Lectures · Volume 100%"))
+    }
+
+    @Test
+    fun `context facts use value-only volume and enhancer text`() {
+        val item = HistoryItem(
+            session(
+                "a",
+                contextType = ContextType.Playlist,
+                collectionSort = CollectionSort.Manual,
+                collectionSortDirection = SortDirection.Desc,
+                collectionIndex = 2,
+                collectionSize = 5,
+                ambientTone = "forest",
+                ambientLevel = 30,
+                volumePercent = 70,
+                enhancerEnabled = true,
+                enhancerBoostDb = 3.0,
+                enhancerBassDb = -1.5,
+                enhancerTrebleDb = 2.0,
+            ),
+            track("a", "Intro"),
+            "Lectures",
+        )
+        assertEquals(
+            PlaybackContextFacts(
+                kind = CollectionKind.Collection,
+                title = "Lectures",
+                order = "Manual · Descending · 3 of 5",
+                ambience = "Forest, level 30",
+                volume = "70%",
+                enhancer = "+3 dB, bass \u22121.5 dB, treble +2 dB",
+            ),
+            item.playbackContextFacts(),
+        )
+    }
+
+    @Test
+    fun `blank snapshot titles fall back to live titles or stay absent`() {
+        val fallback = HistoryItem(
+            session("a", contextType = ContextType.Playlist, contextTitle = "   "),
+            track("a", "Intro"),
+            "Lectures",
+        )
+        assertEquals("Lectures", fallback.playbackContextFacts().title)
+        assertTrue(historyMarkdown(groupHistoryIntoStretches(listOf(fallback)), at("2026-03-10")).contains("Lectures · Volume 100%"))
+
+        val untitled = HistoryItem(
+            session("b", contextType = ContextType.Playlist, contextTitle = ""),
+            track("b", "Intro"),
+            "  ",
+        )
+        assertNull(untitled.playbackContextFacts().title)
     }
 }
