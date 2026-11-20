@@ -29,18 +29,16 @@ import com.pejvak.app.domain.SearchEntry
 import com.pejvak.app.domain.Session
 import com.pejvak.app.domain.Track
 import com.pejvak.app.domain.online.OnlineSource
-import com.pejvak.app.domain.buildFolderPlan
 import com.pejvak.app.domain.buildFolderSummaries
 import com.pejvak.app.domain.buildPlaylistSummaries
 import com.pejvak.app.domain.buildRecentPlays
 import com.pejvak.app.domain.createSearchIndex
 import com.pejvak.app.domain.folderSearchFields
-import com.pejvak.app.domain.folderTrackProgress
 import com.pejvak.app.domain.playlistSearchFields
 import com.pejvak.app.domain.recentSearchFields
 import com.pejvak.app.domain.searchIndex
-import com.pejvak.app.domain.toFolderPlayable
 import com.pejvak.app.domain.trackSearchFields
+import com.pejvak.app.playback.CollectionPlaybackLauncher
 import com.pejvak.app.playback.PlaybackEngine
 import com.pejvak.app.playback.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -112,6 +110,7 @@ class LibraryViewModel @Inject constructor(
     private val runs: ContextPlayRepository,
     private val settings: SettingsRepository,
     private val engine: PlaybackEngine,
+    private val launcher: CollectionPlaybackLauncher,
     private val artwork: ArtworkService,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
@@ -187,31 +186,17 @@ class LibraryViewModel @Inject constructor(
     fun playTrack(track: Track, queue: List<Track> = listOf(track), index: Int = 0) {
         viewModelScope.launch {
             PlaybackService.start(context)
-            engine.loadAndPlay(track, 0, null, queue.map { it.id }, index)
+            launcher.playResolved(track, fallbackQueue = queue.map { it.id }, fallbackIndex = index)
         }
     }
 
     fun playFolder(summary: FolderSummary, mode: FolderPlayMode = FolderPlayMode.Resume) {
         viewModelScope.launch {
-            val tracks = library.tracksInFolder(summary.folder.key)
-            val plan = buildFolderPlan(
-                tracks.map { it.toFolderPlayable() },
-                folderTrackProgress(tracks, lastSessions),
-                FolderPlayOptions(mode),
-            )
-            val entry = tracks.firstOrNull { it.id == plan.queueIds.getOrNull(plan.startIndex) } ?: return@launch
             PlaybackService.start(context)
-            engine.loadAndPlay(
-                entry,
-                plan.startPositionSec,
-                com.pejvak.app.playback.PlaybackContext(
-                    ContextType.Folder,
-                    summary.folder.key,
-                    summary.folder.name,
-                    if (mode == FolderPlayMode.Shuffle) CollectionSort.Shuffle else CollectionSort.Folder,
-                ),
-                plan.queueIds,
-                plan.startIndex,
+            launcher.playFolder(
+                folderKey = summary.folder.key,
+                folderName = summary.folder.name,
+                mode = mode,
             )
         }
     }

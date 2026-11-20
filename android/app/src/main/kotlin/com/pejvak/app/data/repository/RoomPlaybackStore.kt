@@ -32,6 +32,25 @@ class RoomPlaybackStore @Inject constructor(
     override suspend fun finalizeSession(id: String, endedAt: Long, endPositionSec: Int, durationListenedSec: Int, completed: Boolean, interrupted: Boolean) =
         sessionDao.finalize(id, endedAt, endPositionSec, durationListenedSec, completed, interrupted)
     override suspend fun markSessionSeeked(id: String) = sessionDao.markSeeked(id)
+    override suspend fun updateSessionAudioConditions(
+        id: String,
+        ambientTone: String,
+        ambientLevel: Int,
+        volumePercent: Int,
+        enhancerEnabled: Boolean,
+        enhancerBoostDb: Double,
+        enhancerBassDb: Double,
+        enhancerTrebleDb: Double,
+        at: Long,
+    ) = sessionDao.updateAudioConditions(id, ambientTone, ambientLevel, volumePercent, enhancerEnabled, enhancerBoostDb, enhancerBassDb, enhancerTrebleDb, at)
+    override suspend fun updateSessionCollectionOrder(
+        id: String,
+        sort: com.pejvak.app.domain.CollectionSort,
+        direction: com.pejvak.app.domain.SortDirection,
+        index: Int,
+        size: Int,
+        at: Long,
+    ) = sessionDao.updateCollectionOrder(id, sort.wire, direction.wire, index, size, at)
 
     override suspend fun saveCheckpoint(checkpoint: Checkpoint) = checkpointDao.upsert(checkpoint.toEntity())
     override suspend fun deleteCheckpoint(sessionId: String) = checkpointDao.deleteBySession(sessionId)

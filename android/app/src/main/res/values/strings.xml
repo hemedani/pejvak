@@ -499,4 +499,17 @@
     <string name="header_sort">Sort</string>
     <string name="header_date_range">Date range</string>
     <string name="header_screen_menu">Screen settings</string>
+    <string name="sort_title">Sort</string>
+    <string name="sort_option_folder">Folder</string>
+    <string name="sort_option_source">Source</string>
+    <string name="sort_option_name">Name</string>
+    <string name="sort_option_duration">Duration</string>
+    <string name="sort_option_shuffle">Shuffle</string>
+    <string name="sort_option_manual">Manual</string>
+    <string name="sort_option_smart">Smart</string>
+    <string name="sort_option_created">Created</string>
+    <string name="sort_option_unknown">Order</string>
+    <string name="sort_direction">Direction</string>
+    <string name="sort_ascending">Ascending</string>
+    <string name="sort_descending">Descending</string>
 </resources>

@@ -21,6 +21,9 @@ interface SessionDao {
     @Query("SELECT * FROM sessions WHERE track_id = :trackId AND deleted_at IS NULL ORDER BY started_at DESC")
     suspend fun getForTrack(trackId: String): List<SessionEntity>
 
+    @Query("SELECT * FROM sessions WHERE context_play_id = :runId AND deleted_at IS NULL ORDER BY started_at DESC LIMIT 1")
+    suspend fun latestForRun(runId: String): SessionEntity?
+
     @Query(
         "SELECT track_id, COUNT(*) AS sessionCount, COALESCE(SUM(duration_listened_sec), 0) AS listenedSec " +
             "FROM sessions WHERE deleted_at IS NULL AND track_id IN (:trackIds) GROUP BY track_id",
@@ -87,6 +90,36 @@ interface SessionDao {
 
     @Query("UPDATE sessions SET seeked = 1 WHERE id = :id")
     suspend fun markSeeked(id: String)
+
+    @Query(
+        "UPDATE sessions SET ambient_tone = :tone, ambient_level = :level, volume_percent = :volume, " +
+            "enhancer_enabled = :enhancerEnabled, enhancer_boost_db = :boostDb, enhancer_bass_db = :bassDb, " +
+            "enhancer_treble_db = :trebleDb, updated_at = :at, sync_status = 'pending' WHERE id = :id",
+    )
+    suspend fun updateAudioConditions(
+        id: String,
+        tone: String,
+        level: Int,
+        volume: Int,
+        enhancerEnabled: Boolean,
+        boostDb: Double,
+        bassDb: Double,
+        trebleDb: Double,
+        at: Long,
+    )
+
+    @Query(
+        "UPDATE sessions SET collection_sort = :sort, collection_sort_direction = :direction, " +
+            "collection_index = :index, collection_size = :size, updated_at = :at, sync_status = 'pending' WHERE id = :id",
+    )
+    suspend fun updateCollectionOrder(
+        id: String,
+        sort: String,
+        direction: String,
+        index: Int,
+        size: Int,
+        at: Long,
+    )
 
     @Query("UPDATE sessions SET deleted_at = :at, sync_status = 'pending' WHERE id = :id")
     suspend fun softDelete(id: String, at: Long)

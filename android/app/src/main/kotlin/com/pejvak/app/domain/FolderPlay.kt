@@ -29,6 +29,8 @@ enum class FolderPlayMode { Resume, Restart, Unfinished, Shuffle }
 
 data class FolderPlayOptions(
     val mode: FolderPlayMode = FolderPlayMode.Resume,
+    val sort: CollectionSort = CollectionSort.Folder,
+    val direction: SortDirection = SortDirection.Asc,
     val random: () -> Double = { Math.random() },
 )
 
@@ -58,19 +60,25 @@ fun buildFolderPlan(
     options: FolderPlayOptions = FolderPlayOptions(),
 ): FolderPlayPlan {
     val missingCount = tracks.count { it.availability == Availability.Missing }
-    val ordered = orderByFolder(
-        tracks.filter { it.availability != Availability.Missing },
+    val ordered = orderCollectionItems(
+        items = tracks.filter { it.availability != Availability.Missing },
+        sort = options.sort,
+        direction = options.direction,
+        random = options.random,
+        id = { it.id },
+        title = { it.title },
+        durationSec = { it.durationSec },
+        fileName = { it.fileName },
         trackNumber = { it.trackNumber },
         discNumber = { it.discNumber },
-        fileName = { it.fileName },
-        title = { it.title },
     )
     fun plan(items: List<FolderPlayableTrack>, index: Int, position: Int) =
         FolderPlayPlan(items, items.map { it.id }, index, position, missingCount)
 
     if (ordered.isEmpty()) return plan(emptyList(), 0, 0)
     if (options.mode == FolderPlayMode.Shuffle) {
-        return plan(shuffleTracks(ordered, options.random), 0, 0)
+        val shuffled = if (options.sort == CollectionSort.Shuffle) ordered else shuffleTracks(ordered, options.random)
+        return plan(shuffled, 0, 0)
     }
     if (options.mode == FolderPlayMode.Unfinished) {
         val remaining = ordered.filter { progress[it.id]?.finished != true }

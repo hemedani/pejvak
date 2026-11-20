@@ -101,6 +101,12 @@ gone. `WaveProgressBar` is the read-only sibling (dotted unfilled range, solid c
 is what a progress value looks like outside the player. `LevelSliderRow` / `GainSliderRow` are the
 standard wrappers — reach for those before composing a slider inline.
 
+**Sorting a collection.** The folder and online collection screens own their order: changing the sort
+chip reorders the visible list immediately, from the same plan the queue uses (`orderCollectionRows`)
+— never a second sort pass, or a shuffle could show one order and play another. The player's chip sorts
+the live run; the collection screen's chip sorts the list and the next run. Playlist screens have no
+sort control (they are `Manual`/`Smart` by construction).
+
 **Sheets.** `GlassSheet(onDismiss, modifier, title, subtitle, icon, content)` is the only bottom
 sheet. A titled sheet *must* pass `icon`: the header is an accent icon bubble, the headline, an
 optional subtitle, then a hairline wave rule. Do not mount a raw `ModalBottomSheet`.

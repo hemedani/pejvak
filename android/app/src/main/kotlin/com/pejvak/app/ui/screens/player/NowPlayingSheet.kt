@@ -71,6 +71,7 @@ import com.pejvak.app.domain.findTone
 import com.pejvak.app.domain.formatClock
 import com.pejvak.app.domain.pickAnnotationColor
 import com.pejvak.app.playback.PlaybackContext
+import com.pejvak.app.ui.components.CollectionSortSheet
 import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.LocalSheetPresence
 import com.pejvak.app.ui.components.MiniPlayerRow
@@ -218,6 +219,7 @@ fun NowPlayingSheet(
     val enhancerStatus by vm.enhancerStatus.collectAsStateWithLifecycle()
 
     var showQueue by remember { mutableStateOf(false) }
+    var showSort by remember { mutableStateOf(false) }
     var showSleep by remember { mutableStateOf(false) }
     var showJump by remember { mutableStateOf(false) }
     var showEnhancer by remember { mutableStateOf(false) }
@@ -443,6 +445,7 @@ fun NowPlayingSheet(
                             onDismiss()
                             onOpenAi()
                         },
+                        onOpenSort = { showSort = true },
                         onOpenContext = {
                             // The chip carries the collection this run belongs to, so it has
                             // to open that collection — not the Library tab it used to fall
@@ -559,6 +562,19 @@ fun NowPlayingSheet(
         }
     }
 
+    if (showSort) {
+        val sortOptions by vm.sortOptions.collectAsStateWithLifecycle()
+        val context = state.context
+        if (context != null) {
+            CollectionSortSheet(
+                options = sortOptions,
+                sort = context.sort,
+                direction = context.direction,
+                onDismiss = { showSort = false },
+                onSelect = vm::setCollectionSort,
+            )
+        }
+    }
     if (showQueue) {
         QueueSheet(
             tracks = queue,

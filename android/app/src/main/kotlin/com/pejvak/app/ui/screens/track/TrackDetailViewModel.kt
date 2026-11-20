@@ -15,7 +15,7 @@ import com.pejvak.app.domain.Session
 import com.pejvak.app.domain.SessionSummary
 import com.pejvak.app.domain.Track
 import com.pejvak.app.domain.TrackStats
-import com.pejvak.app.playback.PlaybackEngine
+import com.pejvak.app.playback.CollectionPlaybackLauncher
 import com.pejvak.app.playback.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,7 +45,7 @@ class TrackDetailViewModel @Inject constructor(
     private val annotations: AnnotationRepository,
     private val playlists: PlaylistRepository,
     private val inspectionService: AudioInspectionService,
-    private val engine: PlaybackEngine,
+    private val launcher: CollectionPlaybackLauncher,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val trackId: String = savedStateHandle["id"] ?: ""
@@ -95,7 +95,7 @@ class TrackDetailViewModel @Inject constructor(
         val track = _state.value.track ?: return
         viewModelScope.launch {
             PlaybackService.start(context)
-            engine.loadAndPlay(track, positionSec)
+            launcher.playResolved(track, positionSec)
         }
     }
 

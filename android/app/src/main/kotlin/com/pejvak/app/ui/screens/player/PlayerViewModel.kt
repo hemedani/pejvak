@@ -8,11 +8,15 @@ import com.pejvak.app.data.repository.AnnotationRepository
 import com.pejvak.app.data.repository.LibraryRepository
 import com.pejvak.app.domain.Annotation
 import com.pejvak.app.domain.AudioEnhancerSettings
+import com.pejvak.app.domain.CollectionSort
+import com.pejvak.app.domain.SortDirection
+import com.pejvak.app.domain.collectionSortOptions
 import com.pejvak.app.domain.Track
 import com.pejvak.app.domain.clampSeconds
 import com.pejvak.app.domain.isWaiting
 import com.pejvak.app.domain.nextSpeed
 import com.pejvak.app.playback.AudioEffectsController
+import com.pejvak.app.playback.CollectionPlaybackLauncher
 import com.pejvak.app.playback.EnhancerStatus
 import com.pejvak.app.playback.PlaybackEngine
 import com.pejvak.app.playback.PlayerState
@@ -46,10 +50,16 @@ class PlayerViewModel @Inject constructor(
     private val annotations: AnnotationRepository,
     private val waveforms: WaveformAnalyzer,
     private val effects: AudioEffectsController,
+    private val launcher: CollectionPlaybackLauncher,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     val player = engine.state
+
+    val sortOptions: StateFlow<List<CollectionSort>> = engine.state
+        .map { state -> state.context?.type?.let { collectionSortOptions(it) } ?: emptyList() }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val frame: StateFlow<PlayerState> = engine.state
         .map { it.copy(positionSec = 0, listenedSec = 0) }
@@ -212,13 +222,17 @@ class PlayerViewModel @Inject constructor(
         viewModelScope.launch {
             val track = library.firstPlayable() ?: return@launch
             PlaybackService.start(context)
-            engine.loadAndPlay(track, 0, queue = listOf(track.id), index = 0)
+            launcher.playResolved(track, fallbackQueue = listOf(track.id))
         }
     }
 
     fun cycleSpeed() {
         val next = nextSpeed(engine.state.value.playbackSpeed)
         viewModelScope.launch { engine.setSpeed(next) }
+    }
+
+    fun setCollectionSort(sort: CollectionSort, direction: SortDirection) {
+        viewModelScope.launch { engine.setCollectionSort(sort, direction) }
     }
 
     fun setVolume(percent: Int) {

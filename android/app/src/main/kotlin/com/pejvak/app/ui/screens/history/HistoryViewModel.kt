@@ -34,9 +34,11 @@ import com.pejvak.app.domain.historySearchFields
 import com.pejvak.app.domain.matchOne
 import com.pejvak.app.domain.mergeHistoryPages
 import com.pejvak.app.domain.rangeContains
+import com.pejvak.app.domain.playbackConditions
 import com.pejvak.app.domain.resumeTargetSec
+import com.pejvak.app.domain.runResumeSeed
 import com.pejvak.app.domain.stretchResumeTarget
-import com.pejvak.app.playback.PlaybackEngine
+import com.pejvak.app.playback.CollectionPlaybackLauncher
 import com.pejvak.app.playback.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -80,7 +82,7 @@ class HistoryViewModel @Inject constructor(
     private val runs: ContextPlayRepository,
     private val library: LibraryRepository,
     private val settings: SettingsRepository,
-    private val engine: PlaybackEngine,
+    private val launcher: CollectionPlaybackLauncher,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val _state = MutableStateFlow(HistoryUiState())
@@ -200,50 +202,44 @@ class HistoryViewModel @Inject constructor(
     }
 
     fun resumeSession(item: HistoryItem) {
-        val track = item.track
+        val session = item.session
         viewModelScope.launch {
             PlaybackService.start(context)
-            engine.loadAndPlay(
-                track,
-                resumeTargetSec(item.session),
-                item.session.contextType?.let {
-                    com.pejvak.app.playback.PlaybackContext(
-                        it,
-                        item.session.contextKey.orEmpty(),
-                        item.contextTitle ?: track.title,
-                    )
-                },
+            launcher.playResolved(
+                item.track,
+                resumeTargetSec(session),
+                inherit = session.playbackConditions(),
+                speed = session.playbackSpeed,
             )
         }
     }
 
     fun resumeStretch(entry: HistoryStretchEntry) {
         val (item, position) = stretchResumeTarget(entry)
+        val session = item.session
         viewModelScope.launch {
             PlaybackService.start(context)
-            engine.loadAndPlay(
+            launcher.playResolved(
                 item.track,
                 position,
-                item.session.contextType?.let {
-                    com.pejvak.app.playback.PlaybackContext(
-                        it,
-                        item.session.contextKey.orEmpty(),
-                        item.contextTitle ?: item.track.title,
-                    )
-                },
+                inherit = session.playbackConditions(),
+                speed = session.playbackSpeed,
             )
         }
     }
 
     fun resumeRun(run: ContextPlay) {
-        val trackId = run.lastTrackId ?: return
+        val fallbackId = run.lastTrackId ?: return
         viewModelScope.launch {
-            val track = library.getTrack(trackId) ?: return@launch
+            val latest = library.latestSessionForRun(run.id)
+            val track = library.getTrack(latest?.trackId ?: fallbackId) ?: return@launch
+            val seed = runResumeSeed(run, latest)
             PlaybackService.start(context)
-            engine.loadAndPlay(
+            launcher.playResolved(
                 track,
                 run.lastPositionSec,
-                com.pejvak.app.playback.PlaybackContext(run.contextType, run.contextKey, run.contextTitle),
+                inherit = seed.conditions,
+                speed = seed.speed,
             )
         }
     }

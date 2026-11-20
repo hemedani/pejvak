@@ -30,7 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
+import com.pejvak.app.domain.ContextType
 import com.pejvak.app.domain.FolderPlayMode
+import com.pejvak.app.domain.collectionSortOptions
 import com.pejvak.app.domain.describeFolderProgress
 import com.pejvak.app.domain.describeRecentWhen
 import com.pejvak.app.domain.describeRunOutcome
@@ -40,7 +42,9 @@ import com.pejvak.app.ui.components.AddToPlaylistSheet
 import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.EmptyState
 import com.pejvak.app.ui.components.GlassCard
+import com.pejvak.app.ui.components.CollectionSortSheet
 import com.pejvak.app.ui.components.GlassChip
+import com.pejvak.app.ui.components.sortChipLabel
 import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.PaletteTile
@@ -69,6 +73,7 @@ fun FolderDetailScreen(
     val geo = LocalPejvakGeometry.current
     var historyOpen by remember { mutableStateOf(false) }
     var addOpen by remember { mutableStateOf(false) }
+    var sortOpen by remember { mutableStateOf(false) }
 
     val plan = state.plan
     val finishedCount = state.rows.count { it.progress?.finished == true }
@@ -155,6 +160,13 @@ fun FolderDetailScreen(
                                 )
                             },
                         )
+                        if (state.rows.size > 1) {
+                            GlassChip(
+                                label = sortChipLabel(state.sort, state.direction),
+                                icon = "sort",
+                                onClick = { sortOpen = true },
+                            )
+                        }
                         GlassChip(
                             label = stringResource(R.string.folder_save_playlist),
                             onClick = viewModel::saveAsPlaylist,
@@ -195,6 +207,16 @@ fun FolderDetailScreen(
                 }
             }
         }
+    }
+
+    if (sortOpen) {
+        CollectionSortSheet(
+            options = collectionSortOptions(ContextType.Folder),
+            sort = state.sort,
+            direction = state.direction,
+            onDismiss = { sortOpen = false },
+            onSelect = { sort, direction -> viewModel.setSort(sort, direction) },
+        )
     }
 
     if (addOpen) {

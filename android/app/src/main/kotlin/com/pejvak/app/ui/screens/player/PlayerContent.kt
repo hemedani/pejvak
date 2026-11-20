@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.domain.Annotation
 import com.pejvak.app.domain.AudioEnhancerSettings
+import com.pejvak.app.domain.ContextType
 import com.pejvak.app.domain.contextPositionLabel
 import com.pejvak.app.domain.describeRoomTone
 import com.pejvak.app.domain.formatListened
@@ -55,6 +56,7 @@ import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.GlassChip
 import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.PejvakIcon
+import com.pejvak.app.ui.components.sortChipLabel
 import com.pejvak.app.ui.components.UserText
 import com.pejvak.app.ui.components.player.AnnotationList
 import com.pejvak.app.ui.components.player.HeroArtwork
@@ -102,6 +104,7 @@ fun PlayerContent(
     onOpenEnhancer: () -> Unit,
     onOpenAi: () -> Unit,
     onOpenContext: () -> Unit,
+    onOpenSort: () -> Unit,
     modifier: Modifier = Modifier,
     /** Downward (or pull-back upward) delta the body could not scroll, in px. */
     onPullDown: (Float) -> Unit = {},
@@ -346,6 +349,13 @@ fun PlayerContent(
                         icon = if (context.type.name == "Folder") "folder" else "playlist",
                         onClick = onOpenContext,
                     )
+                    if ((context.type == ContextType.Folder || context.type == ContextType.Online) && state.queue.size > 1) {
+                        GlassChip(
+                            label = sortChipLabel(context.sort, context.direction),
+                            icon = "sort",
+                            onClick = onOpenSort,
+                        )
+                    }
                 }
                 if (state.queue.size > 1) {
                     GlassChip(label = stringResource(R.string.player_queue), icon = "queue", onClick = onOpenQueue)

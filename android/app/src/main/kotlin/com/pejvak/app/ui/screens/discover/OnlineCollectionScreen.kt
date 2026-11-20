@@ -31,12 +31,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
+import com.pejvak.app.domain.ContextType
+import com.pejvak.app.domain.collectionSortOptions
 import com.pejvak.app.domain.formatClock
 import com.pejvak.app.domain.formatDuration
 import com.pejvak.app.domain.online.SeriesSection
 import com.pejvak.app.domain.online.buildSeriesSections
 import com.pejvak.app.domain.online.describeKnownTrackCount
 import com.pejvak.app.ui.components.BubbleButton
+import com.pejvak.app.ui.components.CollectionSortSheet
 import com.pejvak.app.ui.components.DownloadControl
 import com.pejvak.app.ui.components.EmptyState
 import com.pejvak.app.ui.components.GlassChip
@@ -49,6 +52,7 @@ import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.row.RowAction
 import com.pejvak.app.ui.components.row.RowActions
 import com.pejvak.app.ui.components.PrimaryButton
+import com.pejvak.app.ui.components.sortChipLabel
 import com.pejvak.app.ui.components.GlassHeader
 import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.ScreenFrame
@@ -71,6 +75,7 @@ fun OnlineCollectionScreen(
     val playIndex = state.tracks.indexOfFirst { it.track.id == resumable?.track?.id }.coerceAtLeast(0)
     val sections = remember(state.tracks) { buildSeriesSections(state.tracks) { it.track.title } }
     var confirmDelete by remember { mutableStateOf(false) }
+    var sortOpen by remember { mutableStateOf(false) }
 
     ScreenFrame(
         header = { headerModifier ->
@@ -149,6 +154,17 @@ fun OnlineCollectionScreen(
                             else stringResource(R.string.discover_favorite),
                             icon = "favorite",
                             onClick = viewModel::toggleFavorite,
+                        )
+                    }
+                }
+                if (state.tracks.size > 1) {
+                    val sortIdx = order++
+                    item {
+                        GlassChip(
+                            label = sortChipLabel(state.sort, state.direction),
+                            icon = "sort",
+                            modifier = Modifier.oceanEntrance(sortIdx, swayDp = 0.dp),
+                            onClick = { sortOpen = true },
                         )
                     }
                 }
@@ -250,6 +266,15 @@ fun OnlineCollectionScreen(
                 }
             }
         }
+    }
+    if (sortOpen) {
+        CollectionSortSheet(
+            options = collectionSortOptions(ContextType.Online),
+            sort = state.sort,
+            direction = state.direction,
+            onDismiss = { sortOpen = false },
+            onSelect = { sort, direction -> viewModel.setSort(sort, direction) },
+        )
     }
     if (confirmDelete) {
         AlertDialog(

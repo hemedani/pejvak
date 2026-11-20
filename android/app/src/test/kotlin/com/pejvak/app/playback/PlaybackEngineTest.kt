@@ -37,7 +37,55 @@ private class FakeStore : PlaybackStore {
     override suspend fun finalizeSession(id: String, endedAt: Long, endPositionSec: Int, durationListenedSec: Int, completed: Boolean, interrupted: Boolean) {
         sessions[id]?.let { sessions[id] = it.copy(endedAt = endedAt, endPositionSec = endPositionSec, durationListenedSec = durationListenedSec, completed = completed, interrupted = interrupted) }
     }
+    var conditionWrites = 0
+    var orderWrites = 0
     override suspend fun markSessionSeeked(id: String) { sessions[id]?.let { sessions[id] = it.copy(seeked = true) } }
+    override suspend fun updateSessionAudioConditions(
+        id: String,
+        ambientTone: String,
+        ambientLevel: Int,
+        volumePercent: Int,
+        enhancerEnabled: Boolean,
+        enhancerBoostDb: Double,
+        enhancerBassDb: Double,
+        enhancerTrebleDb: Double,
+        at: Long,
+    ) {
+        conditionWrites++
+        sessions[id]?.let {
+            sessions[id] = it.copy(
+                ambientTone = ambientTone,
+                ambientLevel = ambientLevel,
+                volumePercent = volumePercent,
+                enhancerEnabled = enhancerEnabled,
+                enhancerBoostDb = enhancerBoostDb,
+                enhancerBassDb = enhancerBassDb,
+                enhancerTrebleDb = enhancerTrebleDb,
+                updatedAt = at,
+                syncStatus = com.pejvak.app.domain.SyncStatus.Pending,
+            )
+        }
+    }
+    override suspend fun updateSessionCollectionOrder(
+        id: String,
+        sort: com.pejvak.app.domain.CollectionSort,
+        direction: com.pejvak.app.domain.SortDirection,
+        index: Int,
+        size: Int,
+        at: Long,
+    ) {
+        orderWrites++
+        sessions[id]?.let {
+            sessions[id] = it.copy(
+                collectionSort = sort,
+                collectionSortDirection = direction,
+                collectionIndex = index,
+                collectionSize = size,
+                updatedAt = at,
+                syncStatus = com.pejvak.app.domain.SyncStatus.Pending,
+            )
+        }
+    }
     override suspend fun saveCheckpoint(checkpoint: Checkpoint) { checkpoints[checkpoint.sessionId] = checkpoint }
     override suspend fun deleteCheckpoint(sessionId: String) { checkpoints.remove(sessionId) }
     override suspend fun getOrphanedCheckpoints() = checkpoints.values.filter { sessions[it.sessionId]?.endedAt == null }
@@ -54,10 +102,11 @@ private class FakeStore : PlaybackStore {
 
 private class FakeCommand : PlayerCommand {
     var loaded: Pair<Track, Int>? = null
+    var loadCount = 0
     var pauseCount = 0
     var resumeCount = 0
     var released = false
-    override suspend fun loadAndPlay(track: Track, positionSec: Int) { loaded = track to positionSec }
+    override suspend fun loadAndPlay(track: Track, positionSec: Int) { loaded = track to positionSec; loadCount++ }
     override fun pause() { pauseCount++ }
     override fun resume() { resumeCount++ }
     override fun seekTo(positionSec: Int) {}
@@ -383,6 +432,108 @@ class PlaybackEngineTest {
         assertEquals(100, conditions.volumePercent)
         assertEquals(0, conditions.ambientLevel)
         assertEquals("none", conditions.ambientTone)
+    }
+
+    @Test
+    fun `collection sort reorders the live queue and keeps the current track playing`() = runTest {
+        val (engine, store, cmd) = setup()
+        val tracks = listOf(
+            track("b").copy(title = "Beta"),
+            track("a").copy(title = "Alpha"),
+            track("c").copy(title = "Gamma"),
+        )
+        tracks.forEach { store.tracks[it.id] = it }
+        val context = PlaybackContext(ContextType.Folder, "f1", "Lectures", CollectionSort.Folder)
+        engine.loadAndPlay(tracks[0], 30, context = context, queue = listOf("b", "a", "c"), index = 0)
+        engine.onPlayerProgress(30, 600, true, false, 1000)
+        val loadsBefore = cmd.loadCount
+
+        engine.setCollectionSort(CollectionSort.Name, com.pejvak.app.domain.SortDirection.Asc)
+
+        assertEquals(listOf("a", "b", "c"), engine.state.value.queue)
+        assertEquals("b", engine.state.value.trackId)
+        assertEquals(1, engine.state.value.queueIndex)
+        assertEquals(CollectionSort.Name, engine.state.value.context?.sort)
+        assertEquals(loadsBefore, cmd.loadCount)
+        assertEquals(30, engine.state.value.positionSec)
+    }
+
+    @Test
+    fun `collection sort patches the active session order`() = runTest {
+        val (engine, store, _) = setup()
+        val tracks = listOf(track("b"), track("a"), track("c"))
+        tracks.forEach { store.tracks[it.id] = it }
+        val context = PlaybackContext(ContextType.Folder, "f1", "Lectures", CollectionSort.Folder)
+        engine.loadAndPlay(tracks[0], 0, context = context, queue = listOf("b", "a", "c"), index = 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+
+        engine.setCollectionSort(CollectionSort.Name, com.pejvak.app.domain.SortDirection.Desc)
+
+        val session = store.sessions.values.first()
+        assertEquals(CollectionSort.Name, session.collectionSort)
+        assertEquals(com.pejvak.app.domain.SortDirection.Desc, session.collectionSortDirection)
+        assertEquals(1, session.collectionIndex)
+        assertEquals(3, session.collectionSize)
+        assertEquals(com.pejvak.app.domain.SyncStatus.Pending, session.syncStatus)
+        assertEquals(listOf("c", "b", "a"), engine.state.value.queue)
+        assertEquals(1, engine.state.value.queueIndex)
+    }
+
+    @Test
+    fun `refresh active conditions patches only the playing session`() = runTest {
+        val (engine, store, _) = setup()
+        val t = track("t1"); store.tracks["t1"] = t
+        var conditions = PlaybackConditions(volumePercent = 100)
+        engine.conditionsProvider = { conditions }
+        engine.loadAndPlay(t, 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        conditions = PlaybackConditions(volumePercent = 55, ambientTone = "forest", ambientLevel = 20)
+
+        engine.refreshActiveConditions()
+
+        val session = store.sessions.values.first()
+        assertEquals(55, session.volumePercent)
+        assertEquals("forest", session.ambientTone)
+        assertEquals(20, session.ambientLevel)
+        assertEquals(1, store.sessions.size)
+    }
+
+    @Test
+    fun `identical condition snapshots do not write again`() = runTest {
+        val (engine, store, _) = setup()
+        val t = track("t1"); store.tracks["t1"] = t
+        engine.conditionsProvider = { PlaybackConditions(volumePercent = 70) }
+        engine.loadAndPlay(t, 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        val writesAfterStart = store.conditionWrites
+
+        engine.refreshActiveConditions()
+        engine.refreshActiveConditions()
+
+        assertEquals(writesAfterStart, store.conditionWrites)
+    }
+
+    @Test
+    fun `next session captures the reordered collection position`() = runTest {
+        val (engine, store, _) = setup()
+        val tracks = listOf(
+            track("b").copy(title = "Beta"),
+            track("a").copy(title = "Alpha"),
+            track("c").copy(title = "Gamma"),
+        )
+        tracks.forEach { store.tracks[it.id] = it }
+        val context = PlaybackContext(ContextType.Folder, "f1", "Lectures", CollectionSort.Folder)
+        engine.loadAndPlay(tracks[0], 0, context = context, queue = listOf("b", "a", "c"), index = 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        engine.setCollectionSort(CollectionSort.Name, com.pejvak.app.domain.SortDirection.Asc)
+        engine.onPlayerFinished()
+        engine.onPlayerProgress(0, 600, true, false, 2000)
+
+        val second = store.sessions.values.last()
+        assertEquals("c", second.trackId)
+        assertEquals(CollectionSort.Name, second.collectionSort)
+        assertEquals(2, second.collectionIndex)
+        assertEquals(3, second.collectionSize)
     }
 
     @Test

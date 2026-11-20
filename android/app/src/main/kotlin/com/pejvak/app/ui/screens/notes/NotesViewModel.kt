@@ -13,7 +13,7 @@ import com.pejvak.app.domain.NoteWithTrack
 import com.pejvak.app.domain.annotationsToMarkdown
 import com.pejvak.app.domain.notesInRange
 import com.pejvak.app.domain.searchNotes
-import com.pejvak.app.playback.PlaybackEngine
+import com.pejvak.app.playback.CollectionPlaybackLauncher
 import com.pejvak.app.playback.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,7 +45,7 @@ data class NotesUiState(
 class NotesViewModel @Inject constructor(
     private val annotations: AnnotationRepository,
     private val library: LibraryRepository,
-    private val engine: PlaybackEngine,
+    private val launcher: CollectionPlaybackLauncher,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -121,11 +121,11 @@ class NotesViewModel @Inject constructor(
     fun resume(note: NoteWithTrack) {
         viewModelScope.launch {
             PlaybackService.start(context)
-            engine.loadAndPlay(
+            launcher.playResolved(
                 note.track,
                 note.annotation.positionSec,
-                queue = listOf(note.track.id),
-                index = 0,
+                fallbackQueue = listOf(note.track.id),
+                fallbackIndex = 0,
             )
         }
     }

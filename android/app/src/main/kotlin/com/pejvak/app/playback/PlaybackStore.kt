@@ -20,6 +20,26 @@ interface PlaybackStore {
     suspend fun finalizeSession(id: String, endedAt: Long, endPositionSec: Int, durationListenedSec: Int, completed: Boolean, interrupted: Boolean)
     suspend fun markSessionSeeked(id: String)
 
+    suspend fun updateSessionAudioConditions(
+        id: String,
+        ambientTone: String,
+        ambientLevel: Int,
+        volumePercent: Int,
+        enhancerEnabled: Boolean,
+        enhancerBoostDb: Double,
+        enhancerBassDb: Double,
+        enhancerTrebleDb: Double,
+        at: Long,
+    )
+    suspend fun updateSessionCollectionOrder(
+        id: String,
+        sort: com.pejvak.app.domain.CollectionSort,
+        direction: com.pejvak.app.domain.SortDirection,
+        index: Int,
+        size: Int,
+        at: Long,
+    )
+
     suspend fun saveCheckpoint(checkpoint: Checkpoint)
     suspend fun deleteCheckpoint(sessionId: String)
     suspend fun getOrphanedCheckpoints(): List<Checkpoint>

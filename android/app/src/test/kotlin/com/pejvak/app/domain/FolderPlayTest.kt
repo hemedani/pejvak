@@ -124,6 +124,52 @@ class FolderPlayTest {
     }
 
     @Test
+    fun `sort name reorders before resume picks the first unfinished`() {
+        val tracks = listOf(
+            FolderPlayableTrack("b", "b.mp3", "B", 600, null, null, Availability.Present),
+            FolderPlayableTrack("a", "a.mp3", "A", 600, null, null, Availability.Present),
+        )
+        val plan = buildFolderPlan(
+            tracks,
+            mapOf("b" to progress(true)),
+            FolderPlayOptions(mode = FolderPlayMode.Resume, sort = CollectionSort.Name),
+        )
+        assertEquals(listOf("a", "b"), plan.queueIds)
+        assertEquals(0, plan.startIndex)
+    }
+
+    @Test
+    fun `sort desc reverses the folder plan and keeps missing excluded`() {
+        val tracks = listOf(
+            FolderPlayableTrack("a", "a.mp3", "A", 600, null, null, Availability.Present),
+            FolderPlayableTrack("b", "b.mp3", "B", 600, null, null, Availability.Present),
+            FolderPlayableTrack("z", "z.mp3", "Z", 600, null, null, Availability.Missing),
+        )
+        val plan = buildFolderPlan(
+            tracks,
+            emptyMap(),
+            FolderPlayOptions(
+                mode = FolderPlayMode.Restart,
+                sort = CollectionSort.Name,
+                direction = SortDirection.Desc,
+            ),
+        )
+        assertEquals(listOf("b", "a"), plan.queueIds)
+        assertEquals(1, plan.missingCount)
+    }
+
+    @Test
+    fun `sort shuffle produces the existing random plan`() {
+        val tracks = listOf(track("1"), track("2"), track("3"), track("4"))
+        val plan = buildFolderPlan(
+            tracks,
+            emptyMap(),
+            FolderPlayOptions(sort = CollectionSort.Shuffle, random = { 0.0 }),
+        )
+        assertEquals(listOf("2", "3", "4", "1"), plan.queueIds)
+    }
+
+    @Test
     fun `row status says finished resume missing or not started`() {
         assertEquals("File missing", describeFolderTrackStatus(progress(true), track("x", availability = Availability.Missing)).label)
         assertEquals("Finished", describeFolderTrackStatus(progress(true), track("x")).label)
