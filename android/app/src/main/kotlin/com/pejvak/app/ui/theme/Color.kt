@@ -24,23 +24,31 @@ val GlassFillFallbackLight = Color(0x4DFFFFFF)// white 30% (API 29-30)
 val GlassFillFallbackDark = Color(0xB8141C26) // dark 72% (API 29-30)
 
 // --- Frost material (shell chrome only: header, dock, mini-player) ---
-// The smoked tint is what makes content behind a pane read as colour washes rather
-// than recognisable shapes; the sheen seasons it. Percentages are of the pane's own
-// alpha, so the alpha-scaling rule applies when composed.
-val FrostBaseLight = Color(0x8C33505F)        // canvasBase 55%
-val FrostBaseDark = Color(0x9E0A0F16)         // canvasBase 62%
-val FrostScrimLight = Color(0x9E33505F)       // canvasBase 62%
-val FrostScrimDark = Color(0xAD06090F)        // #06090F 68%
-val FrostSheenLight = Color(0x1AFFFFFF)       // white 10%
-val FrostSheenDark = Color(0x0FFFFFFF)        // white 6%
+// The pane must REVEAL the blurred backdrop as a coloured wash, not a grey film: the
+// base fills the sample's transparent pixels, the scrim is a TEAL smoke that gives the
+// glass its "lit from within" cast (the reference reads teal/cyan, never neutral), and
+// the sheen is a pale-cyan milk. The stack leaves ~29 % of the blurred sample visible —
+// content dissolves to soft washes (owner spec) while the field's colour still seasons
+// the pane. Values are pinned by ContrastContractTest at the matching bloom alpha
+// (dark 0.38 / light 0.20); percentages are of the pane's own alpha, so the
+// alpha-scaling rule applies when composed.
+val FrostBaseLight = Color(0x522E4C5A)        // teal-slate 32%
+val FrostBaseDark = Color(0x61071A20)         // deep teal 38%
+val FrostScrimLight = Color(0x5227525E)       // teal-slate 32%
+val FrostScrimDark = Color(0x6B0E4A52)        // teal 42%
+val FrostSheenLight = Color(0x2EFFFFFF)       // white 18%
+val FrostSheenDark = Color(0x2EDCF7FF)        // pale cyan 18%
 val FrostFallbackLight = Color(0xD133505F)    // canvasBase 82% (API 29-30)
 val FrostFallbackDark = Color(0xDB06090F)     // #06090F 86% (API 29-30)
 
 // --- Glass edges ---
-val GlassBorderLight = Color(0x8CFFFFFF)      // white 55%
-val GlassBorderDark = Color(0x38FFFFFF)       // white 22%
+// A crisp, bright hairline is what sells "cut glass": light catches the top edge and
+// separates the pane from the field. Dark mode was too faint (22 %) against the now
+// more colourful canvas, so it is lifted to 40 %; the rim light to 55 %.
+val GlassBorderLight = Color(0x99FFFFFF)      // white 60%
+val GlassBorderDark = Color(0x66FFFFFF)       // white 40%
 val GlassHighlightLight = Color(0xBFFFFFFF)   // white 75%
-val GlassHighlightDark = Color(0x59FFFFFF)    // white 35%
+val GlassHighlightDark = Color(0x8CFFFFFF)    // white 55%
 
 // --- Text on glass ---
 val TextLight = Color(0xFFFFFFFF)

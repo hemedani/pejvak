@@ -71,8 +71,17 @@ data class DockGeometry(
 /** Frost geometry (DESING.md §6 / plan 02). Shell chrome only. */
 @Immutable
 data class FrostGeometry(
-    val blur: Dp = 48.dp,
-    /** The modal-backdrop blur; the dock uses the same strength so both read alike. */
+    /**
+     * Chrome-pane blur. 64 dp fully dissolves a scrolling row into a soft wash (owner
+     * spec: "content barely visible, just soft washes of colour") — 48 dp still left
+     * recognisable edges behind the dock.
+     */
+    val blur: Dp = 64.dp,
+    /**
+     * The full-screen modal-backdrop blur (shell content hidden behind a sheet or the
+     * player). Chrome panes — header, dock, mini-player — use [blur] instead: a pane
+     * samples the water at full strength, a backdrop only needs to lose its detail.
+     */
     val backdrop: Dp = 18.dp,
     val noise: Float = 0.12f,
 )
