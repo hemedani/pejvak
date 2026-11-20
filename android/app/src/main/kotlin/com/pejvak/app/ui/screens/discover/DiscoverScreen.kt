@@ -2,7 +2,6 @@ package com.pejvak.app.ui.screens.discover
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,17 +17,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
@@ -83,66 +75,55 @@ fun DiscoverScreen(
                 },
             )
         },
-    ) { topInset ->
-        val density = LocalDensity.current
-        var chipsHeight by remember { mutableStateOf(40.dp) }
-        val topContentInset = topInset + geo.spacing.xs + chipsHeight + geo.spacing.sm
-        Box(Modifier.fillMaxSize()) {
-            HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
-                when (page) {
-                    0 -> ContinuePage(
-                        cards = state.continueRuns,
-                        downloadStates = state.downloadStates,
-                        topInset = topContentInset,
-                        onOpen = onOpenCollection,
-                    )
-
-                    1 -> FavoritesPage(
-                        favorites = state.favorites,
-                        topInset = topContentInset,
-                        onOpen = { key -> onOpenCollection(key, null, 0) },
-                        onUnfavorite = viewModel::unfavorite,
-                    )
-
-                    else -> BrowsePage(
-                        state = state,
-                        topInset = topContentInset,
-                        onOpenSource = onOpenSource,
-                        onOpenLanguage = onOpenLanguage,
-                        onOpenLanguageSheet = viewModel::openLanguageSheet,
-                    )
-                }
-            }
+        subHeader = {
             Row(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(
-                        start = geo.spacing.lg,
-                        end = geo.spacing.lg,
-                        top = topInset + geo.spacing.xs,
-                    )
-                    .onGloballyPositioned { coords ->
-                        if (coords.size.height > 0) {
-                            chipsHeight = with(density) { coords.size.height.toDp() }
-                        }
-                    },
+                modifier = Modifier.padding(horizontal = geo.spacing.lg),
                 horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
             ) {
                 GlassChip(
                     label = stringResource(R.string.discover_continue),
                     selected = state.page == 0,
+                    frosted = true,
                     onClick = { viewModel.setPage(0) },
                 )
                 GlassChip(
                     label = stringResource(R.string.discover_favorites),
                     selected = state.page == 1,
+                    frosted = true,
                     count = state.favorites.size.takeIf { it > 0 },
                     onClick = { viewModel.setPage(1) },
                 )
                 GlassChip(
                     label = stringResource(R.string.discover_browse),
                     selected = state.page == 2,
+                    frosted = true,
                     onClick = { viewModel.setPage(2) },
+                )
+            }
+        },
+    ) { topInset ->
+        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize()) { page ->
+            when (page) {
+                0 -> ContinuePage(
+                    cards = state.continueRuns,
+                    downloadStates = state.downloadStates,
+                    topInset = topInset,
+                    onOpen = onOpenCollection,
+                )
+
+                1 -> FavoritesPage(
+                    favorites = state.favorites,
+                    topInset = topInset,
+                    onOpen = { key -> onOpenCollection(key, null, 0) },
+                    onUnfavorite = viewModel::unfavorite,
+                )
+
+                else -> BrowsePage(
+                    state = state,
+                    topInset = topInset,
+                    onOpenSource = onOpenSource,
+                    onOpenLanguage = onOpenLanguage,
+                    onOpenLanguageSheet = viewModel::openLanguageSheet,
                 )
             }
         }

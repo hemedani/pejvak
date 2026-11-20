@@ -37,9 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -131,89 +129,76 @@ fun HistoryScreen(
                 },
             )
         },
-    ) { topInset ->
-        val density = LocalDensity.current
-        var chipsHeight by remember { mutableStateOf(40.dp) }
-        val topContentInset = topInset + geo.spacing.xs + chipsHeight + geo.spacing.sm
-        val pullState = rememberPullToRefreshState()
-        Box(Modifier.fillMaxSize()) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-            ) { page ->
-                if (page == 0) {
-                    PullToRefreshBox(
-                        isRefreshing = state.refreshing,
-                        onRefresh = viewModel::refresh,
-                        state = pullState,
-                        modifier = Modifier.fillMaxSize(),
-                        indicator = {
-                            PullToRefreshDefaults.Indicator(
-                                state = pullState,
-                                isRefreshing = state.refreshing,
-                                modifier = Modifier
-                                    .align(Alignment.TopCenter)
-                                    .padding(top = topContentInset),
-                            )
-                        },
-                    ) {
-                        HistoryList(
-                            state = state,
-                            topInset = topContentInset,
-                            onTab = viewModel::setTab,
-                            onOpenStretch = { entry ->
-                                entry.end.let(viewModel::openSession)
-                            },
-                            onDeleteStretch = viewModel::deleteStretch,
-                            onOpenRun = { run ->
-                                if (onOpenCollection != null) onOpenCollection(run)
-                                else viewModel.openCollection(run)
-                            },
-                            onDeleteRun = viewModel::deleteRun,
-                            onLoadMore = viewModel::loadMore,
-                            onToggleSelectionMode = viewModel::toggleSelectionMode,
-                            onToggleSelected = viewModel::toggleSelected,
-                            onDeleteSelected = viewModel::deleteSelected,
-                            onOpenAi = onOpenAi,
-                        )
-                    }
-                } else {
-                    StatsPanel(
-                        stats = state.stats,
-                        leaders = state.leaders,
-                        daily = state.daily,
-                        streak = state.streak,
-                        bestStreak = state.bestStreak,
-                        media = state.media,
-                        topInset = topContentInset,
-                    )
-                }
-            }
-
+        subHeader = {
             Row(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(
-                        start = geo.spacing.lg,
-                        end = geo.spacing.lg,
-                        top = topInset + geo.spacing.xs,
-                    )
-                    .onGloballyPositioned { coords ->
-                        if (coords.size.height > 0) {
-                            chipsHeight = with(density) { coords.size.height.toDp() }
-                        }
-                    },
+                modifier = Modifier.padding(horizontal = geo.spacing.lg),
                 horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
             ) {
                 GlassChip(
                     label = stringResource(R.string.history_panel_history),
                     selected = state.panel == HistoryPanel.History,
+                    frosted = true,
                     onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                 )
                 GlassChip(
                     label = stringResource(R.string.history_panel_stats),
                     selected = state.panel == HistoryPanel.Stats,
+                    frosted = true,
                     onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
+                )
+            }
+        },
+    ) { topInset ->
+        val pullState = rememberPullToRefreshState()
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+        ) { page ->
+            if (page == 0) {
+                PullToRefreshBox(
+                    isRefreshing = state.refreshing,
+                    onRefresh = viewModel::refresh,
+                    state = pullState,
+                    modifier = Modifier.fillMaxSize(),
+                    indicator = {
+                        PullToRefreshDefaults.Indicator(
+                            state = pullState,
+                            isRefreshing = state.refreshing,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = topInset),
+                        )
+                    },
+                ) {
+                    HistoryList(
+                        state = state,
+                        topInset = topInset,
+                        onTab = viewModel::setTab,
+                        onOpenStretch = { entry ->
+                            entry.end.let(viewModel::openSession)
+                        },
+                        onDeleteStretch = viewModel::deleteStretch,
+                        onOpenRun = { run ->
+                            if (onOpenCollection != null) onOpenCollection(run)
+                            else viewModel.openCollection(run)
+                        },
+                        onDeleteRun = viewModel::deleteRun,
+                        onLoadMore = viewModel::loadMore,
+                        onToggleSelectionMode = viewModel::toggleSelectionMode,
+                        onToggleSelected = viewModel::toggleSelected,
+                        onDeleteSelected = viewModel::deleteSelected,
+                        onOpenAi = onOpenAi,
+                    )
+                }
+            } else {
+                StatsPanel(
+                    stats = state.stats,
+                    leaders = state.leaders,
+                    daily = state.daily,
+                    streak = state.streak,
+                    bestStreak = state.bestStreak,
+                    media = state.media,
+                    topInset = topInset,
                 )
             }
         }

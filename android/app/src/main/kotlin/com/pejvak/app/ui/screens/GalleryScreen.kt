@@ -165,6 +165,11 @@ fun GalleryScreen() {
                                     )
                                 },
                             )
+                            Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
+                                GlassChip(label = "Tracks", selected = true, frosted = true, icon = "music")
+                                GlassChip(label = "Folders", frosted = true, icon = "folder")
+                                GlassChip(label = "Playlists", frosted = true, icon = "playlists")
+                            }
                             AppDock(selectedRoute = "library", onSelect = {})
                         }
                     }

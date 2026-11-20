@@ -36,8 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -179,51 +177,10 @@ fun LibraryScreen(
                 },
             )
         },
-    ) { topInset ->
-        val density = LocalDensity.current
-        var chipsHeight by remember { mutableStateOf(40.dp) }
-        val topContentInset = topInset + geo.spacing.xs + chipsHeight + geo.spacing.sm
-        Box(Modifier.fillMaxSize()) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize(),
-            ) { page ->
-                val view = views.getOrNull(page) ?: return@HorizontalPager
-                LibraryPage(
-                    view = view,
-                    state = state,
-                    topInset = topContentInset,
-                    newPlaylist = newPlaylist,
-                    onNewPlaylistChange = { newPlaylist = it },
-                    onCreatePlaylist = {
-                        viewModel.createPlaylist(newPlaylist)
-                        newPlaylist = ""
-                    },
-                    onDeletePlaylist = { pendingDelete = it },
-                    onOpenTrack = onOpenTrack,
-                    onOpenFolder = onOpenFolder,
-                    onOpenPlaylist = onOpenPlaylist,
-                    onOpenSmart = onOpenSmart,
-                    onOpenMissing = onOpenMissing,
-                    onOpenSource = onOpenSource,
-                    onOpenAi = onOpenAi,
-                    onImport = onImport,
-                    onSetOrigin = viewModel::setOrigin,
-                    onPlayTrack = { card -> viewModel.playTrack(card.track, state.tracks.map { it.track }) },
-                    onPlayRecent = viewModel::playRecent,
-                )
-            }
+        subHeader = {
             LazyRow(
                 state = chipState,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .fillMaxWidth()
-                    .padding(top = topInset + geo.spacing.xs)
-                    .onGloballyPositioned { coords ->
-                        if (coords.size.height > 0) {
-                            chipsHeight = with(density) { coords.size.height.toDp() }
-                        }
-                    },
+                modifier = Modifier.fillMaxWidth(),
                 contentPadding = PaddingValues(horizontal = geo.spacing.lg),
                 horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
             ) {
@@ -232,6 +189,7 @@ fun LibraryScreen(
                     GlassChip(
                         label = viewLabel(view),
                         selected = index == pagerState.currentPage,
+                        frosted = true,
                         icon = viewIcon(view),
                         count = if (state.query.isNotEmpty() && count != null) count else null,
                         onClick = {
@@ -240,6 +198,36 @@ fun LibraryScreen(
                     )
                 }
             }
+        },
+    ) { topInset ->
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+        ) { page ->
+            val view = views.getOrNull(page) ?: return@HorizontalPager
+            LibraryPage(
+                view = view,
+                state = state,
+                topInset = topInset,
+                newPlaylist = newPlaylist,
+                onNewPlaylistChange = { newPlaylist = it },
+                onCreatePlaylist = {
+                    viewModel.createPlaylist(newPlaylist)
+                    newPlaylist = ""
+                },
+                onDeletePlaylist = { pendingDelete = it },
+                onOpenTrack = onOpenTrack,
+                onOpenFolder = onOpenFolder,
+                onOpenPlaylist = onOpenPlaylist,
+                onOpenSmart = onOpenSmart,
+                onOpenMissing = onOpenMissing,
+                onOpenSource = onOpenSource,
+                onOpenAi = onOpenAi,
+                onImport = onImport,
+                onSetOrigin = viewModel::setOrigin,
+                onPlayTrack = { card -> viewModel.playTrack(card.track, state.tracks.map { it.track }) },
+                onPlayRecent = viewModel::playRecent,
+            )
         }
     }
 
@@ -404,7 +392,7 @@ private fun LibraryPage(
             }
         }
         if (state.spotlight != null && state.query.isEmpty() && view != LibraryView.Online) {
-            item { SpotlightCard(state.spotlight!!, onPlayTrack) }
+            item { SpotlightCard(state.spotlight, onPlayTrack) }
         }
         if (state.missingCount > 0) {
             item {
@@ -420,7 +408,7 @@ private fun LibraryPage(
         if (state.elsewhere != null && state.view == view) {
             item {
                 Text(
-                    text = state.elsewhere!!,
+                    text = state.elsewhere,
                     style = MaterialTheme.typography.bodySmall,
                     color = tokens.textSecondary,
                 )
