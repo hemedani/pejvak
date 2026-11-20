@@ -15,6 +15,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.pejvak.app.data.remote.online.OnlineRegistry
+import com.pejvak.app.domain.PlaybackConditions
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -94,6 +95,19 @@ class PlaybackService : MediaSessionService() {
             if (sourceId != null && externalId != null) {
                 runCatching { onlineRegistry.adapter(sourceId)?.notePlaybackStarted(externalId) }
             }
+        }
+        // Only the audio-treatment fields; the engine keeps the collection facts.
+        engine.conditionsProvider = {
+            val effectsState = effects.state.value
+            PlaybackConditions(
+                ambientTone = effectsState.toneId,
+                ambientLevel = effectsState.toneLevel,
+                volumePercent = effectsState.volume,
+                enhancerEnabled = effectsState.enhancer.enabled,
+                enhancerBoostDb = effectsState.enhancer.boostDb,
+                enhancerBassDb = effectsState.enhancer.bassDb,
+                enhancerTrebleDb = effectsState.enhancer.trebleDb,
+            )
         }
         effects.syncPlayback(false)
         engineScope.launch { engine.recoverOrphanedSessions() }

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.pejvak.app.data.repository.ContextPlayRepository
 import com.pejvak.app.data.repository.LibraryRepository
 import com.pejvak.app.data.repository.PlaylistRepository
+import com.pejvak.app.domain.CollectionSort
 import com.pejvak.app.domain.ContextPlay
 import com.pejvak.app.domain.ContextStats
 import com.pejvak.app.domain.ContextType
@@ -86,7 +87,12 @@ class FolderDetailViewModel @Inject constructor(
             engine.loadAndPlay(
                 entry,
                 if (index == null) plan.startPositionSec else 0,
-                com.pejvak.app.playback.PlaybackContext(ContextType.Folder, folderKey, _state.value.name),
+                com.pejvak.app.playback.PlaybackContext(
+                    ContextType.Folder,
+                    folderKey,
+                    _state.value.name,
+                    if (_state.value.mode == FolderPlayMode.Shuffle) CollectionSort.Shuffle else CollectionSort.Folder,
+                ),
                 plan.queueIds,
                 start,
             )

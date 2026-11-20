@@ -1,11 +1,19 @@
 package com.pejvak.app.playback
 
+import com.pejvak.app.domain.CollectionSort
 import com.pejvak.app.domain.ContextType
 import com.pejvak.app.domain.PlaybackPhase
 import com.pejvak.app.domain.PlaybackWait
+import com.pejvak.app.domain.SortDirection
 
 /** The collection a queue belongs to (a run's context). */
-data class PlaybackContext(val type: ContextType, val key: String, val title: String)
+data class PlaybackContext(
+    val type: ContextType,
+    val key: String,
+    val title: String,
+    val sort: CollectionSort = CollectionSort.Unknown,
+    val direction: SortDirection = SortDirection.Asc,
+)
 
 /**
  * The observable player state the UI draws. The engine is the single writer; the

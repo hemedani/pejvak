@@ -1,12 +1,15 @@
 package com.pejvak.app.playback
 
 import com.pejvak.app.domain.Checkpoint
+import com.pejvak.app.domain.CollectionSort
 import com.pejvak.app.domain.ContextPlay
 import com.pejvak.app.domain.ContextType
+import com.pejvak.app.domain.PlaybackConditions
 import com.pejvak.app.domain.PlaybackPhase
 import com.pejvak.app.domain.PlaybackWait
 import com.pejvak.app.domain.PlaybackWaitKind
 import com.pejvak.app.domain.Session
+import com.pejvak.app.domain.SortDirection
 import com.pejvak.app.domain.SessionTrackerState
 import com.pejvak.app.domain.Track
 import com.pejvak.app.domain.applyProgress
@@ -87,6 +90,14 @@ class PlaybackEngine(
      * to tell an online source that a station was played (radio play counts).
      */
     var onPlaybackStarted: ((Track) -> Unit)? = null
+
+    /**
+     * Supplies the audio-treatment snapshot (tone, volume, enhancer) when a session
+     * starts. The service installs this; the engine overlays those fields onto the
+     * collection facts it derives from the active run, so a provider that only knows
+     * about effects can never erase where the track was played from.
+     */
+    var conditionsProvider: (() -> PlaybackConditions)? = null
 
     private fun newId(): String = UUID.randomUUID().toString()
     private fun patch(block: (PlayerState) -> PlayerState) = _state.update(block)
@@ -169,11 +180,41 @@ class PlaybackEngine(
         }
         seekReported = false
         val sessionId = newId()
+        val base = PlaybackConditions(
+            contextTitle = run?.context?.title,
+            collectionSort = run?.context?.sort ?: CollectionSort.Unknown,
+            collectionSortDirection = run?.context?.direction ?: SortDirection.Asc,
+            collectionIndex = _state.value.queueIndex,
+            collectionSize = _state.value.queue.size,
+        )
+        val conditions = conditionsProvider?.invoke()?.let { provided ->
+            base.copy(
+                ambientTone = provided.ambientTone,
+                ambientLevel = provided.ambientLevel,
+                volumePercent = provided.volumePercent,
+                enhancerEnabled = provided.enhancerEnabled,
+                enhancerBoostDb = provided.enhancerBoostDb,
+                enhancerBassDb = provided.enhancerBassDb,
+                enhancerTrebleDb = provided.enhancerTrebleDb,
+            )
+        } ?: base
         store.insertSession(
             Session(
                 id = sessionId, trackId = track.id, contentHash = track.contentHash, startedAt = startedAt,
                 startPositionSec = startPositionSec, playbackSpeed = speed,
                 contextPlayId = run?.id, contextType = run?.context?.type, contextKey = run?.context?.key,
+                contextTitle = conditions.contextTitle,
+                collectionSort = conditions.collectionSort,
+                collectionSortDirection = conditions.collectionSortDirection,
+                collectionIndex = conditions.collectionIndex,
+                collectionSize = conditions.collectionSize,
+                ambientTone = conditions.ambientTone,
+                ambientLevel = conditions.ambientLevel,
+                volumePercent = conditions.volumePercent,
+                enhancerEnabled = conditions.enhancerEnabled,
+                enhancerBoostDb = conditions.enhancerBoostDb,
+                enhancerBassDb = conditions.enhancerBassDb,
+                enhancerTrebleDb = conditions.enhancerTrebleDb,
                 stretchId = stretchId, createdAt = startedAt, updatedAt = startedAt,
             ),
         )

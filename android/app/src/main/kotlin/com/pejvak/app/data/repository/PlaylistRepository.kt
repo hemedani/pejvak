@@ -5,6 +5,7 @@ import com.pejvak.app.data.local.TrackDao
 import com.pejvak.app.data.local.toDomain
 import com.pejvak.app.data.local.toEntity
 import com.pejvak.app.data.sync.SyncScheduler
+import com.pejvak.app.domain.CollectionSort
 import com.pejvak.app.domain.PlaybackContext
 import com.pejvak.app.domain.Playlist
 import com.pejvak.app.domain.SyncStatus
@@ -100,7 +101,12 @@ class PlaylistRepository @Inject constructor(
     }
 
     fun contextFor(playlist: Playlist): PlaybackContext =
-        PlaybackContext(com.pejvak.app.domain.ContextType.Playlist, playlist.id, playlist.title)
+        PlaybackContext(
+            com.pejvak.app.domain.ContextType.Playlist,
+            playlist.id,
+            playlist.title,
+            CollectionSort.Manual,
+        )
 
     private suspend fun mutate(
         id: String,

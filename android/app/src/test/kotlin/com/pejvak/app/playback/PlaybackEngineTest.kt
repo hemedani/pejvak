@@ -3,8 +3,10 @@ package com.pejvak.app.playback
 import com.pejvak.app.domain.Checkpoint
 import com.pejvak.app.domain.ContextPlay
 import com.pejvak.app.domain.ContextType
+import com.pejvak.app.domain.PlaybackConditions
 import com.pejvak.app.domain.Session
 import com.pejvak.app.domain.Track
+import com.pejvak.app.domain.playbackConditions
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -270,6 +272,47 @@ class PlaybackEngineTest {
         assertTrue(cmd.released)
         assertNull(engine.state.value.trackId)
         assertTrue(store.runs.values.first().interrupted)
+    }
+
+    @Test
+    fun sessionCapturesPlaybackConditions() = runTest {
+        val (engine, store, _) = setup()
+        val t1 = track("t1")
+        val t2 = track("t2")
+        store.tracks["t1"] = t1
+        store.tracks["t2"] = t2
+        engine.conditionsProvider = {
+            PlaybackConditions(
+                ambientTone = "forest",
+                ambientLevel = 35,
+                volumePercent = 70,
+                enhancerEnabled = true,
+                enhancerBoostDb = 3.0,
+                enhancerBassDb = 2.0,
+                enhancerTrebleDb = 1.0,
+            )
+        }
+        val context = PlaybackContext(
+            ContextType.Playlist,
+            "p1",
+            "Morning",
+            com.pejvak.app.domain.CollectionSort.Manual,
+        )
+        engine.loadAndPlay(t1, 0, context = context, queue = listOf("t1", "t2"), index = 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        val conditions = store.sessions.values.first().playbackConditions()
+        // Collection facts survive even though the provider only supplied audio fields.
+        assertEquals("Morning", conditions.contextTitle)
+        assertEquals(com.pejvak.app.domain.CollectionSort.Manual, conditions.collectionSort)
+        assertEquals(0, conditions.collectionIndex)
+        assertEquals(2, conditions.collectionSize)
+        assertEquals("forest", conditions.ambientTone)
+        assertEquals(35, conditions.ambientLevel)
+        assertEquals(70, conditions.volumePercent)
+        assertTrue(conditions.enhancerEnabled)
+        assertEquals(3.0, conditions.enhancerBoostDb, 0.0001)
+        assertEquals(2.0, conditions.enhancerBassDb, 0.0001)
+        assertEquals(1.0, conditions.enhancerTrebleDb, 0.0001)
     }
 
     @Test

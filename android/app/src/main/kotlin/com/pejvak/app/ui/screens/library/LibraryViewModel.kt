@@ -13,6 +13,7 @@ import com.pejvak.app.data.repository.PlaylistRepository
 import com.pejvak.app.data.repository.SettingsRepository
 import com.pejvak.app.domain.Annotation
 import com.pejvak.app.domain.Availability
+import com.pejvak.app.domain.CollectionSort
 import com.pejvak.app.domain.ContextPlay
 import com.pejvak.app.domain.ContextType
 import com.pejvak.app.domain.Folder
@@ -207,6 +208,7 @@ class LibraryViewModel @Inject constructor(
                     ContextType.Folder,
                     summary.folder.key,
                     summary.folder.name,
+                    if (mode == FolderPlayMode.Shuffle) CollectionSort.Shuffle else CollectionSort.Folder,
                 ),
                 plan.queueIds,
                 plan.startIndex,
@@ -223,7 +225,7 @@ class LibraryViewModel @Inject constructor(
                 entry,
                 0,
                 playlists.contextFor(summary.playlist).let {
-                    com.pejvak.app.playback.PlaybackContext(it.type, it.key, it.title)
+                    com.pejvak.app.playback.PlaybackContext(it.type, it.key, it.title, it.sort, it.direction)
                 },
                 tracks.map { it.id },
                 index,

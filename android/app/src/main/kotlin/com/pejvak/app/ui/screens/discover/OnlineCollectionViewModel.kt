@@ -10,6 +10,7 @@ import com.pejvak.app.data.remote.online.OnlineRegistry
 import com.pejvak.app.data.repository.LibraryRepository
 import com.pejvak.app.data.repository.OnlineCatalogService
 import com.pejvak.app.data.repository.OnlineCollectionRepository
+import com.pejvak.app.domain.CollectionSort
 import com.pejvak.app.domain.OnlineCollection
 import com.pejvak.app.domain.Track
 import com.pejvak.app.domain.online.OnlineSourceException
@@ -175,7 +176,7 @@ class OnlineCollectionViewModel @Inject constructor(
     fun play(index: Int = 0, positionSec: Int = 0) {
         val tracks = _state.value.tracks.map { it.track }
         val entry = tracks.getOrNull(index) ?: return
-        val playbackContext = PlaybackContext(ContextType.Online, key, _state.value.title)
+        val playbackContext = PlaybackContext(ContextType.Online, key, _state.value.title, CollectionSort.Source)
         viewModelScope.launch {
             _state.value = _state.value.copy(playingTrackId = entry.id)
             // The engine is useless without the media service that owns ExoPlayer.

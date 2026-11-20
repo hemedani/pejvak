@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pejvak.app.data.repository.LibraryRepository
 import com.pejvak.app.data.repository.PlaylistRepository
+import com.pejvak.app.domain.CollectionSort
 import com.pejvak.app.domain.ContextType
 import com.pejvak.app.domain.DEFAULT_COMMUTE_BUDGET_SEC
 import com.pejvak.app.domain.Playlist
@@ -68,6 +69,7 @@ class SmartPlaylistViewModel @Inject constructor(
                     ContextType.Playlist,
                     "smart:${ruleId.wire}",
                     ruleFor(ruleId).title,
+                    CollectionSort.Smart,
                 ),
                 ids,
                 index,

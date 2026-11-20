@@ -1,7 +1,13 @@
 package com.pejvak.app.domain
 
 /** The collection a queue belongs to; the title is captured when playback starts. */
-data class PlaybackContext(val type: ContextType, val key: String, val title: String)
+data class PlaybackContext(
+    val type: ContextType,
+    val key: String,
+    val title: String,
+    val sort: CollectionSort = CollectionSort.Unknown,
+    val direction: SortDirection = SortDirection.Asc,
+)
 
 data class ContextStats(
     val playCount: Int = 0,

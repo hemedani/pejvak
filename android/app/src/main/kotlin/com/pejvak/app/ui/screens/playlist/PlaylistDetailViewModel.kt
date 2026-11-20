@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.pejvak.app.data.repository.ContextPlayRepository
 import com.pejvak.app.data.repository.LibraryRepository
 import com.pejvak.app.data.repository.PlaylistRepository
+import com.pejvak.app.domain.CollectionSort
 import com.pejvak.app.domain.ContextPlay
 import com.pejvak.app.domain.ContextStats
 import com.pejvak.app.domain.ContextType
@@ -70,7 +71,12 @@ class PlaylistDetailViewModel @Inject constructor(
             engine.loadAndPlay(
                 entry,
                 0,
-                com.pejvak.app.playback.PlaybackContext(ContextType.Playlist, playlist.id, playlist.title),
+                com.pejvak.app.playback.PlaybackContext(
+                    ContextType.Playlist,
+                    playlist.id,
+                    playlist.title,
+                    CollectionSort.Manual,
+                ),
                 ids,
                 index,
             )
