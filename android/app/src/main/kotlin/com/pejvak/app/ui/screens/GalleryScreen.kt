@@ -1,31 +1,39 @@
 package com.pejvak.app.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.pejvak.app.ui.components.AmbientCanvas
 import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.EmptyState
 import com.pejvak.app.ui.components.GlassCard
 import com.pejvak.app.ui.components.GlassChip
 import com.pejvak.app.ui.components.GlassHeader
 import com.pejvak.app.ui.components.HeaderSearch
+import com.pejvak.app.ui.components.LocalBackdrop
+import com.pejvak.app.ui.components.PaletteTile
 import com.pejvak.app.ui.components.AppDock
+import com.pejvak.app.ui.components.backdropSource
+import com.pejvak.app.ui.components.rememberBackdrop
 import com.pejvak.app.ui.components.HighlightedText
 import com.pejvak.app.ui.components.InlineNotice
 import com.pejvak.app.ui.components.NoticeTone
@@ -94,31 +102,91 @@ fun GalleryScreen() {
 
             Section("Shell chrome") {
                 var query by remember { mutableStateOf("") }
-                GlassHeader(
-                    title = "Library",
-                    overline = "Pejvak",
-                    subtitle = "24 tracks · 3 folders",
-                    search = HeaderSearch(
-                        value = query,
-                        onValueChange = { query = it },
-                        placeholder = "Search tracks",
-                    ),
-                    actions = {
-                        BubbleButton(
-                            icon = com.pejvak.app.ui.components.ICON_GLYPHS.getValue("settings"),
-                            contentDescription = "Settings",
-                            onClick = {},
-                        )
-                    },
-                )
-                AppDock(selectedRoute = "library", onSelect = {})
+                val previewBackdrop = rememberBackdrop()
+                CompositionLocalProvider(LocalBackdrop provides previewBackdrop) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(geo.radius.xl)),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .backdropSource(previewBackdrop, zIndex = 0f),
+                        ) {
+                            AmbientCanvas()
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(geo.spacing.md),
+                                verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                            ) {
+                                listOf("Midnight Talks", "Desert Wind", "Evening Chapter").forEach { sample ->
+                                    GlassCard {
+                                        Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
+                                            PaletteTile(contentHash = sample, label = sample, size = geo.tiles.md)
+                                            Column {
+                                                Text(
+                                                    sample,
+                                                    style = MaterialTheme.typography.titleMedium,
+                                                    color = tokens.text
+                                                )
+                                                Text(
+                                                    "Aurora sample behind frost",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = tokens.textSecondary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(geo.spacing.md),
+                            verticalArrangement = Arrangement.spacedBy(geo.spacing.lg),
+                        ) {
+                            GlassHeader(
+                                title = "Library",
+                                overline = "Pejvak",
+                                subtitle = "24 tracks · 3 folders",
+                                search = HeaderSearch(
+                                    value = query,
+                                    onValueChange = { query = it },
+                                    placeholder = "Search tracks",
+                                ),
+                                actions = {
+                                    BubbleButton(
+                                        icon = com.pejvak.app.ui.components.ICON_GLYPHS.getValue("settings"),
+                                        contentDescription = "Settings",
+                                        onClick = {},
+                                    )
+                                },
+                            )
+                            AppDock(selectedRoute = "library", onSelect = {})
+                        }
+                    }
+                }
             }
 
             Section("Controls") {
                 Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
-                    BubbleButton(icon = com.pejvak.app.ui.components.ICON_GLYPHS.getValue("play"), contentDescription = "Play", onClick = {}, filled = true)
-                    BubbleButton(icon = com.pejvak.app.ui.components.ICON_GLYPHS.getValue("next"), contentDescription = "Next", onClick = {})
-                    BubbleButton(icon = com.pejvak.app.ui.components.ICON_GLYPHS.getValue("history"), contentDescription = "History", onClick = {})
+                    BubbleButton(
+                        icon = com.pejvak.app.ui.components.ICON_GLYPHS.getValue("play"),
+                        contentDescription = "Play",
+                        onClick = {},
+                        filled = true
+                    )
+                    BubbleButton(
+                        icon = com.pejvak.app.ui.components.ICON_GLYPHS.getValue("next"),
+                        contentDescription = "Next",
+                        onClick = {})
+                    BubbleButton(
+                        icon = com.pejvak.app.ui.components.ICON_GLYPHS.getValue("history"),
+                        contentDescription = "History",
+                        onClick = {})
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
                     GlassChip(label = "All", selected = true)
@@ -126,7 +194,10 @@ fun GalleryScreen() {
                     GlassChip(label = "Online", count = 12)
                 }
                 var seg by remember { mutableIntStateOf(0) }
-                SegmentedControl(options = listOf("Tracks", "Folders", "Playlists"), selectedIndex = seg, onSelect = { seg = it })
+                SegmentedControl(
+                    options = listOf("Tracks", "Folders", "Playlists"),
+                    selectedIndex = seg,
+                    onSelect = { seg = it })
             }
 
             Section("Fields") {
@@ -153,15 +224,21 @@ fun GalleryScreen() {
                         actions = listOf(RowActions.play {}, RowActions.add {}, RowActions.delete {}),
                     )
                 }
-                RecordRow(title = "Listening stretch", meta = "4 tracks · 42 min", timestamp = "2h ago",
-                    status = StatusSpec("complete", "Completed", StatusTone.Positive))
+                RecordRow(
+                    title = "Listening stretch", meta = "4 tracks · 42 min", timestamp = "2h ago",
+                    status = StatusSpec("complete", "Completed", StatusTone.Positive)
+                )
                 StatusLine(spec = StatusSpec("downloading", "Downloading", StatusTone.Neutral))
             }
 
             Section("States") {
                 EmptyState(icon = "library", title = "Nothing here yet", body = "Import audio to begin.")
                 InlineNotice(message = "You're offline. Changes will sync later.", tone = NoticeTone.Warning)
-                InlineNotice(message = "Couldn't load this source.", tone = NoticeTone.Danger, retryLabel = "Retry", onRetry = {})
+                InlineNotice(
+                    message = "Couldn't load this source.",
+                    tone = NoticeTone.Danger,
+                    retryLabel = "Retry",
+                    onRetry = {})
                 SkeletonRows(count = 3)
             }
 

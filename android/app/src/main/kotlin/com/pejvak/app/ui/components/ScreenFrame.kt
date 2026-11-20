@@ -41,7 +41,7 @@ fun ScreenFrame(
         Box(
             Modifier
                 .fillMaxSize()
-                .backdropSource(backdrop),
+                .backdropSource(backdrop, zIndex = 1f),
         ) {
             content(headerHeight)
         }

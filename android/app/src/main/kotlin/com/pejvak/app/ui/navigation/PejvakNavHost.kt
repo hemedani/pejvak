@@ -60,6 +60,7 @@ import com.pejvak.app.R
 import com.pejvak.app.ui.components.AmbientCanvas
 import com.pejvak.app.ui.components.AppDock
 import com.pejvak.app.ui.components.LocalBackdrop
+import com.pejvak.app.ui.components.backdropSource
 import com.pejvak.app.ui.components.rememberBackdrop
 import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.LocalSheetPresence
@@ -158,232 +159,240 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
         LocalBackdrop provides backdrop,
         LocalShellInsets provides ShellInsets(bottom = dockClearance),
     ) {
-    Box(modifier = modifier.fillMaxSize()) {
-        // One swell per navigation. The route is the trigger, so pushing a detail
-        // screen, popping back and switching tabs all get the same water passing
-        // through instead of three different feels.
-        var sweep by remember { mutableIntStateOf(0) }
-        LaunchedEffect(currentDestination?.route) {
-            if (currentDestination != null) sweep++
-        }
-        val motion = useMotionEnabled()
-        Box(Modifier.fillMaxSize().blur(backdropBlur)) {
-            AmbientCanvas()
-            NavHost(
-                navController = navController,
-                startDestination = Tab.Library.route,
-                enterTransition = { pageEnter(motion) },
-                exitTransition = { pageExit(motion) },
-                popEnterTransition = { pagePopEnter(motion) },
-                popExitTransition = { pagePopExit(motion) },
-                modifier = Modifier.fillMaxSize(),
+        Box(modifier = modifier.fillMaxSize()) {
+            // One swell per navigation. The route is the trigger, so pushing a detail
+            // screen, popping back and switching tabs all get the same water passing
+            // through instead of three different feels.
+            var sweep by remember { mutableIntStateOf(0) }
+            LaunchedEffect(currentDestination?.route) {
+                if (currentDestination != null) sweep++
+            }
+            val motion = useMotionEnabled()
+            val modalOpen = backdropBlur > 0.dp
+            backdrop.paused = modalOpen
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .then(if (modalOpen) Modifier.blur(backdropBlur) else Modifier),
             ) {
-                composable(Tab.Library.route) {
-                    LibraryScreen(
-                        onOpenSettings = { navController.navigate("settings") },
-                        onOpenMissing = { navController.navigate("missing") },
-                        onImport = { navController.navigate("import") },
-                        onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
-                        onOpenFolder = { key -> navController.navigate(folderRoute(key)) },
-                        onOpenPlaylist = { id -> navController.navigate(playlistRoute(id)) },
-                        onOpenSmart = { rule -> navController.navigate("smart/${Uri.encode(rule)}") },
-                        onOpenAi = { aiSheet = true },
-                        onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
-                    )
-                }
-                composable(Tab.Discover.route) {
-                    DiscoverScreen(
-                        onOpenCollection = { key, trackId, positionSec ->
-                            navController.navigate(onlineCollectionRoute(key, trackId, positionSec))
-                        },
-                        onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
-                        onOpenLanguage = { code -> navController.navigate(languageRoute(code)) },
-                    )
-                }
-                composable(Tab.History.route) {
-                    HistoryScreen(
-                        onOpenAi = { aiSheet = true },
-                        onOpenCollection = { run ->
-                            when (run.contextType) {
-                                com.pejvak.app.domain.ContextType.Folder ->
-                                    navController.navigate(folderRoute(run.contextKey))
-                                com.pejvak.app.domain.ContextType.Playlist ->
-                                    navController.navigate(playlistRoute(run.contextKey))
-                                com.pejvak.app.domain.ContextType.Online -> navController.navigate(
-                                    onlineCollectionRoute(run.contextKey, run.lastTrackId, run.lastPositionSec),
-                                )
-                            }
-                        },
-                    )
-                }
-                composable(Tab.Notes.route) {
-                    NotesScreen(onOpenPlayer = { playerOpen = true })
-                }
-                composable(Tab.Ai.route) {
-                    AiScreen(onOpenTool = { id -> navController.navigate("ai/tool/$id") })
-                }
-                composable("ai/tool/{feature}") { entry ->
-                    AiFeatureScreen(
-                        featureId = entry.arguments?.getString("feature"),
-                        onBack = { navController.popBackStack() },
-                    )
-                }
-                if (BuildConfig.DEBUG) {
-                    composable("gallery") { GalleryScreen() }
-                }
-                composable("import") {
-                    ImportScreen(onBack = { navController.popBackStack() })
-                }
-                composable("missing") {
-                    MissingScreen(
-                        onBack = { navController.popBackStack() },
-                        onImport = { navController.navigate("import") },
-                        onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
-                    )
-                }
-                composable("settings") {
-                    SettingsScreen(
-                        onBack = { navController.popBackStack() },
-                        onOpenNotes = {
-                            navController.navigate(Tab.Notes.route) {
-                                popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        onOpenGallery = { navController.navigate("gallery") },
-                    )
-                }
-                // Detail screens land with the rest of Phase 8.
-                composable("track/{id}") {
-                    TrackDetailScreen(onBack = { navController.popBackStack() })
-                }
-                composable("folder/{key}") {
-                    FolderDetailScreen(
-                        onBack = { navController.popBackStack() },
-                        onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
-                        onOpenAi = { aiSheet = true },
-                    )
-                }
-                composable("playlist/{id}") {
-                    PlaylistDetailScreen(
-                        onBack = { navController.popBackStack() },
-                        onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
-                        onOpenAi = { aiSheet = true },
-                    )
-                }
-                composable("online/source/{sourceId}") {
-                    SourceScreen(
-                        onBack = { navController.popBackStack() },
-                        onOpenCollection = { key -> navController.navigate(onlineCollectionRoute(key, null, 0)) },
-                    )
-                }
-                composable("online/language/{code}") {
-                    LanguageScreen(
-                        onBack = { navController.popBackStack() },
-                        onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
-                    )
-                }
-                composable(
-                    "online/{key}?trackId={trackId}&positionSec={positionSec}",
-                    arguments = listOf(
-                        androidx.navigation.navArgument("trackId") {
-                            type = androidx.navigation.NavType.StringType
-                            nullable = true
-                            defaultValue = null
-                        },
-                        androidx.navigation.navArgument("positionSec") {
-                            type = androidx.navigation.NavType.IntType
-                            defaultValue = 0
-                        },
-                    ),
+                AmbientCanvas(Modifier.backdropSource(backdrop, zIndex = 0f))
+                NavHost(
+                    navController = navController,
+                    startDestination = Tab.Library.route,
+                    enterTransition = { pageEnter(motion) },
+                    exitTransition = { pageExit(motion) },
+                    popEnterTransition = { pagePopEnter(motion) },
+                    popExitTransition = { pagePopExit(motion) },
+                    modifier = Modifier.fillMaxSize(),
                 ) {
-                    OnlineCollectionScreen(
-                        onBack = { navController.popBackStack() },
-                        onOpenAi = { aiSheet = true },
-                    )
-                }
-                composable("smart/{rule}") {
-                    SmartPlaylistScreen(
-                        onBack = { navController.popBackStack() },
-                        onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
-                    )
+                    composable(Tab.Library.route) {
+                        LibraryScreen(
+                            onOpenSettings = { navController.navigate("settings") },
+                            onOpenMissing = { navController.navigate("missing") },
+                            onImport = { navController.navigate("import") },
+                            onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
+                            onOpenFolder = { key -> navController.navigate(folderRoute(key)) },
+                            onOpenPlaylist = { id -> navController.navigate(playlistRoute(id)) },
+                            onOpenSmart = { rule -> navController.navigate("smart/${Uri.encode(rule)}") },
+                            onOpenAi = { aiSheet = true },
+                            onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
+                        )
+                    }
+                    composable(Tab.Discover.route) {
+                        DiscoverScreen(
+                            onOpenCollection = { key, trackId, positionSec ->
+                                navController.navigate(onlineCollectionRoute(key, trackId, positionSec))
+                            },
+                            onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
+                            onOpenLanguage = { code -> navController.navigate(languageRoute(code)) },
+                        )
+                    }
+                    composable(Tab.History.route) {
+                        HistoryScreen(
+                            onOpenAi = { aiSheet = true },
+                            onOpenCollection = { run ->
+                                when (run.contextType) {
+                                    com.pejvak.app.domain.ContextType.Folder ->
+                                        navController.navigate(folderRoute(run.contextKey))
+
+                                    com.pejvak.app.domain.ContextType.Playlist ->
+                                        navController.navigate(playlistRoute(run.contextKey))
+
+                                    com.pejvak.app.domain.ContextType.Online -> navController.navigate(
+                                        onlineCollectionRoute(run.contextKey, run.lastTrackId, run.lastPositionSec),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                    composable(Tab.Notes.route) {
+                        NotesScreen(onOpenPlayer = { playerOpen = true })
+                    }
+                    composable(Tab.Ai.route) {
+                        AiScreen(onOpenTool = { id -> navController.navigate("ai/tool/$id") })
+                    }
+                    composable("ai/tool/{feature}") { entry ->
+                        AiFeatureScreen(
+                            featureId = entry.arguments?.getString("feature"),
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+                    if (BuildConfig.DEBUG) {
+                        composable("gallery") { GalleryScreen() }
+                    }
+                    composable("import") {
+                        ImportScreen(onBack = { navController.popBackStack() })
+                    }
+                    composable("missing") {
+                        MissingScreen(
+                            onBack = { navController.popBackStack() },
+                            onImport = { navController.navigate("import") },
+                            onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
+                        )
+                    }
+                    composable("settings") {
+                        SettingsScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenNotes = {
+                                navController.navigate(Tab.Notes.route) {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            },
+                            onOpenGallery = { navController.navigate("gallery") },
+                        )
+                    }
+                    // Detail screens land with the rest of Phase 8.
+                    composable("track/{id}") {
+                        TrackDetailScreen(onBack = { navController.popBackStack() })
+                    }
+                    composable("folder/{key}") {
+                        FolderDetailScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
+                            onOpenAi = { aiSheet = true },
+                        )
+                    }
+                    composable("playlist/{id}") {
+                        PlaylistDetailScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
+                            onOpenAi = { aiSheet = true },
+                        )
+                    }
+                    composable("online/source/{sourceId}") {
+                        SourceScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenCollection = { key -> navController.navigate(onlineCollectionRoute(key, null, 0)) },
+                        )
+                    }
+                    composable("online/language/{code}") {
+                        LanguageScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
+                        )
+                    }
+                    composable(
+                        "online/{key}?trackId={trackId}&positionSec={positionSec}",
+                        arguments = listOf(
+                            androidx.navigation.navArgument("trackId") {
+                                type = androidx.navigation.NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                            androidx.navigation.navArgument("positionSec") {
+                                type = androidx.navigation.NavType.IntType
+                                defaultValue = 0
+                            },
+                        ),
+                    ) {
+                        OnlineCollectionScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenAi = { aiSheet = true },
+                        )
+                    }
+                    composable("smart/{rule}") {
+                        SmartPlaylistScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
+                        )
+                    }
                 }
             }
-        }
 
-        if (isTabRoute) {
-            AppDock(
-                selectedRoute = selectedRoute,
-                onSelect = { tab -> navController.navigateTab(tab.route) },
-                nowPlaying = mini,
-                miniProgress = playerVm.miniProgress,
-                miniWaveform = playerVm.waveform,
-                onPlayPause = playerVm::toggle,
-                onNext = playerVm::next,
-                onExpand = { playerOpen = true },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
-                    .navigationBarsPadding()
-                    .onGloballyPositioned { coords ->
-                        if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
-                    },
+            if (isTabRoute) {
+                AppDock(
+                    selectedRoute = selectedRoute,
+                    onSelect = { tab -> navController.navigateTab(tab.route) },
+                    nowPlaying = mini,
+                    miniProgress = playerVm.miniProgress,
+                    miniWaveform = playerVm.waveform,
+                    onPlayPause = playerVm::toggle,
+                    onNext = playerVm::next,
+                    onExpand = { playerOpen = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
+                        .navigationBarsPadding()
+                        .onGloballyPositioned { coords ->
+                            if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
+                        },
+                )
+            } else {
+                StandaloneMiniPlayer(
+                    nowPlaying = mini,
+                    miniProgress = playerVm.miniProgress,
+                    miniWaveform = playerVm.waveform,
+                    onExpand = { playerOpen = true },
+                    onPlayPause = playerVm::toggle,
+                    onNext = playerVm::next,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
+                        .navigationBarsPadding()
+                        .onGloballyPositioned { coords ->
+                            if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
+                        },
+                )
+            }
+
+            WaveSweep(
+                trigger = sweep,
+                modifier = Modifier.fillMaxSize(),
             )
-        } else {
-            StandaloneMiniPlayer(
-                nowPlaying = mini,
-                miniProgress = playerVm.miniProgress,
-                miniWaveform = playerVm.waveform,
-                onExpand = { playerOpen = true },
-                onPlayPause = playerVm::toggle,
-                onNext = playerVm::next,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
-                    .navigationBarsPadding()
-                    .onGloballyPositioned { coords ->
-                        if (coords.size.height > 0) dockClearance = with(density) { coords.size.height.toDp() }
-                    },
-            )
-        }
 
-        WaveSweep(
-            trigger = sweep,
-            modifier = Modifier.fillMaxSize(),
-        )
-
-        NowPlayingSheet(
-            vm = playerVm,
-            visible = playerOpen,
-            onDismiss = { playerOpen = false },
-            onOpenAi = {
-                aiSheet = true
-            },
-            onOpenContext = { context ->
-                val route = when (context.type) {
-                    ContextType.Folder -> folderRoute(context.key)
-                    ContextType.Playlist -> playlistRoute(context.key)
-                    ContextType.Online -> onlineCollectionRoute(context.key, null, 0)
-                }
-                navController.navigate(route)
-            },
-        )
-
-        if (aiSheet) {
-            AiCatalogSheet(
-                onDismiss = {
-                    aiSheet = false
-                    aiFeature = null
+            NowPlayingSheet(
+                vm = playerVm,
+                visible = playerOpen,
+                onDismiss = { playerOpen = false },
+                onOpenAi = {
+                    aiSheet = true
                 },
-                onOpenFeature = { feature -> aiFeature = feature },
+                onOpenContext = { context ->
+                    val route = when (context.type) {
+                        ContextType.Folder -> folderRoute(context.key)
+                        ContextType.Playlist -> playlistRoute(context.key)
+                        ContextType.Online -> onlineCollectionRoute(context.key, null, 0)
+                    }
+                    navController.navigate(route)
+                },
             )
+
+            if (aiSheet) {
+                AiCatalogSheet(
+                    onDismiss = {
+                        aiSheet = false
+                        aiFeature = null
+                    },
+                    onOpenFeature = { feature -> aiFeature = feature },
+                )
+            }
+            val described = aiFeature
+            if (described != null) {
+                AiFeatureSheet(feature = described, onDismiss = { aiFeature = null })
+            }
         }
-        val described = aiFeature
-        if (described != null) {
-            AiFeatureSheet(feature = described, onDismiss = { aiFeature = null })
-        }
-    }
     }
 }
 
@@ -435,8 +444,8 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.pageEnter(motion: 
         EnterTransition.None
     } else {
         fadeIn(tween(260)) +
-            slideInVertically(tween(360, easing = FastOutSlowInEasing)) { it / 12 } +
-            scaleIn(tween(360, easing = FastOutSlowInEasing), initialScale = 0.975f)
+                slideInVertically(tween(360, easing = FastOutSlowInEasing)) { it / 12 } +
+                scaleIn(tween(360, easing = FastOutSlowInEasing), initialScale = 0.975f)
     }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.pageExit(motion: Boolean): ExitTransition =
@@ -444,8 +453,8 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.pageExit(motion: B
         ExitTransition.None
     } else {
         fadeOut(tween(180)) +
-            slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { -it / 20 } +
-            scaleOut(tween(300, easing = FastOutSlowInEasing), targetScale = 0.985f)
+                slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { -it / 20 } +
+                scaleOut(tween(300, easing = FastOutSlowInEasing), targetScale = 0.985f)
     }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.pagePopEnter(motion: Boolean): EnterTransition =
@@ -453,8 +462,8 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.pagePopEnter(motio
         EnterTransition.None
     } else {
         fadeIn(tween(240)) +
-            slideInVertically(tween(320, easing = FastOutSlowInEasing)) { -it / 20 } +
-            scaleIn(tween(320, easing = FastOutSlowInEasing), initialScale = 0.985f)
+                slideInVertically(tween(320, easing = FastOutSlowInEasing)) { -it / 20 } +
+                scaleIn(tween(320, easing = FastOutSlowInEasing), initialScale = 0.985f)
     }
 
 private fun AnimatedContentTransitionScope<NavBackStackEntry>.pagePopExit(motion: Boolean): ExitTransition =
@@ -462,8 +471,8 @@ private fun AnimatedContentTransitionScope<NavBackStackEntry>.pagePopExit(motion
         ExitTransition.None
     } else {
         fadeOut(tween(200)) +
-            slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { it / 12 } +
-            scaleOut(tween(300, easing = FastOutSlowInEasing), targetScale = 0.985f)
+                slideOutVertically(tween(300, easing = FastOutSlowInEasing)) { it / 12 } +
+                scaleOut(tween(300, easing = FastOutSlowInEasing), targetScale = 0.985f)
     }
 
 /**
