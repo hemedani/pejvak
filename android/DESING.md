@@ -274,9 +274,15 @@ When false, substitute the final value — never rely on the platform flag alone
   bounded `AmbientCanvas` aurora surge and a directional `WaveSweep` (translucent aqua crest +
   dual sine waves + pearl swimmer trailing twin `drawWaveWake` strands), both static/disabled under
   reduced motion.
-- **Reveal stagger** for list entrance (index-derived, arithmetic — never hand-numbered).
+- **Reveal stagger (`OceanCascade` + `Modifier.oceanEntrance`):** initial list items and cards
+  (`index < 10`, first `850 ms` of reveal) enter sequentially with arithmetic `stagger(...)`
+  (32 ms step, 230 ms cap), rising buoyantly (`14 dp`) with a subtle sinusoidal lateral weave
+  (`5 dp`) and soft settle scale (`0.978 → 1`) along `OceanSwellEasing` using `graphicsLayer`-only
+  transforms. Scrolled-in or filtered items skip stagger delay (`0 ms`) and float gently into
+  place without leaving blank scroll gaps.
 - **The only unbounded animation** is `WavyProgress` (the player's ambient wave). Everything else
-  (including the navigation canvas surge) is bounded; decorative loops are static under reduced motion.
+  (including the navigation canvas surge and list entrances) is bounded; decorative loops are static
+  under reduced motion.
 - **No travel motion on the dock indicator itself** (tab switches happen hundreds of times a day) —
   the pressed spring is the whole dock-item interaction.
 - Haptics via `triggerHaptic(intent)` (tap/select/press/success/warning/error/scrub), master switch,
