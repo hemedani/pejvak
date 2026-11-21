@@ -1445,3 +1445,31 @@ Three asks, in the order they were given.
 - **Verification:** `testDebugUnitTest` 453/453, `assembleDebug` green. Deferred: Android push/pull
   round-trip unit test, Room `MigrationTestHelper` test, hurl `clientId` lookup instead of a
   positional assertion.
+
+### 2026-11-20 — Sheets, tabs, and history rail speak the same icon/wave language
+
+- **`GlassSheet` now owns the motion.** It takes `title`, `subtitle`, and a required-by-title
+  `icon`; the header is an accent icon bubble, headline, optional subtitle, and a close bubble, then
+  a `HairlineWave` rule whose phase travels. The panel enters on `OceanSwellEasing` (460 ms), leaves
+  on an ebb (190 ms), and glides on a `graphicsLayer` sine weave with a `SheetWake` canvas behind
+  it. `HairlineWave` gained a `phase` parameter so the crest can move without re-deriving a sine.
+- **Every remaining titleable surface got an icon.** Player sheets (queue, sleep, jump, enhancer,
+  tone, note), global sheets (add-to-playlist, context history, session/note detail), library /
+  playlist / folder / smart / track / online / notes sheets, date-range and sort sheets, and the
+  delete/sign-out dialogs all pass a canonical `ICON_GLYPHS` name. `GainSliderRow` accepts an
+  optional icon so the enhancer rows read at a glance.
+- **The enhancer can be reset.** `player_enhancer_reset` ("Reset") is a `GlassChip` with a
+  `refresh` glyph that writes `onUpdate(false, 0.0, 0.0, 0.0)`.
+- **Chips and sub-tabs are iconed.** Library page chips, Local/Online origin chips, Discover tabs,
+  playlist/folder/smart action chips, history panel/tab/select chips, Notes/AI header sheets, and
+  the Gallery filters all use semantic names (`music`, `folder`, `online`, `playlist`, `time`,
+  `queue`, `equalizer`, `favorite`, `discover`, `library`, `sort`). `"playlists"` and other
+  inconsistent names were folded back to canonical entries.
+- **History rows gained a decorative rail.** `HistoryRail` is its own rounded glass strip — an
+  icon-width container with padding and an 8 dp right margin — sitting beside the item card as a
+  second, separate frame rather than inside it. It holds up to four state glyphs (`sortRailIcon` /
+  `contextRailIcon` / `stretchRailIcons` / `runRailIcons`), driven by the same sort and outcome the
+  row already reports; it is not tappable.
+- **Frosting reaches the player.** `NowPlayingSheet` blurs its own content when `frost > 0.5.dp`
+  (its surface lives in a separate window, so the shell's blur cannot reach it).
+- **Verification:** `testDebugUnitTest` 453/453, `assembleDebug` green.
