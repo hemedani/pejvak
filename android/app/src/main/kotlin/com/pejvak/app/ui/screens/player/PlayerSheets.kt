@@ -311,19 +311,31 @@ fun AudioEnhancerSheet(
             value = settings.boostDb,
             range = EnhancerRange.boostDb,
             onChange = { onUpdate(null, it, null, null) },
+            icon = "equalizer",
         )
         GainSliderRow(
             label = stringResource(R.string.player_enhancer_bass),
             value = settings.bassDb,
             range = EnhancerRange.bassDb,
             onChange = { onUpdate(null, null, it, null) },
+            icon = "volume",
         )
         GainSliderRow(
             label = stringResource(R.string.player_enhancer_treble),
             value = settings.trebleDb,
             range = EnhancerRange.trebleDb,
             onChange = { onUpdate(null, null, null, it) },
+            icon = "music",
         )
+        Spacer(Modifier.size(geo.spacing.sm))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            GlassChip(
+                label = stringResource(R.string.player_enhancer_reset),
+                icon = "refresh",
+                onClick = { onUpdate(false, 0.0, 0.0, 0.0) },
+            )
+        }
+        Spacer(Modifier.size(geo.spacing.sm))
         Text(
             text = if (available) stringResource(R.string.player_enhancer_hint) else stringResource(R.string.player_enhancer_unavailable),
             style = MaterialTheme.typography.bodySmall,

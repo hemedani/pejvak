@@ -111,10 +111,16 @@ fun GainSliderRow(
     range: com.pejvak.app.domain.GainRange,
     onChange: (Double) -> Unit,
     modifier: Modifier = Modifier,
+    icon: String? = null,
 ) {
     val tokens = LocalPejvakTokens.current
+    val geo = LocalPejvakGeometry.current
     Column(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                PejvakIcon(name = icon, contentDescription = null, tint = tokens.textSecondary, size = geo.icons.sm)
+                Spacer(Modifier.width(geo.spacing.xs))
+            }
             Text(label, style = MaterialTheme.typography.labelLarge, color = tokens.text)
             Spacer(Modifier.weight(1f))
             Text(
