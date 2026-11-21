@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -72,10 +73,12 @@ import com.pejvak.app.domain.formatClock
 import com.pejvak.app.domain.pickAnnotationColor
 import com.pejvak.app.playback.PlaybackContext
 import com.pejvak.app.ui.components.CollectionSortSheet
+import com.pejvak.app.ui.components.GlassChip
 import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.LocalSheetPresence
 import com.pejvak.app.ui.components.MiniPlayerRow
 import com.pejvak.app.ui.components.PaletteTile
+import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.components.dockElevation
 import com.pejvak.app.ui.components.notes.AnnotationComposerSheet
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
@@ -231,9 +234,10 @@ fun NowPlayingSheet(
     var confirmDeleteNote by remember { mutableStateOf<Annotation?>(null) }
 
     // A sheet opened from the player renders in its own window, so the shell's
-    // frost only reaches the library behind the player. Darken the player's own
-    // surface with the smoked frost while one of its sheets is up — `Modifier.blur`
-    // here would blur the player's whole tree and is not worth the render cost.
+    // frost only reaches the library behind the player. Blur the player's own
+    // content while one of its sheets is up so the sheet reads as real glass over
+    // the player, not a panel over a still-sharp screen; the smoker frost below is
+    // the API 29–30 fallback because Modifier.blur is a no-op there.
     val presence = LocalSheetPresence.current
     val sheetCount = presence?.count ?: 0
     val frost by animateDpAsState(
@@ -391,6 +395,7 @@ fun NowPlayingSheet(
                 modifier = Modifier
                     .wrapContentSize(align = Alignment.TopCenter, unbounded = true)
                     .size(maxWDp, maxHDp)
+                    .then(if (frost > 0.5.dp) Modifier.blur(frost) else Modifier)
                     .onGloballyPositioned { coords ->
                         fullBoxCoords = coords
                         recomputeHeroRect()
@@ -673,7 +678,15 @@ fun NowPlayingSheet(
             containerColor = tokens.canvasBase,
             titleContentColor = tokens.text,
             textContentColor = tokens.textSecondary,
-            title = { Text(stringResource(R.string.note_selected_delete_title)) },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                ) {
+                    PejvakIcon("warning", null, tint = tokens.danger, size = geo.icons.md)
+                    Text(stringResource(R.string.note_selected_delete_title))
+                }
+            },
             text = { Text(stringResource(R.string.note_selected_delete_body)) },
             confirmButton = {
                 TextButton(
@@ -716,27 +729,18 @@ private fun PlayerNoteSheet(
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassSheet(onDismiss = onClose) {
+    GlassSheet(
+        onDismiss = onClose,
+        title = stringResource(R.string.player_note),
+        subtitle = formatClock(note.positionSec),
+        icon = "note",
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = geo.spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
         ) {
-            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                Text(
-                    text = formatClock(note.positionSec),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = tokens.text,
-                    modifier = Modifier.weight(1f),
-                )
-                TextButton(onClick = onEdit) {
-                    Text(stringResource(R.string.note_selected_edit), color = tokens.accent)
-                }
-                TextButton(onClick = onDelete) {
-                    Text(stringResource(R.string.note_selected_delete), color = tokens.danger)
-                }
-            }
             Text(
                 text = note.text,
                 style = MaterialTheme.typography.bodyLarge,
@@ -747,6 +751,26 @@ private fun PlayerNoteSheet(
                     text = tags,
                     style = MaterialTheme.typography.labelSmall,
                     color = tokens.textTertiary,
+                )
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            ) {
+                GlassChip(
+                    label = stringResource(R.string.note_selected_edit),
+                    icon = "edit",
+                    onClick = onEdit,
+                )
+                GlassChip(
+                    label = stringResource(R.string.note_selected_delete),
+                    icon = "trash",
+                    onClick = onDelete,
+                    modifier = Modifier.border(
+                        1.dp,
+                        tokens.danger,
+                        RoundedCornerShape(geo.radius.pill),
+                    ),
                 )
             }
         }
