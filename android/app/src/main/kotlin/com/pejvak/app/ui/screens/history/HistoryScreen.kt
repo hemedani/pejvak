@@ -2,6 +2,7 @@ package com.pejvak.app.ui.screens.history
 
 import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,16 +47,19 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
 import com.pejvak.app.domain.ContextPlay
+import com.pejvak.app.domain.ContextType
 import com.pejvak.app.domain.HistoryItem
 import com.pejvak.app.domain.HistorySection
 import com.pejvak.app.domain.HistorySort
 import com.pejvak.app.domain.HistoryStretchEntry
 import com.pejvak.app.domain.ListeningStats
+import com.pejvak.app.domain.StretchOutcome
 import com.pejvak.app.domain.TrackLeader
 import com.pejvak.app.domain.describeContextType
 import com.pejvak.app.domain.describeDateRange
 import com.pejvak.app.domain.describeRecentWhen
 import com.pejvak.app.domain.describeRunOutcome
+import com.pejvak.app.domain.describeStretchOutcome
 import com.pejvak.app.domain.describeStretchTitle
 import com.pejvak.app.domain.describeStretchTracks
 import com.pejvak.app.domain.formatDuration
@@ -140,12 +144,14 @@ fun HistoryScreen(
                     label = stringResource(R.string.history_panel_history),
                     selected = state.panel == HistoryPanel.History,
                     frosted = true,
+                    icon = "history",
                     onClick = { scope.launch { pagerState.animateScrollToPage(0) } },
                 )
                 GlassChip(
                     label = stringResource(R.string.history_panel_stats),
                     selected = state.panel == HistoryPanel.Stats,
                     frosted = true,
+                    icon = "equalizer",
                     onClick = { scope.launch { pagerState.animateScrollToPage(1) } },
                 )
             }
@@ -354,11 +360,13 @@ private fun HistoryList(
                     GlassChip(
                         label = stringResource(R.string.history_tab_sessions),
                         selected = state.tab == HistoryTab.Sessions,
+                        icon = "history",
                         onClick = { onTab(HistoryTab.Sessions) },
                     )
                     GlassChip(
                         label = stringResource(R.string.history_tab_collections),
                         selected = state.tab == HistoryTab.Collections,
+                        icon = "queue",
                         onClick = { onTab(HistoryTab.Collections) },
                     )
                     if (state.tab == HistoryTab.Sessions) {
@@ -366,6 +374,7 @@ private fun HistoryList(
                             label = if (state.selectionMode) stringResource(R.string.action_done)
                             else stringResource(R.string.history_select),
                             selected = state.selectionMode,
+                            icon = "check",
                             onClick = onToggleSelectionMode,
                         )
                     }
@@ -411,6 +420,7 @@ private fun HistoryList(
                     itemsIndexed(section.data, key = { _, entry -> entry.stretch.id }) { idx, entry ->
                         StretchCard(
                             entry = entry,
+                            sort = state.sort,
                             selectionMode = state.selectionMode,
                             selected = state.selected.containsAll(entry.items.map { it.session.id }),
                             onToggle = { onToggleSelected(entry) },
@@ -446,6 +456,7 @@ private fun HistoryList(
                 itemsIndexed(state.filteredCollections, key = { _, run -> run.id }) { idx, run ->
                     RunCard(
                         run = run,
+                        sort = state.sort,
                         onOpen = { onOpenRun(run) },
                         onDelete = { onDeleteRun(run) },
                         onOpenAi = onOpenAi,
@@ -468,7 +479,9 @@ private fun SectionHeader(
     Row(
         modifier.fillMaxWidth().padding(top = geo.spacing.md),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(geo.spacing.xs),
     ) {
+        PejvakIcon("time", null, tint = tokens.textSecondary, size = geo.icons.sm)
         Text(
             text = section.title ?: stringResource(R.string.history_all_listens),
             style = MaterialTheme.typography.labelLarge,
@@ -486,6 +499,7 @@ private fun SectionHeader(
 @Composable
 private fun StretchCard(
     entry: HistoryStretchEntry,
+    sort: HistorySort,
     selectionMode: Boolean,
     selected: Boolean,
     onToggle: () -> Unit,
@@ -497,45 +511,104 @@ private fun StretchCard(
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
     val stretch = entry.stretch
-    GlassCard(modifier = modifier.clickable(onClick = if (selectionMode) onToggle else onOpen)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = describeStretchTitle(entry),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = tokens.text,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = buildString {
-                        append(formatTimeRange(stretch.startedAt, stretch.endedAt))
-                        append(" · ")
-                        append(formatDuration(stretch.listenedSec))
-                        if (stretch.trackCount > 1) append(" · ${describeStretchTracks(stretch)}")
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = tokens.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                entry.start.contextTitle?.let {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        HistoryRail(icons = stretchRailIcons(entry, sort))
+        Spacer(Modifier.width(geo.spacing.sm))
+        GlassCard(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = if (selectionMode) onToggle else onOpen),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.labelSmall,
+                        text = describeStretchTitle(entry),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = tokens.text,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = buildString {
+                            append(formatTimeRange(stretch.startedAt, stretch.endedAt))
+                            append(" · ")
+                            append(formatDuration(stretch.listenedSec))
+                            if (stretch.trackCount > 1) append(" · ${describeStretchTracks(stretch)}")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
                         color = tokens.textSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    entry.start.contextTitle?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = tokens.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                if (selectionMode) {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue(if (selected) "check" else "add"),
+                        contentDescription = stringResource(R.string.history_select),
+                        onClick = onToggle,
+                    )
+                } else {
+                    ActionCluster {
+                        AiActionButton(onClick = onOpenAi)
+                        BubbleButton(
+                            icon = ICON_GLYPHS.getValue("delete"),
+                            contentDescription = stringResource(R.string.action_delete),
+                            onClick = onDelete,
+                        )
+                    }
                 }
             }
-            if (selectionMode) {
-                BubbleButton(
-                    icon = ICON_GLYPHS.getValue(if (selected) "check" else "add"),
-                    contentDescription = stringResource(R.string.history_select),
-                    onClick = onToggle,
-                )
-            } else {
+        }
+    }
+}
+
+@Composable
+private fun RunCard(
+    run: ContextPlay,
+    sort: HistorySort,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+    onOpenAi: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = LocalPejvakTokens.current
+    val geo = LocalPejvakGeometry.current
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        HistoryRail(icons = runRailIcons(run, sort))
+        Spacer(Modifier.width(geo.spacing.sm))
+        GlassCard(modifier = Modifier.weight(1f).clickable(onClick = onOpen)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = run.contextTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = tokens.text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = "${describeContextType(run.contextType)} · ${describeRunOutcome(run.shape()).label} · " +
+                                "${run.finishedCount}/${run.trackCount} · ${formatDuration(run.listenedSec)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = describeRecentWhen(run.startedAt),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tokens.textSecondary,
+                    )
+                }
                 ActionCluster {
                     AiActionButton(onClick = onOpenAi)
                     BubbleButton(
@@ -549,51 +622,71 @@ private fun StretchCard(
     }
 }
 
+/**
+ * The record's left margin: a rounded glass strip holding the item's attributes —
+ * ordering, collection kind, outcome and the few facts worth a glance. It is a
+ * summary, not a control; nothing here is clickable.
+ */
 @Composable
-private fun RunCard(
-    run: ContextPlay,
-    onOpen: () -> Unit,
-    onDelete: () -> Unit,
-    onOpenAi: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+private fun HistoryRail(icons: List<String>, modifier: Modifier = Modifier) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    GlassCard(modifier = modifier.clickable(onClick = onOpen)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    text = run.contextTitle,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = tokens.text,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = "${describeContextType(run.contextType)} · ${describeRunOutcome(run.shape()).label} · " +
-                            "${run.finishedCount}/${run.trackCount} · ${formatDuration(run.listenedSec)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = tokens.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = describeRecentWhen(run.startedAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = tokens.textSecondary,
-                )
-            }
-            ActionCluster {
-                AiActionButton(onClick = onOpenAi)
-                BubbleButton(
-                    icon = ICON_GLYPHS.getValue("delete"),
-                    contentDescription = stringResource(R.string.action_delete),
-                    onClick = onDelete,
-                )
-            }
+    val glyph = geo.icons.md
+    val shape = RoundedCornerShape(geo.radius.tile)
+    Column(
+        modifier = modifier
+            .width(glyph + geo.spacing.sm * 2)
+            .clip(shape)
+            .background(tokens.glassFill.copy(alpha = tokens.glassFill.alpha * 0.9f))
+            .border(1.dp, tokens.glassBorder, shape)
+            .padding(vertical = geo.spacing.sm),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(geo.spacing.xs),
+    ) {
+        icons.forEach { name ->
+            PejvakIcon(
+                name = name,
+                contentDescription = null,
+                tint = tokens.textTertiary,
+                size = glyph,
+            )
         }
     }
 }
+
+private fun sortRailIcon(sort: HistorySort): String = when (sort) {
+    HistorySort.Newest -> "sort"
+    HistorySort.Oldest -> "history"
+    HistorySort.Longest -> "timer"
+}
+
+private fun contextRailIcon(type: ContextType?): String = when (type) {
+    ContextType.Playlist -> "playlist"
+    ContextType.Folder -> "folder"
+    ContextType.Online -> "online"
+    null -> "music"
+}
+
+private fun stretchRailIcons(entry: HistoryStretchEntry, sort: HistorySort): List<String> = buildList {
+    add(sortRailIcon(sort))
+    add(contextRailIcon(entry.stretch.contextType))
+    add(
+        when (describeStretchOutcome(entry.stretch)) {
+            StretchOutcome.Complete, StretchOutcome.Finished -> "check"
+            StretchOutcome.Interrupted -> "warning"
+            StretchOutcome.Open -> "play"
+        },
+    )
+    if (entry.stretch.trackCount > 1) add("queue")
+    if (entry.stretch.seeked) add("forward30")
+}.take(4)
+
+private fun runRailIcons(run: ContextPlay, sort: HistorySort): List<String> = buildList {
+    add(sortRailIcon(sort))
+    add(contextRailIcon(run.contextType))
+    add(if (run.shape().completed) "check" else "warning")
+    if (run.trackCount > 1) add("queue")
+}.take(4)
 
 @Composable
 private fun RunDetailSheet(
@@ -719,12 +812,18 @@ private fun StatsPanel(
                 }
             }
             item {
-                Text(
-                    text = stringResource(R.string.history_stat_daily),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = tokens.textSecondary,
+                Row(
                     modifier = Modifier.oceanEntrance(1, swayDp = 0.dp, riseDp = 8.dp),
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.xs),
+                ) {
+                    PejvakIcon("equalizer", null, tint = tokens.textSecondary, size = geo.icons.sm)
+                    Text(
+                        text = stringResource(R.string.history_stat_daily),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = tokens.textSecondary,
+                    )
+                }
             }
             item {
                 val recent = daily.takeLast(14)
@@ -749,12 +848,18 @@ private fun StatsPanel(
                 }
             }
             item {
-                Text(
-                    text = stringResource(R.string.history_stat_leaders),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = tokens.textSecondary,
+                Row(
                     modifier = Modifier.oceanEntrance(3, swayDp = 0.dp, riseDp = 8.dp),
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.xs),
+                ) {
+                    PejvakIcon("music", null, tint = tokens.textSecondary, size = geo.icons.sm)
+                    Text(
+                        text = stringResource(R.string.history_stat_leaders),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = tokens.textSecondary,
+                    )
+                }
             }
             if (leaders.isEmpty()) {
                 item {
