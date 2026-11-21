@@ -1473,3 +1473,18 @@ Three asks, in the order they were given.
 - **Frosting reaches the player.** `NowPlayingSheet` blurs its own content when `frost > 0.5.dp`
   (its surface lives in a separate window, so the shell's blur cannot reach it).
 - **Verification:** `testDebugUnitTest` 453/453, `assembleDebug` green.
+
+### 2026-11-21 — Player chips wrap; the sliders become one continuous wave
+
+- **Chips wrap instead of scrolling.** `PlayerChipRow` is a `FlowRow` with `sm` gaps on both axes,
+  so the player's context/queue/speed/enhancer/AI/sleep/jump/note chips break onto as many lines as
+  the width needs — the off-screen scroll on the last row is gone.
+- **The slider wave is one body of water.** `WaveSlider` draws the full range as a single
+  continuous wave at `WAVE_WAVELENGTH_DP`, then lights the played stretch in accent over it. The
+  unplayed stretch is no longer dotted and no longer a shallower amplitude, so there is no dash
+  pattern or step at the thumb. Stroke is thicker (3.8 dp played / 3 dp rest), the thumb grew, and
+  the wave samples at 24 points per wavelength (`Wave.kt`) so crests are curves, not angular
+  line segments. This is the volume, room-tone and enhancer-gain slider everywhere.
+- **Verification:** `assembleDebug` green; checked on the API 35 emulator — chips wrap onto three
+  lines and both sliders read as smooth, continuous crests.
+
