@@ -24,6 +24,7 @@ fun HairlineWave(
     modifier: Modifier = Modifier,
     color: Color = LocalPejvakTokens.current.glassBorder,
     height: Dp = 6.dp,
+    phase: Float = 0.6f,
 ) {
     val geo = LocalPejvakGeometry.current
     Canvas(
@@ -39,7 +40,7 @@ fun HairlineWave(
                 cy = cy,
                 amplitude = 1.2.dp.toPx(),
                 wavelength = 48.dp.toPx(),
-                phase = 0.6f,
+                phase = phase,
                 taper = 12.dp.toPx(),
                 variation = 0.5f,
             ),

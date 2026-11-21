@@ -126,6 +126,7 @@
     <string name="player_enhancer_bass">Bass</string>
     <string name="player_enhancer_treble">Treble</string>
     <string name="player_enhancer_hint">Moving a slider turns the enhancer on.</string>
+    <string name="player_enhancer_reset">Reset</string>
     <string name="player_enhancer_unavailable">This device will not run the enhancer; playback is untouched.</string>
     <string name="player_tone_title">Room tone</string>
     <string name="player_tone_body">A whisper of sound under the audio keeps a Bluetooth link awake.</string>
@@ -312,6 +313,7 @@
     <string name="action_done">Done</string>
     <string name="action_save">Save</string>
     <string name="action_cancel">Cancel</string>
+    <string name="action_close">Close</string>
     <string name="playlist_track_count">%1$d tracks</string>
     <string name="playlist_add_tracks">Add tracks</string>
     <string name="playlist_empty">Empty playlist</string>
