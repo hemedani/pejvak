@@ -102,6 +102,7 @@ fun SmartPlaylistScreen(
                                 GlassChip(
                                     label = formatDuration(budget),
                                     selected = state.budgetSec == budget,
+                                    icon = "timer",
                                     onClick = { viewModel.setBudget(budget) },
                                 )
                             }
@@ -126,10 +127,12 @@ fun SmartPlaylistScreen(
                         GlassChip(
                             label = if (state.saved) stringResource(R.string.smart_saved)
                             else stringResource(R.string.folder_save_playlist),
+                            icon = "addToPlaylist",
                             onClick = viewModel::saveAsPlaylist,
                         )
                         GlassChip(
                             label = stringResource(R.string.smart_add_all_playlist),
+                            icon = "addToPlaylist",
                             onClick = { addOpen = true },
                         )
                     }

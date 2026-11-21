@@ -64,6 +64,7 @@ fun NotesDateRangeSheet(
                     GlassChip(
                         label = stringResource(labelRes),
                         selected = selected,
+                        icon = "time",
                         onClick = {
                             onApply(next)
                             onClose()

@@ -60,6 +60,7 @@ import com.pejvak.app.ui.components.GlassHeader
 import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.components.SegmentedControl
+import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 import com.pejvak.app.ui.theme.OceanCascade
@@ -93,7 +94,15 @@ fun SettingsScreen(
     if (confirmSignOut) {
         AlertDialog(
             onDismissRequest = { confirmSignOut = false },
-            title = { Text(stringResource(R.string.settings_sign_out_confirm_title)) },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                ) {
+                    PejvakIcon("logout", null, tint = tokens.danger, size = geo.icons.md)
+                    Text(stringResource(R.string.settings_sign_out_confirm_title))
+                }
+            },
             text = { Text(stringResource(R.string.settings_sign_out_confirm_body)) },
             confirmButton = {
                 TextButton(onClick = {

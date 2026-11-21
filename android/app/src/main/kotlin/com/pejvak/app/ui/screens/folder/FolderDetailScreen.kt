@@ -153,6 +153,7 @@ fun FolderDetailScreen(
                         GlassChip(
                             label = stringResource(R.string.folder_unfinished, state.rows.size - finishedCount),
                             selected = state.mode == FolderPlayMode.Unfinished,
+                            icon = "play",
                             onClick = {
                                 viewModel.setMode(
                                     if (state.mode == FolderPlayMode.Unfinished) FolderPlayMode.Resume
@@ -169,14 +170,17 @@ fun FolderDetailScreen(
                         }
                         GlassChip(
                             label = stringResource(R.string.folder_save_playlist),
+                            icon = "addToPlaylist",
                             onClick = viewModel::saveAsPlaylist,
                         )
                         GlassChip(
                             label = stringResource(R.string.folder_add_all_playlist),
+                            icon = "addToPlaylist",
                             onClick = { addOpen = true },
                         )
                         GlassChip(
                             label = stringResource(R.string.folder_add_queue),
+                            icon = "queue",
                             onClick = viewModel::addAllToQueue,
                         )
                         Spacer(Modifier.size(geo.spacing.lg))

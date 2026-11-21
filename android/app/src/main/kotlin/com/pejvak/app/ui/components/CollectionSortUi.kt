@@ -56,6 +56,7 @@ fun CollectionSortSheet(
                     GlassChip(
                         label = sortOptionLabel(option),
                         selected = option == sort,
+                        icon = "sort",
                         onClick = {
                             onSelect(option, if (option == CollectionSort.Shuffle) SortDirection.Asc else direction)
                         },

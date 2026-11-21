@@ -33,6 +33,7 @@ fun GlobalSheetHost(request: SheetRequest?, onDismiss: () -> Unit) {
         is SheetRequest.SessionDetail -> GlassSheet(
             onDismiss = onDismiss,
             title = if (request.noteMode) "Note" else "Session",
+            icon = if (request.noteMode) "note" else "history",
         ) {
             SheetPlaceholder("Session timeline + facts arrive with History (Phase 9).")
         }

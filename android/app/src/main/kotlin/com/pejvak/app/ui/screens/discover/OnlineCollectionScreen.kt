@@ -49,6 +49,7 @@ import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.NoticeTone
 import com.pejvak.app.ui.components.PaletteTile
+import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.components.row.RowAction
 import com.pejvak.app.ui.components.row.RowActions
 import com.pejvak.app.ui.components.PrimaryButton
@@ -279,7 +280,15 @@ fun OnlineCollectionScreen(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text(stringResource(R.string.download_delete_title)) },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                ) {
+                    PejvakIcon("warning", null, tint = tokens.danger, size = geo.icons.md)
+                    Text(stringResource(R.string.download_delete_title))
+                }
+            },
             text = { Text(stringResource(R.string.download_delete_body)) },
             confirmButton = {
                 TextButton(onClick = {

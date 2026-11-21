@@ -87,12 +87,14 @@ fun DiscoverScreen(
                     label = stringResource(R.string.discover_continue),
                     selected = state.page == 0,
                     frosted = true,
+                    icon = "play",
                     onClick = { viewModel.setPage(0) },
                 )
                 GlassChip(
                     label = stringResource(R.string.discover_favorites),
                     selected = state.page == 1,
                     frosted = true,
+                    icon = "favorite",
                     count = state.favorites.size.takeIf { it > 0 },
                     onClick = { viewModel.setPage(1) },
                 )
@@ -100,6 +102,7 @@ fun DiscoverScreen(
                     label = stringResource(R.string.discover_browse),
                     selected = state.page == 2,
                     frosted = true,
+                    icon = "discover",
                     onClick = { viewModel.setPage(2) },
                 )
             }

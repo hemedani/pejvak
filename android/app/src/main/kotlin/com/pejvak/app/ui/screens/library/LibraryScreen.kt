@@ -284,6 +284,7 @@ fun LibraryScreen(
         GlassSheet(
             onDismiss = { showLanguage = false },
             title = stringResource(R.string.library_language_prompt_title),
+            icon = "language",
         ) {
             Text(
                 text = stringResource(R.string.library_language_prompt_body),
@@ -317,7 +318,15 @@ fun LibraryScreen(
             containerColor = tokens.canvasBase,
             titleContentColor = tokens.text,
             textContentColor = tokens.textSecondary,
-            title = { Text(stringResource(R.string.library_playlist_delete_title)) },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                ) {
+                    PejvakIcon("warning", null, tint = tokens.danger, size = geo.icons.md)
+                    Text(stringResource(R.string.library_playlist_delete_title))
+                }
+            },
             text = { Text(stringResource(R.string.library_playlist_delete_body)) },
             confirmButton = {
                 TextButton(onClick = {
@@ -396,12 +405,14 @@ private fun LibraryPage(
                             label = stringResource(R.string.library_origin_local),
                             selected = state.origin == TrackOriginTab.Local,
                             count = state.localCount,
+                            icon = "folder",
                             onClick = { onSetOrigin(TrackOriginTab.Local) },
                         )
                         GlassChip(
                             label = stringResource(R.string.library_origin_online),
                             selected = state.origin == TrackOriginTab.Online,
                             count = state.onlineCount,
+                            icon = "online",
                             onClick = { onSetOrigin(TrackOriginTab.Online) },
                         )
                     }
@@ -689,11 +700,11 @@ private fun viewLabel(view: LibraryView): String = when (view) {
 }
 
 private fun viewIcon(view: LibraryView): String = when (view) {
-    LibraryView.Online -> "globe"
+    LibraryView.Online -> "online"
     LibraryView.Tracks -> "music"
     LibraryView.Folders -> "folder"
-    LibraryView.Playlists -> "playlists"
-    LibraryView.Recent -> "clock"
+    LibraryView.Playlists -> "playlist"
+    LibraryView.Recent -> "time"
 }
 
 @Composable

@@ -87,7 +87,24 @@ fun AnnotationComposerSheet(
                 .padding(bottom = geo.spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(geo.spacing.lg),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(geo.controls.md)
+                        .clip(CircleShape)
+                        .background(tokens.accent.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PejvakIcon(
+                        name = if (annotation == null) "note" else "edit",
+                        contentDescription = null,
+                        tint = tokens.accent,
+                        size = geo.icons.md,
+                    )
+                }
                 Text(
                     text = stringResource(
                         if (annotation == null) R.string.note_composer_new else R.string.note_composer_edit,

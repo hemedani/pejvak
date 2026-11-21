@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -22,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.res.stringResource
@@ -37,6 +40,7 @@ import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.GlassChip
 import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.ICON_GLYPHS
+import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.components.PrimaryButton
 import com.pejvak.app.ui.components.RowDivider
 import com.pejvak.app.ui.components.notes.NoteTimeline
@@ -75,7 +79,24 @@ fun NoteDetailSheet(
                 .padding(bottom = geo.spacing.xxl),
             verticalArrangement = Arrangement.spacedBy(geo.spacing.lg),
         ) {
-            Row(verticalAlignment = Alignment.Top) {
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(geo.controls.md)
+                        .clip(CircleShape)
+                        .background(tokens.accent.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    PejvakIcon(
+                        name = "note",
+                        contentDescription = null,
+                        tint = tokens.accent,
+                        size = geo.icons.md,
+                    )
+                }
                 Column(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(geo.spacing.xs),
@@ -192,7 +213,15 @@ fun NoteDetailSheet(
             containerColor = tokens.canvasBase,
             titleContentColor = tokens.text,
             textContentColor = tokens.textSecondary,
-            title = { Text(stringResource(R.string.notes_delete_title)) },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                ) {
+                    PejvakIcon("warning", null, tint = tokens.danger, size = geo.icons.md)
+                    Text(stringResource(R.string.notes_delete_title))
+                }
+            },
             text = {
                 Text(
                     stringResource(

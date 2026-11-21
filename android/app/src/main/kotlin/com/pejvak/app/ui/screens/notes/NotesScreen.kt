@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -244,7 +245,15 @@ fun NotesScreen(
             containerColor = tokens.canvasBase,
             titleContentColor = tokens.text,
             textContentColor = tokens.textSecondary,
-            title = { Text(stringResource(R.string.notes_delete_title)) },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                ) {
+                    PejvakIcon("warning", null, tint = tokens.danger, size = geo.icons.md)
+                    Text(stringResource(R.string.notes_delete_title))
+                }
+            },
             text = {
                 Text(
                     stringResource(

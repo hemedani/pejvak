@@ -41,6 +41,7 @@ fun DateRangeSheet(
                 GlassChip(
                     label = label,
                     selected = active == preset,
+                    icon = "time",
                     onClick = {
                         onPick(if (preset == DatePreset.Any) ANY_DATE else presetRange(preset))
                         onDismiss()

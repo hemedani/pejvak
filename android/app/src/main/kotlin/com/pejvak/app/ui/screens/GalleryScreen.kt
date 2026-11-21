@@ -168,7 +168,7 @@ fun GalleryScreen() {
                             Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
                                 GlassChip(label = "Tracks", selected = true, frosted = true, icon = "music")
                                 GlassChip(label = "Folders", frosted = true, icon = "folder")
-                                GlassChip(label = "Playlists", frosted = true, icon = "playlists")
+                                GlassChip(label = "Playlists", frosted = true, icon = "playlist")
                             }
                             AppDock(selectedRoute = "library", onSelect = {})
                         }
@@ -194,9 +194,9 @@ fun GalleryScreen() {
                         onClick = {})
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
-                    GlassChip(label = "All", selected = true)
-                    GlassChip(label = "Local", icon = "music")
-                    GlassChip(label = "Online", count = 12)
+                    GlassChip(label = "All", selected = true, icon = "library")
+                    GlassChip(label = "Local", icon = "folder")
+                    GlassChip(label = "Online", icon = "online")
                 }
                 var seg by remember { mutableIntStateOf(0) }
                 SegmentedControl(

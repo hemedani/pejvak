@@ -42,6 +42,7 @@ import com.pejvak.app.ui.components.row.AiActionButton
 import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.PaletteTile
+import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.components.PrimaryButton
 import com.pejvak.app.ui.components.field.TextField
 import com.pejvak.app.ui.components.GlassHeader
@@ -131,16 +132,19 @@ fun PlaylistDetailScreen(
                     ) {
                         GlassChip(
                             label = stringResource(R.string.playlist_add_tracks),
+                            icon = "addToPlaylist",
                             onClick = { addOpen = true },
                         )
                         GlassChip(
                             label = if (state.editing) stringResource(R.string.action_done)
                             else stringResource(R.string.action_edit),
                             selected = state.editing,
+                            icon = "edit",
                             onClick = viewModel::toggleEditing,
                         )
                         GlassChip(
                             label = stringResource(R.string.action_rename),
+                            icon = "edit",
                             onClick = {
                                 draftTitle = playlist?.title.orEmpty()
                                 renameOpen = true
@@ -148,6 +152,7 @@ fun PlaylistDetailScreen(
                         )
                         GlassChip(
                             label = stringResource(R.string.action_delete),
+                            icon = "delete",
                             onClick = { deleteOpen = true },
                         )
                     }
@@ -288,7 +293,15 @@ fun PlaylistDetailScreen(
     if (deleteOpen) {
         AlertDialog(
             onDismissRequest = { deleteOpen = false },
-            title = { Text(stringResource(R.string.playlist_delete_title)) },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+                ) {
+                    PejvakIcon("warning", null, tint = tokens.danger, size = geo.icons.md)
+                    Text(stringResource(R.string.playlist_delete_title))
+                }
+            },
             text = { Text(stringResource(R.string.playlist_delete_body)) },
             confirmButton = {
                 TextButton(onClick = {
