@@ -77,7 +77,7 @@ fun wavePath(
         path.lineTo(to, cy)
         return path
     }
-    val steps = max(2, (span / (wavelength / 6f)).roundToInt())
+    val steps = max(2, (span / (wavelength / 24f)).roundToInt())
     val edgeStart = min(taper, span / 2f)
     val edgeEnd = min(taperEnd, span / 2f)
     for (i in 0..steps) {
