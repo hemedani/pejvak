@@ -26,6 +26,7 @@ fun StandaloneMiniPlayer(
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     modifier: Modifier = Modifier,
+    onClose: () -> Unit = {},
 ) {
     if (nowPlaying == null) return
     val geo = LocalPejvakGeometry.current
@@ -41,6 +42,7 @@ fun StandaloneMiniPlayer(
             onPlayPause = onPlayPause,
             onNext = onNext,
             onExpand = onExpand,
+            onClose = onClose,
             modifier = Modifier.height(geo.dock.playerHeight),
         )
     }

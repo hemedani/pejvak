@@ -367,8 +367,23 @@ class PlaybackEngine(
         transportLoadAndPlay(track, positionSec, context, queue, index)
 
     suspend fun pause() = mutex.withLock { command.pause() }
-    suspend fun resume() = mutex.withLock { command.resume() }
-    suspend fun togglePlayPause() = mutex.withLock { if (_state.value.isPlaying) command.pause() else command.resume() }
+    suspend fun resume() = mutex.withLock { resumeLocked() }
+    suspend fun togglePlayPause() = mutex.withLock { if (_state.value.isPlaying) command.pause() else resumeLocked() }
+
+    /**
+     * Resume the current track. When the media service has died (Bluetooth disconnect +
+     * background timeout) the singleton still holds the track but no player is bound; a
+     * bare resume would be a silent no-op, so re-load the track instead — [PlayerCommand.loadAndPlay]
+     * waits for the service the UI has just (re)started to bring a player up.
+     */
+    private suspend fun resumeLocked() {
+        val track = currentTrack
+        if (track != null && !command.isBound) {
+            command.loadAndPlay(track, _state.value.positionSec)
+        } else {
+            command.resume()
+        }
+    }
     suspend fun seekTo(positionSec: Int) = mutex.withLock { command.seekTo(positionSec) }
     suspend fun setSpeed(speed: Double) = mutex.withLock {
         finishSession(completed = false, interrupted = false)

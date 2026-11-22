@@ -161,15 +161,27 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun toggle() {
+        // The media service may have stopped itself (e.g. Bluetooth disconnect + background
+        // timeout) while the engine singleton kept the track; bring it back so the resume
+        // re-loads into a live player instead of no-op'ing against a null one.
+        PlaybackService.start(context)
         viewModelScope.launch { engine.togglePlayPause() }
     }
 
     fun next() {
+        PlaybackService.start(context)
         viewModelScope.launch { engine.next() }
     }
 
     fun previous() {
+        PlaybackService.start(context)
         viewModelScope.launch { engine.previous() }
+    }
+
+    /** Closes the player: finalizes the session, clears the mini-player, tears down the service. */
+    fun stop() {
+        viewModelScope.launch { engine.stop() }
+        PlaybackService.stop(context)
     }
 
     fun seekTo(seconds: Int) {

@@ -404,6 +404,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                         onPlayPause = playerVm::toggle,
                         onNext = playerVm::next,
                         onExpand = { playerOpen = true },
+                        onClose = playerVm::stop,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)
@@ -425,6 +426,7 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                         onExpand = { playerOpen = true },
                         onPlayPause = playerVm::toggle,
                         onNext = playerVm::next,
+                        onClose = playerVm::stop,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(horizontal = geo.dock.margin, vertical = geo.dock.margin)

@@ -230,5 +230,11 @@ class PlaybackService : MediaSessionService() {
                 android.content.Intent(context, PlaybackService::class.java),
             )
         }
+
+        /** Tears the service down (and with it the player and the media notification),
+         *  used when the listener closes the mini-player. */
+        fun stop(context: android.content.Context) {
+            context.stopService(android.content.Intent(context, PlaybackService::class.java))
+        }
     }
 }

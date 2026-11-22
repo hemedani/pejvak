@@ -106,6 +106,8 @@ private class FakeCommand : PlayerCommand {
     var pauseCount = 0
     var resumeCount = 0
     var released = false
+    var bound = true
+    override val isBound: Boolean get() = bound
     override suspend fun loadAndPlay(track: Track, positionSec: Int) { loaded = track to positionSec; loadCount++ }
     override fun pause() { pauseCount++ }
     override fun resume() { resumeCount++ }
@@ -325,6 +327,52 @@ class PlaybackEngineTest {
         assertTrue(cmd.released)
         assertNull(engine.state.value.trackId)
         assertTrue(store.runs.values.first().interrupted)
+    }
+
+    @Test
+    fun resumeWithALivePlayerJustResumes() = runTest {
+        val (engine, store, cmd) = setup()
+        val t = track("t1"); store.tracks["t1"] = t
+        engine.loadAndPlay(t, 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        engine.pause()
+        engine.onPlayerProgress(120, 600, false, false, 2000)
+        cmd.resumeCount = 0; cmd.loadCount = 0
+        engine.resume()
+        assertEquals(1, cmd.resumeCount)
+        assertEquals(0, cmd.loadCount)
+    }
+
+    @Test
+    fun resumeReLoadsTheTrackWhenThePlayerDied() = runTest {
+        val (engine, store, cmd) = setup()
+        val t = track("t1"); store.tracks["t1"] = t
+        engine.loadAndPlay(t, 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        // The media service stops itself after a Bluetooth disconnect: no player bound,
+        // but the singleton still holds the track at its last position.
+        engine.onPlayerProgress(180, 600, false, false, 2000)
+        cmd.bound = false
+        cmd.resumeCount = 0; cmd.loadCount = 0
+        engine.resume()
+        assertEquals("bare resume must not be issued against a dead player", 0, cmd.resumeCount)
+        assertEquals("the current track must be re-loaded", t to 180, cmd.loaded)
+        assertEquals(1, cmd.loadCount)
+    }
+
+    @Test
+    fun togglePlayPauseReLoadsWhenUnbound() = runTest {
+        val (engine, store, cmd) = setup()
+        val t = track("t1"); store.tracks["t1"] = t
+        engine.loadAndPlay(t, 0)
+        engine.onPlayerProgress(0, 600, true, false, 1000)
+        engine.onPlayerProgress(90, 600, false, false, 2000)
+        cmd.bound = false
+        cmd.resumeCount = 0; cmd.loadCount = 0
+        engine.togglePlayPause()
+        assertEquals(0, cmd.resumeCount)
+        assertEquals(t to 90, cmd.loaded)
+        assertEquals(1, cmd.loadCount)
     }
 
     @Test

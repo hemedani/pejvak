@@ -510,6 +510,7 @@ fun NowPlayingSheet(
                         onPlayPause = vm::toggle,
                         onNext = vm::next,
                         onExpand = {},
+                        onClose = { requestDismiss() },
                         tileAlpha = tileFadeAlpha,
                         modifier = Modifier.height(geo.dock.playerHeight),
                     )

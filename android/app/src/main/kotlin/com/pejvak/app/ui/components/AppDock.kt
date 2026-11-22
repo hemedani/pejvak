@@ -77,6 +77,7 @@ fun AppDock(
     onPlayPause: () -> Unit = {},
     onNext: () -> Unit = {},
     onExpand: () -> Unit = {},
+    onClose: () -> Unit = {},
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
@@ -106,6 +107,7 @@ fun AppDock(
                             onPlayPause = onPlayPause,
                             onNext = onNext,
                             onExpand = onExpand,
+                            onClose = onClose,
                             modifier = Modifier.height(geo.dock.playerHeight),
                         )
                         HairlineWave(
@@ -221,6 +223,7 @@ fun MiniPlayerRow(
     onExpand: () -> Unit,
     modifier: Modifier = Modifier,
     tileAlpha: Float = 1f,
+    onClose: () -> Unit = {},
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
@@ -274,6 +277,13 @@ fun MiniPlayerRow(
             icon = ICON_GLYPHS.getValue("next"),
             contentDescription = stringResource(R.string.player_next),
             onClick = onNext,
+            size = geo.controls.md,
+        )
+        Spacer(Modifier.width(geo.spacing.xs))
+        BubbleButton(
+            icon = ICON_GLYPHS.getValue("close"),
+            contentDescription = stringResource(R.string.player_close),
+            onClick = onClose,
             size = geo.controls.md,
         )
     }

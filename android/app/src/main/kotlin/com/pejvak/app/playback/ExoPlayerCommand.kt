@@ -26,6 +26,8 @@ class ExoPlayerCommand @Inject constructor(
     var player: ExoPlayer? = null
     private val main = Handler(Looper.getMainLooper())
 
+    override val isBound: Boolean get() = player != null
+
     override suspend fun loadAndPlay(track: Track, positionSec: Int) {
         // Signed online URLs expire; re-resolve before handing the URI to ExoPlayer.
         val playable = if (track.origin == Origin.Online && track.collectionKey != null) {

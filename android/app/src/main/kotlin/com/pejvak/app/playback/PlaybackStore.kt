@@ -57,6 +57,9 @@ interface PlaybackStore {
  * Android/Media3 import.
  */
 interface PlayerCommand {
+    /** Whether a live player is bound. False once the media service has stopped,
+     *  while the engine singleton still holds a track — the signal to re-load on resume. */
+    val isBound: Boolean
     suspend fun loadAndPlay(track: Track, positionSec: Int)
     fun pause()
     fun resume()
