@@ -64,6 +64,7 @@ second-install pull, scan/import and visual checks are the owner's.
 | Owner round 6: the player's swipe-down always resolves — it snaps back up or leaves downwards, never rests half way (pointer release + `onPreFling`/`onPostFling`, and fling deltas no longer feed the pull); the Library's Tracks / Folders / Playlists / Recent views swipe left/right via `Modifier.pageSwipe`, which declines at either end so the dock's tab swipe still takes over | ✅ code (emulator verified, dark + light) |
 | Plan 03 — collection-first playback: semantic-folder/online resolution through one launcher, resume/auto-conversion with condition inheritance, live sort (chip + sheet on both the player and the collection screens, reordering the visible list and the run together) patching the active session, narrow Room updates | ✅ code (emulator verified online; local folder fixtures absent) |
 | Owner round 7: Discover no longer crashes on duplicate Lazy keys (`resumableRuns` keeps the newest run per collection); `core/CrashLog` writes uncaught exceptions to `files/crashes/` and Settings → Diagnostics shares the last one, so a crash on the phone no longer needs `adb` or a screenshot | ✅ code (emulator verified) |
+| Owner bug round: play/pause dead after the media service self-stops (BT disconnect + background timeout) — resume now re-loads the current track when no player is bound, transport commands restart the service, and the mini-player gained a close button | ✅ code (build + 492 JVM tests green; on-device BT/kill pass is owner's) |
 | Owner device pass: notification crash logcat, offline→online, kill recovery, themes, haptics, performance | ⬜ owner |
 
 ## 3. Tech stack (pinned, verified on this machine via Hawraa)
@@ -104,7 +105,16 @@ minSdk 29 · targetSdk 36 · compileSdk 37.
 
 - **English LTR UI**; Persian first-class for content (UserText RTL + Vazirmatn + search folding).
 - **Glassmorphism** redesign per `DESING.md` (supersedes the old opaque-card rule).
-- **Media3 ExoPlayer in a MediaSessionService**; UI binds via MediaController (Voice/Auxio pattern).
+- **Media3 ExoPlayer in a `MediaSessionService`** (background audio, notification, lock-screen + BT
+  buttons). The UI drives playback through the shared `PlaybackEngine` **singleton** (Hilt
+  `SingletonComponent`), not a bound `MediaController`; the service owns the `ExoPlayer`, feeds the
+  engine player events and executes its `PlayerCommand`s.
+  **Lifecycle pitfall:** the engine + `ExoPlayerCommand` singletons outlive the service. When the
+  service stops itself (e.g. Bluetooth disconnect → pause → background timeout) `command.player`
+  becomes `null` while the engine still holds the track, so a bare resume was a silent no-op and the
+  mini-player's play/pause looked dead. Fix: `resume()` re-loads the current track when `command.isBound`
+  is false, every transport command calls `PlaybackService.start()` first, and the mini-player gained
+  a close button (`engine.stop()` + `PlaybackService.stop()`).
 - **Room schema mirrors the RN SQLite 1:1** (12 tables) — keeps the sync contract intact.
 - **Enhancer on the player's real audioSessionId** (native advantage over RN's output-mix 0).
 - **FlowCast** (`applicationId com.flowcast.app`, code package still `com.pejvak.app`) installs

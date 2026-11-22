@@ -170,3 +170,31 @@ Report the exact command output (pass counts, BUILD SUCCESSFUL). Do not claim su
 - Do not edit `mobile/`, `back/`, `front/`, or generated declarations.
 - Do not add a schema migration or a backend field.
 - Do not add confirmation dialogs, new sort enums, or a second HTTP/DB layer.
+
+---
+
+## Addendum 2026-11-22 — mini-player transport dead after the service self-stops
+
+**Brief (owner).** Listen in the car over Bluetooth → turn the car off → BT drops, playback
+pauses. Reopen the app later: the main-player play/pause does nothing and the mini-player is
+stuck; only killing the app from RAM clears it, after which re-selecting a track plays again.
+Also asked for a close button on the mini-player.
+
+**Diagnosis.** `PlaybackEngine` and `ExoPlayerCommand` are `SingletonComponent` singletons that
+outlive the `MediaSessionService`. When the service stops itself (paused + background timeout)
+`onDestroy` nulls `command.player`, but the engine keeps `hasTrack=true, phase=Paused`. The UI
+drives the engine directly (not a bound controller), so `togglePlayPause → resume → player?.play()`
+hits a null player — a silent no-op. Every *new* play site calls `PlaybackService.start()`; the
+transport actions did not, and even if they had, a freshly built `ExoPlayer` has no media item.
+
+**Decisions.**
+- `PlayerCommand.isBound`; `resume()`/`togglePlayPause()` re-load the current track via
+  `loadAndPlay` (which already waits for a starting service) when unbound — so resume survives
+  a service restart at the right position.
+- `toggle/next/previous` call `PlaybackService.start()` first (the established play-site pattern).
+- Mini-player close button → `PlayerViewModel.stop()` = `engine.stop()` (resets the singleton,
+  clears the mini-player) + `PlaybackService.stop()` (tears down the service + notification).
+
+**Verification.** `assembleDebug` BUILD SUCCESSFUL; `testDebugUnitTest` 492/492, incl. 3 new
+resume/toggle cases (live player → bare resume; unbound → re-load at last position). On-device
+Bluetooth/kill recovery remains the owner's.
