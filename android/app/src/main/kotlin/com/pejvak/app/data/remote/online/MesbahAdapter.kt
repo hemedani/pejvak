@@ -77,7 +77,7 @@ internal fun parseSpokenCards(html: String): List<SpokenCard> {
 
         cards += SpokenCard(
             id = id,
-            title = cleanOnlineText(anchor?.innerHtml).takeIf { it.isNotEmpty() },
+            title = cleanOnlineText(anchor.innerHtml).takeIf { it.isNotEmpty() },
             subtitle = cleanOnlineText(subtitleContent?.innerHtml).takeIf { it.isNotEmpty() },
             series = cleanOnlineText(seriesAnchor?.innerHtml).takeIf { it.isNotEmpty() },
             hasAudio = MP3_SRC.containsMatchIn(address),

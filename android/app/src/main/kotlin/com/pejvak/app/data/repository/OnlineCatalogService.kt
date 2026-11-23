@@ -164,8 +164,8 @@ class OnlineCatalogService @Inject constructor(
         val byExternal = track.externalId?.let { external -> fresh.firstOrNull { it.externalId == external } }
         if (byExternal == null) return track
         return track.copy(
-            fileUri = track.downloadPath ?: byExternal.streamUrl ?: track.fileUri,
-            streamUrl = byExternal.streamUrl ?: track.streamUrl,
+            fileUri = track.downloadPath ?: byExternal.streamUrl,
+            streamUrl = byExternal.streamUrl,
             durationSec = if (byExternal.durationSec > 0) byExternal.durationSec else track.durationSec,
             artworkUrl = byExternal.artworkUrl ?: track.artworkUrl,
         )
