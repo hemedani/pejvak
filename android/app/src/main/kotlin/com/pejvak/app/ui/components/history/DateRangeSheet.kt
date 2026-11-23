@@ -38,10 +38,18 @@ fun DateRangeSheet(
                     DatePreset.Year -> stringResource(R.string.history_range_year)
                     DatePreset.Custom -> ""
                 }
+                val icon = when (preset) {
+                    DatePreset.Any -> "filter"
+                    DatePreset.Today -> "today"
+                    DatePreset.Week -> "weekend"
+                    DatePreset.Month -> "dateRange"
+                    DatePreset.Year -> "event"
+                    DatePreset.Custom -> "time"
+                }
                 GlassChip(
                     label = label,
                     selected = active == preset,
-                    icon = "time",
+                    icon = icon,
                     onClick = {
                         onPick(if (preset == DatePreset.Any) ANY_DATE else presetRange(preset))
                         onDismiss()

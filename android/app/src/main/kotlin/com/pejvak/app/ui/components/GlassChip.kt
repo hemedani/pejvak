@@ -94,10 +94,10 @@ private fun ChipContent(
         modifier = Modifier.padding(horizontal = geo.spacing.md, vertical = geo.spacing.sm),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (count != null) {
-            Text(text = count.toString(), style = MaterialTheme.typography.labelLarge, color = contentColor)
-            Spacer(Modifier.size(geo.spacing.xs))
-        } else if (icon != null) {
+        // The icon and the count are independent: a leading glyph marks what the chip is,
+        // a trailing count says how many. (Count used to replace the icon, so the
+        // Local/Online sub-tabs never showed their folder/cloud marks.)
+        if (icon != null) {
             PejvakIcon(name = icon, contentDescription = null, tint = contentColor, size = geo.icons.sm)
             Spacer(Modifier.size(geo.spacing.xs))
         }
@@ -109,5 +109,13 @@ private fun ChipContent(
             softWrap = false,
             overflow = TextOverflow.Clip,
         )
+        if (count != null) {
+            Spacer(Modifier.size(geo.spacing.sm))
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+                color = contentColor.copy(alpha = 0.85f),
+            )
+        }
     }
 }

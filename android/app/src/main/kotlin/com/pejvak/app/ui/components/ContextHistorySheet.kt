@@ -1,16 +1,21 @@
 package com.pejvak.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import com.pejvak.app.R
 import com.pejvak.app.domain.ContextPlay
@@ -48,7 +53,21 @@ fun ContextHistorySheet(
                             onDismiss()
                         },
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
+                        Box(
+                            modifier = Modifier
+                                .size(geo.tiles.sm)
+                                .clip(CircleShape)
+                                .background(tokens.accentTeal.copy(alpha = 0.16f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            PejvakIcon(
+                                name = "event",
+                                contentDescription = null,
+                                tint = tokens.accentTeal,
+                                size = geo.icons.sm,
+                            )
+                        }
                         Column(Modifier.weight(1f)) {
                             Text(
                                 text = describeRecentWhen(run.startedAt),

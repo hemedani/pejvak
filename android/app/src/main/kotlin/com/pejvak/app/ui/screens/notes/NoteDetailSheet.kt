@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -85,15 +86,23 @@ fun NoteDetailSheet(
             ) {
                 Box(
                     modifier = Modifier
-                        .size(geo.controls.md)
+                        .size(geo.controls.lg)
                         .clip(CircleShape)
-                        .background(tokens.accent.copy(alpha = 0.14f)),
+                        .background(
+                            Brush.radialGradient(
+                                listOf(
+                                    tokens.accentTeal.copy(alpha = 0.34f),
+                                    tokens.glassFill,
+                                ),
+                            ),
+                        )
+                        .border(1.dp, tokens.glassBorder, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     PejvakIcon(
                         name = "note",
                         contentDescription = null,
-                        tint = tokens.accent,
+                        tint = tokens.accentTeal,
                         size = geo.icons.md,
                     )
                 }

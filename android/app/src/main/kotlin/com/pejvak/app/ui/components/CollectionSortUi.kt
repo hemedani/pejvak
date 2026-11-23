@@ -36,6 +36,19 @@ fun sortOptionLabel(sort: CollectionSort): String = stringResource(
 fun sortChipLabel(sort: CollectionSort, direction: SortDirection): String =
     sortOptionLabel(sort) + sortDirectionArrow(sort, direction)
 
+/** The glyph for a sort option, so each order reads as a different thing. */
+fun sortOptionIcon(sort: CollectionSort): String = when (sort) {
+    CollectionSort.Folder -> "folder"
+    CollectionSort.Source -> "online"
+    CollectionSort.Name -> "name"
+    CollectionSort.Duration -> "duration"
+    CollectionSort.Shuffle -> "shuffle"
+    CollectionSort.Manual -> "list"
+    CollectionSort.Smart -> "sparkle"
+    CollectionSort.CreatedAt -> "calendar"
+    CollectionSort.Unknown -> "info"
+}
+
 /** The shared sort sheet: one pick per order, plus Asc/Desc unless shuffling. */
 @Composable
 fun CollectionSortSheet(
@@ -56,7 +69,7 @@ fun CollectionSortSheet(
                     GlassChip(
                         label = sortOptionLabel(option),
                         selected = option == sort,
-                        icon = "sort",
+                        icon = sortOptionIcon(option),
                         onClick = {
                             onSelect(option, if (option == CollectionSort.Shuffle) SortDirection.Asc else direction)
                         },

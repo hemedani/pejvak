@@ -188,6 +188,7 @@ fun SleepTimerSheet(
             SLEEP_TIMER_MINUTES.forEach { minutes ->
                 GlassChip(
                     label = "$minutes min",
+                    icon = "timer",
                     onClick = {
                         onStart(minutes)
                         onDismiss()

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -34,6 +35,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
@@ -158,9 +160,17 @@ fun GlassSheet(
             Box(Modifier.fillMaxWidth().padding(bottom = geo.spacing.md), contentAlignment = Alignment.Center) {
                 Box(
                     Modifier
-                        .size(width = 36.dp, height = 4.dp)
+                        .size(width = 40.dp, height = 5.dp)
                         .clip(RoundedCornerShape(geo.radius.pill))
-                        .background(tokens.glassBorder),
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    tokens.glassBorder.copy(alpha = tokens.glassBorder.alpha * 0.25f),
+                                    tokens.glassBorder,
+                                    tokens.glassBorder.copy(alpha = tokens.glassBorder.alpha * 0.25f),
+                                ),
+                            ),
+                        ),
                 )
             }
             if (title != null) {
@@ -193,32 +203,43 @@ private fun SheetHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
         ) {
+            // The accent bubble: a teal glow behind a glass disc with a bright rim, so
+            // the sheet opens on the design system's own mark rather than a flat tint.
             Box(
                 modifier = Modifier
-                    .size(geo.controls.md)
+                    .size(geo.controls.lg)
                     .clip(CircleShape)
-                    .background(tokens.accent.copy(alpha = 0.14f)),
+                    .background(
+                        Brush.radialGradient(
+                            listOf(
+                                tokens.accentTeal.copy(alpha = 0.34f),
+                                tokens.glassFill,
+                            ),
+                        ),
+                    )
+                    .border(BorderStroke(1.dp, tokens.glassBorder), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 PejvakIcon(
                     name = icon,
                     contentDescription = null,
-                    tint = tokens.accent,
+                    tint = tokens.accentTeal,
                     size = geo.icons.md,
                 )
             }
             Column(Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = MaterialTheme.typography.headlineMedium,
                     color = tokens.text,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (subtitle != null) {
+                    Spacer(Modifier.height(2.dp))
                     Text(
                         text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.bodyMedium,
                         color = tokens.textSecondary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
