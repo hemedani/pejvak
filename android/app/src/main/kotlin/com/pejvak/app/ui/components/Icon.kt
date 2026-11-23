@@ -4,38 +4,51 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.ListAlt
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.Sort
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.FilterAlt
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.Forward30
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.HourglassBottom
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Refresh
@@ -46,14 +59,22 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.SortByAlpha
 import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Subtitles
 import androidx.compose.material.icons.rounded.Summarize
 import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Tag
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Today
+import androidx.compose.material.icons.rounded.Translate
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Upload
 import androidx.compose.material.icons.rounded.WarningAmber
+import androidx.compose.material.icons.rounded.Weekend
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -117,6 +138,9 @@ val ICON_GLYPHS: Map<String, ImageVector> = mapOf(
     "discover" to Icons.Rounded.Explore,
     "folder" to Icons.Rounded.Folder,
     "online" to Icons.Rounded.Cloud,
+    "cloud_upload" to Icons.Rounded.CloudUpload,
+    "cloud_done" to Icons.Rounded.CloudDone,
+    "person_add" to Icons.Rounded.PersonAdd,
     "language" to Icons.Rounded.Language,
     "favorite" to Icons.Rounded.Favorite,
     "favoriteBorder" to Icons.Rounded.FavoriteBorder,
@@ -125,6 +149,24 @@ val ICON_GLYPHS: Map<String, ImageVector> = mapOf(
     "info" to Icons.Rounded.Info,
     "warning" to Icons.Rounded.WarningAmber,
     "error" to Icons.Rounded.ErrorOutline,
+    "calendar" to Icons.Rounded.CalendarMonth,
+    "today" to Icons.Rounded.Today,
+    "weekend" to Icons.Rounded.Weekend,
+    "event" to Icons.Rounded.Event,
+    "dateRange" to Icons.Rounded.DateRange,
+    "filter" to Icons.Rounded.FilterAlt,
+    "shuffle" to Icons.Rounded.Shuffle,
+    "name" to Icons.Rounded.SortByAlpha,
+    "duration" to Icons.Rounded.HourglassBottom,
+    "list" to Icons.AutoMirrored.Rounded.ListAlt,
+    "stats" to Icons.AutoMirrored.Rounded.TrendingUp,
+    "mic" to Icons.Rounded.Mic,
+    "translate" to Icons.Rounded.Translate,
+    "star" to Icons.Rounded.Star,
+    "starBorder" to Icons.Rounded.StarBorder,
+    "bookmark" to Icons.Rounded.Bookmark,
+    "lock" to Icons.Rounded.Lock,
+    "export" to Icons.Rounded.Upload,
 )
 
 @Composable

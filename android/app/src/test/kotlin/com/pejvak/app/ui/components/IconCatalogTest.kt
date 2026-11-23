@@ -15,6 +15,7 @@ class IconCatalogTest {
         "discover", "folder", "online", "language", "favorite", "favoriteBorder",
         "person", "logout", "info", "warning", "error",
         "transcribe", "summarize", "audioSummary", "enhance", "sparkle",
+        "cloud_upload", "cloud_done", "person_add",
     )
 
     @Test
