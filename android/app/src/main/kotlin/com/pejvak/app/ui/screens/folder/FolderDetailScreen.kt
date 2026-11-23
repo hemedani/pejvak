@@ -386,7 +386,7 @@ private fun FolderTrackCard(
                 Spacer(Modifier.height(geo.spacing.sm))
                 WaveProgressBar(
                     fraction = fraction,
-                    height = 12.dp,
+                    height = 20.dp,
                 )
             }
         }
