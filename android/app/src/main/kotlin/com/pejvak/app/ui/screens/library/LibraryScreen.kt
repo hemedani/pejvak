@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -106,6 +107,10 @@ fun LibraryScreen(
     onOpenSmart: (String) -> Unit,
     onOpenAi: () -> Unit,
     onOpenSource: (String) -> Unit,
+    onOpenAccount: () -> Unit,
+    accountGlyph: String,
+    accountAttention: Boolean,
+    accountLabelRes: Int,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -170,6 +175,27 @@ fun LibraryScreen(
                     placeholder = stringResource(R.string.library_search_placeholder),
                 ),
                 actions = {
+                    // AUTH-10: the home-screen auth button. Signed out it invites register/login;
+                    // signed in it opens the account + sync sheet. An attention dot marks anything
+                    // not yet on the server. It sits beside Settings, filled when it wants a tap.
+                    Box {
+                        BubbleButton(
+                            icon = ICON_GLYPHS.getValue(accountGlyph),
+                            contentDescription = stringResource(accountLabelRes),
+                            onClick = onOpenAccount,
+                            filled = accountAttention,
+                        )
+                        if (accountAttention) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(2.dp)
+                                    .size(9.dp)
+                                    .clip(CircleShape)
+                                    .background(tokens.accentTeal),
+                            )
+                        }
+                    }
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("settings"),
                         contentDescription = stringResource(R.string.header_screen_menu),
@@ -302,7 +328,26 @@ fun LibraryScreen(
                             showLanguage = false
                         },
                 ) {
-                    Text(label, style = MaterialTheme.typography.titleMedium, color = tokens.text)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(geo.tiles.sm)
+                                .clip(CircleShape)
+                                .background(tokens.accentTeal.copy(alpha = 0.16f)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            PejvakIcon(
+                                name = "language",
+                                contentDescription = null,
+                                tint = tokens.accentTeal,
+                                size = geo.icons.sm,
+                            )
+                        }
+                        Text(label, style = MaterialTheme.typography.titleMedium, color = tokens.text)
+                    }
                 }
             }
             TextButton(onClick = { showLanguage = false }) {

@@ -20,6 +20,7 @@ import com.pejvak.app.domain.Session
 import com.pejvak.app.domain.SyncStatus
 import com.pejvak.app.domain.SyncSummary
 import com.pejvak.app.domain.Track
+import com.pejvak.app.domain.endpointNeedsMigration
 import com.pejvak.app.domain.reconcileAnnotations
 import com.pejvak.app.domain.reconcileContextPlays
 import com.pejvak.app.domain.reconcileOnlineCollections
@@ -101,6 +102,30 @@ class SyncRepository @Inject constructor(
     )
 
     suspend fun lastSyncAt(): Long? = settingsRepository.getLastSyncAt()
+
+    /**
+     * SRV-02: one-time full re-queue when the configured Lesan endpoint changes.
+     *
+     * The engine only pushes `pending`/`failed` rows, so anything already `synced` against an old
+     * server would be stranded on a new one. When the base URL differs from the last one recorded,
+     * flip every acknowledged row back to `pending` and store the new endpoint. Safe and idempotent:
+     * `syncLocalData` dedupes on `clientId`, so re-sending to a server that already holds a row is a
+     * skip, and to an empty server it is the insert that preserves the listener's data.
+     *
+     * Returns true when a re-queue ran. Never throws; the next sync carries the re-queued rows.
+     */
+    suspend fun ensureEndpointMigrated(currentEndpoint: String): Boolean {
+        val stored = settingsRepository.getSyncEndpoint()
+        if (!endpointNeedsMigration(stored, currentEndpoint)) return false
+        trackDao.requeueSynced()
+        sessionDao.requeueSynced()
+        annotationDao.requeueSynced()
+        playlistDao.requeueSynced()
+        contextPlayDao.requeueSynced()
+        onlineCollectionDao.requeueSynced()
+        settingsRepository.setSyncEndpoint(currentEndpoint)
+        return true
+    }
 
     /** Restores server-side data so a reinstall / second device keeps history. */
     suspend fun pullFromServer(): PullSummary = coroutineScope {

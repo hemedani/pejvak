@@ -1,22 +1,18 @@
 package com.pejvak.app.ui.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.pejvak.app.ui.screens.auth.AuthScreen
 import com.pejvak.app.ui.screens.auth.AuthViewModel
-import com.pejvak.app.ui.theme.LocalPejvakTokens
 
 /**
- * The auth gate (AUTH-05): unauthenticated → the auth flow; authenticated → the
- * tabs + detail screens. While restoring, a centered spinner holds the place so a
- * cached session never flashes the login screen.
+ * The auth surface wrapper (AUTH-09). It is **non-blocking**: the app always renders, whether or not
+ * there is a session. [AuthViewModel] restores any saved token in the background (a valid token
+ * auto-signs-in and kicks a sync; an invalid one is cleared silently), and the shared instance feeds
+ * the home-screen button + the register/login and account sheets hosted by [PejvakNavHost]. There is
+ * deliberately no full-screen login takeover — an active listener is never interrupted.
  */
 @Composable
 fun AuthGate(
@@ -24,14 +20,9 @@ fun AuthGate(
     viewModel: AuthViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val tokens = LocalPejvakTokens.current
-    when (state.status) {
-        AuthViewModel.Status.Loading -> {
-            Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = tokens.accent)
-            }
-        }
-        AuthViewModel.Status.Unauthenticated -> AuthScreen(modifier = modifier)
-        AuthViewModel.Status.Authenticated -> PejvakNavHost(modifier = modifier)
-    }
+    PejvakNavHost(
+        modifier = modifier,
+        authViewModel = viewModel,
+        authState = state,
+    )
 }

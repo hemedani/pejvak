@@ -66,10 +66,16 @@ import androidx.navigation.compose.rememberNavController
 import com.pejvak.app.BuildConfig
 import com.pejvak.app.R
 import com.pejvak.app.domain.AiFeature
+import com.pejvak.app.domain.AccountButtonState
 import com.pejvak.app.domain.ContextType
+import com.pejvak.app.domain.accountButtonState
 import com.pejvak.app.domain.folderKeyToRouteSegment
+import com.pejvak.app.domain.glyphKey
+import com.pejvak.app.domain.needsAttention
 import com.pejvak.app.ui.components.AmbientCanvas
 import com.pejvak.app.ui.components.AppDock
+import com.pejvak.app.ui.components.BubbleButton
+import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.LocalBackdrop
 import com.pejvak.app.ui.components.LocalSheetPresence
 import com.pejvak.app.ui.components.LocalShellInsets
@@ -85,6 +91,9 @@ import com.pejvak.app.ui.screens.ai.AiCatalogSheet
 import com.pejvak.app.ui.screens.ai.AiFeatureScreen
 import com.pejvak.app.ui.screens.ai.AiFeatureSheet
 import com.pejvak.app.ui.screens.ai.AiScreen
+import com.pejvak.app.ui.screens.auth.AccountSheet
+import com.pejvak.app.ui.screens.auth.AuthSheet
+import com.pejvak.app.ui.screens.auth.AuthViewModel
 import com.pejvak.app.ui.screens.discover.DiscoverScreen
 import com.pejvak.app.ui.screens.discover.LanguageScreen
 import com.pejvak.app.ui.screens.discover.OnlineCollectionScreen
@@ -123,7 +132,11 @@ enum class Tab(val route: String, val labelRes: Int, val icon: ImageVector) {
 }
 
 @Composable
-fun PejvakNavHost(modifier: Modifier = Modifier) {
+fun PejvakNavHost(
+    modifier: Modifier = Modifier,
+    authViewModel: AuthViewModel = hiltViewModel(),
+    authState: AuthViewModel.UiState = AuthViewModel.UiState(),
+) {
     val navController = rememberNavController()
     val geo = LocalPejvakGeometry.current
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -135,11 +148,22 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
     val playerVm: PlayerViewModel = hiltViewModel()
     val mini by playerVm.mini.collectAsStateWithLifecycle()
     var playerOpen by remember { mutableStateOf(false) }
+    // When the player's context chip opens a collection screen, the full player must
+    // collapse to reveal it. Remember the entry we left so returning to it re-expands
+    // the player instead of leaving the listener on the mini-player.
+    var reopenPlayerBackStackId by remember { mutableStateOf<String?>(null) }
     // The AI catalogue is a sheet, not a destination: a row's AI button should open
     // the tools where the listener already is. The description sheet stacks on top
     // of it, so closing a description lands back on the list.
     var aiSheet by remember { mutableStateOf(false) }
     var aiFeature by remember { mutableStateOf<AiFeature?>(null) }
+    // The home-screen auth button opens one of two sheets by session state: the register/login
+    // modal when signed out, the account + sync sheet when signed in. It floats over the app.
+    var accountSheet by remember { mutableStateOf(false) }
+    val accountState = accountButtonState(
+        signedIn = authState.status == AuthViewModel.Status.Authenticated,
+        pendingTotal = authState.pendingTotal,
+    )
     val sheetPresence = remember { SheetPresence() }
     var playerExpandProgress by remember { mutableFloatStateOf(0f) }
     var miniPlayerRect by remember { mutableStateOf<Rect?>(null) }
@@ -160,6 +184,15 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
     val backdropBlur = maxOf(sheetBackdropBlur, geo.frost.backdrop * playerExpandProgress)
     LaunchedEffect(playerVm) {
         playerVm.openPlayer.collect { playerOpen = true }
+    }
+    // Returning to the entry we left when the context chip opened a collection
+    // re-expands the full player (the collapse was only ever to reveal the collection).
+    LaunchedEffect(backStackEntry?.id) {
+        val id = backStackEntry?.id
+        if (reopenPlayerBackStackId != null && id == reopenPlayerBackStackId) {
+            playerOpen = true
+            reopenPlayerBackStackId = null
+        }
     }
     // The dock floats over the canvas; its clearance is measured, not assumed. The
     // seed value only covers the first frame before layout reports the real height.
@@ -270,6 +303,14 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                             onOpenSmart = { rule -> navController.navigate("smart/${Uri.encode(rule)}") },
                             onOpenAi = { aiSheet = true },
                             onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
+                            onOpenAccount = { accountSheet = true },
+                            accountGlyph = accountState.glyphKey(),
+                            accountAttention = accountState.needsAttention(),
+                            accountLabelRes = when (accountState) {
+                                AccountButtonState.NeedsSignIn -> R.string.home_account_needs_sign_in
+                                AccountButtonState.Queued -> R.string.home_account_queued
+                                AccountButtonState.UpToDate -> R.string.home_account_up_to_date
+                            },
                         )
                     }
                     composable(Tab.Discover.route) {
@@ -460,6 +501,9 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
                         ContextType.Playlist -> playlistRoute(context.key)
                         ContextType.Online -> onlineCollectionRoute(context.key, null, 0)
                     }
+                    // Remember where we were so the player re-expands when the
+                    // listener backs out of the collection.
+                    reopenPlayerBackStackId = backStackEntry?.id
                     navController.navigate(route)
                 },
                 targetRect = miniPlayerRect,
@@ -479,6 +523,21 @@ fun PejvakNavHost(modifier: Modifier = Modifier) {
             val described = aiFeature
             if (described != null) {
                 AiFeatureSheet(feature = described, onDismiss = { aiFeature = null })
+            }
+
+            if (accountSheet) {
+                if (accountState == AccountButtonState.NeedsSignIn) {
+                    AuthSheet(
+                        onDismiss = { accountSheet = false },
+                        shared = authViewModel,
+                    )
+                } else {
+                    AccountSheet(
+                        onDismiss = { accountSheet = false },
+                        shared = authViewModel,
+                        onOpenSettings = { navController.navigate("settings") },
+                    )
+                }
             }
         }
     }

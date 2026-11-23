@@ -56,6 +56,10 @@ interface OnlineCollectionDao {
     @Query("UPDATE online_collections SET sync_status = 'synced', server_id = :serverId WHERE `key` = :key")
     suspend fun markSynced(key: String, serverId: String)
 
+    /** SRV-02: after an endpoint move, re-queue everything the old server acknowledged. */
+    @Query("UPDATE online_collections SET sync_status = 'pending' WHERE sync_status = 'synced'")
+    suspend fun requeueSynced()
+
     @Query("UPDATE online_collections SET is_favorite = :favorite, sync_status = 'pending', updated_at = :at WHERE `key` = :key")
     suspend fun setFavorite(key: String, favorite: Boolean, at: Long)
 

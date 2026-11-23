@@ -54,6 +54,10 @@ interface AnnotationDao {
     @Query("UPDATE annotations SET sync_status = :status WHERE id = :id")
     suspend fun setSyncStatus(id: String, status: String)
 
+    /** SRV-02: after an endpoint move, re-queue everything the old server acknowledged. */
+    @Query("UPDATE annotations SET sync_status = 'pending' WHERE sync_status = 'synced'")
+    suspend fun requeueSynced()
+
     @Query("UPDATE annotations SET deleted_at = :at, sync_status = 'pending' WHERE id = :id")
     suspend fun softDelete(id: String, at: Long)
 
@@ -95,6 +99,10 @@ interface PlaylistDao {
 
     @Query("UPDATE playlists SET sync_status = :status WHERE id = :id")
     suspend fun setSyncStatus(id: String, status: String)
+
+    /** SRV-02: after an endpoint move, re-queue everything the old server acknowledged. */
+    @Query("UPDATE playlists SET sync_status = 'pending' WHERE sync_status = 'synced'")
+    suspend fun requeueSynced()
 
     @Query("UPDATE playlists SET deleted_at = :at, sync_status = 'pending' WHERE id = :id")
     suspend fun softDelete(id: String, at: Long)

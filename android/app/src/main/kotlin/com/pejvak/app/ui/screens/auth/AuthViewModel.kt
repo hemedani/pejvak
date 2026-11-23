@@ -2,10 +2,12 @@ package com.pejvak.app.ui.screens.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pejvak.app.BuildConfig
 import com.pejvak.app.data.auth.AuthRepository
 import com.pejvak.app.data.auth.AuthSession
 import com.pejvak.app.data.remote.LesanErrorCode
 import com.pejvak.app.data.remote.LesanException
+import com.pejvak.app.data.sync.SyncRepository
 import com.pejvak.app.data.sync.SyncScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,15 +18,18 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Auth gate state (mirrors authStore.ts). A saved token opens the app immediately on
- * the cached profile; only a background getMe rejection ends the session. Login and
- * register establish the session and kick a sync.
+ * Auth + account gate (mirrors authStore.ts, extended by SY-13). A saved token opens the app
+ * immediately on the cached profile; only a background getMe rejection ends the session. The gate
+ * is **non-blocking** (AUTH-09): this VM never hides the app — login/register establish the session
+ * and kick a sync, and the same state feeds the home-screen account surface (pending queue,
+ * last-synced, Sync now).
  */
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val authSession: AuthSession,
     private val syncScheduler: SyncScheduler,
+    private val syncRepository: SyncRepository,
 ) : ViewModel() {
 
     enum class Status { Loading, Authenticated, Unauthenticated }
@@ -34,6 +39,9 @@ class AuthViewModel @Inject constructor(
         val user: AuthRepository.AuthUser? = null,
         val error: String? = null,
         val isSubmitting: Boolean = false,
+        val pendingTotal: Int = 0,
+        val lastSyncAt: Long? = null,
+        val isSyncing: Boolean = false,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -58,6 +66,9 @@ class AuthViewModel @Inject constructor(
 
     fun restore() {
         viewModelScope.launch {
+            // SRV-02: re-queue the old server's acknowledged rows once, before anything syncs,
+            // so a moved install preserves its data on the new endpoint.
+            syncRepository.ensureEndpointMigrated(BuildConfig.LESAN_BASE_URL)
             val cached = authRepository.restore(
                 onIdentity = { user -> _state.update { it.copy(user = user) } },
                 onSignedOut = { _state.update { it.copy(status = Status.Unauthenticated, user = null) } },
@@ -74,6 +85,7 @@ class AuthViewModel @Inject constructor(
                 syncScheduler.schedulePeriodic()
                 syncScheduler.syncNow()
             }
+            refreshAccount()
         }
     }
 
@@ -82,10 +94,7 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val response = authRepository.login(email.trim(), password)
-                authRepository.establish(response)
-                _state.update { it.copy(status = Status.Authenticated, user = response.user, isSubmitting = false, error = null) }
-                syncScheduler.schedulePeriodic()
-                syncScheduler.syncNow()
+                establishAndSync(response)
             } catch (error: Exception) {
                 _state.update { it.copy(isSubmitting = false, error = toErrorMessage(error)) }
             }
@@ -97,14 +106,22 @@ class AuthViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val response = authRepository.register(username.trim(), email.trim(), password, displayName?.trim()?.ifEmpty { null })
-                authRepository.establish(response)
-                _state.update { it.copy(status = Status.Authenticated, user = response.user, isSubmitting = false, error = null) }
-                syncScheduler.schedulePeriodic()
-                syncScheduler.syncNow()
+                establishAndSync(response)
             } catch (error: Exception) {
                 _state.update { it.copy(isSubmitting = false, error = toErrorMessage(error)) }
             }
         }
+    }
+
+    /** Persists a sign-in, re-queues for a moved endpoint, then pushes + pulls. */
+    private suspend fun establishAndSync(response: AuthRepository.AuthResponse) {
+        authRepository.establish(response)
+        syncRepository.ensureEndpointMigrated(BuildConfig.LESAN_BASE_URL)
+        _state.update {
+            it.copy(status = Status.Authenticated, user = response.user, isSubmitting = false, error = null)
+        }
+        syncScheduler.schedulePeriodic()
+        runSyncNow()
     }
 
     fun logout() {
@@ -112,7 +129,33 @@ class AuthViewModel @Inject constructor(
             authRepository.logout()
             syncScheduler.cancelAll()
             _state.update { it.copy(status = Status.Unauthenticated, user = null, error = null) }
+            refreshAccount()
         }
+    }
+
+    /** The account sheet's "Sync now": inline push + pull so the surface updates, never blocking. */
+    fun syncNow() {
+        viewModelScope.launch { runSyncNow() }
+    }
+
+    private suspend fun runSyncNow() {
+        _state.update { it.copy(isSyncing = true) }
+        try {
+            syncRepository.syncAll()
+        } catch (_: Exception) {
+            // syncAll already swallows pull failures; a push error leaves rows pending for the next
+            // trigger. The surface must not crash on a failed manual sync.
+        }
+        _state.update { it.copy(isSyncing = false) }
+        refreshAccount()
+    }
+
+    /** Re-reads the queue + last-synced + cached identity for the account surface. */
+    private suspend fun refreshAccount() {
+        val user = authRepository.getCachedUser()
+        val pending = syncRepository.pendingCounts().total
+        val last = syncRepository.lastSyncAt()
+        _state.update { it.copy(user = user, pendingTotal = pending, lastSyncAt = last) }
     }
 
     fun clearError() = _state.update { it.copy(error = null) }

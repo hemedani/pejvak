@@ -26,6 +26,24 @@
     <string name="auth_register_action">Create account</string>
     <string name="auth_no_account">New here? Create an account</string>
     <string name="auth_have_account">Already have an account? Sign in</string>
+    <!-- Auth modal (AUTH-11) + home button (AUTH-10) -->
+    <string name="auth_modal_subtitle">Keep your listening across devices.</string>
+    <string name="auth_modal_body">Sign in or create an account to back up the history, notes and playlists already on this device. Everything you have saved here is synced up the moment you do.</string>
+    <string name="home_account_needs_sign_in">Sign in to sync your data</string>
+    <string name="home_account_queued">Syncing your data</string>
+    <string name="home_account_up_to_date">Account · all synced</string>
+    <!-- Account + sync sheet (AUTH-12) -->
+    <string name="account_title">Account</string>
+    <string name="account_subtitle">Your data, on the server.</string>
+    <string name="account_up_to_date">Everything on this device is on the server.</string>
+    <string name="account_queued_one">%1$d item is waiting to sync.</string>
+    <string name="account_queued_many">%1$d items are waiting to sync.</string>
+    <string name="account_last_synced">Last synced: %1$s</string>
+    <string name="account_sync_action">Sync now</string>
+    <string name="account_manage">Manage account &amp; sync</string>
+    <string name="account_sign_out">Sign out</string>
+    <string name="account_sign_out_body">Your downloaded audio, history and notes stay on this device. Signing in again restores anything already synced.</string>
+    <string name="account_cancel">Cancel</string>
 
     <!-- Settings (account + sync slice; the rest lands in Phase 13) -->
     <string name="settings_overline">Preferences</string>

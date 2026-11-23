@@ -172,6 +172,10 @@ class SettingsRepository @Inject constructor(
     suspend fun getLastSyncAt(): Long? = get(KEY_LAST_SYNC_AT)?.toLongOrNull()
     suspend fun setLastSyncAt(timestampMs: Long) = put(KEY_LAST_SYNC_AT, timestampMs.toString())
 
+    /** SRV-02: the Lesan base URL the last acknowledged sync ran against. */
+    suspend fun getSyncEndpoint(): String? = get(KEY_SYNC_ENDPOINT)
+    suspend fun setSyncEndpoint(endpoint: String) = put(KEY_SYNC_ENDPOINT, endpoint)
+
     companion object {
         private const val KEY_THEME = "themePreference"
         private const val KEY_SPEED = "defaultSpeed"
@@ -182,5 +186,6 @@ class SettingsRepository @Inject constructor(
         private const val KEY_SETTINGS_UPDATED_AT = "settingsUpdatedAt"
         private const val KEY_SETTINGS_SYNCED_AT = "settingsSyncedAt"
         private const val KEY_LAST_SYNC_AT = "lastSyncAt"
+        private const val KEY_SYNC_ENDPOINT = "syncEndpoint"
     }
 }

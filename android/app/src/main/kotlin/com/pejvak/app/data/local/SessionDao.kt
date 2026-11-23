@@ -85,6 +85,10 @@ interface SessionDao {
     @Query("UPDATE sessions SET sync_status = :status WHERE id = :id")
     suspend fun setSyncStatus(id: String, status: String)
 
+    /** SRV-02: after an endpoint move, re-queue everything the old server acknowledged. */
+    @Query("UPDATE sessions SET sync_status = 'pending' WHERE sync_status = 'synced'")
+    suspend fun requeueSynced()
+
     @Query("UPDATE sessions SET ended_at = :endedAt, end_position_sec = :endPositionSec, duration_listened_sec = :listenedSec, completed = :completed, interrupted = :interrupted, updated_at = :endedAt WHERE id = :id")
     suspend fun finalize(id: String, endedAt: Long, endPositionSec: Int, listenedSec: Int, completed: Boolean, interrupted: Boolean)
 
@@ -199,6 +203,10 @@ interface ContextPlayDao {
 
     @Query("UPDATE context_plays SET sync_status = :status WHERE id = :id")
     suspend fun setSyncStatus(id: String, status: String)
+
+    /** SRV-02: after an endpoint move, re-queue everything the old server acknowledged. */
+    @Query("UPDATE context_plays SET sync_status = 'pending' WHERE sync_status = 'synced'")
+    suspend fun requeueSynced()
 
     @Query("UPDATE context_plays SET ended_at = :endedAt, completed = :completed, interrupted = :interrupted, updated_at = :endedAt WHERE id = :id")
     suspend fun finalize(id: String, endedAt: Long, completed: Boolean, interrupted: Boolean)

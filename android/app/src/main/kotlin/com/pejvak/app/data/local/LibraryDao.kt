@@ -78,6 +78,10 @@ interface TrackDao {
     @Query("UPDATE tracks SET sync_status = :status WHERE id = :id")
     suspend fun setSyncStatus(id: String, status: String)
 
+    /** SRV-02: after an endpoint move, re-queue everything the old server acknowledged. */
+    @Query("UPDATE tracks SET sync_status = 'pending' WHERE sync_status = 'synced'")
+    suspend fun requeueSynced()
+
     @Query("UPDATE tracks SET availability = :availability WHERE id = :id")
     suspend fun setAvailability(id: String, availability: String)
 

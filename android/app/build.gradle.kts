@@ -24,10 +24,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
 
-        // The live Lesan backend (same as the RN app's EAS profiles). For local
-        // development against `back/` (port 1405), override to
+        // The live Lesan backend. Local development against `back/` (port 1405) overrides to
         // "http://10.0.2.2:1405/lesan" (emulator) or the dev machine's LAN IP.
-        buildConfigField("String", "LESAN_BASE_URL", "\"http://185.239.0.14:1243/lesan\"")
+        // SRV-01: moved off the old test server (185.239.0.14:1243) to the new server.
+        buildConfigField("String", "LESAN_BASE_URL", "\"http://46.245.98.207:1405/lesan\"")
     }
 
     buildTypes {
