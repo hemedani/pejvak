@@ -296,6 +296,26 @@
     <string name="track_detail_interrupted">Interrupted</string>
     <string name="track_detail_open">In progress</string>
     <string name="track_detail_no_playlists">No playlists yet. Make one in the Library.</string>
+    <string name="track_detail_listening">Listening</string>
+    <string name="track_detail_details">Details</string>
+    <string name="track_detail_days">Days listened</string>
+    <string name="track_detail_average">Average session</string>
+    <string name="track_detail_longest">Longest session</string>
+    <string name="track_detail_notes_count">Notes</string>
+    <string name="track_detail_first_listen">First listened</string>
+    <string name="track_detail_speeds">Heard at</string>
+    <string name="track_detail_not_listened">Not listened yet — press play to start.</string>
+    <string name="track_detail_more_sessions">%1$d more sessions</string>
+    <string name="track_detail_vbr">variable</string>
+    <string name="track_detail_bit_depth">Bit depth</string>
+    <string name="track_detail_duration">Duration</string>
+    <string name="track_detail_track_no">Track number</string>
+    <string name="track_detail_disc_no">Disc number</string>
+    <string name="track_detail_folder">Folder</string>
+    <string name="track_detail_collection">Collection</string>
+    <string name="track_detail_format">Format</string>
+    <string name="track_detail_added">Added</string>
+    <string name="track_detail_downloaded">Downloaded to</string>
 
     <string name="folder_history">History</string>
     <string name="folder_no_history">No runs yet.</string>
