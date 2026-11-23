@@ -13,13 +13,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.pejvak.app.R
 import com.pejvak.app.domain.formatClock
 import com.pejvak.app.domain.formatDuration
+import com.pejvak.app.ui.components.WAVE_WAVELENGTH_DP
+import com.pejvak.app.ui.components.ramp
+import com.pejvak.app.ui.components.waveOffsetAt
 import com.pejvak.app.ui.components.wavePath
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
@@ -27,11 +33,13 @@ import com.pejvak.app.ui.theme.LocalPejvakTokens
 /**
  * A session's span across its track (DESING.md history).
  *
- * The whole line is the file and the lit stretch is what was heard, but drawn as the
- * player's wave rather than a flat bar: a faint full-width swell with a brighter crest
- * riding over the heard range, closed at both ends by the same taper the scrubber uses.
- * A seek leaves a tick at the far edge. So the sheet answers "where did I get to?"
- * with the same object the player answers it with.
+ * The whole line is the file and the lit stretch is what was heard, drawn with the
+ * volume slider's technique: **one continuous wave across the full range with a wide
+ * taper at both ends** (so the line is flat where it enters and leaves), then the heard
+ * window is that *same path* clipped and re-stroked in [heardColor]. Because both colours
+ * are one curve, they meet exactly at the head and the line never breaks there. [heardColor]
+ * is the track's own aurora identity (DESING.md §3.5) so a finished listen is tinted like
+ * the thing that was heard, not a fixed accent. A seek leaves a tick at the far edge.
  */
 @Composable
 fun ListeningTimeline(
@@ -39,6 +47,7 @@ fun ListeningTimeline(
     endPositionSec: Int?,
     durationSec: Int,
     seeked: Boolean,
+    heardColor: Color,
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalPejvakTokens.current
@@ -65,57 +74,62 @@ fun ListeningTimeline(
                     formatDuration(durationSec),
                 ),
                 style = MaterialTheme.typography.labelSmall,
-                color = tokens.text,
+                color = heardColor,
             )
         }
         Spacer(Modifier.height(geo.spacing.xs))
+        val headInset = with(LocalDensity.current) { 6.dp.toPx() }
         Canvas(
             Modifier
                 .fillMaxWidth()
-                .height(26.dp),
+                .height(28.dp),
         ) {
             val cy = size.height / 2f
-            val wavelength = 44.dp.toPx()
+            val left = headInset
+            val right = size.width - headInset
+            val usable = (right - left).coerceAtLeast(1f)
+            val wavelength = WAVE_WAVELENGTH_DP.dp.toPx() * 0.95f
+            val amplitude = 4.6.dp.toPx()
+            val variation = 0.22f
+            val taper = (usable * 0.22f).coerceAtLeast(20.dp.toPx())
+
+            val track = wavePath(
+                from = left,
+                to = right,
+                cy = cy,
+                amplitude = amplitude,
+                wavelength = wavelength,
+                phase = 0f,
+                taper = taper,
+                variation = variation,
+            )
+            // The whole file as a calm swell first.
             drawPath(
-                path = wavePath(
-                    from = 0f,
-                    to = size.width,
-                    cy = cy,
-                    amplitude = 1.6.dp.toPx(),
-                    wavelength = wavelength * 1.6f,
-                    phase = 0f,
-                    taper = 10.dp.toPx(),
-                    variation = 0.4f,
-                ),
+                path = track,
                 color = tokens.glassBorder,
-                style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round),
+                style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round),
             )
             if (high > low) {
-                val from = size.width * low
-                val to = size.width * high
-                drawPath(
-                    path = wavePath(
-                        from = from,
-                        to = to,
-                        cy = cy,
-                        amplitude = 3.4.dp.toPx(),
-                        wavelength = wavelength,
-                        phase = 0f,
-                        taper = 6.dp.toPx(),
-                        variation = 0.22f,
-                    ),
-                    color = tokens.accent,
-                    style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round),
-                )
-                // The taper fades the crest into the baseline at both ends, so the
-                // head sits on the baseline where the wave actually arrives.
-                drawCircle(tokens.accent.copy(alpha = 0.18f), 6.dp.toPx(), Offset(to, cy))
-                drawCircle(tokens.accent, 3.dp.toPx(), Offset(to, cy))
+                val from = left + usable * low
+                val to = left + usable * high
+                // Clip the same full-range path to the heard window; teal re-stroke.
+                clipRect(left = from, top = 0f, right = to, bottom = size.height) {
+                    drawPath(
+                        path = track,
+                        color = heardColor,
+                        style = Stroke(width = 3.6.dp.toPx(), cap = StrokeCap.Round),
+                    )
+                }
+                // The head sits on the curve at the far edge of the heard span.
+                val edgeFade = ramp(to - left, taper) * ramp(right - to, taper)
+                val headY = cy + edgeFade * waveOffsetAt(to, amplitude, wavelength, 0f, variation)
+                drawCircle(heardColor.copy(alpha = 0.18f), 7.dp.toPx(), Offset(to, headY))
+                drawCircle(heardColor, 3.6.dp.toPx(), Offset(to, headY))
                 if (seeked) {
                     drawLine(
                         color = tokens.text.copy(alpha = 0.7f),
-                        start = Offset(to, 2.dp.toPx()),
-                        end = Offset(to, size.height - 2.dp.toPx()),
+                        start = Offset(to, 3.dp.toPx()),
+                        end = Offset(to, size.height - 3.dp.toPx()),
                         strokeWidth = 1.5.dp.toPx(),
                         cap = StrokeCap.Round,
                     )

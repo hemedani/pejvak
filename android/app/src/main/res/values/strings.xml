@@ -366,6 +366,10 @@
     <string name="history_timeline_heard">Heard</string>
     <string name="history_timeline_span">%1$s of %2$s</string>
     <string name="history_fact_when">When</string>
+    <string name="history_fact_day">Day</string>
+    <string name="history_fact_progress">Progress</string>
+    <string name="history_section_session">Session</string>
+    <string name="history_section_playback">Playback</string>
     <string name="history_fact_listened">Listened</string>
     <string name="history_fact_speed">Speed</string>
     <string name="history_fact_status">Status</string>

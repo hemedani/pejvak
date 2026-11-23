@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -38,8 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -77,6 +81,8 @@ import com.pejvak.app.ui.components.PrimaryButton
 import com.pejvak.app.ui.components.GlassHeader
 import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.PejvakIcon
+import com.pejvak.app.ui.components.PaletteTile
+import com.pejvak.app.ui.components.StatTile
 import com.pejvak.app.ui.components.HeaderSearch
 import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.ScreenFrame
@@ -84,6 +90,9 @@ import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.history.DateRangeSheet
 import com.pejvak.app.ui.components.history.SessionDetailSheet
+import com.pejvak.app.domain.paletteIndexFor
+import com.pejvak.app.ui.components.WaveProgressBar
+import com.pejvak.app.ui.theme.AuroraRamps
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 import com.pejvak.app.ui.theme.OceanCascade
@@ -697,26 +706,35 @@ private fun RunDetailSheet(
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    com.pejvak.app.ui.components.GlassSheet(onDismiss = onDismiss, title = run.contextTitle, icon = "history") {
+    GlassSheet(onDismiss = onDismiss, title = run.contextTitle, icon = "history") {
+        // The run's own aurora identity (keyed on its collection) tints the progress wave.
+        val heardColor = AuroraRamps[paletteIndexFor(run.contextKey)].third
         Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
-            Text(
-                text = "${describeContextType(run.contextType)} · ${describeRunOutcome(run.shape()).label}",
-                style = MaterialTheme.typography.labelLarge,
-                color = tokens.textSecondary,
+            WaveProgressBar(
+                fraction = runProgressRatio(run.finishedCount, run.trackCount).toFloat(),
+                color = heardColor,
+                height = 26.dp,
             )
-            ProgressBar(runProgressRatio(run.finishedCount, run.trackCount))
-            Text(
-                text = "${run.finishedCount} of ${run.trackCount} finished · ${formatDuration(run.listenedSec)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = tokens.text,
-            )
-            Text(
-                text = describeRecentWhen(run.startedAt),
-                style = MaterialTheme.typography.bodySmall,
-                color = tokens.textSecondary,
-            )
-            PrimaryButton(label = stringResource(R.string.history_resume), onClick = onResume)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            GlassCard(Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
+                    FactRow("queue", stringResource(R.string.history_fact_progress), "${run.finishedCount} of ${run.trackCount}")
+                    FactRow("time", stringResource(R.string.history_fact_listened), formatDuration(run.listenedSec))
+                    FactRow("history", stringResource(R.string.history_fact_when), describeRecentWhen(run.startedAt))
+                    FactRow(
+                        icon = if (run.shape().completed) "check" else "warning",
+                        label = stringResource(R.string.history_fact_status),
+                        value = describeRunOutcome(run.shape()).label,
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+            ) {
+                Box(Modifier.weight(1f)) {
+                    PrimaryButton(label = stringResource(R.string.history_resume), onClick = onResume)
+                }
                 BubbleButton(
                     icon = ICON_GLYPHS.getValue("delete"),
                     contentDescription = stringResource(R.string.action_delete),
@@ -727,22 +745,43 @@ private fun RunDetailSheet(
     }
 }
 
+/** A labelled fact line with a leading glyph bubble, used across the detail sheets. */
 @Composable
-private fun ProgressBar(ratio: Double) {
+private fun FactRow(icon: String, label: String, value: String) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(6.dp)
-            .clip(RoundedCornerShape(geo.radius.pill))
-            .background(tokens.glassFill),
+    Row(
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
     ) {
         Box(
-            Modifier
-                .fillMaxWidth(ratio.toFloat().coerceIn(0f, 1f))
-                .fillMaxHeight()
-                .background(tokens.accent),
+            modifier = Modifier
+                .size(geo.tiles.sm)
+                .clip(CircleShape)
+                .background(tokens.accentTeal.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            PejvakIcon(name = icon, contentDescription = null, tint = tokens.accentTeal, size = geo.icons.sm)
+        }
+        // Both columns weighted: a long value can never starve the label to zero width.
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = tokens.textSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(top = geo.spacing.xxs),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = tokens.text,
+            textAlign = TextAlign.End,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1.3f),
         )
     }
 }
@@ -772,44 +811,66 @@ private fun StatsPanel(
         ) {
             item {
                 GlassCard(Modifier.fillMaxWidth().oceanEntrance(0)) {
-                    Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
-                        StatRow(
-                            stringResource(R.string.history_stat_total),
-                            formatDuration(stats.totalListenTimeSec),
+                    Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.xxs)) {
+                        Text(
+                            text = formatDuration(stats.totalListenTimeSec),
+                            style = MaterialTheme.typography.displayLarge.copy(fontFeatureSettings = "tnum"),
+                            color = tokens.text,
                         )
-                        StatRow(
-                            stringResource(R.string.history_stat_sessions),
-                            stats.sessionCount.toString(),
-                        )
-                        StatRow(
-                            stringResource(R.string.history_stat_tracks),
-                            stats.trackCount.toString(),
-                        )
-                        StatRow(
-                            stringResource(R.string.history_stat_days),
-                            stats.activeDayCount.toString(),
-                        )
-                        StatRow(
-                            stringResource(R.string.history_stat_average),
-                            formatDuration(stats.averageSessionSec),
-                        )
-                        StatRow(
-                            stringResource(R.string.history_stat_longest),
-                            stats.longestSessionTitle?.let {
-                                "$it · ${formatDuration(stats.longestSessionSec)}"
-                            } ?: formatDuration(stats.longestSessionSec),
-                        )
-                        StatRow(
-                            stringResource(R.string.history_stat_streak),
-                            "$streak · ${stringResource(R.string.history_stat_best, bestStreak)}",
-                        )
-                        StatRow(
-                            stringResource(R.string.history_stat_media),
-                            "${stringResource(R.string.history_stat_audiobooks)} ${formatDuration(media.audiobookSec)} · " +
-                                    "${stringResource(R.string.history_stat_music)} ${formatDuration(media.musicSec)}",
+                        Text(
+                            text = stringResource(R.string.history_stat_total),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = tokens.textSecondary,
                         )
                     }
                 }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
+                    StatTile(
+                        label = stringResource(R.string.history_stat_sessions),
+                        value = stats.sessionCount.toString(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatTile(
+                        label = stringResource(R.string.history_stat_tracks),
+                        value = stats.trackCount.toString(),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
+                    StatTile(
+                        label = stringResource(R.string.history_stat_days),
+                        value = stats.activeDayCount.toString(),
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatTile(
+                        label = stringResource(R.string.history_stat_average),
+                        value = formatDuration(stats.averageSessionSec),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm)) {
+                    StatTile(
+                        label = stringResource(R.string.history_stat_streak),
+                        value = streak.toString(),
+                        secondary = stringResource(R.string.history_stat_best, bestStreak),
+                        modifier = Modifier.weight(1f),
+                    )
+                    StatTile(
+                        label = stringResource(R.string.history_stat_longest),
+                        value = formatDuration(stats.longestSessionSec),
+                        secondary = stats.longestSessionTitle,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            item {
+                MediaSplitCard(media, Modifier.oceanEntrance(1))
             }
             item {
                 Row(
@@ -828,22 +889,59 @@ private fun StatsPanel(
             item {
                 val recent = daily.takeLast(14)
                 val max = recent.maxOfOrNull { it.listenTimeSec }?.coerceAtLeast(1) ?: 1
-                Row(
-                    Modifier
+                Column(
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp)
                         .oceanEntrance(2, swayDp = 0.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.Bottom,
+                    verticalArrangement = Arrangement.spacedBy(geo.spacing.xs),
                 ) {
-                    recent.forEach { day ->
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .fillMaxHeight(day.listenTimeSec.toFloat() / max)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(tokens.accent),
-                        )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.Bottom,
+                    ) {
+                        recent.forEach { day ->
+                            val frac = (day.listenTimeSec.toFloat() / max).coerceIn(0f, 1f)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(0.06f + 0.94f * frac)
+                                    .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                tokens.accentTeal.copy(alpha = 0.35f + 0.55f * frac),
+                                                tokens.accentTeal.copy(alpha = 0.92f),
+                                            ),
+                                        ),
+                                    ),
+                            )
+                        }
+                    }
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(tokens.glassBorder),
+                    )
+                    if (recent.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = dayLabel(recent.first().key),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = tokens.textTertiary,
+                            )
+                            Text(
+                                text = dayLabel(recent.last().key),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = tokens.textTertiary,
+                            )
+                        }
                     }
                 }
             }
@@ -871,44 +969,134 @@ private fun StatsPanel(
                 }
             }
             itemsIndexed(leaders, key = { _, leader -> leader.trackId }) { idx, leader ->
-                GlassCard(Modifier.fillMaxWidth().oceanEntrance(4 + idx)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = leader.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = tokens.text,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            Text(
-                                text = stringResource(R.string.history_leader_plays, leader.playCount),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = tokens.textSecondary,
-                            )
-                        }
-                        Text(
-                            text = formatDuration(leader.listenTimeSec),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = tokens.text,
-                        )
-                    }
-                }
+                LeaderRow(idx = idx, leader = leader, modifier = Modifier.oceanEntrance(4 + idx))
             }
         }
     }
 }
 
 @Composable
-private fun StatRow(label: String, value: String) {
+private fun MediaSplitCard(media: com.pejvak.app.domain.MediaBreakdown, modifier: Modifier = Modifier) {
     val tokens = LocalPejvakTokens.current
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = tokens.textSecondary,
-            modifier = Modifier.weight(1f),
-        )
-        Text(text = value, style = MaterialTheme.typography.titleSmall, color = tokens.text)
+    val geo = LocalPejvakGeometry.current
+    val total = (media.audiobookSec + media.musicSec).coerceAtLeast(1)
+    GlassCard(modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
+            Text(
+                text = stringResource(R.string.history_stat_media).uppercase(),
+                style = MaterialTheme.typography.labelSmall,
+                color = tokens.textSecondary,
+            )
+            MediaBar(
+                label = stringResource(R.string.history_stat_audiobooks),
+                sec = media.audiobookSec,
+                total = total,
+                color = tokens.accentTeal,
+            )
+            MediaBar(
+                label = stringResource(R.string.history_stat_music),
+                sec = media.musicSec,
+                total = total,
+                color = tokens.accent,
+            )
+        }
     }
 }
+
+@Composable
+private fun MediaBar(label: String, sec: Int, total: Int, color: Color) {
+    val tokens = LocalPejvakTokens.current
+    val geo = LocalPejvakGeometry.current
+    val frac = (sec.toFloat() / total).coerceIn(0f, 1f)
+    Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.xxs)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+        ) {
+            Box(
+                Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(color),
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = tokens.textSecondary,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = formatDuration(sec),
+                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                color = tokens.text,
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(geo.radius.pill))
+                .background(tokens.glassFill),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(frac)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(geo.radius.pill))
+                    .background(color),
+            )
+        }
+    }
+}
+
+@Composable
+private fun LeaderRow(idx: Int, leader: TrackLeader, modifier: Modifier = Modifier) {
+    val tokens = LocalPejvakTokens.current
+    val geo = LocalPejvakGeometry.current
+    GlassCard(modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = (idx + 1).toString(),
+                    style = MaterialTheme.typography.labelLarge.copy(fontFeatureSettings = "tnum"),
+                    color = tokens.textTertiary,
+                )
+            }
+            PaletteTile(
+                contentHash = leader.contentHash,
+                label = leader.title,
+                size = geo.tiles.md,
+            )
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = leader.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = tokens.text,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = stringResource(R.string.history_leader_plays, leader.playCount),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tokens.textSecondary,
+                )
+            }
+            Text(
+                text = formatDuration(leader.listenTimeSec),
+                style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+                color = tokens.text,
+            )
+        }
+    }
+}
+
+/** "2026-02-09" → "9" — the day-of-month tick under the daily chart. */
+private fun dayLabel(key: String): String = key.substringAfterLast('-').trimStart('0').ifEmpty { "1" }

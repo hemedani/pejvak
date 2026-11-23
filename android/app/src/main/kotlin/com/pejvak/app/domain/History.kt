@@ -2,6 +2,10 @@ package com.pejvak.app.domain
 
 import java.time.Instant
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.time.format.TextStyle
+import java.util.Locale
 
 /**
  * History list model (mirrors mobile/src/lib/history.ts). Pure: the caller joins
@@ -136,6 +140,22 @@ fun formatTimeRange(startedAt: Long, endedAt: Long?, zone: ZoneId = ZoneId.syste
         return "%02d:%02d".format(t.hour, t.minute)
     }
     return if (endedAt == null) "${clock(startedAt)} – in progress" else "${clock(startedAt)} – ${clock(endedAt)}"
+}
+
+/**
+ * The day a session was listened, as a weekday name plus the date — e.g.
+ * "Tuesday · Nov 12, 2026". Localised like the rest of the date readouts so a
+ * Persian device still reads its own weekday names.
+ */
+fun formatDayOfWeek(
+    epochMillis: Long,
+    zone: ZoneId = ZoneId.systemDefault(),
+    locale: Locale = Locale.getDefault(),
+): String {
+    val date = Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate()
+    val weekday = date.dayOfWeek.getDisplayName(TextStyle.FULL, locale)
+    val day = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale).format(date)
+    return "$weekday · $day"
 }
 
 fun formatPositionRange(startSec: Int, endSec: Int?): String =
