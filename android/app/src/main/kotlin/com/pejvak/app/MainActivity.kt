@@ -6,29 +6,38 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.SideEffect
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.pejvak.app.core.LocalHapticsEnabled
 import com.pejvak.app.data.repository.SettingsRepository
 import com.pejvak.app.data.sync.SyncScheduler
 import com.pejvak.app.ui.navigation.AuthGate
+import com.pejvak.app.ui.screens.splash.SplashIntro
 import com.pejvak.app.domain.MotionPreference as DomainMotion
 import com.pejvak.app.domain.ThemePreference
 import com.pejvak.app.ui.theme.LocalMotionPreference
 import com.pejvak.app.ui.theme.MotionPreference
+import com.pejvak.app.ui.theme.OceanSwellEasing
 import com.pejvak.app.ui.theme.PejvakTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 /** Single activity; Compose draws everything. Edge-to-edge so the ambient canvas
@@ -40,17 +49,16 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var settingsRepository: SettingsRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        val splash = installSplashScreen()
-        val settingsReady = AtomicBoolean(false)
-        splash.setKeepOnScreenCondition { !settingsReady.get() }
+        // Release the OS system splash immediately — do NOT hold it on settings load.
+        // Holding it made it linger as a separate "first splash" (icon on a plain field)
+        // before the branded intro. Released at once (with a transparent icon, see
+        // themes.xml) it is a sub-frame handoff, so the SplashIntro is the one splash.
+        installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        // Hold the splash until the saved theme/motion/haptics are loaded, so the
-        // first frame is already in the listener's theme (fonts are bundled).
-        lifecycleScope.launch {
-            runCatching { settingsRepository.load() }
-            settingsReady.set(true)
-        }
+        // Settings still load in the background underneath the intro (the intro is the
+        // only thing visible for its ~1.4 s, so a late theme read is hidden behind it).
+        lifecycleScope.launch { runCatching { settingsRepository.load() } }
         setContent {
             val preferences by settingsRepository.settings.collectAsStateWithLifecycle()
             val dark = when (preferences.themePreference) {
@@ -89,7 +97,31 @@ class MainActivity : ComponentActivity() {
             ) {
                 PejvakTheme(darkTheme = dark) {
                     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
-                        AuthGate()
+                        // The branded intro plays once over the live app, then ebbs away.
+                        // AuthGate is composed underneath so it is already warm when the
+                        // splash clears; the splash only fades + lifts off it.
+                        var introDone by remember { mutableStateOf(false) }
+                        val introExit = remember { Animatable(1f) }
+                        val introScope = rememberCoroutineScope()
+                        Box(Modifier.fillMaxSize()) {
+                            AuthGate()
+                            if (!introDone) {
+                                SplashIntro(
+                                    modifier = Modifier.graphicsLayer {
+                                        alpha = introExit.value
+                                        val s = 1f + (1f - introExit.value) * 0.06f
+                                        scaleX = s
+                                        scaleY = s
+                                    },
+                                    onFinish = {
+                                        introScope.launch {
+                                            introExit.animateTo(0f, tween(360, easing = OceanSwellEasing))
+                                            introDone = true
+                                        }
+                                    },
+                                )
+                            }
+                        }
                     }
                 }
             }

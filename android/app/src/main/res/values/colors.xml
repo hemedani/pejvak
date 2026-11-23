@@ -4,4 +4,7 @@
     <color name="canvas_base">#33505F</color>
     <color name="canvas_base_night">#0A0F16</color>
     <color name="ic_launcher_background">#2F2690</color>
+    <!-- Splash field: matches the Compose canvas base so the system splash hands off
+         seamlessly into the branded intro (light = deep teal, night = near-black). -->
+    <color name="splash_background">#33505F</color>
 </resources>
