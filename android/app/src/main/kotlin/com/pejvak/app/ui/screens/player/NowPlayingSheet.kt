@@ -447,7 +447,10 @@ fun NowPlayingSheet(
                         onOpenJump = { showJump = true },
                         onOpenEnhancer = { showEnhancer = true },
                         onOpenAi = {
-                            onDismiss()
+                            // The AI catalogue is a sheet that opens *over* the player
+                            // (it frosts behind via LocalSheetPresence); it must not
+                            // dismiss the full player first — that is what threw the
+                            // listener back to the mini-player.
                             onOpenAi()
                         },
                         onOpenSort = { showSort = true },
@@ -545,7 +548,7 @@ fun NowPlayingSheet(
         }
 
         // Shared floating artwork bridging HeroArtwork <-> MiniPlayerRow's PaletteTile.
-        if (canFlyArt && heroRect != null) {
+        if (canFlyArt) {
             val mdTilePx = with(density) { geo.tiles.md.toPx() }
             val dockInsetPx = with(density) { geo.dock.inset.toPx() }
             val miniArtLeft = miniRect.left + dockInsetPx
