@@ -41,3 +41,16 @@ _(append further decisions/changes here as they land)_
   *in place of* the icon, so the marks never showed. Fixed in `GlassChip.ChipContent` to lay out
   icon + label + count together (count now a trailing tabular figure, not a replacement). This also
   keeps the icon on the main view-tab chips while a search shows their count. Shared-component fix.
+- 2026-11-23 — **Follow-up (F): group history.** Owner: "group all items related to one track or
+  collection in the relevant tab." Added pure `groupByTrack` (Sessions: stretches bucketed by their
+  start track, so a multi-track stretch lands once) and `groupByCollection` (Collections: runs bucketed
+  by `contextType:contextKey`). Sessions switched from day-grouping to track-grouping; Collections went
+  from a flat run list to grouped run cards under a collection header. The existing Newest/Oldest/Longest
+  sort now orders the groups (and items within) rather than days. `HistorySection` reused as the group
+  model; headers render artwork/type bubble + title + "count · total". New `HistoryTest` cases cover
+  both. On-device light/dark pass remains the owner's.
+- 2026-11-23 — **Follow-up (F5).** Owner wanted each group capped at 5 items with a "Show more" button.
+  Added `groupPreview = 5` in `HistoryList`; a `ShowMoreRow` (centered "Show N more" / "Show less" with
+  chevronDown/Up) reveals the rest of that group. Expand state is a `remember`ed `Set<String>` keyed
+  `s:<trackId>` / `c:<type:key>` so it survives recomposition and the tabs don't collide. New glyphs
+  `chevronDown`/`chevronUp` (ExpandMore/ExpandLess) and strings `history_show_more`/`history_show_less`.
