@@ -32,6 +32,18 @@ export const planLimits_pure = object({
   maxTracks: defaulted(number(), -1),
   /** Monthly AI credits — spent by the AI service, shown by `getMyAiUsage`. */
   aiCreditsPerMonth: defaulted(number(), 0),
+  /**
+   * Channels a creator may own — enforced by `createChannel`.
+   *
+   * Hosting costs storage, so creation is metered like history (prompt D11):
+   * `-1` is unlimited, and over the cap the act refuses *the new row* with a
+   * quota object and never touches existing content.
+   */
+  channels: defaulted(number(), 3),
+  /** Published channel audios per creator — enforced by `publishChannelAudio`. */
+  channelAudios: defaulted(number(), 100),
+  /** Total hosted bytes per creator — checked by `uploadChannelMedia`. */
+  storageBytes: defaulted(number(), 2 * 1024 * 1024 * 1024),
 });
 
 /**

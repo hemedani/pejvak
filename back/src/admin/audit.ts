@@ -10,7 +10,10 @@ export type AuditInput = {
     | "subscription"
     | "transaction"
     | "platformSetting"
-    | "aiUsage";
+    | "aiUsage"
+    | "channel"
+    | "channelPlaylist"
+    | "channelAudio";
   targetId?: string;
   /** One sentence for the panel's activity list — no ids, no JSON. */
   summary?: string;

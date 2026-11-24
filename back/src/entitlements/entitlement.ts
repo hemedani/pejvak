@@ -1,5 +1,7 @@
 import { ObjectId } from "lesan";
 import {
+  channel,
+  channelAudio,
   plan,
   playbackSession,
   playlist,
@@ -21,6 +23,9 @@ export type PlanLimits = {
   playlists: number;
   maxTracks: number;
   aiCreditsPerMonth: number;
+  channels: number;
+  channelAudios: number;
+  storageBytes: number;
 };
 
 export const UNLIMITED = -1;
@@ -37,6 +42,9 @@ export const FALLBACK_LIMITS: PlanLimits = {
   playlists: 10,
   maxTracks: -1,
   aiCreditsPerMonth: 0,
+  channels: 3,
+  channelAudios: 100,
+  storageBytes: 2 * 1024 * 1024 * 1024,
 };
 
 export type SubscriptionStatus =
@@ -97,6 +105,15 @@ export const canonicalLimits = (raw: unknown): PlanLimits => {
     aiCreditsPerMonth: integer(
       stored.aiCreditsPerMonth,
       FALLBACK_LIMITS.aiCreditsPerMonth,
+    ),
+    channels: integer(stored.channels, FALLBACK_LIMITS.channels),
+    channelAudios: integer(
+      stored.channelAudios,
+      FALLBACK_LIMITS.channelAudios,
+    ),
+    storageBytes: integer(
+      stored.storageBytes,
+      FALLBACK_LIMITS.storageBytes,
     ),
   };
 };
@@ -374,3 +391,57 @@ export const trackQuotaOf = async (
     limits.maxTracks,
     await track.countDocument({ filter: { "user._id": userId } }),
   );
+
+/**
+ * Creator hosting quotas (plan §6, prompt D11).
+ *
+ * All three are **skip-and-report**: over the cap the act refuses the *new* row
+ * with a quota object and leaves existing content untouched. A quota never
+ * destroys data (root AGENTS domain rule 7). `-1` means unlimited and is handled
+ * by `quotaOf`.
+ */
+export const channelQuotaOf = async (
+  userId: ObjectId,
+  limits: PlanLimits,
+): Promise<Quota> =>
+  quotaOf(
+    limits.channels,
+    await channel.countDocument({ filter: { "user._id": userId } }),
+  );
+
+export const channelAudioQuotaOf = async (
+  userId: ObjectId,
+  limits: PlanLimits,
+): Promise<Quota> =>
+  quotaOf(
+    limits.channelAudios,
+    await channelAudio.countDocument({ filter: { "user._id": userId } }),
+  );
+
+/**
+ * Total bytes the creator already hosts — the sum of every `channelAudio`'s
+ * `fileSizeBytes`.
+ *
+ * Counted from the published rows, which are the source of truth for storage.
+ * A file uploaded but not yet published is not counted here (it is orphan bytes
+ * the deferred sweep reclaims); once `publishChannelAudio` stores
+ * `fileSizeBytes`, it is.
+ */
+export const storageBytesUsed = async (userId: ObjectId): Promise<number> => {
+  const [row] = await channelAudio
+    .aggregation({
+      pipeline: [
+        { $match: { "user._id": userId } },
+        { $group: { _id: null, bytes: { $sum: "$fileSizeBytes" } } },
+      ],
+    })
+    .toArray();
+
+  return (row?.bytes as number) ?? 0;
+};
+
+export const storageQuotaOf = async (
+  userId: ObjectId,
+  limits: PlanLimits,
+): Promise<Quota> =>
+  quotaOf(limits.storageBytes, await storageBytesUsed(userId));

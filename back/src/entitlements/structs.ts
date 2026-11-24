@@ -15,6 +15,9 @@ export const limitsProjection = () =>
     playlists: optional(enums([0, 1])),
     maxTracks: optional(enums([0, 1])),
     aiCreditsPerMonth: optional(enums([0, 1])),
+    channels: optional(enums([0, 1])),
+    channelAudios: optional(enums([0, 1])),
+    storageBytes: optional(enums([0, 1])),
   });
 
 export const quotaProjection = () =>
