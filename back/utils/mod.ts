@@ -1,5 +1,6 @@
 export * from "./context.ts";
 export * from "./createUpdateAt.ts";
+export * from "./optionalAuth.ts";
 export * from "./pagination.ts";
 export * from "./projection.ts";
 export * from "./roles.ts";

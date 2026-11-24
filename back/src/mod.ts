@@ -3,6 +3,7 @@ import { aiSetup } from "./ai/mod.ts";
 import { annotationsSetup } from "./annotations/mod.ts";
 import { authSetup } from "./auth/mod.ts";
 import { billingSetup } from "./billing/mod.ts";
+import { channelsSetup } from "./channels/mod.ts";
 import { contextsSetup } from "./contexts/mod.ts";
 import { onlineSetup } from "./online/mod.ts";
 import { platformSetup } from "./platform/mod.ts";
@@ -23,6 +24,7 @@ export const functionsSetup = () => {
   playlistsSetup();
   contextsSetup();
   onlineSetup();
+  channelsSetup();
   settingsSetup();
   billingSetup();
   aiSetup();
