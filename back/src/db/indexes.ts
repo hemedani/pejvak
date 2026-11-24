@@ -28,6 +28,25 @@ export const ensureIndexes = async () => {
     },
     { collection: "user", spec: { role: 1 } },
     { collection: "user", spec: { status: 1 } },
+
+    // ── Listener Channels (plan §3). The model factory took the one primary
+    // index each (channel.slug unique, channelPlaylist { channel._id, sortOrder },
+    // channelAudio { channelPlaylist._id, position }); these are the secondaries
+    // the creator and public-browse reads filter and sort on. Multikey indexes on
+    // `categories`/`tags` let a category or tag browse hit an index even though
+    // the values are client catalogues the server never enumerates.
+    { collection: "channel", spec: { "user._id": 1 } },
+    { collection: "channel", spec: { categories: 1 } },
+    { collection: "channel", spec: { status: 1, createdAt: -1 } },
+    { collection: "channelPlaylist", spec: { "user._id": 1 } },
+    { collection: "channelPlaylist", spec: { category: 1 } },
+    { collection: "channelPlaylist", spec: { tags: 1 } },
+    { collection: "channelAudio", spec: { "channel._id": 1 } },
+    { collection: "channelAudio", spec: { contentHash: 1 } },
+    { collection: "channelAudio", spec: { "user._id": 1 } },
+    { collection: "channelAudio", spec: { category: 1 } },
+    { collection: "channelAudio", spec: { tags: 1 } },
+    { collection: "channelAudio", spec: { status: 1, createdAt: -1 } },
   ];
 
   for (const { collection, spec } of indexes) {

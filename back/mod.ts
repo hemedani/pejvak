@@ -4,6 +4,9 @@ import {
   aiUsages,
   annotations,
   billingTransactions,
+  channelAudios,
+  channelPlaylists,
+  channels,
   onlineCollections,
   plans,
   platformSettings,
@@ -35,6 +38,9 @@ export const annotation = annotations();
 export const playlist = playlists();
 export const playbackContext = playbackContexts();
 export const onlineCollection = onlineCollections();
+export const channel = channels();
+export const channelPlaylist = channelPlaylists();
+export const channelAudio = channelAudios();
 export const plan = plans();
 export const subscription = subscriptions();
 export const billingTransaction = billingTransactions();
@@ -58,6 +64,10 @@ if (import.meta.main) {
     port: Number(APP_PORT),
     typeGeneration: true,
     playground: ENV === "development",
+    // Serves the hosted channel media written by `uploadChannelMedia` (plan §5,
+    // prompt D14). The bytes live under `./uploads` (git-ignored); Lesan maps GET
+    // `/uploads/*` to that tree, so a stored `audioUrl` resolves to a real file.
+    staticPath: ["/uploads"],
     cors: ["http://localhost:3000", "http://localhost:8081"],
   });
 }

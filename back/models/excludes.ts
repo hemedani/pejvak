@@ -29,3 +29,18 @@ export const playlist_excludes: string[] = [
   "createdAt",
   "updatedAt",
 ];
+
+export const channel_excludes: string[] = [
+  "createdAt",
+  "updatedAt",
+];
+
+export const channelPlaylist_excludes: string[] = [
+  "createdAt",
+  "updatedAt",
+];
+
+export const channelAudio_excludes: string[] = [
+  "createdAt",
+  "updatedAt",
+];
