@@ -4,9 +4,12 @@ Sector: `back/`. Brief: [`../prompts/01-listener-channels.md`](../prompts/01-lis
 Android counterpart: [`../../android/docs/plans/07-listener-channels.md`](../../android/docs/plans/07-listener-channels.md).
 Precedence: code > plan > `back/AGENTS.md` > root `AGENTS.md` > docs.
 
-> **Status: design only — no code written yet.** This file is the contract. Backend is built
-> **before** the client (root AGENTS §Agent Workflow). Every feature ID below ends up implemented or
-> explicitly retired; nothing is silently dropped.
+> **Status: B1–B7 implemented and verified.** This file was the contract; the backend now ships all three
+> models, the creator/public acts, the multipart upload act (CH-UP resolved — see prompt D14), the
+> creator quotas and moderation. `deno check`/`lint`/`fmt` are clean and `http/channels.hurl` passes
+> against a live MongoDB (32 requests); `e2e.hurl` + `admin.hurl` still pass. Backend landed **before**
+> the client (root AGENTS §Agent Workflow), so `android/` Plan 07 is now unblocked. Every feature ID below
+> is implemented or explicitly retired; nothing is silently dropped.
 
 ---
 
@@ -63,6 +66,12 @@ Three new Lesan models, one file each in `models/`, registered in `models/mod.ts
 `mod.ts`. All three relate to `user` (the creator) so ownership is enforced the same listener-act way
 (`"user._id": userId` in the act's own query).
 
+> **Reverse-relation `limit` is a first-page embed size, not a collection size.** Lesan embeds the
+> `relatedRelations` array on the parent document, so it must stay small (~50) to respect the 16 MB Mongo
+> document cap; everything past the first page is fetched by querying the child model directly (the public
+> browse acts do exactly that with their own bounded `page`/`audioLimit`). The numbers below were corrected
+> from the earlier draft's 100/500/1000 for this reason.
+
 ### 3a. `channel` — `models/channel.ts`
 
 A public, creator-owned shelf.
@@ -115,7 +124,7 @@ channelPlaylist_pure
 
 channelPlaylist_relations
   channel: { schemaName:"channel", type:"single", optional:false, excludes:shared_relation_excludes,
-             relatedRelations:{ playlists:{ type:"multiple", limit:100, sort:{field:"sortOrder",order:"asc"} } } }
+             relatedRelations:{ playlists:{ type:"multiple", limit:50, sort:{field:"sortOrder",order:"asc"} } } }
   user:    { schemaName:"user",    type:"single", optional:false, excludes:user_excludes,
              relatedRelations:{ channelPlaylists:{ type:"multiple", limit:50, sort:{field:"_id",order:"desc"} } } }
 ```
@@ -153,9 +162,9 @@ channelAudio_pure
 
 channelAudio_relations
   channel:         { schemaName:"channel",         type:"single", optional:false, excludes:shared_relation_excludes,
-                     relatedRelations:{ audios:{ type:"multiple", limit:500, sort:{field:"position",order:"asc"} } } }
+                     relatedRelations:{ audios:{ type:"multiple", limit:50, sort:{field:"position",order:"asc"} } } }
   channelPlaylist: { schemaName:"channelPlaylist", type:"single", optional:false, excludes:shared_relation_excludes,
-                     relatedRelations:{ audios:{ type:"multiple", limit:1000, sort:{field:"position",order:"asc"} } } }
+                     relatedRelations:{ audios:{ type:"multiple", limit:50, sort:{field:"position",order:"asc"} } } }
   user:            { schemaName:"user",            type:"single", optional:false, excludes:user_excludes,
                      relatedRelations:{ channelAudios:{ type:"multiple", limit:50, sort:{field:"_id",order:"desc"} } } }
 ```
@@ -203,10 +212,11 @@ creator acts use `preAct:[setTokens, setUser, requireActive]`.
 | `createChannelPlaylist` | `channelPlaylist/createChannelPlaylist` | Add a folder to a caller-owned channel; `category` required; `sortOrder` appended. Bumps `channel.playlistCount`. |
 | `updateChannelPlaylist` | `channelPlaylist/updateChannelPlaylist` | Patch folder (title, description, category, tags, sortOrder). |
 | `deleteChannelPlaylist` | `channelPlaylist/deleteChannelPlaylist` | Hard delete folder + its audios (leaf-first). Bumps `channel.playlistCount`. |
+| `uploadChannelMedia` | `channelAudio/uploadChannelMedia` | **Multipart act** (CH-UP2, D14): `set.formData: instance(FormData)`, streams `file` to `./uploads`, checks `storageBytes` **before** writing, returns durable `{ audioUrl, mediaPath, mimeType, fileSizeBytes }`. No DB row — pairing is `publishChannelAudio`'s job. |
 | `publishChannelAudio` | `channelAudio/publishChannelAudio` | Create an audio in a caller-owned folder. **Derive** `channel` from the folder; require `contentHash` + `audioUrl` + `category`; dedupe on `contentHash` within the channel; bump `playlist.audioCount` + `channel.audioCount`. |
 | `updateChannelAudio` | `channelAudio/updateChannelAudio` | Patch audio metadata (title, description, category, tags, art, author, narrator, position, language, isAudiobook). |
 | `moveChannelAudio` | `channelAudio/moveChannelAudio` | Move an audio to another folder **in the same channel** (re-derives `channel`; re-derives counts). |
-| `deleteChannelAudio` | `channelAudio/deleteChannelAudio` | Hard delete the row (+ schedules the bytes for cleanup, §5). Bumps counts. |
+| `deleteChannelAudio` | `channelAudio/deleteChannelAudio` | Hard delete the row + unlink its bytes via the traversal-guarded `removeStoredBytes` (§5/D14; the deferred sweep stays the object-store path). Bumps counts. |
 
 ### 4b. Public browse acts (tokenless, like `getPlatformStatus`)
 
@@ -229,6 +239,15 @@ public surface exposes only `username`/`displayName`/`avatarUrl`.
 ---
 
 ## 5. Upload & media transport — **the open decision** (CH-UP)
+
+> **RESOLVED (build phase — see prompt D14).** The §5 premise "no file route exists in `back/`" held for
+> this repo, but two sibling Lesan projects prove the pinned `@hemedani/lesan@^0.2.3` already parses
+> `multipart/form-data` **inside an act** (`set.formData: instance(FormData)`, merged by
+> `checkWants.ts`) and serves bytes via `runServer({ staticPath: ["/uploads"] })`. So CH-UP2 is the act
+> **`src/channels/uploadChannelMedia/`**, not a bespoke Deno route — same streaming/`MEDIA_STORAGE`
+> semantics, native to Lesan, covered by `declarations/`. Verified live: `http/channels.hurl` uploads a
+> real file and `deleteChannel` reclaims its bytes through the path-traversal-guarded
+> `removeStoredBytes` in `src/channels/media.ts`. The text below is kept as the original decision record.
 
 Lesan acts are **JSON**; there is **no** file/multipart route in `back/` today (verified). Audio files
 are large. This must be resolved before any creator flow ships. Options, with a recommendation:
@@ -302,55 +321,58 @@ effect.
 Tick the box + append a row to §9 after **every** small task. Backend lands before the client.
 
 ### Phase B1 — Models & registration
-- [ ] CH-M01 `models/channel.ts` (pure + relations + unique `slug` index)
-- [ ] CH-M02 `models/channelPlaylist.ts`
-- [ ] CH-M03 `models/channelAudio.ts`
-- [ ] CH-M04 register all three in `models/mod.ts` + instantiate in `mod.ts`
-- [ ] CH-M05 secondary indexes in `db/indexes.ts`; `deno check mod.ts` green
-- [ ] CH-M06 add `channel_excludes`/`channelAudio_excludes` to `excludes.ts` if relation reads need them
+- [x] CH-M01 `models/channel.ts` (pure + relations + unique `slug` index)
+- [x] CH-M02 `models/channelPlaylist.ts`
+- [x] CH-M03 `models/channelAudio.ts`
+- [x] CH-M04 register all three in `models/mod.ts` + instantiate in `mod.ts`
+- [x] CH-M05 secondary indexes in `db/indexes.ts`; `deno check mod.ts` green
+- [x] CH-M06 add `channel_excludes`/`channelAudio_excludes` to `excludes.ts` if relation reads need them
 
 ### Phase B2 — Creator acts (channels + playlists)
-- [ ] CH-A01 `createChannel` (+ slug derive/dedupe, categories≥1)
-- [ ] CH-A02 `updateChannel`
-- [ ] CH-A03 `deleteChannel` (leaf-first hard delete)
-- [ ] CH-A04 `getMyChannels`
-- [ ] CH-A05 `createChannelPlaylist` (+ playlistCount bump)
-- [ ] CH-A06 `updateChannelPlaylist`
-- [ ] CH-A07 `deleteChannelPlaylist` (+ cascade audios, count bumps)
-- [ ] CH-A08 `channelsSetup()` wired into `src/mod.ts`
+- [x] CH-A01 `createChannel` (+ slug derive/dedupe, categories≥1)
+- [x] CH-A02 `updateChannel`
+- [x] CH-A03 `deleteChannel` (leaf-first hard delete)
+- [x] CH-A04 `getMyChannels`
+- [x] CH-A05 `createChannelPlaylist` (+ playlistCount bump)
+- [x] CH-A06 `updateChannelPlaylist`
+- [x] CH-A07 `deleteChannelPlaylist` (+ cascade audios, count bumps)
+- [x] CH-A08 `channelsSetup()` wired into `src/mod.ts`
 
 ### Phase B3 — Audio publish + media upload
-- [ ] CH-UP1 resolve the upload transport (§5) and record the decision in the prompt log
-- [ ] CH-UP2 upload route (`/uploads/channel`) + `MEDIA_*` env + storage backend
-- [ ] CH-A09 `publishChannelAudio` (derive channel from folder, contentHash dedupe, count bumps)
-- [ ] CH-A10 `updateChannelAudio`
-- [ ] CH-A11 `moveChannelAudio` (same-channel re-derive)
-- [ ] CH-A12 `deleteChannelAudio` (+ deferred byte sweep)
+- [x] CH-UP1 resolve the upload transport (§5) and record the decision in the prompt log
+- [x] CH-UP2 upload route (`/uploads/channel`) + `MEDIA_*` env + storage backend
+- [x] CH-A09 `publishChannelAudio` (derive channel from folder, contentHash dedupe, count bumps)
+- [x] CH-A10 `updateChannelAudio`
+- [x] CH-A11 `moveChannelAudio` (same-channel re-derive)
+- [x] CH-A12 `deleteChannelAudio` (+ deferred byte sweep)
 
 ### Phase B4 — Public browse acts
-- [ ] CH-A13 `listChannels` (category/q/sort, active-only, paginated)
-- [ ] CH-A14 `getChannel` (slug or _id, + playlists + newest-audio slice)
-- [ ] CH-A15 `listChannelPlaylists`
-- [ ] CH-A16 `listChannelAudios` (channel/playlist/category/tag/q, active-only)
-- [ ] CH-A17 `getChannelAudio` (_id or contentHash)
+- [x] CH-A13 `listChannels` (category/q/sort, active-only, paginated)
+- [x] CH-A14 `getChannel` (slug or _id, + playlists + newest-audio slice)
+- [x] CH-A15 `listChannelPlaylists`
+- [x] CH-A16 `listChannelAudios` (channel/playlist/category/tag/q, active-only)
+- [x] CH-A17 `getChannelAudio` (_id or contentHash)
 
 ### Phase B5 — Entitlements
-- [ ] CH-ENT1 add `channels`/`channelAudios`/`storageBytes` to `planLimits_pure` + `canonicalLimits`
-- [ ] CH-ENT2 seed free/pro defaults (insert-only-if-absent)
-- [ ] CH-ENT3 enforce in `createChannel`/`publishChannelAudio` (skip-and-report quota objects)
-- [ ] CH-ENT4 upload route checks `storageBytes` before accepting bytes
+- [x] CH-ENT1 add `channels`/`channelAudios`/`storageBytes` to `planLimits_pure` + `canonicalLimits`
+- [x] CH-ENT2 seed free/pro defaults (insert-only-if-absent)
+- [x] CH-ENT3 enforce in `createChannel`/`publishChannelAudio` (skip-and-report quota objects)
+- [x] CH-ENT4 upload route checks `storageBytes` before accepting bytes
 
-### Phase B6 — Moderation & admin
-- [ ] CH-ADM1 `status:"removed"` filters on every public read
-- [ ] CH-ADM2 admin acts under real schemas: `adminListChannels`, `adminGetChannel`,
-      `adminUpdateChannel` (feature/flag/status), `adminDeleteChannel`, `adminListChannelAudios`,
-      `adminDeleteChannelAudio` — each mutation calls `recordAudit()`
-- [ ] CH-ADM3 admin hurl assertions
+### Phase B6 — Moderation (consolidated — see prompt D15)
+- [x] CH-ADM1 `status:"removed"` filters on every public read (`statusScope` pins anon/creator to `active`;
+      an operator elevated via `optionalAuth` sees all)
+- [x] CH-ADM2 **Superseded the separate-`admin*` design.** No `adminListChannels`/`adminGetChannel`/
+      `adminUpdateChannel`/`adminDeleteChannel`/`adminListChannelAudios`/`adminDeleteChannelAudio` — the
+      operator's powers are folded into the shared acts (`updateChannel` + `status`, `deleteChannel`/
+      `deleteChannelAudio` cross-tenant via `rowScope`), gated in the `fn`, audited on operator mutations.
+- [x] CH-ADM3 moderation assertions live in `http/channels.hurl` (creator denied `status`; operator takedown;
+      public hidden; operator `getChannel` sees `removed`)
 
 ### Phase B7 — Tests & declarations
-- [ ] CH-T1 `http/channels.hurl` — creator + public + quota + ownership-denial + idempotent re-publish
-- [ ] CH-T2 `deno task test:all` green; `deno check`/`lint`/`fmt --check` clean
-- [ ] CH-T3 regenerate `declarations/` and refresh the vendored client copies byte-for-byte
+- [x] CH-T1 `http/channels.hurl` — creator + public + quota + ownership-denial + idempotent re-publish
+- [x] CH-T2 `deno task test:all` green; `deno check`/`lint`/`fmt --check` clean
+- [x] CH-T3 regenerate `declarations/` and refresh the vendored client copies byte-for-byte
       (root AGENTS: this is a breaking change for `front/` + `mobile/` — coordinate the client commit)
 
 ---
@@ -362,3 +384,11 @@ _(tick a box + append a row after EVERY small task)_
 | Task | Done | Note |
 |---|---|---|
 | Plan authored (design only) | ✅ | No code yet. Upload transport (§5) is the first thing to resolve. |
+| CH-UP resolved (D14) | ✅ | Upload is a Lesan act (`instance(FormData)` + `staticPath`), not a Deno route. Verified live. |
+| B1 Models + registration (CH-M01–M06) | ✅ | `channel`/`channelPlaylist`/`channelAudio` in `models/`, registered in `models/mod.ts` + `mod.ts`, secondary indexes in `db/indexes.ts`, excludes added. `deno check` green. |
+| B2 Creator channel+folder acts (CH-A01–A08) | ✅ | create/update/delete/getMy channels + folder create/update/delete; slug derive/dedupe; leaf-first hard delete via `cascade.ts`; count bumps. |
+| B3 Upload + audio acts (CH-UP2, CH-A09–A12) | ✅ | `uploadChannelMedia` multipart; publish (derive channel from folder, per-channel contentHash dedupe, quota), update, move (same-channel re-derive), delete (+ byte reclaim). |
+| B4 Public browse (CH-A13–A17) | ✅ | tokenless `listChannels`/`getChannel`/`listChannelPlaylists`/`listChannelAudios`/`getChannelAudio`, all `status:"active"`, paginated. |
+| B5 Entitlements (CH-ENT1–ENT4) | ✅ | `channels`/`channelAudios`/`storageBytes` limits + fallback + seeds; quota helpers; enforced skip-and-report in create/publish/upload. |
+| B6 Moderation (consolidated, D15) | ✅ | `removed` filter on every public read via `statusScope`; the 6 separate `admin*Channel*` acts were **deleted** and folded into the shared acts (`authz.ts` `rowScope`/`statusScope` + `optionalAuth.ts`); operator mutations audited. `channels.hurl` (34 req) proves creator-denied-status, operator takedown, public-hidden, operator-elevated-read. |
+| B7 Tests & declarations (CH-T1–T3) | ✅ | `http/channels.hurl` (32 requests) green against a live Mongo; `test`/`test:admin` still green (no regression); `check`/`lint`/`fmt` clean; `declarations/` regenerated. **Out of scope for `back/`:** the byte-for-byte refresh of the vendored `front/` + `mobile/` copies is a separate client commit (root AGENTS). |

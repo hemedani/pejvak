@@ -457,9 +457,37 @@ The model that *belongs to* another model owns the relation. Define it on the ch
 
 A `type: "single"` relation is stored inline in the parent document. Reading it costs no extra query, and you can index sub-fields like `user._id`. Do **not** denormalize `userId`/`userName` into extra pure fields — filter on `user._id` instead.
 
+> **Read an embedded relation NESTED, not as a flat `"user._id"` key.** A projection of `{ "user._id": 1 }` returns `{ user: { _id } }`, so the code path is `doc.user._id`; `doc["user._id"]` is `undefined`. Filtering in `$match`/`findOne.filters` uses the dotted `"user._id"` form — only the *returned document* is nested. The `src/channels/` ownership checks (`isOwner = doc.user?._id === userId`) depend on this.
+
 ### `hardCascade` on `deleteOne`
 
 Default (`false`) deletes the child and auto-cleans the parent's embedded reverse array, but **blocks** deleting a parent that still has children. `hardCascade: true` cascade-deletes children — use sparingly and never for routine cleanup. Delete leaf nodes first.
+
+### `relatedRelations` limits are a first-page embed size
+
+The reverse array Lesan embeds on the parent document is only ever read for the **first page**; deeper pages query the child model directly. So the `limit` on a `relatedRelations` entry is a page size (~50), **not** a collection size — a `1000` embed risks the 16 MB Mongo document cap and buys nothing. Cap these to ~50 (the original `channel`/`channelAudio` draft's 100/500/1000 were corrected for this reason).
+
+### Role-aware shared acts (one route, not an `admin*` twin)
+
+Where a creator action and an operator action are the *same operation on the same shape*, prefer **one act whose query scope and business rules branch on the caller's role** over a parallel `admin*` act. Lesan's pipeline carries each concern in its own place:
+
+- **`validator`** → data validity only (shape, enums, ranges). It cannot see the DB or the caller.
+- **`preAct`** → identity + tenant: `setTokens`/`setUser`/`requireActive`, or `optionalAuth` for a read that is public yet elevates an operator.
+- **`fn`** → the boundary and the rules: build the filter from the role (`rowScope`: creator → `{ _id, "user._id": userId }`, admin → `{ _id }`) and gate operator-only fields (`status`) in code.
+
+This is what `src/channels/` does (`authz.ts` + `optionalAuth.ts`, prompt D15). It is safe **only** because the invariants are enforced in the query, not by a forgotten guard: a creator can never reach another tenant (the `user._id` filter is in the query), and a creator can never flip `status` (the fn refuses). Operator mutations still call `recordAudit()`.
+
+> **Do NOT collapse the two by writing `if (isAdmin) { skip all checks }`.** That is the bug this pattern exists to avoid. The admin branch *widens the query scope and unlocks one field*; it never removes validation, audit, or the cross-tenant delete confirmation.
+
+**When to keep separate `admin*` acts.** Some admin operations genuinely differ in shape — a global `adminListUsers` joins subscriptions and stats the listener list never returns, and reads are `requireSupport` (a role listeners can't hold). Those stay separate (see [Roles and the admin panel](#roles-and-the-admin-panel)). The shared-act pattern is for the `get/update/delete/write`-the-same-resource case, not for replacing the whole panel.
+
+### Lesan's request context is a process-wide singleton (caveat)
+
+`context.ts` stores the request context in a module-level `let context`, mutated by `setContext`. It is **not** reset per request. Consequences an act author must respect:
+
+- An act that *tolerates* an absent token (like `optionalAuth`) must **actively clear** `context.user` on the no-token path (`setContext({ user: undefined })`), or the previous request's identity leaks into the next anonymous one. This bit the first `getChannel` implementation — an operator's `user` persisted and a following public read saw `removed` rows.
+- Acts that always run `setTokens` are unaffected: it throws on a missing token, so a stale `user` is never read.
+- This also means concurrent requests share and can clobber the context; treat `context` as request-scoped by convention, establish identity at the top of every authenticated path, and never assume a field survives between two `await`s of different requests.
 
 ---
 

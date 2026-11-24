@@ -82,6 +82,52 @@ deferred sweep, not inline.
 **D13 — Deferred, listed so nothing is silently dropped:** play/listen aggregates (CH-AGG), follow/
 subscribe, comments/ratings, server-side transcoding. None are v1; each is an explicit future item.
 
+**D14 — CH-UP RESOLVED (build phase): the upload transport is a Lesan act, not a separate Deno route.**
+The §5/D12 assumption "no file route exists in `back/`" was true of *this repo*, but two sibling Lesan
+projects (`katiraei/ziwound`, `madani/nejat/lesan`) prove Lesan `@hemedani/lesan@^0.2.3` — the exact
+version `back/` pins — already parses `multipart/form-data` **inside an act**: the validator declares
+`set.formData: instance(FormData)`, the framework merges the request's `FormData` into `details.set`
+(see `src/core/utils/checkWants.ts`), and `runServer({ staticPath: ["/uploads"] })` serves the bytes
+back for streaming. So `uploadChannelMedia` is **one more act** (`src/channels/uploadChannelMedia/`),
+authed by the same `preAct:[setTokens,setUser,requireActive]`, covered by `declarations/` type-gen, and
+requiring no bespoke HTTP plumbing. The client POSTs multipart to `/lesan` with a `lesan-body` JSON
+field (`{model,act,details}`) plus the `file` part. This supersedes D12's option-(A) "dedicated Deno
+route" — same streaming/`MEDIA_STORAGE` semantics, but native to Lesan. Option (C) base64 stays
+rejected for audio (a multi-MB episode in a JSON body blows the request budget); note `nejat` uses
+base64 only for small images, which is not our case. Durable URL is formed from `MEDIA_BASE_URL`
+(absolute in prod, root-relative `/uploads/...` in dev) so it never bakes a host into stored rows.
+Byte cleanup on delete reuses the `nejat` `storedFiles.ts` idea: a path-traversal-guarded
+`removeStoredBytes` in `src/channels/media.ts`, run by the delete acts (and available to the deferred
+sweep), never unlinking outside `./uploads`.
+
+**D15 — Creator and operator share one act per operation; no parallel `admin*` acts (owner directive,
+build phase).** The first build shipped six separate `admin*Channel*` acts (mirroring the panel's
+`admin*User` convention). The owner rejected that: Lesan's act pipeline (`preValidation → validator →
+preAct → fn`) already gives each concern its place — the **validator** carries data validity, and the
+**tenant boundary + business rules** live in `preAct`/`fn`. So one act can serve both roles. The 6 admin
+acts were deleted; their capability folded into the shared acts via `src/channels/authz.ts`:
+
+- `rowScope(who, id, {write})` → `{_id, "user._id": userId}` for a creator, `{_id}` for an admin. The
+  boundary is the *query*, so it cannot be forgotten the way a missing `requireAdmin` on a twin could.
+- `statusScope(who, requested)` → `{status:"active"}` for anon/creator, unconstrained/filterable for an
+  operator. `optionalAuth` (`utils/optionalAuth.ts`) lets the public reads elevate an operator who presents
+  a token.
+- `updateChannel` now accepts `status`/`reason` but **refuses them for a non-admin** (a creator must not undo
+  moderation); `deleteChannel`/`deleteChannelAudio` allow cross-tenant for an admin, require `confirmName`
+  on a cross-tenant delete, and `recordAudit()` on operator mutations.
+
+This supersedes the §4/§8 "admin acts under real schemas" design for *this* feature. It is deliberately NOT
+`if (isAdmin) skip all checks`: the admin branch only widens query scope + unlocks `status`; validation,
+audit and the destructive-confirm still apply. (The genuinely-different-shape panel reads like
+`adminListUsers` remain separate — this is the same-resource CRUD case only.)
+
+**D16 — Lesson: Lesan's request context is a process-wide singleton, so an optional-auth act MUST scrub
+`user` on the no-token path.** `context.ts` keeps `let context` module-level and never resets it per
+request. The first `optionalAuth` "skipped" when no token was present — which left the *previous* request's
+`context.user` in place, so an anonymous `getChannel` inherited an admin identity and saw `removed` rows.
+Caught by `channels.hurl`. Fix: on the missing-token branch, `setContext({ user: undefined })`. Acts that
+always run `setTokens` are immune (it throws on a missing token). Documented in `back/AGENTS.md`.
+
 ## Non-negotiables carried from AGENTS (restated for this feature)
 
 - Strict TypeScript, no `any`; one model per file; validator before implementation; `get` is a closed
