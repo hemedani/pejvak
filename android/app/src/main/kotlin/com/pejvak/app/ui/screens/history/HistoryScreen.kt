@@ -347,6 +347,10 @@ private fun HistoryList(
     val hasData =
         if (state.tab == HistoryTab.Sessions) state.sections.isNotEmpty() else state.filteredCollections.isNotEmpty()
     val staggerList = state.query.isBlank()
+    // Each group shows up to 5 items until its "Show more" is tapped. Keys are namespaced
+    // per tab so a track and a collection that share an id never collide.
+    var expandedKeys by remember { mutableStateOf(setOf<String>()) }
+    val groupPreview = 5
 
     OceanCascade(key = Pair(state.tab, hasData)) {
         LazyColumn(
@@ -411,6 +415,9 @@ private fun HistoryList(
                     }
                 }
                 state.sections.forEach { section ->
+                    val sectionKey = "s:${section.key}"
+                    val isOpen = sectionKey in expandedKeys
+                    val shown = if (isOpen) section.data else section.data.take(groupPreview)
                     val headerIdx = order++
                     item(key = "h-${section.key}") {
                         SectionHeader(
@@ -425,8 +432,8 @@ private fun HistoryList(
                         )
                     }
                     val sectionBase = order
-                    order += section.data.size
-                    itemsIndexed(section.data, key = { _, entry -> entry.stretch.id }) { idx, entry ->
+                    order += shown.size
+                    itemsIndexed(shown, key = { _, entry -> entry.stretch.id }) { idx, entry ->
                         StretchCard(
                             entry = entry,
                             sort = state.sort,
@@ -438,6 +445,20 @@ private fun HistoryList(
                             onOpenAi = onOpenAi,
                             modifier = Modifier.oceanEntrance(sectionBase + idx, staggerEnabled = staggerList),
                         )
+                    }
+                    if (section.data.size > groupPreview) {
+                        val hidden = section.data.size - shown.size
+                        item(key = "more-$sectionKey") {
+                            ShowMoreRow(
+                                expanded = isOpen,
+                                hiddenCount = hidden,
+                                onToggle = {
+                                    expandedKeys =
+                                        if (isOpen) expandedKeys - sectionKey
+                                        else expandedKeys + sectionKey
+                                },
+                            )
+                        }
                     }
                 }
                 if (state.hasMore && state.query.isBlank()) {
@@ -460,17 +481,49 @@ private fun HistoryList(
                         )
                     }
                 }
-                val runBase = order
-                order += state.filteredCollections.size
-                itemsIndexed(state.filteredCollections, key = { _, run -> run.id }) { idx, run ->
-                    RunCard(
-                        run = run,
-                        sort = state.sort,
-                        onOpen = { onOpenRun(run) },
-                        onDelete = { onDeleteRun(run) },
-                        onOpenAi = onOpenAi,
-                        modifier = Modifier.oceanEntrance(runBase + idx, staggerEnabled = staggerList),
-                    )
+                state.groupedCollections.forEach { section ->
+                    val sectionKey = "c:${section.key}"
+                    val isOpen = sectionKey in expandedKeys
+                    val shown = if (isOpen) section.data else section.data.take(groupPreview)
+                    val headerIdx = order++
+                    item(key = "ch-${section.key}") {
+                        CollectionSectionHeader(
+                            section = section,
+                            modifier = Modifier.oceanEntrance(
+                                index = headerIdx,
+                                staggerEnabled = staggerList,
+                                riseDp = 8.dp,
+                                swayDp = 0.dp,
+                                startScale = 1f,
+                            ),
+                        )
+                    }
+                    val runBase = order
+                    order += shown.size
+                    itemsIndexed(shown, key = { _, run -> run.id }) { idx, run ->
+                        RunCard(
+                            run = run,
+                            sort = state.sort,
+                            onOpen = { onOpenRun(run) },
+                            onDelete = { onDeleteRun(run) },
+                            onOpenAi = onOpenAi,
+                            modifier = Modifier.oceanEntrance(runBase + idx, staggerEnabled = staggerList),
+                        )
+                    }
+                    if (section.data.size > groupPreview) {
+                        val hidden = section.data.size - shown.size
+                        item(key = "more-$sectionKey") {
+                            ShowMoreRow(
+                                expanded = isOpen,
+                                hiddenCount = hidden,
+                                onToggle = {
+                                    expandedKeys =
+                                        if (isOpen) expandedKeys - sectionKey
+                                        else expandedKeys + sectionKey
+                                },
+                            )
+                        }
+                    }
                 }
             }
             item { Spacer(Modifier.height(geo.spacing.xxl)) }
@@ -485,22 +538,109 @@ private fun SectionHeader(
 ) {
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
+    val track = section.data.first().start.track
     Row(
         modifier.fillMaxWidth().padding(top = geo.spacing.md),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(geo.spacing.xs),
+        horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
     ) {
-        PejvakIcon("time", null, tint = tokens.textSecondary, size = geo.icons.sm)
+        PaletteTile(
+            contentHash = track.contentHash,
+            label = track.title,
+            artworkUrl = track.artworkUrl,
+            size = geo.tiles.sm,
+        )
         Text(
-            text = section.title ?: stringResource(R.string.history_all_listens),
+            text = section.title ?: track.title,
             style = MaterialTheme.typography.labelLarge,
-            color = tokens.textSecondary,
+            color = tokens.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         Text(
-            text = section.data.sumOf { it.stretch.listenedSec }.let(::formatDuration),
-            style = MaterialTheme.typography.labelSmall,
+            text = "${section.data.size} · ${section.data.sumOf { it.stretch.listenedSec }.let(::formatDuration)}",
+            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
             color = tokens.textSecondary,
+        )
+    }
+}
+
+@Composable
+private fun CollectionSectionHeader(
+    section: HistorySection<ContextPlay>,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = LocalPejvakTokens.current
+    val geo = LocalPejvakGeometry.current
+    val first = section.data.first()
+    Row(
+        modifier.fillMaxWidth().padding(top = geo.spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(geo.tiles.sm)
+                .clip(CircleShape)
+                .background(tokens.accentTeal.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            PejvakIcon(
+                name = contextTypeIcon(first.contextType),
+                contentDescription = null,
+                tint = tokens.accentTeal,
+                size = geo.icons.sm,
+            )
+        }
+        Text(
+            text = section.title ?: describeContextType(first.contextType),
+            style = MaterialTheme.typography.labelLarge,
+            color = tokens.text,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = "${section.data.size} · ${section.data.sumOf { it.listenedSec }.let(::formatDuration)}",
+            style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
+            color = tokens.textSecondary,
+        )
+    }
+}
+
+private fun contextTypeIcon(type: ContextType): String = when (type) {
+    ContextType.Folder -> "folder"
+    ContextType.Playlist -> "playlist"
+    ContextType.Online -> "online"
+}
+
+/** The per-group expand control: reveals the rest of a group's items, or folds it back. */
+@Composable
+private fun ShowMoreRow(expanded: Boolean, hiddenCount: Int, onToggle: () -> Unit) {
+    val tokens = LocalPejvakTokens.current
+    val geo = LocalPejvakGeometry.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(geo.radius.md))
+            .clickable(onClick = onToggle)
+            .padding(vertical = geo.spacing.sm),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (expanded) stringResource(R.string.history_show_less)
+            else stringResource(R.string.history_show_more, hiddenCount),
+            style = MaterialTheme.typography.labelLarge,
+            color = tokens.accentTeal,
+        )
+        Spacer(Modifier.width(geo.spacing.xs))
+        PejvakIcon(
+            name = if (expanded) "chevronUp" else "chevronDown",
+            contentDescription = null,
+            tint = tokens.accentTeal,
+            size = geo.icons.sm,
         )
     }
 }

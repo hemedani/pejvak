@@ -21,7 +21,8 @@ import com.pejvak.app.domain.HistoryStretchEntry
 import com.pejvak.app.domain.ListeningStats
 import com.pejvak.app.domain.MediaBreakdown
 import com.pejvak.app.domain.TrackLeader
-import com.pejvak.app.domain.buildStretchSections
+import com.pejvak.app.domain.groupByCollection
+import com.pejvak.app.domain.groupByTrack
 import com.pejvak.app.domain.computeBestStreak
 import com.pejvak.app.domain.dailyListenWindow
 import com.pejvak.app.domain.computeDayStreak
@@ -63,6 +64,7 @@ data class HistoryUiState(
     val sections: List<HistorySection<HistoryStretchEntry>> = emptyList(),
     val collections: List<ContextPlay> = emptyList(),
     val filteredCollections: List<ContextPlay> = emptyList(),
+    val groupedCollections: List<HistorySection<ContextPlay>> = emptyList(),
     val stats: ListeningStats = ListeningStats(),
     val leaders: List<TrackLeader> = emptyList(),
     val daily: List<DailyListen> = emptyList(),
@@ -297,15 +299,17 @@ class HistoryViewModel @Inject constructor(
         }
         _state.value = s.copy(
             entries = entries,
-            sections = buildStretchSections(entries, s.sort),
+            sections = groupByTrack(entries, s.sort),
             filteredCollections = collections,
+            groupedCollections = groupByCollection(collections, s.sort),
             hasMore = terms.isEmpty() && s.hasMore,
         )
     }
 
     private fun rebuildSections() {
         _state.value = _state.value.copy(
-            sections = buildStretchSections(_state.value.entries, _state.value.sort),
+            sections = groupByTrack(_state.value.entries, _state.value.sort),
+            groupedCollections = groupByCollection(_state.value.filteredCollections, _state.value.sort),
         )
     }
 }

@@ -30,6 +30,8 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.ExpandLess
+import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -99,6 +101,8 @@ val ICON_GLYPHS: Map<String, ImageVector> = mapOf(
     "back" to Icons.AutoMirrored.Rounded.ArrowBack,
     "chevronLeft" to Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
     "chevronRight" to Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+    "chevronDown" to Icons.Rounded.ExpandMore,
+    "chevronUp" to Icons.Rounded.ExpandLess,
     "close" to Icons.Rounded.Close,
     "more" to Icons.Rounded.MoreVert,
     "search" to Icons.Rounded.Search,

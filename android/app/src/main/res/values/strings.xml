@@ -397,6 +397,8 @@
     <string name="history_no_collections_body">A folder or playlist you play through becomes a run here.</string>
     <string name="history_all_listens">All listens</string>
     <string name="history_load_more">Load more</string>
+    <string name="history_show_more">Show %1$d more</string>
+    <string name="history_show_less">Show less</string>
     <string name="history_open">Open details</string>
     <string name="history_resume">Resume</string>
     <string name="history_single_track">Single track</string>

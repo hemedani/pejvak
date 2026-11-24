@@ -120,6 +120,89 @@ fun buildStretchSections(
         .map { HistorySection(it.key, it.label, it.items) }
 }
 
+/**
+ * Group stretches by the track they belong to (the track they started on, so a
+ * multi-track stretch lands once). Each group's header is the track; the sort orders
+ * the groups (Newest/Oldest by most recent listen, Longest by total listened) and the
+ * stretches within each group.
+ */
+fun groupByTrack(
+    entries: List<HistoryStretchEntry>,
+    sort: HistorySort = HistorySort.Newest,
+): List<HistorySection<HistoryStretchEntry>> {
+    if (entries.isEmpty()) return emptyList()
+    val ascending = sort == HistorySort.Oldest
+    val buckets = LinkedHashMap<String, MutableList<HistoryStretchEntry>>()
+    for (entry in entries) {
+        buckets.getOrPut(entry.start.track.id) { mutableListOf() }.add(entry)
+    }
+    val groups = buckets.entries.map { (trackId, list) ->
+        val sorted = list.sortedBy { it.stretch.startedAt }.let { if (ascending) it else it.reversed() }
+        TrackGroup(
+            key = trackId,
+            title = sorted.first().start.track.title,
+            lastAt = list.maxOf { it.stretch.startedAt },
+            totalSec = list.sumOf { it.stretch.listenedSec },
+            items = sorted,
+        )
+    }
+    val ordered = when (sort) {
+        HistorySort.Longest -> groups.sortedByDescending { it.totalSec }
+        HistorySort.Oldest -> groups.sortedBy { it.lastAt }
+        HistorySort.Newest -> groups.sortedByDescending { it.lastAt }
+    }
+    return ordered.map { HistorySection(it.key, it.title, it.items) }
+}
+
+private data class TrackGroup(
+    val key: String,
+    val title: String,
+    val lastAt: Long,
+    val totalSec: Int,
+    val items: List<HistoryStretchEntry>,
+)
+
+/**
+ * Group collection runs by the collection they belong to (type + key), so every run of
+ * one playlist/folder/online collection sits under a single header. The sort orders the
+ * groups and the runs within each.
+ */
+fun groupByCollection(
+    runs: List<ContextPlay>,
+    sort: HistorySort = HistorySort.Newest,
+): List<HistorySection<ContextPlay>> {
+    if (runs.isEmpty()) return emptyList()
+    val ascending = sort == HistorySort.Oldest
+    val buckets = LinkedHashMap<String, MutableList<ContextPlay>>()
+    for (run in runs) {
+        buckets.getOrPut("${run.contextType}:${run.contextKey}") { mutableListOf() }.add(run)
+    }
+    val groups = buckets.entries.map { (key, list) ->
+        val sorted = list.sortedBy { it.startedAt }.let { if (ascending) it else it.reversed() }
+        CollectionGroup(
+            key = key,
+            title = sorted.first().contextTitle,
+            lastAt = list.maxOf { it.startedAt },
+            totalSec = list.sumOf { it.listenedSec },
+            items = sorted,
+        )
+    }
+    val ordered = when (sort) {
+        HistorySort.Longest -> groups.sortedByDescending { it.totalSec }
+        HistorySort.Oldest -> groups.sortedBy { it.lastAt }
+        HistorySort.Newest -> groups.sortedByDescending { it.lastAt }
+    }
+    return ordered.map { HistorySection(it.key, it.title, it.items) }
+}
+
+private data class CollectionGroup(
+    val key: String,
+    val title: String,
+    val lastAt: Long,
+    val totalSec: Int,
+    val items: List<ContextPlay>,
+)
+
 fun resumeTargetSec(session: Session): Int =
     if (session.completed) maxOf(0, session.startPositionSec)
     else maxOf(0, session.endPositionSec ?: session.startPositionSec)

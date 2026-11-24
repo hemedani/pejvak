@@ -268,6 +268,72 @@ class HistoryTest {
         assertTrue(markdown.contains("Lectures · Volume 100%"))
     }
 
+    private fun run(
+        id: String,
+        type: ContextType,
+        key: String,
+        title: String,
+        startedAt: Long,
+        listenedSec: Int,
+        trackCount: Int = 1,
+        finishedCount: Int = 0,
+    ) = ContextPlay(
+        id = id,
+        contextType = type,
+        contextKey = key,
+        contextTitle = title,
+        trackCount = trackCount,
+        startedAt = startedAt,
+        finishedCount = finishedCount,
+        listenedSec = listenedSec,
+        createdAt = startedAt,
+        updatedAt = startedAt,
+    )
+
+    @Test
+    fun `sessions group by track, newest track first, stretches newest within`() {
+        val entries = groupHistoryIntoStretches(
+            listOf(
+                HistoryItem(session("a1", trackId = "a", stretchId = "sa1", startedAt = at("2026-03-08", 9)), track("a", "Alpha")),
+                HistoryItem(session("a2", trackId = "a", stretchId = "sa2", startedAt = at("2026-03-10", 9)), track("a", "Alpha")),
+                HistoryItem(session("b1", trackId = "b", stretchId = "sb1", startedAt = at("2026-03-09", 9)), track("b", "Beta")),
+            ),
+        )
+        val sections = groupByTrack(entries, HistorySort.Newest)
+        assertEquals(listOf("a", "b"), sections.map { it.key })
+        assertEquals("Alpha", sections.first().title)
+        assertEquals(2, sections.first().data.size)
+        assertEquals(listOf("sa2", "sa1"), sections.first().data.map { it.stretch.id })
+        assertEquals(0, groupByTrack(emptyList()).size)
+    }
+
+    @Test
+    fun `track groups order by total listened under the longest sort`() {
+        val entries = groupHistoryIntoStretches(
+            listOf(
+                HistoryItem(session("a1", trackId = "a", stretchId = "sa1", listenedSec = 10), track("a")),
+                HistoryItem(session("b1", trackId = "b", stretchId = "sb1", listenedSec = 30), track("b")),
+                HistoryItem(session("b2", trackId = "b", stretchId = "sb2", listenedSec = 30), track("b")),
+            ),
+        )
+        val sections = groupByTrack(entries, HistorySort.Longest)
+        assertEquals(listOf("b", "a"), sections.map { it.key })
+    }
+
+    @Test
+    fun `collections group by collection, newest collection first, runs newest within`() {
+        val runs = listOf(
+            run("r1", ContextType.Playlist, "p1", "Lectures", at("2026-03-08"), 100),
+            run("r2", ContextType.Playlist, "p1", "Lectures", at("2026-03-10"), 50),
+            run("r3", ContextType.Folder, "f1", "Audiobooks", at("2026-03-09"), 10),
+        )
+        val sections = groupByCollection(runs, HistorySort.Newest)
+        assertEquals(listOf("Playlist:p1", "Folder:f1"), sections.map { it.key })
+        assertEquals("Lectures", sections.first().title)
+        assertEquals(listOf("r2", "r1"), sections.first().data.map { it.id })
+        assertEquals(0, groupByCollection(emptyList()).size)
+    }
+
     @Test
     fun `context facts use value-only volume and enhancer text`() {
         val item = HistoryItem(
