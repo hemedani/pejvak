@@ -2,11 +2,14 @@
 
 Sector: `android/`. Brief: [`../prompts/07-listener-channels.md`](../prompts/07-listener-channels.md).
 Backend counterpart: [`../../back/docs/plans/01-listener-channels.md`](../../back/docs/plans/01-listener-channels.md)
-(models `channel` / `channelPlaylist` / `channelAudio`; acts and the upload route all land **there first**).
+(models `channel` / `channelPlaylist` / `channelAudio`; the acts and the **multipart upload act** — not a
+route — all landed there first).
 Precedence: code > plan > `android/AGENTS.md` > docs.
 
-> **Status: design only — no code yet.** Backend must ship before the client (root AGENTS). This is the
-> native feature inventory; every `CHAN-` ID ends up implemented or explicitly retired.
+> **Status: design only — no Android code yet, but UNBLOCKED.** The backend (Plan 01) is implemented and
+> verified against a live MongoDB, including the upload transport (resolved as the
+> `channelAudio.uploadChannelMedia` multipart act, not a `/uploads/channel` route — see backend prompt D14).
+> This is the native feature inventory; every `CHAN-` ID ends up implemented or explicitly retired.
 
 ---
 
@@ -53,6 +56,8 @@ New **read-cache** tables (mirrors of server state; source of truth is the serve
   `description`, `category`, `tags` (JSON), `audioUrl`, `durationSec`, `fileSizeBytes`, `mimeType`,
   `isAudiobook`, `author`, `narrator`, `artworkUrl`, `position`, `languageCode`, `status`,
   `downloadState`, `isMine`, `cachedAt`.
+  (The server's `channelAudio` also carries an internal `mediaPath` for byte cleanup — the client never
+  reads or caches it; it streams `audioUrl`.)
 
 **Materialising a channel audio into the player** produces a `Track(origin = Online, contentHash =
 <the channel audio's hash>, streamUrl = audioUrl, collectionKey = "channel:<channelServerId>",
@@ -82,9 +87,11 @@ cleanly.
   avatar, gallery (multi-image), donation/website URLs, socials (dynamic platform+url rows), contact
   email. Field chaining via IME actions; inline error line; reuse `TextField`/`PasswordField` primitives.
 - **Upload flow** — pick file (SAF) → compute `contentHash`/`durationSec`/size on device → show upload
-  progress (the app's own wave/`WaveProgressBar`, not a Material bar) → POST to the upload route →
-  `publishChannelAudio` with the returned `audioUrl` → pick the target folder + category + tags.
-  Over the storage quota → a non-blocking inline notice (reuse `InlineNotice`), never a blocking error.
+  progress (the app's own wave/`WaveProgressBar`, not a Material bar) → multipart POST to the
+  `channelAudio.uploadChannelMedia` **act** (a `lesan-body` JSON part + a `file` part) → it returns
+  `{ audioUrl, mediaPath, mimeType, fileSizeBytes }` → `publishChannelAudio` with those **plus** the device
+  `contentHash`/`durationSec` → pick the target folder + category + tags. Over the storage quota → a
+  non-blocking inline notice (reuse `InlineNotice`), never a blocking error.
 - **Manage channel** — reorder playlists (`sortOrder`), add/rename/delete folders, edit/move/delete
   episodes. Destructive actions confirm (the existing `AlertDialog` pattern).
 
@@ -117,7 +124,8 @@ Phases build **after** the matching backend phase. Tick + log after every small 
 - [ ] CHAN-D02 Lesan act wrappers in `data/remote` (`listChannels`, `getChannel`, `listChannelAudios`,
       `getChannelAudio`, `listChannelPlaylists`) — reuse `LesanClient`
 - [ ] CHAN-D03 read-cache repository + pull (mirror online-collection caching); `isMine` from session
-- [ ] CHAN-D04 upload client (multipart → the backend `/uploads/channel` route) + progress callback
+- [ ] CHAN-D04 upload client (multipart → the `channelAudio.uploadChannelMedia` **act** on `/lesan`,
+      bytes served back from `/uploads/...`) + progress callback
 
 ### Phase A2 — Listening surfaces
 - [ ] CHAN-U01 Channels hub screen (category chips, search, cards, pagination) + route + dock/entry
@@ -160,4 +168,5 @@ upload survives app-kill and retry, and it has been looked at in **both themes**
 
 | Task | Done | Note |
 |---|---|---|
-| Plan authored (design only) | ✅ | No code yet; blocked on backend B1–B4 and the §5 upload decision. |
+| Plan authored (design only) | ✅ | Was blocked on backend B1–B4 and the §5 upload decision. |
+| Backend landed → Android unblocked | ✅ | back/ Plan 01 B1–B7 implemented + verified (`channels.hurl` green on live Mongo). Upload is the `channelAudio.uploadChannelMedia` multipart **act**, not a route (backend D14); it returns `{ audioUrl, mediaPath, mimeType, fileSizeBytes }` for `publishChannelAudio`. Docs synced; no Android code yet. |
