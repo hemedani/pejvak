@@ -26,8 +26,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         DownloadJobEntity::class,
         DownloadScopeEntity::class,
         DownloadFileEntity::class,
+        ChannelEntity::class,
+        ChannelPlaylistEntity::class,
+        ChannelAudioEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class PejvakDatabase : RoomDatabase() {
@@ -43,6 +46,9 @@ abstract class PejvakDatabase : RoomDatabase() {
     abstract fun downloadJobDao(): DownloadJobDao
     abstract fun downloadScopeDao(): DownloadScopeDao
     abstract fun downloadFileDao(): DownloadFileDao
+    abstract fun channelDao(): ChannelDao
+    abstract fun channelPlaylistDao(): ChannelPlaylistDao
+    abstract fun channelAudioDao(): ChannelAudioDao
 }
 
 /**
@@ -64,5 +70,52 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         db.execSQL("ALTER TABLE sessions ADD COLUMN enhancer_boost_db REAL")
         db.execSQL("ALTER TABLE sessions ADD COLUMN enhancer_bass_db REAL")
         db.execSQL("ALTER TABLE sessions ADD COLUMN enhancer_treble_db REAL")
+    }
+}
+
+/**
+ * v3 adds the Listener Channels read-cache mirror (plan 07 §3): three tables that
+ * mirror the server's `channel` / `channelPlaylist` / `channelAudio` rows. They carry
+ * no `sync_status` — the phone is a consumer, never the owner (prompt D2) — just the
+ * mirrored fields plus `is_mine` (resolved from the session at pull time) and
+ * `cached_at` for pruning.
+ */
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `channels` (" +
+                "`server_id` TEXT NOT NULL, `slug` TEXT NOT NULL, `name` TEXT NOT NULL, `bio` TEXT, " +
+                "`categories` TEXT NOT NULL, `language_code` TEXT, `avatar_url` TEXT, `gallery` TEXT NOT NULL, " +
+                "`donation_url` TEXT, `website_url` TEXT, `socials` TEXT NOT NULL, `contact_email` TEXT, " +
+                "`status` TEXT NOT NULL, `audio_count` INTEGER NOT NULL, `playlist_count` INTEGER NOT NULL, " +
+                "`creator_id` TEXT, `creator_username` TEXT, `creator_display_name` TEXT, `creator_avatar_url` TEXT, " +
+                "`is_mine` INTEGER NOT NULL, `cached_at` INTEGER NOT NULL, `created_at` INTEGER, `updated_at` INTEGER, " +
+                "PRIMARY KEY(`server_id`))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_channels_status` ON `channels` (`status`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_channels_cached` ON `channels` (`cached_at`)")
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `channel_playlists` (" +
+                "`server_id` TEXT NOT NULL, `channel_server_id` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+                "`description` TEXT, `category` TEXT, `tags` TEXT NOT NULL, `sort_order` INTEGER NOT NULL, " +
+                "`audio_count` INTEGER NOT NULL, `is_mine` INTEGER NOT NULL, `cached_at` INTEGER NOT NULL, " +
+                "PRIMARY KEY(`server_id`))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_channel_playlists_channel` ON `channel_playlists` (`channel_server_id`, `sort_order`)")
+
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS `channel_audios` (" +
+                "`server_id` TEXT NOT NULL, `channel_server_id` TEXT NOT NULL, `playlist_server_id` TEXT, " +
+                "`content_hash` TEXT NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `category` TEXT, " +
+                "`tags` TEXT NOT NULL, `audio_url` TEXT NOT NULL, `duration_sec` INTEGER NOT NULL, " +
+                "`file_size_bytes` INTEGER NOT NULL, `mime_type` TEXT, `is_audiobook` INTEGER NOT NULL, " +
+                "`author` TEXT, `narrator` TEXT, `artwork_url` TEXT, `position` INTEGER NOT NULL, " +
+                "`language_code` TEXT, `status` TEXT NOT NULL, `download_state` TEXT NOT NULL, " +
+                "`is_mine` INTEGER NOT NULL, `cached_at` INTEGER NOT NULL, PRIMARY KEY(`server_id`))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_channel_audios_channel` ON `channel_audios` (`channel_server_id`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_channel_audios_playlist` ON `channel_audios` (`playlist_server_id`)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS `idx_channel_audios_hash` ON `channel_audios` (`content_hash`)")
     }
 }

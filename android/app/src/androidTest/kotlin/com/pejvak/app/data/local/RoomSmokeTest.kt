@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
-/** The 12-table database opens and a KV write survives a read (device smoke). */
+/** The 15-table database opens and a KV write survives a read (device smoke). */
 class RoomSmokeTest {
 
     private lateinit var db: PejvakDatabase
@@ -37,6 +37,7 @@ class RoomSmokeTest {
             "tracks", "sessions", "annotations", "playlists", "playback_checkpoints", "settings",
             "folders", "context_plays", "online_collections", "download_jobs",
             "download_scopes", "download_files",
+            "channels", "channel_playlists", "channel_audios",
         ).forEach { assertTrue("missing table $it (got $names)", it in names) }
 
         db.settingsDao().put(SettingsEntity("themePreference", "dark"))

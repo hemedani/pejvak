@@ -21,6 +21,11 @@ import com.pejvak.app.domain.Session
 import com.pejvak.app.domain.SortDirection
 import com.pejvak.app.domain.SyncStatus
 import com.pejvak.app.domain.Track
+import com.pejvak.app.domain.channel.Channel
+import com.pejvak.app.domain.channel.ChannelAudio
+import com.pejvak.app.domain.channel.ChannelPlaylist
+import com.pejvak.app.domain.channel.ChannelSocial
+import com.pejvak.app.domain.channel.ChannelStatus
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -29,6 +34,22 @@ private val mapperJson = Json { ignoreUnknownKeys = true; encodeDefaults = true 
 
 @Serializable
 private data class ItemJson(val trackId: String, val order: Int)
+
+@Serializable
+private data class SocialJson(val platform: String, val url: String)
+
+private fun encodeStringList(values: List<String>): String = mapperJson.encodeToString(values)
+
+private fun decodeStringList(raw: String?): List<String> =
+    if (raw.isNullOrBlank()) emptyList() else runCatching { mapperJson.decodeFromString<List<String>>(raw) }.getOrDefault(emptyList())
+
+private fun encodeSocials(values: List<ChannelSocial>): String =
+    mapperJson.encodeToString(values.map { SocialJson(it.platform, it.url) })
+
+private fun decodeSocials(raw: String?): List<ChannelSocial> =
+    if (raw.isNullOrBlank()) emptyList() else runCatching {
+        mapperJson.decodeFromString<List<SocialJson>>(raw).map { ChannelSocial(it.platform, it.url) }
+    }.getOrDefault(emptyList())
 
 // --- Track ---
 fun TrackEntity.toDomain() = Track(
@@ -197,4 +218,53 @@ fun DownloadFile.toEntity() = DownloadFileEntity(
     scope_key = scopeKey, scope_kind = scopeKind.wire, track_id = trackId, file_uri = fileUri, file_path = filePath,
     file_size_bytes = fileSizeBytes, duration_sec = durationSec, folder_key = folderKey, folder_name = folderName,
     track_number = trackNumber, created_at = createdAt,
+)
+
+// --- Channel (read-cache mirror; no sync columns) ---
+fun ChannelEntity.toDomain() = Channel(
+    serverId = serverId, slug = slug, name = name, bio = bio, categories = decodeStringList(categories),
+    languageCode = languageCode, avatarUrl = avatarUrl, gallery = decodeStringList(gallery),
+    donationUrl = donationUrl, websiteUrl = websiteUrl, socials = decodeSocials(socials), contactEmail = contactEmail,
+    status = ChannelStatus.from(status), audioCount = audioCount, playlistCount = playlistCount,
+    creatorId = creatorId, creatorUsername = creatorUsername, creatorDisplayName = creatorDisplayName,
+    creatorAvatarUrl = creatorAvatarUrl, isMine = isMine, cachedAt = cachedAt, createdAt = createdAt, updatedAt = updatedAt,
+)
+
+fun Channel.toEntity() = ChannelEntity(
+    serverId = serverId, slug = slug, name = name, bio = bio, categories = encodeStringList(categories),
+    languageCode = languageCode, avatarUrl = avatarUrl, gallery = encodeStringList(gallery),
+    donationUrl = donationUrl, websiteUrl = websiteUrl, socials = encodeSocials(socials), contactEmail = contactEmail,
+    status = status.wire, audioCount = audioCount, playlistCount = playlistCount,
+    creatorId = creatorId, creatorUsername = creatorUsername, creatorDisplayName = creatorDisplayName,
+    creatorAvatarUrl = creatorAvatarUrl, isMine = isMine, cachedAt = cachedAt, createdAt = createdAt, updatedAt = updatedAt,
+)
+
+fun ChannelPlaylistEntity.toDomain() = ChannelPlaylist(
+    serverId = serverId, channelServerId = channelServerId, title = title, description = description,
+    category = category, tags = decodeStringList(tags), sortOrder = sortOrder, audioCount = audioCount,
+    isMine = isMine, cachedAt = cachedAt,
+)
+
+fun ChannelPlaylist.toEntity() = ChannelPlaylistEntity(
+    serverId = serverId, channelServerId = channelServerId, title = title, description = description,
+    category = category, tags = encodeStringList(tags), sortOrder = sortOrder, audioCount = audioCount,
+    isMine = isMine, cachedAt = cachedAt,
+)
+
+fun ChannelAudioEntity.toDomain() = ChannelAudio(
+    serverId = serverId, channelServerId = channelServerId, playlistServerId = playlistServerId,
+    contentHash = contentHash, title = title, description = description, category = category,
+    tags = decodeStringList(tags), audioUrl = audioUrl, durationSec = durationSec, fileSizeBytes = fileSizeBytes,
+    mimeType = mimeType, isAudiobook = isAudiobook, author = author, narrator = narrator, artworkUrl = artworkUrl,
+    position = position, languageCode = languageCode, status = ChannelStatus.from(status),
+    downloadState = DownloadState.from(downloadState), isMine = isMine, cachedAt = cachedAt,
+)
+
+fun ChannelAudio.toEntity() = ChannelAudioEntity(
+    serverId = serverId, channelServerId = channelServerId, playlistServerId = playlistServerId,
+    contentHash = contentHash, title = title, description = description, category = category,
+    tags = encodeStringList(tags), audioUrl = audioUrl, durationSec = durationSec, fileSizeBytes = fileSizeBytes,
+    mimeType = mimeType, isAudiobook = isAudiobook, author = author, narrator = narrator, artworkUrl = artworkUrl,
+    position = position, languageCode = languageCode, status = status.wire, downloadState = downloadState.wire,
+    isMine = isMine, cachedAt = cachedAt,
 )

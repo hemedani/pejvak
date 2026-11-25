@@ -30,7 +30,7 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): PejvakDatabase =
         Room.databaseBuilder(context, PejvakDatabase::class.java, "pejvak.db")
-            .addMigrations(com.pejvak.app.data.local.MIGRATION_1_2)
+            .addMigrations(com.pejvak.app.data.local.MIGRATION_1_2, com.pejvak.app.data.local.MIGRATION_2_3)
             .build()
 
     @Provides
@@ -68,6 +68,15 @@ object AppModule {
 
     @Provides
     fun provideDownloadFileDao(db: PejvakDatabase): com.pejvak.app.data.local.DownloadFileDao = db.downloadFileDao()
+
+    @Provides
+    fun provideChannelDao(db: PejvakDatabase): com.pejvak.app.data.local.ChannelDao = db.channelDao()
+
+    @Provides
+    fun provideChannelPlaylistDao(db: PejvakDatabase): com.pejvak.app.data.local.ChannelPlaylistDao = db.channelPlaylistDao()
+
+    @Provides
+    fun provideChannelAudioDao(db: PejvakDatabase): com.pejvak.app.data.local.ChannelAudioDao = db.channelAudioDao()
 
     @Provides
     @Singleton
