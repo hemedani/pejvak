@@ -154,6 +154,32 @@ jsonpath "$.body.audioUrl" exists
 audioUrl: jsonpath "$.body.audioUrl"
 mediaPath: jsonpath "$.body.mediaPath"
 
+# ── Aborted upload leaves no bytes (CH-CLEAN, prompt D18) ───────
+#
+# A body that stops mid-part (no closing boundary) is how a client abort reaches
+# the server. The framework rejects it before the act runs, so nothing is
+# written. `src/channels/media_test.ts` proves the harder case — an abort *after*
+# the act has begun writing — with a direct atomic-rename/unlink test, because a
+# hurl file cannot inspect `./uploads`.
+
+POST {{serverAddress}}/lesan
+token: {{creatorToken}}
+Content-Type: multipart/form-data; boundary=AbortedBoundary
+```
+--AbortedBoundary
+Content-Disposition: form-data; name="lesan-body"
+
+{"model":"channelAudio","act":"uploadChannelMedia","details":{"set":{"kind":"audio"},"get":{"audioUrl":1}}}
+--AbortedBoundary
+Content-Disposition: form-data; name="file"; filename="aborted.mp3"
+Content-Type: audio/mpeg
+
+TRUNCATED
+```
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
+
 # ── publishChannelAudio (CH-A09) ────────────────────────────────
 
 POST {{serverAddress}}/lesan

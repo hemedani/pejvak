@@ -72,7 +72,22 @@ export type StoredMedia = {
 };
 
 /**
- * Streams `file` into the upload tree and returns the durable descriptors.
+ * The minimal shape `storeUploadFile` needs from an upload part.
+ *
+ * A `File` satisfies it; a test can supply a stream that fails mid-read without
+ * constructing a real multipart body. Keeping the signature this narrow is what
+ * lets the abort path be tested directly.
+ */
+export type UploadSource = {
+  name?: string;
+  type?: string;
+  size: number;
+  stream: () => ReadableStream<Uint8Array>;
+};
+
+/**
+ * Streams `file` into the upload tree **atomically** and returns the durable
+ * descriptors.
  *
  * The leaf name is a generated ObjectId prefix plus the sanitised original
  * (extension preserved), so two uploads never collide and a filename cannot
@@ -80,25 +95,159 @@ export type StoredMedia = {
  * episode must not be loaded into memory, which is the whole reason the upload
  * is a `multipart` act and not a base64 JSON body (prompt D14).
  *
+ * Bytes land in `<mediaPath>.part` first and are renamed into place only once
+ * the stream has ended **and** the byte count equals `file.size`. A client that
+ * aborts mid-stream (OkHttp timeout, network drop, process kill) makes
+ * `file.stream()` reject; the partial leaf is then unlinked, so an aborted
+ * upload leaves nothing under `./uploads` (prompt D18). A crash between write
+ * and rename leaves only a `.part`, which the deferred sweep reclaims.
+ *
  * This does **not** check the storage quota — the caller does that before
  * invoking it, so a refusal never writes bytes it would then have to remove.
  */
 export const storeUploadFile = async (
   kind: MediaKind,
-  file: File,
+  file: UploadSource,
   id: string,
 ): Promise<StoredMedia> => {
   const dir = await ensureMediaDir(kind);
   const fileName = `${id}-${sanitizeName(file.name)}`;
   const mediaPath = `${dir}/${fileName}`;
-  await Deno.writeFile(`${UPLOAD_ROOT}/${mediaPath}`, file.stream());
+  const finalPath = `${UPLOAD_ROOT}/${mediaPath}`;
+  const partPath = `${finalPath}.part`;
+
+  let written = 0;
+  const counter = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      written += chunk.byteLength;
+      controller.enqueue(chunk);
+    },
+  });
+
+  const handle = await Deno.open(partPath, {
+    create: true,
+    write: true,
+    truncate: true,
+  });
+
+  try {
+    await file.stream().pipeThrough(counter).pipeTo(handle.writable);
+
+    if (written !== file.size) {
+      throw new Error(
+        `Upload incomplete: received ${written} of ${file.size} bytes`,
+      );
+    }
+
+    await Deno.rename(partPath, finalPath);
+  } catch (error) {
+    // `pipeTo` closes the file on completion, but an aborted source may leave
+    // the destination open; closing twice is harmless here.
+    try {
+      await handle.close();
+    } catch {
+      // The handle was already closed by the pipe.
+    }
+    await Deno.remove(partPath).catch(() => {
+      // Nothing to reclaim if the stream failed before the file existed.
+    });
+    throw error;
+  }
 
   return {
     audioUrl: durableUrl(mediaPath),
     mediaPath,
-    mimeType: file.type,
-    fileSizeBytes: file.size,
+    mimeType: file.type ?? "",
+    fileSizeBytes: written,
   };
+};
+
+/** One file found under `./uploads`, with the data a sweep needs to decide. */
+export type StoredFile = {
+  mediaPath: string;
+  modifiedAtMs: number;
+};
+
+/**
+ * Walks the upload tree and returns every stored file (relative to
+ * `./uploads`). A missing root is an empty tree, not an error — a fresh
+ * deployment has no files until the first upload.
+ */
+export const listStoredFiles = async (): Promise<StoredFile[]> => {
+  const root = resolve(UPLOAD_ROOT);
+  const files: StoredFile[] = [];
+
+  const walk = async (dir: string): Promise<void> => {
+    let entries: Deno.DirEntry[];
+    try {
+      entries = [];
+      for await (const entry of Deno.readDir(dir)) entries.push(entry);
+    } catch (error) {
+      if (error instanceof Deno.errors.NotFound) return;
+      throw error;
+    }
+
+    for (const entry of entries) {
+      const absolute = resolve(dir, entry.name);
+      if (entry.isDirectory) {
+        await walk(absolute);
+      } else if (entry.isFile) {
+        const mediaPath = absolute.slice(root.length + 1).replaceAll(sep, "/");
+        const info = await Deno.stat(absolute);
+        files.push({
+          mediaPath,
+          modifiedAtMs: info.mtime?.getTime() ?? 0,
+        });
+      }
+    }
+  };
+
+  await walk(root);
+  return files;
+};
+
+/** Files a sweep may delete, split by why they are reclaimable. */
+export type ReclaimablePaths = {
+  /** Orphaned temp leaves from an aborted or crashed upload. */
+  parts: string[];
+  /** Completed files with no `channelAudio.mediaPath` pointing at them. */
+  orphans: string[];
+};
+
+/**
+ * Decides which stored files are safe to reclaim.
+ *
+ * **Age is the safety rail.** A `.part` file is being written right now; a
+ * completed file with no row is the normal window between `uploadChannelMedia`
+ * and `publishChannelAudio`. Deleting either before `staleAfterMs` would race a
+ * live upload and break a publish, so the sweep only touches old files. The
+ * threshold is a parameter rather than a constant so the deferred job and its
+ * tests agree, and so an operator can tune it.
+ */
+export const selectReclaimablePaths = (
+  files: readonly StoredFile[],
+  referenced: ReadonlySet<string>,
+  nowMs: number,
+  staleAfterMs: number,
+): ReclaimablePaths => {
+  const parts: string[] = [];
+  const orphans: string[] = [];
+
+  for (const file of files) {
+    if (nowMs - file.modifiedAtMs < staleAfterMs) continue;
+
+    // A referenced file is authoritative, even if its name ends in `.part`: the
+    // suffix is a naming convention, not proof the file is unfinished.
+    if (referenced.has(file.mediaPath)) continue;
+
+    if (file.mediaPath.endsWith(".part")) {
+      parts.push(file.mediaPath);
+    } else {
+      orphans.push(file.mediaPath);
+    }
+  }
+
+  return { parts, orphans };
 };
 
 /**

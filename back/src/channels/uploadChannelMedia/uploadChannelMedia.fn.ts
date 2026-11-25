@@ -37,6 +37,11 @@ export const uploadChannelMediaFn: ActFn = async (body) => {
 
   const entitlement = await resolveEntitlement(userId);
   if (entitlement.limits.storageBytes >= 0) {
+    // `file.size` is final here: Lesan parses the multipart body before it
+    // invokes the act, so the remaining-storage check runs before any byte is
+    // written. There is no separate per-file ceiling in the plan catalogue —
+    // adding a constant would violate "limits are data" — so the remaining
+    // allowance *is* the largest single upload the plan permits.
     const quota = await storageQuotaOf(userId, entitlement.limits);
     if (file.size > quota.remaining) {
       const mb = (n: number) => Math.round(n / (1024 * 1024));

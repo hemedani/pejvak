@@ -8,8 +8,10 @@
     "seed": "deno run --allow-all utils/seed.ts",
     "test": "hurl --test --variables-file http/vars.env --variable unique=$(uuidgen) http/e2e.hurl",
     "test:admin": "deno task seed && hurl --test --variables-file http/vars.env --variable unique=$(uuidgen) http/admin.hurl",
-    "test:channels": "hurl --test --variables-file http/vars.env --variable unique=$(uuidgen) http/channels.hurl",
-    "test:all": "deno task test && deno task test:admin && deno task test:channels"
+    "test:unit": "deno test --allow-read --allow-write --allow-env src/channels",
+    "test:channels": "deno task test:unit && hurl --test --variables-file http/vars.env --variable unique=$(uuidgen) http/channels.hurl",
+    "test:all": "deno task test && deno task test:admin && deno task test:channels",
+    "sweep:uploads": "deno run --allow-all src/channels/sweep.ts"
   },
   "fmt": {
     "include": ["src/", "models/", "utils/", "mod.ts"],
