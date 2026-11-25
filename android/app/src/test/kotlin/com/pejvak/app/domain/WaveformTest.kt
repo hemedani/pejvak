@@ -76,7 +76,7 @@ class WaveformTest {
     fun rmsAndFullScaleConversions() {
         assertEquals(0f, rmsOf(0.0, 0), 0.0001f)
         assertEquals(0.5f, rmsOf(0.25 * 4, 4), 0.0001f)
-        assertEquals(1f, pcm16FullScale(Short.MAX_VALUE.toShort()).let { abs(it) }, 0.001f)
+        assertEquals(1f, pcm16FullScale(Short.MAX_VALUE).let { abs(it) }, 0.001f)
         assertEquals(0f, pcm16FullScale(0), 0.0001f)
     }
 
