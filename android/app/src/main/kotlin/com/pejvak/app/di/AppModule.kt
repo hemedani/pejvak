@@ -78,6 +78,31 @@ object AppModule {
     @Provides
     fun provideChannelAudioDao(db: PejvakDatabase): com.pejvak.app.data.local.ChannelAudioDao = db.channelAudioDao()
 
+    /**
+     * A plain OkHttp client for the channel media upload (prompt D11): the multipart
+     * `channelAudio.uploadChannelMedia` act needs a streaming `MultipartBody` with a
+     * progress hook, which reads more naturally against OkHttp directly than through
+     * the Ktor JSON transport. Same cleartext policy as the Ktor engine (debug http).
+     *
+     * Timeouts are deliberately generous: a real audiobook is tens–hundreds of MB and
+     * the server ingest is bandwidth-bound (a 30 MB upload measured ~72 s end-to-end
+     * against the live host). OkHttp's 10 s defaults abort the body mid-transfer with
+     * a `SocketTimeoutException` ("timeout"), which the app surfaced as a false
+     * "upload failed". Keep the 30 s connect timeout (fail fast on an unreachable
+     * host) but disable the read/write timeout for the long transfer — the upload
+     * progress callback keeps the UI honest and TCP surfaces a genuine dead peer.
+     */
+    @Provides
+    @Singleton
+    fun provideOkHttpClient(): okhttp3.OkHttpClient =
+        okhttp3.OkHttpClient.Builder()
+            .retryOnConnectionFailure(true)
+            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
+            .callTimeout(0, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
     @Provides
     @Singleton
     fun provideJson(): Json = Json {
