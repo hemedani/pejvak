@@ -52,6 +52,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Podcasts
 import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Replay30
@@ -142,6 +143,8 @@ val ICON_GLYPHS: Map<String, ImageVector> = mapOf(
     "discover" to Icons.Rounded.Explore,
     "folder" to Icons.Rounded.Folder,
     "online" to Icons.Rounded.Cloud,
+    "channel" to Icons.Rounded.Podcasts,
+    "podcast" to Icons.Rounded.Podcasts,
     "cloud_upload" to Icons.Rounded.CloudUpload,
     "cloud_done" to Icons.Rounded.CloudDone,
     "person_add" to Icons.Rounded.PersonAdd,

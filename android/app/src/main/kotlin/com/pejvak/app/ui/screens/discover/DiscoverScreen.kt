@@ -51,6 +51,7 @@ fun DiscoverScreen(
     onOpenCollection: (key: String, trackId: String?, positionSec: Int) -> Unit,
     onOpenSource: (String) -> Unit,
     onOpenLanguage: (String) -> Unit,
+    onOpenChannels: () -> Unit,
     viewModel: DiscoverViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -129,6 +130,7 @@ fun DiscoverScreen(
                     topInset = topInset,
                     onOpenSource = onOpenSource,
                     onOpenLanguage = onOpenLanguage,
+                    onOpenChannels = onOpenChannels,
                     onOpenLanguageSheet = viewModel::openLanguageSheet,
                 )
             }
@@ -277,6 +279,7 @@ private fun BrowsePage(
     topInset: Dp,
     onOpenSource: (String) -> Unit,
     onOpenLanguage: (String) -> Unit,
+    onOpenChannels: () -> Unit,
     onOpenLanguageSheet: () -> Unit,
 ) {
     val geo = LocalPejvakGeometry.current
@@ -294,9 +297,17 @@ private fun BrowsePage(
         ) {
             item {
                 GlassChip(
+                    label = stringResource(R.string.discover_channels),
+                    icon = "channel",
+                    modifier = Modifier.oceanEntrance(0, swayDp = 0.dp),
+                    onClick = onOpenChannels,
+                )
+            }
+            item {
+                GlassChip(
                     label = stringResource(R.string.discover_browse_all_languages),
                     icon = "language",
-                    modifier = Modifier.oceanEntrance(0, swayDp = 0.dp),
+                    modifier = Modifier.oceanEntrance(1, swayDp = 0.dp),
                     onClick = onOpenLanguageSheet,
                 )
             }
@@ -305,7 +316,7 @@ private fun BrowsePage(
                     text = stringResource(R.string.discover_sources_here),
                     style = MaterialTheme.typography.labelSmall,
                     color = tokens.textSecondary,
-                    modifier = Modifier.oceanEntrance(1, swayDp = 0.dp, riseDp = 8.dp),
+                    modifier = Modifier.oceanEntrance(2, swayDp = 0.dp, riseDp = 8.dp),
                 )
             }
             if (state.sources.isEmpty()) {

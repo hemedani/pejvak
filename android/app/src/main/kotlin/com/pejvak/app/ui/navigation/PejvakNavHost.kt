@@ -94,6 +94,12 @@ import com.pejvak.app.ui.screens.ai.AiScreen
 import com.pejvak.app.ui.screens.auth.AccountSheet
 import com.pejvak.app.ui.screens.auth.AuthSheet
 import com.pejvak.app.ui.screens.auth.AuthViewModel
+import com.pejvak.app.ui.screens.channels.ChannelDetailScreen
+import com.pejvak.app.ui.screens.channels.ChannelEditorSheet
+import com.pejvak.app.ui.screens.channels.ChannelCreatorViewModel
+import com.pejvak.app.ui.screens.channels.ChannelManageScreen
+import com.pejvak.app.ui.screens.channels.ChannelsScreen
+import com.pejvak.app.ui.screens.channels.MyChannelsScreen
 import com.pejvak.app.ui.screens.discover.DiscoverScreen
 import com.pejvak.app.ui.screens.discover.LanguageScreen
 import com.pejvak.app.ui.screens.discover.OnlineCollectionScreen
@@ -160,6 +166,12 @@ fun PejvakNavHost(
     // The home-screen auth button opens one of two sheets by session state: the register/login
     // modal when signed out, the account + sync sheet when signed in. It floats over the app.
     var accountSheet by remember { mutableStateOf(false) }
+    // Channel creator: one shared, activity-scoped editor form (create from the hub, edit from
+    // a channel) hosted as a shell sibling so it floats over the app like the AI / auth sheets.
+    // A signed-out tap routes to AuthSheet instead (prompt D4) — never a hard gate.
+    val creatorViewModel: ChannelCreatorViewModel = hiltViewModel()
+    var channelEditor by remember { mutableStateOf(false) }
+    val signedIn = authState.status == AuthViewModel.Status.Authenticated
     val accountState = accountButtonState(
         signedIn = authState.status == AuthViewModel.Status.Authenticated,
         pendingTotal = authState.pendingTotal,
@@ -320,6 +332,7 @@ fun PejvakNavHost(
                             },
                             onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
                             onOpenLanguage = { code -> navController.navigate(languageRoute(code)) },
+                            onOpenChannels = { navController.navigate("channels") },
                         )
                     }
                     composable(Tab.History.route) {
@@ -433,6 +446,48 @@ fun PejvakNavHost(
                             onOpenTrack = { id -> navController.navigate(trackRoute(id)) },
                         )
                     }
+                    composable("channels") {
+                        ChannelsScreen(
+                            onBack = { navController.popBackStack() },
+                            onOpenChannel = { slug -> navController.navigate(channelRoute(slug)) },
+                            onCreate = {
+                                if (signedIn) {
+                                    creatorViewModel.startCreate()
+                                    channelEditor = true
+                                } else {
+                                    accountSheet = true
+                                }
+                            },
+                            onMyChannels = { navController.navigate("mychannels") },
+                        )
+                    }
+                    composable("mychannels") {
+                        MyChannelsScreen(
+                            onBack = { navController.popBackStack() },
+                            onCreate = {
+                                if (signedIn) {
+                                    creatorViewModel.startCreate()
+                                    channelEditor = true
+                                } else {
+                                    accountSheet = true
+                                }
+                            },
+                            onOpenChannel = { slug -> navController.navigate(channelRoute(slug)) },
+                        )
+                    }
+                    composable("channel/{slug}") {
+                        ChannelDetailScreen(
+                            onBack = { navController.popBackStack() },
+                            onManage = { channelId -> navController.navigate("channelManage/${Uri.encode(channelId)}") },
+                            onEdit = { channel ->
+                                creatorViewModel.startEdit(channel)
+                                channelEditor = true
+                            },
+                        )
+                    }
+                    composable("channelManage/{channelId}") {
+                        ChannelManageScreen(onBack = { navController.popBackStack() })
+                    }
                 }
 
                 if (isTabRoute) {
@@ -539,6 +594,13 @@ fun PejvakNavHost(
                     )
                 }
             }
+
+            if (channelEditor) {
+                ChannelEditorSheet(
+                    viewModel = creatorViewModel,
+                    onDismiss = { channelEditor = false },
+                )
+            }
         }
     }
 }
@@ -559,6 +621,8 @@ private fun trackRoute(id: String): String = "track/${Uri.encode(id)}"
 private fun sourceRoute(sourceId: String): String = "online/source/${Uri.encode(sourceId)}"
 
 private fun languageRoute(code: String): String = "online/language/${Uri.encode(code)}"
+
+private fun channelRoute(slug: String): String = "channel/${Uri.encode(slug)}"
 
 private fun onlineCollectionRoute(key: String, trackId: String?, positionSec: Int): String {
     val track = trackId?.let { Uri.encode(it) }.orEmpty()
