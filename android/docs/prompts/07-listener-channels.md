@@ -109,3 +109,84 @@ operator panel adds the `status` field and an admin token to the existing act ca
 - **Zero Kotlin warnings** + JVM tests green is the ship gate; on-device light/dark/gesture verification
   is **always the owner's**, never claimed here.
 - Never touch `mobile/`. Backend lands before the client.
+
+---
+
+## Enhanced implementation prompt — backend is LIVE (start building)
+
+> **Status change:** the backend is deployed and reachable at **`http://46.245.98.207:1405/`**. The
+> "backend lands before the client" gate is satisfied — Android work is **unblocked now**. Everything below
+> was verified against that live server with read-only probes on 2026-11-24; no data was written to it.
+
+**D11 — Live server verified; this pins the deployed surface and the client config (supersedes any
+"backend not ready yet" assumption).** Probed live:
+- `channel` schema exposes exactly `createChannel, updateChannel, deleteChannel, getMyChannels, listChannels,
+  getChannel` — **no `admin*Channel`** (the D15 consolidation is deployed).
+- `channelAudio` exposes `uploadChannelMedia, publishChannelAudio, updateChannelAudio, moveChannelAudio,
+  deleteChannelAudio, listChannelAudios, getChannelAudio`.
+- `channelPlaylist` exposes `createChannelPlaylist, updateChannelPlaylist, deleteChannelPlaylist,
+  listChannelPlaylists`.
+- `channel/listChannels` (tokenless) returns the envelope `{"body":{"rows":[],"total":0,"page":1,"limit":2},
+  "success":true}` — empty now because no channels exist yet, but the shape is confirmed.
+- `/uploads/...` is served (a missing file 404s, i.e. the static route is mounted). **First upload must
+  confirm the returned `audioUrl` is actually fetchable** (see the resolution rule below).
+
+### Client configuration
+- Point `LesanClient` base URL at `http://46.245.98.207:1405/lesan` (env/build-config it; do not hardcode in
+  source — keep a debug/release slot). All acts are `POST /lesan` with body
+  `{ "model": <schema>, "act": <name>, "details": { "set": {...}, "get": {...} } }` and the JWT in the
+  **`token` header (no `Bearer`)**.
+- Envelope: every response is `{ success, body }`. **A refusal is HTTP 501 with `{ success:false,
+  body.message }`** — treat non-2xx / `success:false` as a handled inline notice, never a crash or a blocking
+  dialog. Reuse the existing `LesanClient` error path.
+- **`audioUrl` resolution rule (critical for playback):** the backend returns either an absolute URL (when
+  server `MEDIA_BASE_URL` is set) or a root-relative `/uploads/channel/audio/<file>`. The app MUST do:
+  `if (audioUrl.startsWith("http")) streamUrl = audioUrl else streamUrl = serverOrigin + audioUrl`. Verify
+  which form this deployment returns on the first real upload and pin it.
+
+### Build order (do A1 against the live reads first — it is the fastest proof the wiring works)
+1. **A1 — transport + cache (CHAN-D01..D04):** add the three Room entities/DAOs + migration; wrap the
+   **public reads** (`listChannels`, `getChannel`, `listChannelPlaylists`, `listChannelAudios`,
+   `getChannelAudio`) in `data/remote`; the read-cache repo with `isMine` from the session; the multipart
+   upload client. **Acceptance for this step: the Channels hub renders live data from the server.**
+   - Kotlin upload = OkHttp `MultipartBody` to `POST /lesan` with two parts: a text part named **`lesan-body`**
+     whose value is the JSON `{model:"channelAudio", act:"uploadChannelMedia", details:{set:{kind:"audio"},
+     get:{audioUrl:1,mediaPath:1,fileSizeBytes:1,mimeType:1}}}`, and a file part named **`file`** (the picked
+     audio). (The `[MultipartFormData]` keyword is hurl-only — irrelevant to the app.) It returns
+     `{ audioUrl, mediaPath, mimeType, fileSizeBytes }`; then call `publishChannelAudio` with those **plus**
+     the device-computed `contentHash` + `durationSec`.
+2. **A2 — listening surfaces (CHAN-U01..U05):** Channels hub (category chips, search, cards, pagination) →
+   channel detail (identity, bio, gallery, link actions, playlist `HorizontalPager`) → audio rows that
+   **materialise to `Track(origin=Online, streamUrl=audioUrl, contentHash, collectionKey="channel:<id>",
+   collectionTitle=name)`** and start a run via the existing engine. Resolve D7 (`ContextType.Channel` vs
+   reuse `Online` + `channel:` key) here. Add download-for-offline.
+3. **A3 — creator surfaces (CHAN-C01..C06):** "My channels" + New channel; create/edit `GlassSheet`
+   (categories ≥1 inline validation — the server refuses empty with 501); manage folders (add/rename/reorder/
+   delete); the upload flow (pick → hash/duration → `WaveProgressBar` progress → publish → folder/category/
+   tags); edit/move/delete episode; delete channel (leaf-first) with confirm. Over-cap (3 channels /
+   100 audios / 2 GiB) → non-blocking `InlineNotice` upgrade prompt, never a blocking error.
+
+### Invariants to honour (from D1–D10, restated for the live build)
+- Public reads are tokenless; pass no token for the signed-out browse, and the server pins `status:"active"`.
+- Creator writes need a session; signed-out → route through `AuthSheet` (D4), never a hard gate.
+- `contentHash` is the identity — compute it on-device (same SHA-256(first 1 MB + size) as the importer) and
+  send it on `publishChannelAudio`; a listener's history/notes then follow the episode with no new code path.
+- All durations/positions are **integer seconds**.
+- Channel content is **never** in `syncLocalData` (D2); only the listener's own playback session syncs.
+- `mediaPath` is server-internal — do not cache or display it; stream `audioUrl`.
+- Design system governs every surface (D5): `GlassSheet`/`GlassCard`/`GlassChip`/`ListRow`/`ActionCluster`/
+  `WaveProgressBar`; new glyphs behind `Icon`/`ICON_GLYPHS` pinned in `IconCatalogTest`; strings in
+  `strings.xml`; colours from `ui/theme/`; light + dark from the first commit; motion on `useMotionEnabled()`.
+
+### Open items to verify during integration (flag, don't guess)
+- **`audioUrl` form on this deployment** (absolute vs root-relative) — confirm on first upload (see rule above).
+- **CORS / cleartext:** the server is `http://` (not https). Confirm the app's network security config allows
+  cleartext to this host for testing, and that the production build points at an https origin.
+- **Empty state:** the server currently has 0 channels. Seed one (or register a creator) to exercise the
+  happy path; do not assume a populated directory.
+- On-device light/dark/gesture checks remain **the owner's** — never claimed here.
+
+### Ship gate (unchanged)
+`./gradlew assembleDebug` with **zero Kotlin warnings** + JVM unit tests green (`testDebugUnitTest`,
+`IconCatalogTest`, contrast contract). Tick each `CHAN-` box + add a `../plans/07-listener-channels.md` §8
+row after EVERY small task; update `android/docs/summary.md`.
