@@ -1290,13 +1290,14 @@ HTTP 200
 jsonpath "$.body.announcement" == null
 
 
-# The panel reads the same singleton, including the row key, so the settings
-# page and the public banner cannot disagree.
+# The panel reads the same singleton via the shared public act (prompt D15: the
+# old `adminGetPlatformSetting` was a duplicate of this read on the same row),
+# including the row key, so the settings page and the public banner agree.
 POST {{serverAddress}}/lesan
 token: {{adminToken}}
 {
   "model": "platformSetting",
-  "act": "adminGetPlatformSetting",
+  "act": "getPlatformStatus",
   "details": {
     "set": {},
     "get": {

@@ -6,7 +6,6 @@ import { adminGetTopTracksSetup } from "./analytics/adminGetTopTracks/mod.ts";
 import { adminListAuditLogsSetup } from "./auditLog/adminListAuditLogs/mod.ts";
 import { adminListPlansSetup } from "./plans/adminListPlans/mod.ts";
 import { adminUpsertPlanSetup } from "./plans/adminUpsertPlan/mod.ts";
-import { adminGetPlatformSettingSetup } from "./platform/adminGetPlatformSetting/mod.ts";
 import { adminUpdatePlatformSettingSetup } from "./platform/adminUpdatePlatformSetting/mod.ts";
 import { adminGrantSubscriptionSetup } from "./subscriptions/adminGrantSubscription/mod.ts";
 import { adminListSubscriptionsSetup } from "./subscriptions/adminListSubscriptions/mod.ts";
@@ -66,7 +65,6 @@ export const adminSetup = () => {
 
   adminListAuditLogsSetup();
 
-  adminGetPlatformSettingSetup();
   adminUpdatePlatformSettingSetup();
 
   adminGrantAiCreditsSetup();

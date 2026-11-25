@@ -1,6 +1,6 @@
 import type { ActFn } from "lesan";
 import { pickByGet } from "@lib";
-import { readPlatformSetting } from "../setting.ts";
+import { PLATFORM_SETTING_KEY, readPlatformSetting } from "../setting.ts";
 
 /**
  * The four global switches, readable without a token.
@@ -28,6 +28,7 @@ export const getPlatformStatusFn: ActFn = async (body) => {
   const announcement = setting.announcement?.trim();
 
   return pickByGet({
+    key: PLATFORM_SETTING_KEY,
     signupsEnabled: setting.signupsEnabled,
     aiEnabled: setting.aiEnabled,
     maintenanceMode: setting.maintenanceMode,
