@@ -479,7 +479,14 @@ This is what `src/channels/` does (`authz.ts` + `optionalAuth.ts`, prompt D15). 
 
 > **Do NOT collapse the two by writing `if (isAdmin) { skip all checks }`.** That is the bug this pattern exists to avoid. The admin branch *widens the query scope and unlocks one field*; it never removes validation, audit, or the cross-tenant delete confirmation.
 
-**When to keep separate `admin*` acts.** Some admin operations genuinely differ in shape — a global `adminListUsers` joins subscriptions and stats the listener list never returns, and reads are `requireSupport` (a role listeners can't hold). Those stay separate (see [Roles and the admin panel](#roles-and-the-admin-panel)). The shared-act pattern is for the `get/update/delete/write`-the-same-resource case, not for replacing the whole panel.
+**When to keep separate `admin*` acts — and when NOT to force a merge.** The shared-act pattern collapses a **duplicate**: an operator act that re-implements a user act on the *same resource with the same response shape*. It is not a mandate to rename every `admin*` act. Audit before merging, because most admin acts are genuinely operator-only or differently-shaped, and "merging" them would break a client contract with no DRY or security gain:
+
+- **No user-side twin at all** → nothing to share; the act is a single operator tool, correctly named. Examples (verified against `src/`): `adminListUsers`, `adminListPlans`, `adminUpsertPlan`, `adminGrantSubscription`, `adminListSubscriptions`, `adminGrantAiCredits`, `adminRefundTransaction`, `adminListTransactions`, `adminDeleteUser`, `adminResetUserPassword`, `adminListAuditLogs`, and the four analytics acts. A listener never performs these, so there is no creator branch to unify.
+- **A twin exists but the shapes differ** → keep separate. `adminGetUserHistory` returns `{rows,total,page,limit}` with relation excludes and a `contentHash` filter; `getMyListeningHistory` returns a bare array at a deeper projection. Folding them changes both the mobile and panel contracts.
+- **A true duplicate** → collapse it. `getPlatformStatus` (public) and `adminGetPlatformSetting` (operator) both read the singleton via `readPlatformSetting`; the operator act was deleted and the panel now calls `getPlatformStatus` (its `get` allow-list widened to include `key`). This is the one remaining clean merge and it is done.
+- **Shared mechanics, different act contract** → merge only with explicit sign-off. `cancelMySubscription` and `adminRevokeSubscription` both call `lifecycle.revokeSubscription`, but differ in `immediate`, response label, and audit, and sit on the money path — left separate pending a decision, since renaming breaks both clients.
+
+Rule of thumb: the pattern is `get/update/delete/write` *the same resource, same shape*, creator and operator. It is not a style rule for the panel.
 
 ### Lesan's request context is a process-wide singleton (caveat)
 
@@ -513,7 +520,10 @@ deno task dev          # hot reload
 deno task seed         # bootstrap plans/indexes + demo user + first admin + sample content
 deno task test         # listener-facing hurl suite (requires a running server)
 deno task test:admin   # seeds, then the admin/billing/entitlements hurl suite
-deno task test:all     # both suites
+deno task test:channels # upload-safety unit tests + the channels hurl suite
+deno task test:unit    # Deno unit tests (atomic upload / orphan sweep selection)
+deno task test:all     # all three suites
+deno task sweep:uploads # reclaim stale .part and unreferenced upload bytes
 deno check mod.ts      # typecheck
 deno lint              # lint
 deno fmt               # format
@@ -528,8 +538,11 @@ Environment variables:
 - `TOKEN_KEY` — JWT signing secret (default is a dev-only value; always set in production)
 - `BILLING_PROVIDER` — `manual` (default) or `stripe`
 - `STRIPE_SECRET_KEY`, `STRIPE_SUCCESS_URL`, `STRIPE_CANCEL_URL` — only read by the Stripe provider
+- `MEDIA_BASE_URL` — prefix for stored channel `audioUrl`s; unset leaves them root-relative (`/uploads/...`)
 
 `bootstrap()` runs before `runServer` and is idempotent: it inserts the two default plans **only when their code is absent**, creates the platform row on first read, and confirms the analytics/admin indexes. None of it overwrites an operator's decision, so a restart is safe on a live database. The implementations live next to their domain — `src/entitlements/defaultPlans.ts`, `src/platform/setting.ts`, `src/db/indexes.ts` — and `src/bootstrap.ts` only fixes the order.
+
+**Uploads are written atomically.** `src/channels/media.ts` streams a `multipart` file to `<mediaPath>.part` and renames it into place only after the stream ends and the byte count matches `file.size`; an aborted upload (client timeout, drop, kill) is unlinked in the `catch` and leaves nothing under `./uploads`. The deferred sweep (`sweepOrphanUploads` / `deno task sweep:uploads`) reclaims what a request cannot: stale `.part` leaves and completed files with no `channelAudio.mediaPath`, both gated on an age threshold so a live upload or a not-yet-published file is never touched.
 
 **The first admin comes from the seed, not from an endpoint.** `deno task seed` creates `admin@pejvak.app / password123` (and promotes an existing account with that email). There is deliberately no public "make me an admin" act — that endpoint would *be* the security model. Afterwards, admins promote each other from the panel. **Change that password before exposing the server.**
 
@@ -542,8 +555,10 @@ The Lesan playground is available at `/playground` in development. `typeGenerati
 - E2E tests are [hurl](https://hurl.dev) files under `http/`:
   - `deno task test` — `http/e2e.hurl`, the listener-facing suite (62 requests).
   - `deno task test:admin` — seeds, then `http/admin.hurl` (73 requests): RBAC, plans, quota enforcement, the full money path, forever/duration/usage grants, AI credits, suspension, analytics, the audit trail, the platform switches and the destructive-act guards.
-  - `deno task test:all` — both.
-- Both suites are **re-runnable against the same database**: every fixture is created under a `{{unique}}` suffix (injected per run by the task), and `admin.hurl` deletes its own listener and archives its own throwaway plan at the end. It uses a dedicated `e2e-cap` plan rather than editing `free`, so a failed run can never leave the real paywall at 2 entries.
+  - `deno task test:channels` — the upload-safety unit tests plus `http/channels.hurl`: creator CRUD, multipart upload including an aborted body, publish/idempotency, browse, quota, moderation and the leaf-first delete.
+  - `deno task test:all` — all three suites.
+- Upload durability is tested at the function level (`src/channels/media_test.ts`) because hurl cannot inspect `./uploads`: an erroring stream and a short-but-clean stream must both leave no `.part` and no final file, and `selectReclaimablePaths` must only pick stale files.
+- Both hurl suites are **re-runnable against the same database**: every fixture is created under a `{{unique}}` suffix (injected per run by the task), and `admin.hurl` deletes its own listener and archives its own throwaway plan at the end. It uses a dedicated `e2e-cap` plan rather than editing `free`, so a failed run can never leave the real paywall at 2 entries.
 - Each act should have at least one hurl assertion. The highest-value tests are: session ingest + aggregate updates, idempotent re-sync, quota skip-vs-refuse behaviour, annotation position accuracy, and projection correctness.
 - Backend work is not "done" until `deno check mod.ts`, `deno lint`, and `deno fmt --check` pass, and the act's hurl steps are green.
 

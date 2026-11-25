@@ -128,6 +128,65 @@ request. The first `optionalAuth` "skipped" when no token was present — which 
 Caught by `channels.hurl`. Fix: on the missing-token branch, `setContext({ user: undefined })`. Acts that
 always run `setTokens` are immune (it throws on a missing token). Documented in `back/AGENTS.md`.
 
+**D17 — Follow-up audit: do the other domains have an `admin*`↔user duplicate to collapse? (owner asked to
+migrate users/plans/subscriptions/transactions/analytics to the D15 pattern).** Verified against the actual
+`setAct` registrations. D15 collapses a **duplicate** (operator act re-implementing a user act, same resource
++ same shape). Findings:
+
+- **True duplicate → collapsed:** `getPlatformStatus` (public) and `adminGetPlatformSetting` both read the
+  singleton via `readPlatformSetting`. Deleted `adminGetPlatformSetting`; widened `getPlatformStatus`'s `get`
+  to include `key`; the panel now calls `getPlatformStatus`. `adminUpdatePlatformSetting` stays (operator-only
+  write, no user twin).
+- **Shared mechanics, different act contract → left separate, flagged:** `cancelMySubscription` ↔
+  `adminRevokeSubscription` both call `lifecycle.revokeSubscription` but differ in `immediate`, response label
+  (`canceled`/`revoked`) and audit — money path, so a merge needs explicit sign-off (breaks both clients).
+- **Twin exists but shapes differ → left separate:** `adminGetUserHistory` (`{rows,total,page,limit}` + excludes
+  + `contentHash`) vs `getMyListeningHistory` (bare array, deeper projection).
+- **No user twin → nothing to collapse (operator-only singletons):** `adminListUsers`, `adminGetUser`,
+  `adminDeleteUser`, `adminResetUserPassword`, `adminListPlans`, `adminUpsertPlan`, `adminGrantSubscription`,
+  `adminListSubscriptions`, `adminListTransactions`, `adminConfirmTransaction` (self `confirmCheckout` uses the
+  provider verify path; the admin path is manual — different semantics), `adminRefundTransaction`,
+  `adminListAuditLogs`, `adminGrantAiCredits`, and the four analytics acts. Already role-aware via
+  `requireSupport`/`requireAdmin`; renaming them would break the panel + client contracts with no DRY gain.
+
+Net: D15 applied to the one place it genuinely fits; the rest are correctly separate. The refined boundary
+(collapse duplicates, don't rename operator-only acts) is recorded in `back/AGENTS.md`.
+
+**D18 — Upload "timeout" is a CLIENT bug, not the server; but it exposes a real backend gap (partial-upload
+bytes) to fix here (owner-reported, 2026-11-24).** When the Android app uploaded a real (multi-MB) episode it
+showed a non-blocking notice reading exactly `timeout`. Diagnosis against the **live server** (`http://46.245.98.207:1405`):
+
+- A 30 MB `uploadChannelMedia` POST returned **HTTP 200, `success:true`** with a correct `audioUrl`/`mediaPath`/
+  `fileSizeBytes`/`mimeType` — it just took **~72 s** end-to-end (bandwidth-bound ingest; `storeUploadFile`
+  streams `file.stream()` to disk, so the server is correct and memory-safe). **The server does not time the
+  upload out and imposes no size cap beyond the quota check.**
+- The `timeout` string is OkHttp's `SocketTimeoutException` message — the app's upload client ran with OkHttp's
+  **default 10 s connect/read/write timeouts**, so it aborted the body long before the slow-but-successful
+  server finished. **Root cause is client-side; fixed in `android/`** (upload `OkHttpClient` now keeps a 30 s
+  connect timeout but disables read/write/call timeouts for the long transfer; progress + cancel drive the UI).
+  Recorded here so nobody re-investigates the server for this symptom.
+
+**The genuine backend follow-up this surfaced (CH-CLEAN / upload hardening):** a client that aborts mid-stream
+(timeout, network drop, process kill, user cancel) makes `Deno.writeFile(path, file.stream())` in
+`src/channels/media.ts` leave a **partial file under `./uploads` with no `channelAudio` row** — orphan bytes that
+nothing reclaims (the byte sweep is still deferred, D14). Requested fix, backend-side:
+
+1. **Atomic write.** Stream to a temp leaf (e.g. `channel/audio/<id>-<name>.part`), and `Deno.rename` into the
+   final `mediaPath` **only after** the stream completes and the byte count matches `file.size`. On any stream
+   error, `unlink` the `.part` so an aborted upload leaves nothing. (`file.stream()` errors on client abort —
+   wrap it.)
+2. **Reclaim strays.** The deferred sweep must delete `*.part` files and any completed file with no referencing
+   `channelAudio.mediaPath` (the inverse of `removeStoredBytes`), so a missed abort or a crash between write and
+   publish does not leak bytes against the creator's storage quota.
+3. **Defense-in-depth size guard** (optional): reject a body over the plan's per-file ceiling before writing, so
+   a non-cooperative client cannot fill the disk past the quota (the current quota check uses `file.size`, which
+   for a streamed multipart may only be known after read — confirm and enforce early if cheap).
+
+No act-surface/contract change: the response shape and the root-relative-vs-absolute `audioUrl` rule (D11) stay
+as shipped. This is durability + hygiene, not a new feature. Acceptance: a hurl step that uploads, then a step
+that simulates an aborted upload (truncated body) and asserts no stray file remains under `./uploads`, plus the
+existing `channels.hurl` green; `deno check/lint/fmt` clean.
+
 ## Non-negotiables carried from AGENTS (restated for this feature)
 
 - Strict TypeScript, no `any`; one model per file; validator before implementation; `get` is a closed
