@@ -50,21 +50,21 @@ internal fun secureMediaUrl(url: String): String =
     SECURE_MEDIA.replace(url, "https://dl.drshariati.com/")
 
 internal fun parseEpisodes(html: String): List<Episode> {
+    val audios = onlineHtmlElements(html, "audio")
+    if (audios.isEmpty()) return emptyList()
+    // One document pass, then resolve each audio's holder from that list. Parsing the
+    // whole page once per audio (the old shape) made a book page O(audio x tags).
+    val elements = onlineHtmlElements(html)
     val episodes = mutableListOf<Episode>()
     val seen = mutableSetOf<String>()
-    for (audio in onlineHtmlElements(html, "audio")) {
-        var streamUrl: String? = null
-        for (source in onlineHtmlTagOpenings(audio.innerHtml, "source")) {
-            val src = onlineHtmlAttribute(source, "src") ?: continue
-            val match = MP3_SRC.find(src)
-            if (match != null) {
-                streamUrl = secureMediaUrl(match.value)
-                break
-            }
-        }
-        val url = streamUrl ?: continue
+    for (audio in audios) {
+        val url = audioStreamUrl(audio) ?: continue
         if (!seen.add(url)) continue
-        val holder = onlineHtmlEnclosingElement(html, audio)
+        val holder = elements
+            .asSequence()
+            .filter { it.start <= audio.start && it.end >= audio.end }
+            .filterNot { it.start == audio.start && it.end == audio.end && it.tag == audio.tag }
+            .minByOrNull { it.end - it.start }
         val title = holder
             ?.let { onlineHtmlElements(it.innerHtml, "p").firstOrNull() }
             ?.let { cleanOnlineText(it.innerHtml) }
@@ -72,6 +72,24 @@ internal fun parseEpisodes(html: String): List<Episode> {
         episodes += Episode(title, url)
     }
     return episodes
+}
+
+/** Counts distinct audio episodes without building titles; used for catalogue counts. */
+internal fun countAudioEpisodes(html: String): Int {
+    val seen = mutableSetOf<String>()
+    for (audio in onlineHtmlElements(html, "audio")) {
+        audioStreamUrl(audio)?.let(seen::add)
+    }
+    return seen.size
+}
+
+private fun audioStreamUrl(audio: OnlineHtmlElement): String? {
+    for (source in onlineHtmlTagOpenings(audio.innerHtml, "source")) {
+        val src = onlineHtmlAttribute(source, "src") ?: continue
+        val match = MP3_SRC.find(src) ?: continue
+        return secureMediaUrl(match.value)
+    }
+    return null
 }
 
 internal fun parseBookTitle(html: String): String? =
@@ -182,7 +200,7 @@ private class ShariatiAdapter(private val transport: OnlineTransport) : OnlineAd
 
     private suspend fun countEpisodes(slug: String): Int =
         try {
-            fetchBook(slug).episodes.size
+            countAudioEpisodes(transport.getText(bookUrl(slug)))
         } catch (_: OnlineTransportException) {
             0
         }

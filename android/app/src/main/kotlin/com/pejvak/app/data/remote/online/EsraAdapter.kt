@@ -305,15 +305,6 @@ internal fun onlineHtmlTagOpenings(html: String, tag: String): List<String> {
     return regex.findAll(html).map { it.groupValues[1] }.toList()
 }
 
-internal fun onlineHtmlEnclosingElement(
-    html: String,
-    child: OnlineHtmlElement,
-): OnlineHtmlElement? = onlineHtmlElements(html)
-    .asSequence()
-    .filter { it.start <= child.start && it.end >= child.end }
-    .filterNot { it.start == child.start && it.end == child.end && it.tag == child.tag }
-    .minByOrNull { it.end - it.start }
-
 internal fun onlineHtmlAttribute(attributes: String, name: String): String? {
     val regex = Regex(
         "(?is)(?:^|\\s)${Regex.escape(name)}\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))",

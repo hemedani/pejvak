@@ -65,7 +65,9 @@ class OnlineCatalogService @Inject constructor(
             return CollectionListResult(cached.items, fromCache = true)
         }
         return try {
-            val items = adapter.listCollections(OnlineListOptions(languageCode))
+            val items = withContext(Dispatchers.Default) {
+                adapter.listCollections(OnlineListOptions(languageCode))
+            }
             mutex.withLock { cache[cacheKey] = CacheEntry(now(), items) }
             CollectionListResult(items)
         } catch (error: OnlineSourceException) {
@@ -81,7 +83,11 @@ class OnlineCatalogService @Inject constructor(
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return browse(sourceId, languageCode)
         return try {
-            CollectionListResult(adapter.searchCollections(trimmed, OnlineListOptions(languageCode)))
+            CollectionListResult(
+                withContext(Dispatchers.Default) {
+                    adapter.searchCollections(trimmed, OnlineListOptions(languageCode))
+                },
+            )
         } catch (error: OnlineSourceException) {
             CollectionListResult(emptyList(), error = error)
         }
@@ -105,7 +111,7 @@ class OnlineCatalogService @Inject constructor(
         val (sourceId, externalId) = parseCollectionKey(key) ?: return null
         val adapter = registry.adapter(sourceId) ?: return null
         return try {
-            adapter.getCollection(externalId)
+            withContext(Dispatchers.Default) { adapter.getCollection(externalId) }
         } catch (_: OnlineSourceException) {
             null
         }
@@ -121,10 +127,10 @@ class OnlineCatalogService @Inject constructor(
             ?: throw OnlineSourceException("Bad collection key: $key", OnlineErrorCode.NotFound)
         val adapter = registry.adapter(sourceId)
             ?: throw OnlineSourceException("Unknown source: $sourceId", OnlineErrorCode.NotFound)
-        val tracks = adapter.getTracks(key)
+        val tracks = withContext(Dispatchers.Default) { adapter.getTracks(key) }
         if (tracks.isEmpty()) throw OnlineSourceException("Collection is empty or gone", OnlineErrorCode.NotFound)
         val saved = collections.get(key)
-        val info = adapter.getCollection(externalId)
+        val info = withContext(Dispatchers.Default) { adapter.getCollection(externalId) }
             ?: OnlineCollectionInfo(
                 key = key,
                 sourceId = sourceId,
@@ -180,7 +186,7 @@ class OnlineCatalogService @Inject constructor(
             ?: throw OnlineSourceException("Bad collection key: $key", OnlineErrorCode.NotFound)
         val adapter = registry.adapter(sourceId)
             ?: throw OnlineSourceException("Unknown source: $sourceId", OnlineErrorCode.NotFound)
-        val tracks = adapter.getTracks(key)
+        val tracks = withContext(Dispatchers.Default) { adapter.getTracks(key) }
         val now = System.currentTimeMillis()
         withContext(Dispatchers.IO) {
             for (item in tracks) {
