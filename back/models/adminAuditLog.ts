@@ -24,7 +24,10 @@ export const adminAuditLog_pure = {
   actorRole: optional(string()),
   /** Dotted, stable, greppable: `user.update`, `subscription.grant`, … */
   action: string(),
-  /** `user` | `plan` | `subscription` | `transaction` | `platformSetting`. */
+  /**
+   * `user` | `plan` | `subscription` | `transaction` | `platformSetting` |
+   * `aiUsage` | `channel` | `channelPlaylist` | `channelAudio`.
+   */
   targetType: string(),
   targetId: optional(string()),
   /** One human sentence, written for the panel's activity list. */

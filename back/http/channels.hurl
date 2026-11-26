@@ -246,6 +246,43 @@ HTTP 200
 jsonpath "$.success" == true
 jsonpath "$.body.waveform" count == 0
 
+[Captures]
+missingAudioId: jsonpath "$.body._id"
+
+# ── adminBackfillChannelWaveforms (prompt 02 backfill) ──────────
+#
+# The missing-bytes row is a candidate with an empty waveform. The backfill must
+# count it as skipped rather than fail, and a listener token must not reach the
+# admin-only act. This is the same path `deno task backfill:waveforms` uses.
+
+POST {{serverAddress}}/lesan
+token: {{creatorToken}}
+{
+  "model": "channelAudio",
+  "act": "adminBackfillChannelWaveforms",
+  "details": { "set": { "audioId": "{{missingAudioId}}" }, "get": { "scanned": 1 } }
+}
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
+
+POST {{serverAddress}}/lesan
+token: {{adminToken}}
+{
+  "model": "channelAudio",
+  "act": "adminBackfillChannelWaveforms",
+  "details": { "set": { "audioId": "{{missingAudioId}}" }, "get": { "scanned": 1, "updated": 1, "skippedMissing": 1, "failed": 1, "lastId": 1, "done": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.scanned" == 1
+jsonpath "$.body.updated" == 0
+jsonpath "$.body.skippedMissing" == 1
+jsonpath "$.body.failed" == 0
+jsonpath "$.body.done" == true
+jsonpath "$.body.lastId" == "{{missingAudioId}}"
+
 # The deduped re-publish did not double-count; the folder now also holds the
 # unmeasurable row. Both folders are still listed.
 

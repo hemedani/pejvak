@@ -4,6 +4,7 @@ import { adminGetRetentionSetup } from "./analytics/adminGetRetention/mod.ts";
 import { adminGetTimeseriesSetup } from "./analytics/adminGetTimeseries/mod.ts";
 import { adminGetTopTracksSetup } from "./analytics/adminGetTopTracks/mod.ts";
 import { adminListAuditLogsSetup } from "./auditLog/adminListAuditLogs/mod.ts";
+import { adminBackfillChannelWaveformsSetup } from "./channels/adminBackfillChannelWaveforms/mod.ts";
 import { adminListPlansSetup } from "./plans/adminListPlans/mod.ts";
 import { adminUpsertPlanSetup } from "./plans/adminUpsertPlan/mod.ts";
 import { adminUpdatePlatformSettingSetup } from "./platform/adminUpdatePlatformSetting/mod.ts";
@@ -35,6 +36,7 @@ import { adminUpdateUserSetup } from "./users/adminUpdateUser/mod.ts";
  * - `adminAuditLog` — the activity feed
  * - `platformSetting` — the global switches
  * - `aiUsage` — AI credit grants
+ * - `channelAudio` — waveform maintenance
  *
  * Read acts use `requireSupport` (admin or support); mutating acts use
  * `requireAdmin`. That split is what makes a support role safe to hand out.
@@ -68,4 +70,6 @@ export const adminSetup = () => {
   adminUpdatePlatformSettingSetup();
 
   adminGrantAiCreditsSetup();
+
+  adminBackfillChannelWaveformsSetup();
 };
