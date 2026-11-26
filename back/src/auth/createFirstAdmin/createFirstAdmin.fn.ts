@@ -1,0 +1,71 @@
+import type { ActFn } from "lesan";
+import { hash } from "@da/bcrypt";
+import { coreApp, user } from "../../../mod.ts";
+import { createToken, throwError } from "@lib";
+
+/**
+ * Creates the first admin, and only the first.
+ *
+ * The guard is "the user collection is empty", matching the temporary-bootstrap
+ * pattern this act was modeled on. That makes it self-closing: the first
+ * successful call (or any pre-existing account) shuts it, so it can never be
+ * used to promote a listener later. A database that already has accounts and
+ * needs an admin uses `deno task seed` or an existing admin, not this act.
+ *
+ * Returning a token makes setup one call: the operator can use the new account
+ * immediately, then create their real identity from the panel if they prefer.
+ */
+export const createFirstAdminFn: ActFn = async (body) => {
+  const { set, get } = body.details;
+
+  const existing = await user.findOne({
+    filters: {},
+    projection: { _id: 1 },
+  });
+  if (existing) {
+    throwError(
+      "This setup action is only available before the first account is created",
+    );
+  }
+
+  const now = new Date();
+  const created = await user.insertOne({
+    doc: {
+      username: set.username,
+      email: set.email,
+      password: await hash(set.password),
+      ...(set.displayName !== undefined
+        ? { displayName: set.displayName }
+        : {}),
+      role: "admin",
+      status: "active",
+      createdAt: now,
+      updatedAt: now,
+    },
+    projection: { _id: 1, username: 1, email: 1 },
+  });
+  if (!created) throwError("Admin was not created");
+
+  const token = await createToken({
+    _id: created!._id,
+    username: set.username,
+    email: set.email,
+  });
+
+  // Mirror `register`: an empty projection would return the whole document,
+  // including the password hash, so fall back to every safe pure field and then
+  // delete the hash defensively even from an exclusion projection.
+  const requestedUser = get?.user ?? {};
+  const userProjection = Object.keys(requestedUser).length > 0
+    ? requestedUser
+    : coreApp.schemas.createProjection("user", "Pure");
+
+  const admin = await user.findOne({
+    filters: { _id: created!._id },
+    projection: userProjection,
+  });
+
+  if (admin) delete admin.password;
+
+  return { token, user: admin };
+};

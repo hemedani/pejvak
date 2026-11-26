@@ -49,6 +49,27 @@ adminToken: jsonpath "$.body.token"
 adminId: jsonpath "$.body.user._id"
 
 
+# ── First-admin bootstrap is one-time ───────────────────────────
+#
+# `createFirstAdmin` is public only because a fresh database has no account to
+# authenticate with. The seeded admin closes it, so a listener (or anyone else)
+# cannot use it to promote themselves later.
+
+POST {{serverAddress}}/lesan
+{
+  "model": "user",
+  "act": "createFirstAdmin",
+  "details": {
+    "set": { "username": "late-admin-{{unique}}", "email": "late-admin-{{unique}}@pejvak.app", "password": "password123" },
+    "get": { "token": 1 }
+  }
+}
+
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
+
+
 # ── Public status: no token at all ──────────────────────────────
 #
 # A client has to be able to learn that signups are closed, or that the app is
