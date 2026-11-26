@@ -244,8 +244,10 @@ so non-history callers keep their look.
   clobbering aggregates) and `PlaybackEngine` seeds `durationSec` from the track on load/skip/advance. Without both:
   no total time, no timeline, no history row, no auto-advance, no waveform. Media3's reported duration still wins.
 - **A streamed channel episode's waveform is server work.** `channelAudio.waveform` (0..1 peaks) is consumed by
-  `wireWaveform` → `WaveformAnalyzer.provide` when the channel is refreshed/materialised; the seeded sample is only
-  the fallback. The contract lives in `back/docs/prompts/02-channel-waveform-peaks.md`.
+  `wireWaveform` → `WaveformAnalyzer.provide` when the channel is refreshed/materialised, and `rememberWaveforms`
+  writes it to the contentHash-keyed disk cache so real bars survive restart/offline; the seeded sample is only the
+  fallback and is never cached. The contract lives in `back/docs/prompts/02-channel-waveform-peaks.md`. An episode
+  published before the backend change has no peaks until `deno task backfill:waveforms` runs on the server.
 
 ## 6. Where to look in the old app (reference for parity)
 | Native concern | RN reference |

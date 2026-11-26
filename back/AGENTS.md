@@ -67,7 +67,7 @@ back/
 │   │   └── providers/      # manual (operator-confirmed) + stripe (Checkout Sessions)
 │   ├── ai/                 # getMyAiUsage, period.ts (UTC month key)
 │   ├── platform/           # getPlatformStatus (public, tokenless), setting.ts
-│   └── admin/              # the panel: 22 acts across 8 schemas
+│   └── admin/              # the panel: 23 acts across 9 schemas
 │       ├── audit.ts        # recordAudit
 │       ├── query.ts        # adminPagination, safeUserProjection, escapeRegex, textFilter
 │       ├── time.ts         # UTC day/week buckets
@@ -259,6 +259,7 @@ Every act lives in `src/<domain>/<actName>/` and consists of three files: `mod.t
 | Act | Model / route | Auth | Purpose |
 |---|---|---|---|
 | `register` | `POST /user/register` | public | Create a user, return `{ token, user }`. |
+| `createFirstAdmin` | `POST /user/createFirstAdmin` | **public, one-time** | Bootstrap the first `admin` **only while the user collection is empty**; returns `{ token, user }`. It is self-closing and is not a way to promote an existing listener. |
 | `login` | `POST /user/login` | public | Verify password, return `{ token, user }`. |
 | `getMe` | `POST /user/getMe` | token | Return the current user with a deep `get` projection. |
 | `getMySettings` | `POST /user/getMySettings` | token | Return the caller's shared settings, filling defaults on read without writing. |
@@ -277,7 +278,7 @@ Every act lives in `src/<domain>/<actName>/` and consists of three files: `mod.t
 | `cancelMySubscription` | `POST /subscription/cancelMySubscription` | token | Stop the next renewal, keep the paid days (`cancelAtPeriodEnd`). |
 | `getMyAiUsage` | `POST /aiUsage/getMyAiUsage` | token | The credit meter for the current (or a named) month. |
 
-The admin panel's 22 acts are listed separately in [Roles and the admin panel](#roles-and-the-admin-panel).
+The admin panel's 23 acts are listed separately in [Roles and the admin panel](#roles-and-the-admin-panel).
 
 **Request shape**: `{ "details": { "set": { ... }, "get": { ... } } }`; the token goes in the `token` header. `set` is validated by the act's validator; `get` drives the projection via `selectStruct(model, depth)`.
 
@@ -329,8 +330,9 @@ Guards live in `utils/roles.ts` and are **synchronous** (`requireSupport` / `req
 | `subscription` | `adminGrantSubscription`, `adminRevokeSubscription`, `adminListSubscriptions` |
 | `billingTransaction` | `adminListTransactions`, `adminConfirmTransaction`, `adminRefundTransaction` |
 | `adminAuditLog` | `adminListAuditLogs` |
-| `platformSetting` | `adminGetPlatformSetting`, `adminUpdatePlatformSetting` |
+| `platformSetting` | `adminUpdatePlatformSetting` (the read is the public `getPlatformStatus`) |
 | `aiUsage` | `adminGrantAiCredits` |
+| `channelAudio` | `adminBackfillChannelWaveforms` |
 
 ### Panel conventions
 
@@ -544,7 +546,7 @@ Environment variables:
 
 **Uploads are written atomically.** `src/channels/media.ts` streams a `multipart` file to `<mediaPath>.part` and renames it into place only after the stream ends and the byte count matches `file.size`; an aborted upload (client timeout, drop, kill) is unlinked in the `catch` and leaves nothing under `./uploads`. The deferred sweep (`sweepOrphanUploads` / `deno task sweep:uploads`) reclaims what a request cannot: stale `.part` leaves and completed files with no `channelAudio.mediaPath`, both gated on an age threshold so a live upload or a not-yet-published file is never touched.
 
-**The first admin comes from the seed, not from an endpoint.** `deno task seed` creates `admin@pejvak.app / password123` (and promotes an existing account with that email). There is deliberately no public "make me an admin" act — that endpoint would *be* the security model. Afterwards, admins promote each other from the panel. **Change that password before exposing the server.**
+**The first admin normally comes from the seed.** `deno task seed` creates `admin@pejvak.app / password123` (and promotes an existing account with that email), which is the path for a deployment that already has accounts. A truly fresh database may instead call `createFirstAdmin` **once**: it is public only because there is no account to authenticate with, and it refuses as soon as any user exists. It is a setup tool, not a promotion path — never expose it in a client. Afterwards, admins promote each other from the panel. **Change the seeded password before exposing the server.**
 
 The Lesan playground is available at `/playground` in development. `typeGeneration: true` regenerates `declarations/` on server start.
 
@@ -553,8 +555,8 @@ The Lesan playground is available at `/playground` in development. `typeGenerati
 ## Testing
 
 - E2E tests are [hurl](https://hurl.dev) files under `http/`:
-  - `deno task test` — `http/e2e.hurl`, the listener-facing suite (62 requests).
-  - `deno task test:admin` — seeds, then `http/admin.hurl` (73 requests): RBAC, plans, quota enforcement, the full money path, forever/duration/usage grants, AI credits, suspension, analytics, the audit trail, the platform switches and the destructive-act guards.
+  - `deno task test` — `http/e2e.hurl`, the listener-facing suite (64 requests).
+  - `deno task test:admin` — seeds, then `http/admin.hurl` (74 requests): RBAC, the one-time first-admin guard, plans, quota enforcement, the full money path, forever/duration/usage grants, AI credits, suspension, analytics, the audit trail, the platform switches and the destructive-act guards.
   - `deno task test:channels` — the upload-safety unit tests plus `http/channels.hurl`: creator CRUD, multipart upload including an aborted body, publish/idempotency, browse, quota, moderation and the leaf-first delete.
   - `deno task test:all` — all three suites.
 - Upload durability is tested at the function level (`src/channels/media_test.ts`) because hurl cannot inspect `./uploads`: an erroring stream and a short-but-clean stream must both leave no `.part` and no final file, and `selectReclaimablePaths` must only pick stale files.
