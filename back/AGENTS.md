@@ -259,7 +259,7 @@ Every act lives in `src/<domain>/<actName>/` and consists of three files: `mod.t
 | Act | Model / route | Auth | Purpose |
 |---|---|---|---|
 | `register` | `POST /user/register` | public | Create a user, return `{ token, user }`. |
-| `createFirstAdmin` | `POST /user/createFirstAdmin` | **public, one-time** | Bootstrap the first `admin` **only while the user collection is empty**; returns `{ token, user }`. It is self-closing and is not a way to promote an existing listener. |
+| `createFirstAdmin` | `POST /user/createFirstAdmin` | **public, one-time** | Bootstrap the first `admin` **only while no admin exists**; returns `{ token, user }`. It is self-closing and is not a way to promote an existing listener. |
 | `login` | `POST /user/login` | public | Verify password, return `{ token, user }`. |
 | `getMe` | `POST /user/getMe` | token | Return the current user with a deep `get` projection. |
 | `getMySettings` | `POST /user/getMySettings` | token | Return the caller's shared settings, filling defaults on read without writing. |
@@ -546,7 +546,7 @@ Environment variables:
 
 **Uploads are written atomically.** `src/channels/media.ts` streams a `multipart` file to `<mediaPath>.part` and renames it into place only after the stream ends and the byte count matches `file.size`; an aborted upload (client timeout, drop, kill) is unlinked in the `catch` and leaves nothing under `./uploads`. The deferred sweep (`sweepOrphanUploads` / `deno task sweep:uploads`) reclaims what a request cannot: stale `.part` leaves and completed files with no `channelAudio.mediaPath`, both gated on an age threshold so a live upload or a not-yet-published file is never touched.
 
-**The first admin normally comes from the seed.** `deno task seed` creates `admin@pejvak.app / password123` (and promotes an existing account with that email), which is the path for a deployment that already has accounts. A truly fresh database may instead call `createFirstAdmin` **once**: it is public only because there is no account to authenticate with, and it refuses as soon as any user exists. It is a setup tool, not a promotion path — never expose it in a client. Afterwards, admins promote each other from the panel. **Change the seeded password before exposing the server.**
+**The first admin normally comes from the seed.** `deno task seed` creates `admin@pejvak.app / password123` (and promotes an existing account with that email), which is the path for a deployment that already has accounts. A database with no admin may instead call `createFirstAdmin` **once**: it is public only because there is no admin to authenticate with, and it refuses as soon as an admin exists (listeners may already be present). It is a setup tool, not a promotion path — never expose it in a client. Afterwards, admins promote each other from the panel. **Change the seeded password before exposing the server.**
 
 The Lesan playground is available at `/playground` in development. `typeGeneration: true` regenerates `declarations/` on server start.
 

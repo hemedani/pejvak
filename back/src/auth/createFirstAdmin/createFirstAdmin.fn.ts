@@ -6,11 +6,11 @@ import { createToken, throwError } from "@lib";
 /**
  * Creates the first admin, and only the first.
  *
- * The guard is "the user collection is empty", matching the temporary-bootstrap
- * pattern this act was modeled on. That makes it self-closing: the first
- * successful call (or any pre-existing account) shuts it, so it can never be
- * used to promote a listener later. A database that already has accounts and
- * needs an admin uses `deno task seed` or an existing admin, not this act.
+ * The guard is "no admin exists", not "no user exists": a database that already
+ * has listeners can still appoint its first operator. That is a deliberate
+ * bootstrap window, so keep the endpoint unavailable to the public until setup
+ * is finished; the first admin closes it, and it can never promote a listener
+ * afterwards. A database that already has an admin uses the panel, not this act.
  *
  * Returning a token makes setup one call: the operator can use the new account
  * immediately, then create their real identity from the panel if they prefer.
@@ -18,13 +18,23 @@ import { createToken, throwError } from "@lib";
 export const createFirstAdminFn: ActFn = async (body) => {
   const { set, get } = body.details;
 
-  const existing = await user.findOne({
-    filters: {},
+  const existingAdmin = await user.findOne({
+    filters: { role: "admin" },
     projection: { _id: 1 },
   });
-  if (existing) {
+  if (existingAdmin) {
     throwError(
-      "This setup action is only available before the first account is created",
+      "This setup action is only available before the first admin account is created",
+    );
+  }
+
+  const emailTaken = await user.findOne({
+    filters: { email: set.email },
+    projection: { _id: 1 },
+  });
+  if (emailTaken) {
+    throwError(
+      "A user with this email already exists. Use an existing admin or `deno task seed` to promote it, or choose another email.",
     );
   }
 

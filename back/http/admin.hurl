@@ -51,9 +51,9 @@ adminId: jsonpath "$.body.user._id"
 
 # ── First-admin bootstrap is one-time ───────────────────────────
 #
-# `createFirstAdmin` is public only because a fresh database has no account to
-# authenticate with. The seeded admin closes it, so a listener (or anyone else)
-# cannot use it to promote themselves later.
+# `createFirstAdmin` is public only because a database with no admin has no
+# operator to authenticate with. The seeded admin closes it, so a listener (or
+# anyone else) cannot use it to promote themselves later.
 
 POST {{serverAddress}}/lesan
 {
