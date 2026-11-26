@@ -22,6 +22,22 @@ import { resolve, sep } from "node:path";
 /** Root of the upload tree, as `mod.ts` serves it at `/uploads`. */
 export const UPLOAD_ROOT = "./uploads";
 
+/**
+ * Source buckets for a channel episode's scrubber waveform.
+ *
+ * The Android client draws 84 bars and resamples this strip (keeping peaks), so
+ * more source buckets than bars is intentional: the server measures once and
+ * every device can pick its own density without a re-decode.
+ */
+export const WAVEFORM_PEAKS = 160;
+
+/** Silence floor as a bar height, matching the client's `WaveformAnalyzer`. */
+export const WAVEFORM_MIN_HEIGHT = 0.12;
+
+/** Loudness window, in dBFS, mapped onto `[WAVEFORM_MIN_HEIGHT, 1]`. */
+const WAVEFORM_FLOOR_DB = -52;
+const WAVEFORM_CEIL_DB = -6;
+
 /** The two kinds of media an upload act accepts. */
 export type MediaKind = "audio" | "image";
 
@@ -315,4 +331,111 @@ export const removeStoredBytes = async (
   }
 
   return removed;
+};
+
+const clamp01 = (value: number): number =>
+  value < 0 ? 0 : value > 1 ? 1 : value;
+
+/** A span's RMS loudness, mapped to the same bar height the client draws. */
+const heightOf = (sumSquares: number, count: number): number => {
+  if (count <= 0) return WAVEFORM_MIN_HEIGHT;
+
+  const rms = Math.sqrt(sumSquares / count);
+  if (!(rms > 0)) return WAVEFORM_MIN_HEIGHT;
+
+  const db = 20 * Math.log10(Math.max(rms, 1e-6));
+  const ratio = clamp01(
+    (db - WAVEFORM_FLOOR_DB) / (WAVEFORM_CEIL_DB - WAVEFORM_FLOOR_DB),
+  );
+  const height = WAVEFORM_MIN_HEIGHT + (1 - WAVEFORM_MIN_HEIGHT) * ratio;
+
+  // JSON turns NaN/Infinity into null, so never let one escape.
+  return Number.isFinite(height) ? height : WAVEFORM_MIN_HEIGHT;
+};
+
+/**
+ * Measures `path` into `buckets` RMS bar heights in `[0.12, 1]`.
+ *
+ * The mapping is deliberately identical to the Android `WaveformAnalyzer`
+ * (`MIN_HEIGHT`/`FLOOR_DB`/`CEIL_DB`), so a server-measured strip and a
+ * device-measured one look the same. ffmpeg narrows to mono 16-bit PCM at
+ * 8 kHz — enough to measure loudness, and cheap to parse. The whole file is
+ * decoded in one pass; publishing is once per episode, so that is acceptable.
+ *
+ * Returns `[]` instead of throwing when ffmpeg is absent, the file is missing
+ * or unreadable, or there are fewer samples than buckets (too little audio to
+ * measure honestly). A missing waveform is a nicety; it must never fail a
+ * publish or a backfill.
+ */
+export const waveformPeaks = async (
+  path: string,
+  buckets = WAVEFORM_PEAKS,
+): Promise<number[]> => {
+  const bucketCount = Math.max(1, Math.floor(buckets));
+
+  let output: Deno.CommandOutput;
+  try {
+    output = await new Deno.Command("ffmpeg", {
+      // No shell string and no filename interpolation into a command line.
+      args: [
+        "-v",
+        "error",
+        "-i",
+        path,
+        "-ac",
+        "1",
+        "-ar",
+        "8000",
+        "-f",
+        "s16le",
+        "-",
+      ],
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+  } catch (error) {
+    console.warn(`waveform: could not run ffmpeg for ${path}:`, error);
+    return [];
+  }
+
+  if (!output.success) {
+    const reason = new TextDecoder().decode(output.stderr).trim();
+    console.warn(
+      `waveform: ffmpeg could not measure ${path}: ${reason || "no stderr"}`,
+    );
+    return [];
+  }
+
+  const bytes = output.stdout;
+  const sampleCount = Math.floor(bytes.byteLength / 2);
+  if (sampleCount < bucketCount) return [];
+
+  // `Int16Array` needs an even byte offset. The piped stdout is normally
+  // aligned; copy in the rare unaligned case rather than risk a shifted read.
+  const samples = bytes.byteOffset % 2 === 0
+    ? new Int16Array(bytes.buffer, bytes.byteOffset, sampleCount)
+    : (() => {
+      const copy = new Uint8Array(sampleCount * 2);
+      copy.set(bytes.subarray(0, sampleCount * 2));
+      return new Int16Array(copy.buffer);
+    })();
+
+  const span = Math.floor(sampleCount / bucketCount);
+  const peaks: number[] = [];
+
+  for (let bucket = 0; bucket < bucketCount; bucket++) {
+    const start = bucket * span;
+    // Integer boundaries; the final span absorbs the remainder.
+    const end = bucket === bucketCount - 1 ? sampleCount : start + span;
+
+    let sumSquares = 0;
+    for (let index = start; index < end; index++) {
+      const normalised = samples[index] / 32768;
+      sumSquares += normalised * normalised;
+    }
+
+    peaks.push(heightOf(sumSquares, end - start));
+  }
+
+  return peaks;
 };

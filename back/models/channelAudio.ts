@@ -79,6 +79,13 @@ export const channelAudio_pure = {
   durationSec: defaulted(number(), 0),
   fileSizeBytes: defaulted(number(), 0),
   mimeType: optional(string()),
+  /**
+   * Measured loudness strip for the scrubber: exactly WAVEFORM_PEAKS heights in
+   * [0, 1], left→right, produced once from the hosted bytes. Empty when the server
+   * could not measure the file; the client then falls back to its sample strip.
+   * Never accepted from the client — `publishChannelAudio` computes it.
+   */
+  waveform: defaulted(array(number()), []),
   isAudiobook: defaulted(boolean(), false),
   author: optional(string()),
   narrator: optional(string()),

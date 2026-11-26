@@ -42,6 +42,7 @@ export const moveChannelAudioFn: ActFn = async (body) => {
       durationSec: 1,
       fileSizeBytes: 1,
       mimeType: 1,
+      waveform: 1,
       isAudiobook: 1,
       author: 1,
       narrator: 1,
@@ -104,6 +105,9 @@ export const moveChannelAudioFn: ActFn = async (body) => {
       durationSec: src.durationSec,
       fileSizeBytes: src.fileSizeBytes,
       mimeType: src.mimeType,
+      // A move re-files the episode; it does not re-upload it, so the measured
+      // strip travels with it. A legacy row without one stays empty (backfill).
+      waveform: src.waveform ?? [],
       isAudiobook: src.isAudiobook,
       author: src.author,
       narrator: src.narrator,

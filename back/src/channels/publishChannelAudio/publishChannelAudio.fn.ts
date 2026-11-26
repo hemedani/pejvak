@@ -10,6 +10,7 @@ import {
   channelAudioQuotaOf,
   resolveEntitlement,
 } from "../../entitlements/entitlement.ts";
+import { UPLOAD_ROOT, waveformPeaks } from "../media.ts";
 
 /**
  * Creates an episode in a caller-owned folder.
@@ -60,6 +61,15 @@ export const publishChannelAudioFn: ActFn = async (body) => {
   });
   if (duplicate) return duplicate;
 
+  // Server-authoritative, from the bytes we just stored. A missing file or a
+  // failed measurement yields `[]` and must never stop the episode publishing.
+  const absoluteMediaPath = set.mediaPath
+    ? `${UPLOAD_ROOT}/${set.mediaPath}`
+    : undefined;
+  const waveform = absoluteMediaPath
+    ? await waveformPeaks(absoluteMediaPath)
+    : [];
+
   const now = new Date();
   const created = await channelAudio.insertOne({
     doc: {
@@ -73,6 +83,7 @@ export const publishChannelAudioFn: ActFn = async (body) => {
       durationSec: set.durationSec ?? 0,
       fileSizeBytes: set.fileSizeBytes ?? 0,
       mimeType: set.mimeType,
+      waveform,
       isAudiobook: set.isAudiobook ?? false,
       author: set.author,
       narrator: set.narrator,

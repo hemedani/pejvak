@@ -5,6 +5,9 @@ import {
   storeUploadFile,
   UPLOAD_ROOT,
   type UploadSource,
+  WAVEFORM_MIN_HEIGHT,
+  WAVEFORM_PEAKS,
+  waveformPeaks,
 } from "./media.ts";
 
 const exists = async (path: string): Promise<boolean> => {
@@ -13,6 +16,41 @@ const exists = async (path: string): Promise<boolean> => {
     return true;
   } catch {
     return false;
+  }
+};
+
+const generateWav = async (
+  path: string,
+  filter: string,
+  durationSec?: number,
+): Promise<void> => {
+  const args = ["-v", "error", "-f", "lavfi", "-i", filter];
+  if (durationSec !== undefined) args.push("-t", String(durationSec));
+  args.push("-ac", "1", "-ar", "8000", "-y", path);
+
+  const output = await new Deno.Command("ffmpeg", {
+    args,
+    stdout: "null",
+    stderr: "piped",
+  }).output();
+
+  if (!output.success) {
+    throw new Error(
+      `ffmpeg could not create ${path}: ${
+        new TextDecoder().decode(output.stderr).trim()
+      }`,
+    );
+  }
+};
+
+const withTempDir = async (run: (dir: string) => Promise<void>) => {
+  const dir = await Deno.makeTempDir({ prefix: "pejvak-waveform-" });
+  try {
+    await run(dir);
+  } finally {
+    await Deno.remove(dir, { recursive: true }).catch(() => {
+      // Best-effort cleanup; the temp dir is disposable either way.
+    });
   }
 };
 
@@ -132,6 +170,58 @@ Deno.test("selectReclaimablePaths reclaims only stale parts and unreferenced fil
   // the row references it, so the sweep must never treat it as a temp leaf.
   equal(parts.includes("channel/audio/legit.part"), false);
   equal(orphans.includes("channel/audio/legit.part"), false);
+});
+
+Deno.test("waveformPeaks maps a sine to 160 finite heights above the floor", async () => {
+  await withTempDir(async (dir) => {
+    const path = `${dir}/sine.wav`;
+    await generateWav(path, "aevalsrc=0.5*sin(2*PI*440*t):s=8000:d=2");
+
+    const peaks = await waveformPeaks(path);
+
+    equal(peaks.length, WAVEFORM_PEAKS);
+    for (const peak of peaks) {
+      equal(Number.isFinite(peak), true);
+      equal(peak >= WAVEFORM_MIN_HEIGHT, true);
+      equal(peak <= 1, true);
+    }
+
+    const mean = peaks.reduce((sum, peak) => sum + peak, 0) / peaks.length;
+    equal(mean > WAVEFORM_MIN_HEIGHT + 0.2, true);
+  });
+});
+
+Deno.test("waveformPeaks maps digital silence to the minimum height", async () => {
+  await withTempDir(async (dir) => {
+    const path = `${dir}/silence.wav`;
+    await generateWav(path, "anullsrc=r=8000:cl=mono", 2);
+
+    const peaks = await waveformPeaks(path);
+
+    equal(peaks.length, WAVEFORM_PEAKS);
+    for (const peak of peaks) {
+      equal(Math.abs(peak - WAVEFORM_MIN_HEIGHT) < 1e-9, true);
+    }
+  });
+});
+
+Deno.test("waveformPeaks returns [] for a missing path or a non-audio file", async () => {
+  await withTempDir(async (dir) => {
+    equal((await waveformPeaks(`${dir}/missing.wav`)).length, 0);
+
+    const text = `${dir}/not-audio.txt`;
+    await Deno.writeTextFile(text, "this is not audio");
+    equal((await waveformPeaks(text)).length, 0);
+  });
+});
+
+Deno.test("waveformPeaks returns [] when there are fewer samples than buckets", async () => {
+  await withTempDir(async (dir) => {
+    const path = `${dir}/too-short.wav`;
+    await generateWav(path, "anullsrc=r=8000:cl=mono", 0.01);
+
+    equal((await waveformPeaks(path)).length, 0);
+  });
 });
 
 Deno.test("listStoredFiles returns media paths relative to the upload root", async () => {

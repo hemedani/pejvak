@@ -200,7 +200,7 @@ token: {{creatorToken}}
       "durationSec": 3600,
       "isAudiobook": false
     },
-    "get": { "_id": 1, "title": 1, "audioUrl": 1, "durationSec": 1, "position": 1 }
+    "get": { "_id": 1, "title": 1, "audioUrl": 1, "durationSec": 1, "position": 1, "waveform": 1 }
   }
 }
 HTTP 200
@@ -209,9 +209,14 @@ jsonpath "$.success" == true
 jsonpath "$.body.audioUrl" == "{{audioUrl}}"
 jsonpath "$.body.durationSec" == 3600
 jsonpath "$.body.position" == 0
+# The server measured the uploaded bytes into the scrubber strip.
+jsonpath "$.body.waveform" count == 160
+jsonpath "$.body.waveform[0]" >= 0.12
+jsonpath "$.body.waveform[0]" <= 1
 
 [Captures]
 audioId: jsonpath "$.body._id"
+waveformFirst: jsonpath "$.body.waveform[0]"
 
 # Idempotent re-publish: same contentHash in the same channel returns the row.
 
@@ -226,7 +231,23 @@ HTTP 200
 [Asserts]
 jsonpath "$.body._id" == "{{audioId}}"
 
-# folder.audioCount and channel.audioCount each bumped to 1 (dedup not double-counted).
+# Measurement failure must never fail the publish: a path with no bytes still
+# creates the row, with an empty waveform, and does not 500 (prompt 02 §3).
+
+POST {{serverAddress}}/lesan
+token: {{creatorToken}}
+{
+  "model": "channelAudio",
+  "act": "publishChannelAudio",
+  "details": { "set": { "playlistId": "{{folderId}}", "contentHash": "hash-bad-{{unique}}", "title": "No Bytes", "category": "podcast", "audioUrl": "/uploads/missing.wav", "mediaPath": "channel/audio/missing-{{unique}}.wav" }, "get": { "_id": 1, "title": 1, "waveform": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.success" == true
+jsonpath "$.body.waveform" count == 0
+
+# The deduped re-publish did not double-count; the folder now also holds the
+# unmeasurable row. Both folders are still listed.
 
 POST {{serverAddress}}/lesan
 token: {{creatorToken}}
@@ -247,12 +268,15 @@ token: {{creatorToken}}
 {
   "model": "channelAudio",
   "act": "updateChannelAudio",
-  "details": { "set": { "audioId": "{{audioId}}", "title": "Episode One — Final", "author": "N. Signal" }, "get": { "_id": 1, "title": 1, "author": 1 } }
+  "details": { "set": { "audioId": "{{audioId}}", "title": "Episode One — Final", "author": "N. Signal" }, "get": { "_id": 1, "title": 1, "author": 1, "waveform": 1 } }
 }
 HTTP 200
 [Asserts]
 jsonpath "$.body.title" == "Episode One — Final"
 jsonpath "$.body.author" == "N. Signal"
+# Metadata edits must not touch the measured strip.
+jsonpath "$.body.waveform" count == 160
+jsonpath "$.body.waveform[0]" == {{waveformFirst}}
 
 # ── moveChannelAudio (CH-A11, same channel) ─────────────────────
 
@@ -307,12 +331,13 @@ POST {{serverAddress}}/lesan
 {
   "model": "channelAudio",
   "act": "getChannelAudio",
-  "details": { "set": { "contentHash": "hash-{{unique}}" }, "get": { "_id": 1, "contentHash": 1, "audioUrl": 1 } }
+  "details": { "set": { "contentHash": "hash-{{unique}}" }, "get": { "_id": 1, "contentHash": 1, "audioUrl": 1, "waveform": 1 } }
 }
 HTTP 200
 [Asserts]
 jsonpath "$.body.contentHash" == "hash-{{unique}}"
 jsonpath "$.body.audioUrl" == "{{audioUrl}}"
+jsonpath "$.body.waveform" count == 160
 
 # ── Ownership denial: a second creator cannot file into our folder ─
 
