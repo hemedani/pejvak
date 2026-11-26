@@ -215,12 +215,12 @@ class ChannelRepository @Inject constructor(
             .also { waveforms.provide(audio.contentHash, wireWaveform(audio.waveform)) }
 
     /**
-     * Keeps the server-measured strips for this process. `waveform` is derived, not
-     * identity, so it is not stored in the Room mirror; seed it from the wire rows
-     * before they are cached and re-read as domain objects that no longer carry it.
+     * Keeps the server-measured strips. `waveform` is derived, not identity, so it is
+     * not stored in the Room mirror; seed it from the wire rows before they are cached
+     * and write it to the contentHash-keyed disk cache so it survives restart/offline.
      */
     private fun rememberWaveforms(rows: List<ChannelAudio>) {
-        rows.forEach { waveforms.provide(it.contentHash, wireWaveform(it.waveform)) }
+        rows.forEach { waveforms.provide(it.contentHash, wireWaveform(it.waveform), persist = true) }
     }
 
     /** The durable, origin-resolved stream URL for an episode (prompt D11). */

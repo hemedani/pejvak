@@ -102,10 +102,15 @@ class WaveformAnalyzer @Inject constructor(
 
     private fun sample(key: String): FloatArray = sampleWaveformFor(key)
 
-    /** Registers a server-measured strip (already normalised to [WAVEFORM_BUCKETS]). */
-    fun provide(key: String, values: FloatArray?) {
+    /**
+     * Registers a server-measured strip (already normalised to [WAVEFORM_BUCKETS]).
+     * [persist] writes it to the same contentHash-keyed disk cache the decoder uses,
+     * so a hosted episode keeps its real bars offline and across restarts.
+     */
+    fun provide(key: String, values: FloatArray?, persist: Boolean = false) {
         if (values == null || values.isEmpty()) return
         synchronized(provided) { provided[key] = values }
+        if (persist) write(key, values)
     }
 
     private fun cached(key: String): FloatArray? =

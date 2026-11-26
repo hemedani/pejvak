@@ -368,31 +368,6 @@ class ChannelRemoteDataSource @Inject constructor(
         cachedAt = 0L,
     )
 
-    private fun parseAudio(obj: JsonObject, channelServerId: String?, playlistServerId: String?): ChannelAudio = ChannelAudio(
-        serverId = obj.string("_id") ?: error("audio without _id"),
-        channelServerId = channelServerId ?: "",
-        playlistServerId = playlistServerId,
-        contentHash = obj.string("contentHash") ?: "",
-        title = obj.string("title") ?: "",
-        description = obj.string("description"),
-        category = obj.string("category"),
-        tags = obj.stringList("tags"),
-        audioUrl = obj.string("audioUrl") ?: "",
-        durationSec = obj["durationSec"].jsonInt() ?: 0,
-        waveform = obj.floatList("waveform"),
-        fileSizeBytes = obj.long("fileSizeBytes") ?: 0L,
-        mimeType = obj.string("mimeType"),
-        isAudiobook = obj["isAudiobook"].asBoolean() ?: false,
-        author = obj.string("author"),
-        narrator = obj.string("narrator"),
-        artworkUrl = obj.string("artworkUrl"),
-        position = obj["position"].jsonInt() ?: 0,
-        languageCode = obj.string("languageCode"),
-        status = ChannelStatus.from(obj.string("status")),
-        cachedAt = 0L,
-        isMine = false,
-    )
-
     private companion object {
         const val DEFAULT_LIMIT = 50
 
@@ -414,6 +389,31 @@ class ChannelRemoteDataSource @Inject constructor(
         )
     }
 }
+
+internal fun parseAudio(obj: JsonObject, channelServerId: String?, playlistServerId: String?): ChannelAudio = ChannelAudio(
+    serverId = obj.string("_id") ?: error("audio without _id"),
+    channelServerId = channelServerId ?: "",
+    playlistServerId = playlistServerId,
+    contentHash = obj.string("contentHash") ?: "",
+    title = obj.string("title") ?: "",
+    description = obj.string("description"),
+    category = obj.string("category"),
+    tags = obj.stringList("tags"),
+    audioUrl = obj.string("audioUrl") ?: "",
+    durationSec = obj["durationSec"].jsonInt() ?: 0,
+    waveform = obj.floatList("waveform"),
+    fileSizeBytes = obj.long("fileSizeBytes") ?: 0L,
+    mimeType = obj.string("mimeType"),
+    isAudiobook = obj["isAudiobook"].asBoolean() ?: false,
+    author = obj.string("author"),
+    narrator = obj.string("narrator"),
+    artworkUrl = obj.string("artworkUrl"),
+    position = obj["position"].jsonInt() ?: 0,
+    languageCode = obj.string("languageCode"),
+    status = ChannelStatus.from(obj.string("status")),
+    cachedAt = 0L,
+    isMine = false,
+)
 
 // --- minimal JSON accessors over the Lesan projection (camelCase scalar fields) ---
 
