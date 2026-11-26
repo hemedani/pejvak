@@ -26,6 +26,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
 import com.pejvak.app.domain.OnlineCollection
+import com.pejvak.app.domain.formatDuration
 import com.pejvak.app.domain.online.OnlineSource
 import com.pejvak.app.domain.online.describeDownloadState
 import com.pejvak.app.domain.online.findLanguage
@@ -52,6 +53,7 @@ fun DiscoverScreen(
     onOpenSource: (String) -> Unit,
     onOpenLanguage: (String) -> Unit,
     onOpenChannels: () -> Unit,
+    onCreateChannel: () -> Unit,
     viewModel: DiscoverViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -71,6 +73,11 @@ fun DiscoverScreen(
                 title = stringResource(R.string.tab_discover),
                 subtitle = findLanguage(state.languageCode)?.let { "${it.nativeName} · ${it.name}" },
                 actions = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("add"),
+                        contentDescription = stringResource(R.string.my_channels_new),
+                        onClick = onCreateChannel,
+                    )
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("language"),
                         contentDescription = stringResource(R.string.discover_choose_language),
@@ -132,6 +139,7 @@ fun DiscoverScreen(
                     onOpenLanguage = onOpenLanguage,
                     onOpenChannels = onOpenChannels,
                     onOpenLanguageSheet = viewModel::openLanguageSheet,
+                    onPlayEpisode = viewModel::playEpisode,
                 )
             }
         }
@@ -281,6 +289,7 @@ private fun BrowsePage(
     onOpenLanguage: (String) -> Unit,
     onOpenChannels: () -> Unit,
     onOpenLanguageSheet: () -> Unit,
+    onPlayEpisode: (ChannelEpisodeCard) -> Unit,
 ) {
     val geo = LocalPejvakGeometry.current
     val tokens = LocalPejvakTokens.current
@@ -310,6 +319,42 @@ private fun BrowsePage(
                     modifier = Modifier.oceanEntrance(1, swayDp = 0.dp),
                     onClick = onOpenLanguageSheet,
                 )
+            }
+            // UX-D01: channel episodes sit above the third-party source directory.
+            if (state.channelEpisodes.isNotEmpty()) {
+                item {
+                    Text(
+                        text = stringResource(R.string.discover_channels_ahead),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tokens.textSecondary,
+                        modifier = Modifier.oceanEntrance(2, swayDp = 0.dp, riseDp = 8.dp),
+                    )
+                }
+                item {
+                    ListGroup(
+                        items = state.channelEpisodes,
+                        modifier = Modifier.oceanEntrance(2),
+                        staggerRows = true,
+                    ) { card, _ ->
+                        ListRow(
+                            title = card.audio.title,
+                            subtitle = listOfNotNull(
+                                card.channelName.takeIf { it.isNotBlank() },
+                                card.audio.author?.takeIf { it.isNotBlank() },
+                            ).joinToString(" · ").ifBlank { null },
+                            meta = card.audio.durationSec.takeIf { it > 0 }?.let { formatDuration(it) },
+                            leading = {
+                                PaletteTile(
+                                    contentHash = card.audio.contentHash,
+                                    label = card.audio.title,
+                                    artworkUrl = card.audio.artworkUrl,
+                                    size = geo.tiles.md,
+                                )
+                            },
+                            onClick = { onPlayEpisode(card) },
+                        )
+                    }
+                }
             }
             item {
                 Text(

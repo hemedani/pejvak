@@ -98,6 +98,7 @@ import com.pejvak.app.ui.screens.channels.ChannelDetailScreen
 import com.pejvak.app.ui.screens.channels.ChannelEditorSheet
 import com.pejvak.app.ui.screens.channels.ChannelCreatorViewModel
 import com.pejvak.app.ui.screens.channels.ChannelManageScreen
+import com.pejvak.app.ui.screens.channels.ChannelUploadScreen
 import com.pejvak.app.ui.screens.channels.ChannelsScreen
 import com.pejvak.app.ui.screens.channels.MyChannelsScreen
 import com.pejvak.app.ui.screens.discover.DiscoverScreen
@@ -176,6 +177,16 @@ fun PejvakNavHost(
         signedIn = authState.status == AuthViewModel.Status.Authenticated,
         pendingTotal = authState.pendingTotal,
     )
+    // UX-C01: one create-channel action shared by every dock page's header. A signed-out
+    // tap routes to AuthSheet instead of gating (prompt D4 of plan 07).
+    val startCreateChannel: () -> Unit = {
+        if (signedIn) {
+            creatorViewModel.startCreate()
+            channelEditor = true
+        } else {
+            accountSheet = true
+        }
+    }
     val sheetPresence = remember { SheetPresence() }
     var playerExpandProgress by remember { mutableFloatStateOf(0f) }
     var miniPlayerRect by remember { mutableStateOf<Rect?>(null) }
@@ -316,6 +327,8 @@ fun PejvakNavHost(
                             onOpenAi = { aiSheet = true },
                             onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
                             onOpenAccount = { accountSheet = true },
+                            onOpenChannel = { slug -> navController.navigate(channelRoute(slug)) },
+                            onCreateChannel = startCreateChannel,
                             accountGlyph = accountState.glyphKey(),
                             accountAttention = accountState.needsAttention(),
                             accountLabelRes = when (accountState) {
@@ -323,6 +336,9 @@ fun PejvakNavHost(
                                 AccountButtonState.Queued -> R.string.home_account_queued
                                 AccountButtonState.UpToDate -> R.string.home_account_up_to_date
                             },
+                            // UX-H06: once everything is on the server the account/sync bubble
+                            // adds nothing; the create action stays.
+                            showAccountButton = accountState != AccountButtonState.UpToDate,
                         )
                     }
                     composable(Tab.Discover.route) {
@@ -333,11 +349,13 @@ fun PejvakNavHost(
                             onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
                             onOpenLanguage = { code -> navController.navigate(languageRoute(code)) },
                             onOpenChannels = { navController.navigate("channels") },
+                            onCreateChannel = startCreateChannel,
                         )
                     }
                     composable(Tab.History.route) {
                         HistoryScreen(
                             onOpenAi = { aiSheet = true },
+                            onCreateChannel = startCreateChannel,
                             onOpenCollection = { run ->
                                 when (run.contextType) {
                                     com.pejvak.app.domain.ContextType.Folder ->
@@ -354,10 +372,16 @@ fun PejvakNavHost(
                         )
                     }
                     composable(Tab.Notes.route) {
-                        NotesScreen(onOpenPlayer = { playerOpen = true })
+                        NotesScreen(
+                            onOpenPlayer = { playerOpen = true },
+                            onCreateChannel = startCreateChannel,
+                        )
                     }
                     composable(Tab.Ai.route) {
-                        AiScreen(onOpenTool = { id -> navController.navigate("ai/tool/$id") })
+                        AiScreen(
+                            onOpenTool = { id -> navController.navigate("ai/tool/$id") },
+                            onCreateChannel = startCreateChannel,
+                        )
                     }
                     composable("ai/tool/{feature}") { entry ->
                         AiFeatureScreen(
@@ -486,7 +510,27 @@ fun PejvakNavHost(
                         )
                     }
                     composable("channelManage/{channelId}") {
-                        ChannelManageScreen(onBack = { navController.popBackStack() })
+                        ChannelManageScreen(
+                            onBack = { navController.popBackStack() },
+                            onUpload = { channelId, playlistId ->
+                                navController.navigate(uploadRoute(channelId, playlistId))
+                            },
+                        )
+                    }
+                    composable(
+                        "channelUpload/{channelId}?playlistId={playlistId}",
+                        arguments = listOf(
+                            androidx.navigation.navArgument("channelId") {
+                                type = androidx.navigation.NavType.StringType
+                            },
+                            androidx.navigation.navArgument("playlistId") {
+                                type = androidx.navigation.NavType.StringType
+                                nullable = true
+                                defaultValue = null
+                            },
+                        ),
+                    ) {
+                        ChannelUploadScreen(onBack = { navController.popBackStack() })
                     }
                 }
 
@@ -623,6 +667,11 @@ private fun sourceRoute(sourceId: String): String = "online/source/${Uri.encode(
 private fun languageRoute(code: String): String = "online/language/${Uri.encode(code)}"
 
 private fun channelRoute(slug: String): String = "channel/${Uri.encode(slug)}"
+
+private fun uploadRoute(channelId: String, playlistId: String?): String {
+    val base = "channelUpload/${Uri.encode(channelId)}"
+    return if (playlistId.isNullOrBlank()) base else "$base?playlistId=${Uri.encode(playlistId)}"
+}
 
 private fun onlineCollectionRoute(key: String, trackId: String?, positionSec: Int): String {
     val track = trackId?.let { Uri.encode(it) }.orEmpty()

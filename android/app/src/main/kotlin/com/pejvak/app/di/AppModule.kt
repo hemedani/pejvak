@@ -30,7 +30,11 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): PejvakDatabase =
         Room.databaseBuilder(context, PejvakDatabase::class.java, "pejvak.db")
-            .addMigrations(com.pejvak.app.data.local.MIGRATION_1_2, com.pejvak.app.data.local.MIGRATION_2_3)
+            .addMigrations(
+                com.pejvak.app.data.local.MIGRATION_1_2,
+                com.pejvak.app.data.local.MIGRATION_2_3,
+                com.pejvak.app.data.local.MIGRATION_3_4,
+            )
             .build()
 
     @Provides

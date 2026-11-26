@@ -39,6 +39,11 @@ class SettingsRepository @Inject constructor(
     private val _settings = MutableStateFlow(AppSettings())
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
 
+    /** True once [load] has read the persisted snapshot. The first-run language prompt gates on
+     *  this so it never fires on the pre-load null and re-asks a language that is already saved. */
+    private val _loaded = MutableStateFlow(false)
+    val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+
     private suspend fun get(key: String): String? = settingsDao.get(key)
     private suspend fun put(key: String, value: String) = settingsDao.put(SettingsEntity(key, value))
 
@@ -57,6 +62,7 @@ class SettingsRepository @Inject constructor(
             languageCode = parseLanguageCode(get(KEY_LANGUAGE)),
         )
         _settings.value = settings
+        _loaded.value = true
         return settings
     }
 

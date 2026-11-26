@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pejvak.app.data.repository.ChannelOp
 import com.pejvak.app.data.repository.ChannelRepository
+import com.pejvak.app.data.repository.SettingsRepository
 import com.pejvak.app.domain.channel.Channel
 import com.pejvak.app.domain.channel.ChannelDraft
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -23,6 +24,7 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class ChannelCreatorViewModel @Inject constructor(
     private val repo: ChannelRepository,
+    private val settings: SettingsRepository,
 ) : ViewModel() {
     data class EditorState(
         val draft: ChannelDraft = ChannelDraft(),
@@ -44,7 +46,9 @@ class ChannelCreatorViewModel @Inject constructor(
     val state: StateFlow<EditorState> = _state.asStateFlow()
 
     fun startCreate() {
-        _state.value = EditorState()
+        // Seed the listener's chosen language so a channel created from the home CTA
+        // immediately belongs to the shelf that offered it (plan 08 UX-H02).
+        _state.value = EditorState(draft = ChannelDraft(languageCode = settings.settings.value.languageCode))
     }
 
     fun startEdit(channel: Channel) {

@@ -58,6 +58,7 @@ import com.pejvak.app.ui.theme.oceanEntrance
 @Composable
 fun NotesScreen(
     onOpenPlayer: () -> Unit,
+    onCreateChannel: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: NotesViewModel = hiltViewModel(),
 ) {
@@ -100,6 +101,11 @@ fun NotesScreen(
                     placeholder = stringResource(R.string.notes_search_placeholder),
                 ),
                 actions = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("add"),
+                        contentDescription = stringResource(R.string.my_channels_new),
+                        onClick = onCreateChannel,
+                    )
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("more"),
                         contentDescription = stringResource(R.string.header_more),

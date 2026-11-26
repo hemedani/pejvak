@@ -586,6 +586,9 @@
     <string name="channel_website">Website</string>
     <string name="channel_contact">Contact</string>
     <string name="channel_taken_down">This channel was taken down.</string>
+    <string name="library_add_first_channel">Add your first channel</string>
+    <string name="library_add_first_channel_body">Share your audiobooks and podcasts.</string>
+    <string name="discover_channels_ahead">From creators</string>
 
     <!-- Listener Channels — creator surfaces (plan 07 A3) -->
     <string name="channel_taken_down_short">Taken down</string>
@@ -644,6 +647,8 @@
     <string name="upload_repick">Choose a different file</string>
     <string name="upload_folder">Folder</string>
     <string name="upload_needs_folder">Create a folder first, then upload into it.</string>
+    <string name="upload_needs_folder_body">Add a folder in Manage channel, then upload here.</string>
+    <string name="upload_tags_hint">Comma-separated</string>
     <string name="upload_title_field">Title</string>
     <string name="upload_title_required">A title is required</string>
     <string name="upload_category">Category</string>

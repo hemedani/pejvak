@@ -1,8 +1,10 @@
 package com.pejvak.app.ui.screens.discover
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pejvak.app.data.remote.online.OnlineRegistry
+import com.pejvak.app.data.repository.ChannelRepository
 import com.pejvak.app.data.repository.ContextPlayRepository
 import com.pejvak.app.data.repository.OnlineCatalogService
 import com.pejvak.app.data.repository.OnlineCollectionRepository
@@ -10,12 +12,18 @@ import com.pejvak.app.data.repository.SettingsRepository
 import com.pejvak.app.domain.ContextPlay
 import com.pejvak.app.domain.ContextType
 import com.pejvak.app.domain.OnlineCollection
+import com.pejvak.app.domain.channel.Channel
+import com.pejvak.app.domain.channel.ChannelAudio
+import com.pejvak.app.domain.channel.channelContextKey
 import com.pejvak.app.domain.online.LANGUAGES
 import com.pejvak.app.domain.online.OnlineLanguage
 import com.pejvak.app.domain.online.OnlineSource
 import com.pejvak.app.domain.online.parseCollectionKey
 import com.pejvak.app.domain.resumableRuns
+import com.pejvak.app.playback.CollectionPlaybackLauncher
+import com.pejvak.app.playback.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,12 +44,20 @@ data class ContinueCard(
     val updatedAt: Long,
 )
 
+/** One channel episode on Discover's "From creators" shelf (plan 08 UX-D01). */
+data class ChannelEpisodeCard(
+    val audio: ChannelAudio,
+    val channelName: String,
+    val channelSlug: String,
+)
+
 data class DiscoverUiState(
     val page: Int = 0,
     val languageCode: String = "fa",
     val sources: List<OnlineSource> = emptyList(),
     val continueRuns: List<ContinueCard> = emptyList(),
     val favorites: List<OnlineCollection> = emptyList(),
+    val channelEpisodes: List<ChannelEpisodeCard> = emptyList(),
     val downloadStates: Map<String, com.pejvak.app.domain.DownloadState> = emptyMap(),
     val languageSheetOpen: Boolean = false,
 )
@@ -53,6 +69,9 @@ class DiscoverViewModel @Inject constructor(
     private val collections: OnlineCollectionRepository,
     private val runs: ContextPlayRepository,
     private val settings: SettingsRepository,
+    private val channels: ChannelRepository,
+    private val launcher: CollectionPlaybackLauncher,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val page = MutableStateFlow(0)
     private val language = MutableStateFlow("fa")
@@ -69,7 +88,12 @@ class DiscoverViewModel @Inject constructor(
         viewModelScope.launch {
             settings.settings.collect { appSettings ->
                 val code = appSettings.languageCode?.takeIf { it.isNotBlank() } ?: "fa"
-                if (code != language.value) language.value = code
+                if (code != language.value) {
+                    language.value = code
+                    // Cold start: the saved language arrives after init, so pull its
+                    // creator shelf now rather than leaving the default's cache on screen.
+                    refreshEpisodes(code)
+                }
             }
         }
         viewModelScope.launch {
@@ -82,7 +106,7 @@ class DiscoverViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
-            combine(page, language, sheet, runs.observeLive(), collections.observeFavorites()) { p, code, open, runRows, favorites ->
+            val base = combine(page, language, sheet, runs.observeLive(), collections.observeFavorites()) { p, code, open, runRows, favorites ->
                 latestRuns = runRows
                 DiscoverUiState(
                     page = p,
@@ -93,7 +117,64 @@ class DiscoverViewModel @Inject constructor(
                     downloadStates = _state.value.downloadStates,
                     languageSheetOpen = open,
                 )
+            }
+            combine(base, channels.observeChannels(), channels.observeAudios()) { state, channelRows, audioRows ->
+                state.copy(
+                    channelEpisodes = channelEpisodes(channelRows, audioRows, state.languageCode),
+                )
             }.collect { _state.value = it }
+        }
+        // UX-D01: pull the creator shelf for the saved language in the background.
+        refreshDiscover()
+    }
+
+    /** Refreshes the channel directory, then the bounded episode slice Discover shows. */
+    fun refreshDiscover() {
+        viewModelScope.launch {
+            channels.refreshChannels()
+            channels.refreshDiscoverAudios(language.value)
+        }
+    }
+
+    private fun refreshEpisodes(code: String) {
+        viewModelScope.launch { channels.refreshDiscoverAudios(code) }
+    }
+
+    /** Episodes of channels serving [code], newest first, capped so the shelf stays short. */
+    private fun channelEpisodes(
+        channelRows: List<Channel>,
+        audioRows: List<ChannelAudio>,
+        code: String,
+    ): List<ChannelEpisodeCard> {
+        val byId = channelRows.associateBy { it.serverId }
+        return audioRows.asSequence()
+            .mapNotNull { audio ->
+                val channel = byId[audio.channelServerId] ?: return@mapNotNull null
+                ChannelEpisodeCard(audio = audio, channelName = channel.name, channelSlug = channel.slug)
+            }
+            .filter { card ->
+                card.audio.languageCode == code || byId[card.audio.channelServerId]?.languageCode == code
+            }
+            .sortedByDescending { it.audio.cachedAt }
+            .distinctBy { it.audio.serverId }
+            .take(20)
+            .toList()
+    }
+
+    /** Plays a Discover episode as a run over its channel's mirrored queue (D1/D7). */
+    fun playEpisode(card: ChannelEpisodeCard) {
+        viewModelScope.launch {
+            val channel = channels.cachedChannels().firstOrNull { it.serverId == card.audio.channelServerId } ?: return@launch
+            val queue = channels.cachedAudios(channel.serverId).ifEmpty { listOf(card.audio) }
+            val tracks = queue.map { channels.toTrack(it, channel.name) }
+            val startId = channels.toTrack(card.audio, channel.name).id
+            PlaybackService.start(context)
+            launcher.playOnline(
+                collectionKey = channelContextKey(channel.serverId),
+                title = channel.name,
+                startTrackId = startId,
+                orderedTracks = tracks,
+            )
         }
     }
 
@@ -105,6 +186,7 @@ class DiscoverViewModel @Inject constructor(
         language.value = code
         sheet.value = false
         viewModelScope.launch { settings.setLanguage(code) }
+        refreshEpisodes(code)
     }
 
     fun openLanguageSheet() {

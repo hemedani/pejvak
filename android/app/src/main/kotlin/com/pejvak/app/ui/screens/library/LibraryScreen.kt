@@ -48,6 +48,9 @@ import com.pejvak.app.domain.PlaylistSummary
 import com.pejvak.app.domain.RecentPlay
 import com.pejvak.app.domain.SMART_RULES
 import com.pejvak.app.domain.Track
+import com.pejvak.app.domain.channel.Channel
+import com.pejvak.app.domain.channel.channelSubtitle
+import com.pejvak.app.domain.online.LANGUAGES
 import com.pejvak.app.domain.online.OnlineSource
 import com.pejvak.app.domain.describeFolderProgress
 import com.pejvak.app.domain.describeRecentWhen
@@ -73,18 +76,12 @@ import com.pejvak.app.ui.components.row.AiActionButton
 import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.field.TextField
+import com.pejvak.app.ui.screens.discover.LanguagePickerSheet
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 import com.pejvak.app.ui.theme.OceanCascade
 import com.pejvak.app.ui.theme.oceanEntrance
 import kotlinx.coroutines.launch
-
-private val LANGUAGE_OPTIONS = listOf(
-    "en" to "English",
-    "fa" to "فارسی",
-    "ar" to "العربية",
-    "fr" to "Français",
-)
 
 /** The library's views in the order the chip row shows them, so the swipe and the
  *  chips can never disagree about what "next" means. */
@@ -108,9 +105,12 @@ fun LibraryScreen(
     onOpenAi: () -> Unit,
     onOpenSource: (String) -> Unit,
     onOpenAccount: () -> Unit,
+    onOpenChannel: (slug: String) -> Unit,
+    onCreateChannel: () -> Unit,
     accountGlyph: String,
     accountAttention: Boolean,
     accountLabelRes: Int,
+    showAccountButton: Boolean,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -123,8 +123,10 @@ fun LibraryScreen(
     var pendingDelete by remember { mutableStateOf<PlaylistSummary?>(null) }
     var menuOpen by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(state.loading, state.languageCode) {
-        if (!state.loading && state.languageCode == null && !languageAsked) {
+    LaunchedEffect(state.loading, state.settingsLoaded, state.languageCode) {
+        // Only prompt once the persisted settings have actually been read, so a saved
+        // language never triggers a phantom first-run prompt on a cold start.
+        if (!state.loading && state.settingsLoaded && state.languageCode == null && !languageAsked) {
             languageAsked = true
             showLanguage = true
         }
@@ -142,13 +144,17 @@ fun LibraryScreen(
 
     // The page the finger lands on is the view. The chips read `currentPage`, not
     // `state.view`, so the highlight crosses over with the content mid-drag.
+    // Skip a no-op sync: the first settle must not count as a user choice, or it
+    // would block the language-driven default (UX-H05) before settings load.
     LaunchedEffect(pagerState.settledPage) {
-        views.getOrNull(pagerState.settledPage)?.let(viewModel::setView)
+        val target = views.getOrNull(pagerState.settledPage) ?: return@LaunchedEffect
+        if (target != state.view) viewModel.setView(target)
     }
 
     // A language choice inserts "Online" at the front, which shifts every index;
-    // follow the view the user was actually on.
-    LaunchedEffect(views) {
+    // follow the view the user was actually on — and follow a view-model change
+    // (the language-driven default, UX-H05) as well.
+    LaunchedEffect(views, state.view) {
         val target = views.indexOf(state.view)
         if (target >= 0 && target != pagerState.currentPage) pagerState.scrollToPage(target)
     }
@@ -175,25 +181,32 @@ fun LibraryScreen(
                     placeholder = stringResource(R.string.library_search_placeholder),
                 ),
                 actions = {
-                    // AUTH-10: the home-screen auth button. Signed out it invites register/login;
-                    // signed in it opens the account + sync sheet. An attention dot marks anything
-                    // not yet on the server. It sits beside Settings, filled when it wants a tap.
-                    Box {
-                        BubbleButton(
-                            icon = ICON_GLYPHS.getValue(accountGlyph),
-                            contentDescription = stringResource(accountLabelRes),
-                            onClick = onOpenAccount,
-                            filled = accountAttention,
-                        )
-                        if (accountAttention) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(2.dp)
-                                    .size(9.dp)
-                                    .clip(CircleShape)
-                                    .background(tokens.accentTeal),
+                    // UX-C01: create-channel lives in the header on every dock page.
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("add"),
+                        contentDescription = stringResource(R.string.my_channels_new),
+                        onClick = onCreateChannel,
+                    )
+                    // UX-H06: the sync/account bubble is hidden when everything is already on
+                    // the server; it reappears the moment there is something owed or a sign-in.
+                    if (showAccountButton) {
+                        Box {
+                            BubbleButton(
+                                icon = ICON_GLYPHS.getValue(accountGlyph),
+                                contentDescription = stringResource(accountLabelRes),
+                                onClick = onOpenAccount,
+                                filled = accountAttention,
                             )
+                            if (accountAttention) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(2.dp)
+                                        .size(9.dp)
+                                        .clip(CircleShape)
+                                        .background(tokens.accentTeal),
+                                )
+                            }
                         }
                     }
                     BubbleButton(
@@ -251,6 +264,8 @@ fun LibraryScreen(
                 onOpenSource = onOpenSource,
                 onOpenAi = onOpenAi,
                 onImport = onImport,
+                onOpenChannel = onOpenChannel,
+                onCreateChannel = onCreateChannel,
                 onSetOrigin = viewModel::setOrigin,
                 onPlayTrack = { card -> viewModel.playTrack(card.track, state.tracks.map { it.track }) },
                 onPlayRecent = viewModel::playRecent,
@@ -285,7 +300,7 @@ fun LibraryScreen(
                     else -> ListRow(
                         title = stringResource(R.string.header_language),
                         subtitle = state.languageCode?.let { code ->
-                            LANGUAGE_OPTIONS.firstOrNull { it.first == code }?.second ?: code
+                            LANGUAGES.firstOrNull { it.code == code }?.let { "${it.nativeName} · ${it.name}" } ?: code
                         } ?: stringResource(R.string.library_language_choose),
                         leading = {
                             PejvakIcon(
@@ -307,54 +322,15 @@ fun LibraryScreen(
     }
 
     if (showLanguage) {
-        GlassSheet(
+        LanguagePickerSheet(
+            languages = LANGUAGES,
+            selectedCode = state.languageCode ?: "en",
+            onSelect = { code ->
+                viewModel.setLanguage(code)
+                showLanguage = false
+            },
             onDismiss = { showLanguage = false },
-            title = stringResource(R.string.library_language_prompt_title),
-            icon = "language",
-        ) {
-            Text(
-                text = stringResource(R.string.library_language_prompt_body),
-                style = MaterialTheme.typography.bodyMedium,
-                color = tokens.textSecondary,
-                modifier = Modifier.padding(bottom = geo.spacing.md),
-            )
-            LANGUAGE_OPTIONS.forEach { (code, label) ->
-                GlassCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = geo.spacing.sm)
-                        .clickable {
-                            viewModel.setLanguage(code)
-                            showLanguage = false
-                        },
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(geo.tiles.sm)
-                                .clip(CircleShape)
-                                .background(tokens.accentTeal.copy(alpha = 0.16f)),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            PejvakIcon(
-                                name = "language",
-                                contentDescription = null,
-                                tint = tokens.accentTeal,
-                                size = geo.icons.sm,
-                            )
-                        }
-                        Text(label, style = MaterialTheme.typography.titleMedium, color = tokens.text)
-                    }
-                }
-            }
-            TextButton(onClick = { showLanguage = false }) {
-                Text(stringResource(R.string.library_language_not_now), color = tokens.textSecondary)
-            }
-            Spacer(Modifier.height(geo.spacing.xl))
-        }
+        )
     }
 
     pendingDelete?.let { summary ->
@@ -412,6 +388,8 @@ private fun LibraryPage(
     onOpenSource: (String) -> Unit,
     onOpenAi: () -> Unit,
     onImport: () -> Unit,
+    onOpenChannel: (String) -> Unit,
+    onCreateChannel: () -> Unit,
     onSetOrigin: (TrackOriginTab) -> Unit,
     onPlayTrack: (TrackCard) -> Unit,
     onPlayRecent: (RecentPlay) -> Unit,
@@ -495,6 +473,37 @@ private fun LibraryPage(
 
             when (view) {
                 LibraryView.Online -> {
+                    // UX-H01/H02: channels sit above the online-resource directory. When no
+                    // channel serves the selected language, the shelf becomes a create CTA.
+                    val langChannels = state.languageCode?.let { code ->
+                        state.channels.filter { it.languageCode == code }
+                    } ?: state.channels
+                    if (langChannels.isNotEmpty()) {
+                        val cIdx = order++
+                        item {
+                            Text(
+                                text = stringResource(R.string.channels_title),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = tokens.textSecondary,
+                                modifier = Modifier.oceanEntrance(cIdx, swayDp = 0.dp),
+                            )
+                        }
+                        val cListIdx = order++
+                        item {
+                            ListGroup(items = langChannels, modifier = Modifier.oceanEntrance(cListIdx), staggerRows = true) { channel, _ ->
+                                ChannelShelfRow(channel = channel, onClick = { onOpenChannel(channel.slug) })
+                            }
+                        }
+                    } else {
+                        val ctaIdx = order++
+                        item {
+                            CreateChannelCta(
+                                modifier = Modifier.oceanEntrance(ctaIdx, swayDp = 0.dp),
+                                onClick = onCreateChannel,
+                            )
+                        }
+                    }
+
                     if (state.sources.isEmpty()) {
                         val idx = order++
                         item {
@@ -810,6 +819,54 @@ private fun SourceShelfRow(source: OnlineSource, onClick: () -> Unit) {
         leading = { PaletteTile(contentHash = source.id, label = source.name, size = geo.tiles.md) },
         onClick = onClick,
     )
+}
+
+@Composable
+private fun ChannelShelfRow(channel: Channel, onClick: () -> Unit) {
+    val geo = LocalPejvakGeometry.current
+    ListRow(
+        title = channel.name,
+        subtitle = channelSubtitle(channel),
+        meta = channel.categories.takeIf { it.isNotEmpty() }?.joinToString(" · ") { it.replaceFirstChar { c -> c.uppercase() } },
+        leading = {
+            PaletteTile(contentHash = channel.slug, label = channel.name, artworkUrl = channel.avatarUrl, size = geo.tiles.md)
+        },
+        onClick = onClick,
+    )
+}
+
+@Composable
+private fun CreateChannelCta(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val geo = LocalPejvakGeometry.current
+    val tokens = LocalPejvakTokens.current
+    GlassCard(modifier = modifier.clickable(onClick = onClick)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
+            Box(
+                modifier = Modifier
+                    .size(geo.tiles.md)
+                    .clip(CircleShape)
+                    .background(tokens.accentTeal.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                PejvakIcon(name = "add", contentDescription = null, tint = tokens.accentTeal, size = geo.icons.lg)
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(geo.spacing.xs)) {
+                Text(
+                    text = stringResource(R.string.library_add_first_channel),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = tokens.text,
+                )
+                Text(
+                    text = stringResource(R.string.library_add_first_channel_body),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = tokens.textSecondary,
+                )
+            }
+        }
+    }
 }
 
 @Composable

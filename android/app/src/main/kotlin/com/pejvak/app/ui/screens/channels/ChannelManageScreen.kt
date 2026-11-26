@@ -24,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
 import com.pejvak.app.domain.channel.ChannelAudio
@@ -54,6 +56,7 @@ import com.pejvak.app.ui.theme.LocalPejvakTokens
 @Composable
 fun ChannelManageScreen(
     onBack: () -> Unit,
+    onUpload: (channelId: String, playlistId: String?) -> Unit,
     viewModel: ChannelManageViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -61,7 +64,6 @@ fun ChannelManageScreen(
     val tokens = LocalPejvakTokens.current
 
     var folderEditor by remember { mutableStateOf<Pair<PlaylistDraft?, String?>?>(null) } // null=closed; non-null Pair=(existing draft?, editing id?)
-    var uploadOpen by remember { mutableStateOf(false) }
     var episodeEditor by remember { mutableStateOf<Pair<EpisodeDraft?, String?>>(null to null) }
     var moveTarget by remember { mutableStateOf<ChannelAudio?>(null) }
     var confirmDeleteChannel by remember { mutableStateOf(false) }
@@ -73,6 +75,13 @@ fun ChannelManageScreen(
 
     // Close the manage screen once the channel is gone.
     androidx.compose.runtime.LaunchedEffect(state.deleted) { if (state.deleted) onBack() }
+
+    // The upload page is a route, so returning from it resumes this screen; reload the
+    // folder/episode mirror then (the ViewModel's init load already covered the first pass).
+    var firstResume by remember { mutableStateOf(true) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (firstResume) firstResume = false else viewModel.load()
+    }
 
     ScreenFrame(
         header = { headerModifier ->
@@ -92,7 +101,7 @@ fun ChannelManageScreen(
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("cloud_upload"),
                         contentDescription = stringResource(R.string.upload_title),
-                        onClick = { uploadOpen = true },
+                        onClick = { onUpload(viewModel.channelId, folders.firstOrNull()?.serverId) },
                     )
                 },
             )
@@ -199,14 +208,6 @@ fun ChannelManageScreen(
                 if (folderEditingId == null) viewModel.addFolder(draft) else viewModel.renameFolder(folderEditingId, draft)
                 folderEditor = null
             },
-        )
-    }
-
-    if (uploadOpen) {
-        EpisodeUploadSheet(
-            viewModel = viewModel,
-            folders = folders,
-            onDismiss = { uploadOpen = false },
         )
     }
 

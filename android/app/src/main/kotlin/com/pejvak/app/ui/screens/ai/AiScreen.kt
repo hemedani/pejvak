@@ -33,6 +33,8 @@ import com.pejvak.app.domain.AiFeature
 import com.pejvak.app.domain.aiGlyphRamp
 import com.pejvak.app.domain.aiGlyphStop
 import com.pejvak.app.ui.components.GlassCard
+import com.pejvak.app.ui.components.BubbleButton
+import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.components.ai.AiBloom
 import com.pejvak.app.ui.components.ai.AiGlyph
@@ -50,6 +52,7 @@ import com.pejvak.app.ui.theme.oceanEntrance
 @Composable
 fun AiScreen(
     onOpenTool: (String) -> Unit,
+    onCreateChannel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val tokens = LocalPejvakTokens.current
@@ -64,6 +67,18 @@ fun AiScreen(
                 .padding(horizontal = geo.spacing.xl, vertical = geo.spacing.xl),
             verticalArrangement = Arrangement.spacedBy(geo.spacing.xxl),
         ) {
+            // UX-C01: the AI page has no glass header, so the shared create-channel
+            // action sits in a compact top row instead.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                BubbleButton(
+                    icon = ICON_GLYPHS.getValue("add"),
+                    contentDescription = stringResource(R.string.my_channels_new),
+                    onClick = onCreateChannel,
+                )
+            }
             Hero(modifier = Modifier.oceanEntrance(0, swayDp = 0.dp))
             Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.md)) {
                 rows.forEachIndexed { rowIdx, row ->

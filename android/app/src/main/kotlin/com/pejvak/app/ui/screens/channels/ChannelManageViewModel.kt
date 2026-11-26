@@ -129,19 +129,6 @@ class ChannelManageViewModel @Inject constructor(
         }
     }
 
-    fun uploadEpisode(playlistId: String, uri: String, draft: EpisodeDraft, onProgress: (ChannelRepository.UploadProgress) -> Unit) {
-        viewModelScope.launch {
-            _state.value = _state.value.copy(busy = true, notice = null)
-            when (val op = repo.uploadAndPublish(playlistId, channelId, uri, draft, onProgress)) {
-                is ChannelOp.Ok -> {
-                    _state.value = _state.value.copy(busy = false, episodes = _state.value.episodes + op.value)
-                    load()
-                }
-                is ChannelOp.Failed -> _state.value = _state.value.copy(busy = false, notice = op.message)
-            }
-        }
-    }
-
     fun editEpisode(audioId: String, draft: EpisodeDraft) {
         viewModelScope.launch {
             _state.value = _state.value.copy(busy = true, notice = null)

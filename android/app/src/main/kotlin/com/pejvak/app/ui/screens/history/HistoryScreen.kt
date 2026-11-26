@@ -103,6 +103,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun HistoryScreen(
     onOpenAi: () -> Unit,
+    onCreateChannel: () -> Unit,
     viewModel: HistoryViewModel = hiltViewModel(),
     onOpenCollection: ((ContextPlay) -> Unit)? = null,
 ) {
@@ -136,6 +137,11 @@ fun HistoryScreen(
                     placeholder = stringResource(R.string.history_search_placeholder),
                 ),
                 actions = {
+                    BubbleButton(
+                        icon = ICON_GLYPHS.getValue("add"),
+                        contentDescription = stringResource(R.string.my_channels_new),
+                        onClick = onCreateChannel,
+                    )
                     BubbleButton(
                         icon = ICON_GLYPHS.getValue("more"),
                         contentDescription = stringResource(R.string.header_more),

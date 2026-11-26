@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.pejvak.app.core.foldQuery
 import com.pejvak.app.core.foldText
 import com.pejvak.app.data.media.ArtworkService
+import com.pejvak.app.data.repository.ChannelRepository
 import com.pejvak.app.data.repository.ContextPlayRepository
 import com.pejvak.app.data.remote.online.OnlineRegistry
 import com.pejvak.app.data.repository.LibraryRepository
@@ -28,6 +29,7 @@ import com.pejvak.app.domain.RecentPlay
 import com.pejvak.app.domain.SearchEntry
 import com.pejvak.app.domain.Session
 import com.pejvak.app.domain.Track
+import com.pejvak.app.domain.channel.Channel
 import com.pejvak.app.domain.online.OnlineSource
 import com.pejvak.app.domain.buildFolderSummaries
 import com.pejvak.app.domain.buildPlaylistSummaries
@@ -76,6 +78,8 @@ data class LibraryUiState(
     val onlineCount: Int = 0,
     val hasBothOrigins: Boolean = false,
     val sources: List<OnlineSource> = emptyList(),
+    val channels: List<Channel> = emptyList(),
+    val settingsLoaded: Boolean = false,
 )
 
 private data class Quad(
@@ -100,6 +104,8 @@ private data class LibraryData(
     val playlistCards: List<PlaylistSummary>,
     val recentPlays: List<RecentPlay>,
     val cards: List<TrackCard>,
+    val channels: List<Channel>,
+    val settingsLoaded: Boolean,
 )
 
 @HiltViewModel
@@ -112,6 +118,7 @@ class LibraryViewModel @Inject constructor(
     private val engine: PlaybackEngine,
     private val launcher: CollectionPlaybackLauncher,
     private val artwork: ArtworkService,
+    private val channelRepo: ChannelRepository,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private var backfillStarted = false
@@ -136,6 +143,12 @@ class LibraryViewModel @Inject constructor(
             settings.settings.first { it.languageCode != null }
             if (!viewChosen) view.value = LibraryView.Online
         }
+        // The home Channels shelf reads the live directory in the background (never blocks).
+        refreshChannels()
+    }
+
+    fun refreshChannels() {
+        viewModelScope.launch { channelRepo.refreshChannels() }
     }
 
     private val core = combine(
@@ -148,7 +161,13 @@ class LibraryViewModel @Inject constructor(
         Quad(tracks, folders, playlistRows, sessions, annotations)
     }
 
-    private val data = combine(core, runs.observeLive(), settings.settings) { quad, runRows, appSettings ->
+    private val data = combine(
+        core,
+        runs.observeLive(),
+        settings.settings,
+        settings.loaded,
+        channelRepo.observeChannels(),
+    ) { quad, runRows, appSettings, loaded, channels ->
         buildData(
             quad.tracks,
             quad.folders,
@@ -157,6 +176,8 @@ class LibraryViewModel @Inject constructor(
             quad.annotations,
             runRows,
             appSettings.languageCode,
+            loaded,
+            channels,
         )
     }
 
@@ -248,6 +269,8 @@ class LibraryViewModel @Inject constructor(
         annotations: List<Annotation>,
         runRows: List<ContextPlay>,
         languageCode: String?,
+        settingsLoaded: Boolean,
+        channels: List<Channel>,
     ): LibraryData {
         lastSessions = sessions
         val noteCounts = annotations.groupingBy { it.trackId }.eachCount()
@@ -275,6 +298,8 @@ class LibraryViewModel @Inject constructor(
             playlistCards = playlistCards,
             recentPlays = recentPlays,
             cards = cards,
+            channels = channels,
+            settingsLoaded = settingsLoaded,
         ).also { lastData = it }
     }
 
@@ -344,6 +369,8 @@ class LibraryViewModel @Inject constructor(
             onlineCount = online.size,
             hasBothOrigins = hasBoth,
             sources = visibleSources,
+            channels = data.channels,
+            settingsLoaded = data.settingsLoaded,
         )
     }
 
