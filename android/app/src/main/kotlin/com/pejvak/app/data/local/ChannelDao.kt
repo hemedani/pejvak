@@ -70,6 +70,10 @@ interface ChannelAudioDao {
     @Query("SELECT * FROM channel_audios WHERE channel_server_id = :channelServerId ORDER BY position ASC, server_id ASC")
     suspend fun getByChannel(channelServerId: String): List<ChannelAudioEntity>
 
+    /** The whole mirrored episode cache, newest first (Discover's "From creators" shelf). */
+    @Query("SELECT * FROM channel_audios ORDER BY cached_at DESC")
+    fun observeAll(): Flow<List<ChannelAudioEntity>>
+
     @Query("SELECT * FROM channel_audios WHERE playlist_server_id = :playlistServerId ORDER BY position ASC, server_id ASC")
     suspend fun getByPlaylist(playlistServerId: String): List<ChannelAudioEntity>
 
@@ -84,4 +88,10 @@ interface ChannelAudioDao {
 
     @Query("DELETE FROM channel_audios WHERE server_id = :serverId")
     suspend fun deleteByServerId(serverId: String)
+
+    @Query("UPDATE channel_audios SET download_state = :state, local_path = :localPath WHERE server_id = :serverId")
+    suspend fun setDownloadState(serverId: String, state: String, localPath: String?)
+
+    @Query("SELECT * FROM channel_audios WHERE download_state = 'downloading'")
+    suspend fun getDownloading(): List<ChannelAudioEntity>
 }

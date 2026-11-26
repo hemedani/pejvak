@@ -124,6 +124,10 @@ class CollectionPlaybackLauncher @Inject constructor(
         // A caller that already shows an order (the collection screen) hands it in
         // whole, so a shuffle cannot land differently in the list and the queue.
         val ordered = if (orderedTracks != null) source else orderCollectionTracks(source, sort, direction)
+        // Channel episodes arrive built in memory. Persist them before the engine takes
+        // over, because it resolves the queue by id — history, waveform, and auto-advance
+        // all read the `tracks` row.
+        library.materialiseTracks(ordered)
         val startId = startTrackId ?: ordered.first().id
         val index = resolveIndex(ordered, startId)
         engine.loadAndPlay(

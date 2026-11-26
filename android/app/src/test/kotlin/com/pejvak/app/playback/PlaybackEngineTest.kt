@@ -241,6 +241,30 @@ class PlaybackEngineTest {
     }
 
     @Test
+    fun loadSeedsDurationFromTrackSoTheTimelineWorksBeforeThePlayerReports() = runTest {
+        val (engine, store, _) = setup()
+        val t = track("t1", durationSec = 468)
+        store.tracks["t1"] = t
+        engine.loadAndPlay(t, 0)
+        assertEquals(468, engine.state.value.durationSec)
+        engine.onPlayerProgress(0, 0, playing = true, isBuffering = true, atMs = 1000)
+        assertEquals("a zero report must not erase the seeded duration", 468, engine.state.value.durationSec)
+        engine.onPlayerProgress(0, 470, playing = true, isBuffering = false, atMs = 2000)
+        assertEquals(470, engine.state.value.durationSec)
+    }
+
+    @Test
+    fun queueSkipSeedsDurationFromTheNextTrack() = runTest {
+        val (engine, store, _) = setup()
+        val t1 = track("t1", durationSec = 120); val t2 = track("t2", durationSec = 300)
+        store.tracks["t1"] = t1; store.tracks["t2"] = t2
+        engine.loadAndPlay(t1, 0, queue = listOf("t1", "t2"), index = 0)
+        engine.onPlayerProgress(0, 120, playing = true, isBuffering = false, atMs = 1000)
+        engine.next()
+        assertEquals(300, engine.state.value.durationSec)
+    }
+
+    @Test
     fun autoAdvanceKeepsTheStretch() = runTest {
         val (engine, store, cmd) = setup()
         val t1 = track("t1"); val t2 = track("t2")

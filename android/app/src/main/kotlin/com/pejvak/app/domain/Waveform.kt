@@ -72,6 +72,19 @@ fun sampleWaveform(values: FloatArray, bars: Int): FloatArray {
     return out
 }
 
+/**
+ * Turns a server-computed loudness strip (0..1, any bucket count) into the
+ * [WAVEFORM_BUCKETS] heights the scrubber caches. The server samples the episode it
+ * hosts, so a streamed channel track has real bars even though there is no local file
+ * to decode. Returns null for an absent strip, letting the analyzer fall back.
+ */
+fun wireWaveform(values: List<Float>, buckets: Int = WAVEFORM_BUCKETS): FloatArray? {
+    if (values.isEmpty() || buckets <= 0) return null
+    val clamped = FloatArray(values.size) { values[it].coerceIn(0f, 1f) }
+    val resampled = sampleWaveform(clamped, buckets)
+    return FloatArray(buckets) { resampled[it].coerceIn(WAVEFORM_MIN_HEIGHT, 1f) }
+}
+
 /** One turn of the sample's sines. */
 private const val TWO_PI: Float = (2.0 * kotlin.math.PI).toFloat()
 

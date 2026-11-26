@@ -57,6 +57,15 @@ class WaveformAnalyzer @Inject constructor(
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FloatArray>?): Boolean =
             size > MEMORY_ENTRIES
     }
+    /**
+     * Server-measured strips, keyed by contentHash. A hosted channel episode is sampled
+     * by the backend, so its strip is available even though the device only ever holds
+     * a stream URL. Checked before decoding; bounded like [memory].
+     */
+    private val provided = object : LinkedHashMap<String, FloatArray>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FloatArray>?): Boolean =
+            size > PROVIDED_ENTRIES
+    }
 
     /** Emits the heights as they are measured; a sample strip when nothing can be measured. */
     fun waveform(track: Track): Flow<FloatArray?> = flow {
@@ -93,7 +102,14 @@ class WaveformAnalyzer @Inject constructor(
 
     private fun sample(key: String): FloatArray = sampleWaveformFor(key)
 
-    private fun cached(key: String): FloatArray? = synchronized(memory) { memory[key] } ?: read(key)
+    /** Registers a server-measured strip (already normalised to [WAVEFORM_BUCKETS]). */
+    fun provide(key: String, values: FloatArray?) {
+        if (values == null || values.isEmpty()) return
+        synchronized(provided) { provided[key] = values }
+    }
+
+    private fun cached(key: String): FloatArray? =
+        synchronized(provided) { provided[key] } ?: synchronized(memory) { memory[key] } ?: read(key)
 
     // --- Decoding ---
 
@@ -285,6 +301,7 @@ class WaveformAnalyzer @Inject constructor(
         const val CACHE_DIR = "waveforms"
         const val CACHE_MAGIC = 0x57415645 // "WAVE"
         const val MEMORY_ENTRIES = 24
+        const val PROVIDED_ENTRIES = 512
         const val WINDOW_MS = 60
         const val TIMEOUT_US = 6_000L
         const val MAX_ATTEMPTS = 200

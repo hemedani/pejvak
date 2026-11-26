@@ -257,7 +257,7 @@ fun ChannelAudioEntity.toDomain() = ChannelAudio(
     tags = decodeStringList(tags), audioUrl = audioUrl, durationSec = durationSec, fileSizeBytes = fileSizeBytes,
     mimeType = mimeType, isAudiobook = isAudiobook, author = author, narrator = narrator, artworkUrl = artworkUrl,
     position = position, languageCode = languageCode, status = ChannelStatus.from(status),
-    downloadState = DownloadState.from(downloadState), isMine = isMine, cachedAt = cachedAt,
+    downloadState = DownloadState.from(downloadState), localPath = localPath, isMine = isMine, cachedAt = cachedAt,
 )
 
 fun ChannelAudio.toEntity() = ChannelAudioEntity(
@@ -266,5 +266,5 @@ fun ChannelAudio.toEntity() = ChannelAudioEntity(
     tags = encodeStringList(tags), audioUrl = audioUrl, durationSec = durationSec, fileSizeBytes = fileSizeBytes,
     mimeType = mimeType, isAudiobook = isAudiobook, author = author, narrator = narrator, artworkUrl = artworkUrl,
     position = position, languageCode = languageCode, status = status.wire, downloadState = downloadState.wire,
-    isMine = isMine, cachedAt = cachedAt,
+    localPath = localPath, isMine = isMine, cachedAt = cachedAt,
 )

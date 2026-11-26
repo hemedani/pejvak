@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,6 +35,7 @@ import com.pejvak.app.R
 import com.pejvak.app.domain.channel.Channel
 import com.pejvak.app.domain.channel.ChannelAudio
 import com.pejvak.app.domain.channel.channelSubtitle
+import com.pejvak.app.domain.DownloadState
 import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.EmptyState
@@ -50,6 +52,8 @@ import com.pejvak.app.ui.components.UserText
 import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.row.RowAction
+import com.pejvak.app.ui.components.row.StatusSpec
+import com.pejvak.app.ui.components.row.StatusTone
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -170,6 +174,12 @@ fun ChannelDetailScreen(
                         topInset = topInset,
                         fromCache = state.fromCache,
                         error = state.error,
+                        notice = state.notice,
+                        onDismissNotice = { viewModel.dismissNotice() },
+                        downloadUi = viewModel::downloadUiFor,
+                        onDownload = viewModel::download,
+                        onCancelDownload = viewModel::cancelDownload,
+                        onDeleteDownload = viewModel::deleteDownload,
                         onRetry = viewModel::load,
                         onOpenLink = { uriHandler.openUri(it) },
                         onPlay = { index -> viewModel.play(audios, index) },
@@ -187,6 +197,12 @@ private fun ChannelBody(
     topInset: androidx.compose.ui.unit.Dp,
     fromCache: Boolean,
     error: String?,
+    notice: String?,
+    onDismissNotice: () -> Unit,
+    downloadUi: (ChannelAudio) -> DownloadUi,
+    onDownload: (ChannelAudio) -> Unit,
+    onCancelDownload: (ChannelAudio) -> Unit,
+    onDeleteDownload: (ChannelAudio) -> Unit,
     onRetry: () -> Unit,
     onOpenLink: (String) -> Unit,
     onPlay: (Int) -> Unit,
@@ -199,6 +215,17 @@ private fun ChannelBody(
         verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
     ) {
         item { ChannelIdentity(channel = channel, onOpenLink = onOpenLink) }
+
+        if (notice != null) {
+            item {
+                InlineNotice(
+                    message = notice,
+                    tone = NoticeTone.Warning,
+                    title = stringResource(R.string.channel_notice_title),
+                    action = { TextButton(onClick = onDismissNotice) { Text(stringResource(R.string.action_close)) } },
+                )
+            }
+        }
 
         if (fromCache && error != null) {
             item {
@@ -222,11 +249,29 @@ private fun ChannelBody(
             }
         } else {
             itemsIndexed(audios, key = { _, audio -> audio.serverId }) { index, audio ->
+                val dl = downloadUi(audio)
+                val status = when (dl.state) {
+                    DownloadState.Downloading -> StatusSpec(
+                        kind = "downloading",
+                        label = if (dl.bytesTotal > 0) "${(dl.progress * 100).toInt()}%" else stringResource(R.string.download_downloading),
+                        tone = StatusTone.Positive,
+                    )
+                    DownloadState.Complete -> StatusSpec(kind = "downloaded", label = stringResource(R.string.download_complete), tone = StatusTone.Positive)
+                    DownloadState.Failed -> StatusSpec(kind = "failed", label = stringResource(R.string.download_failed), tone = StatusTone.Danger)
+                    DownloadState.Cancelled -> StatusSpec(kind = "cancelled", label = stringResource(R.string.download_paused), tone = StatusTone.Warning)
+                    DownloadState.None -> null
+                }
+                val downloadAction = when (dl.state) {
+                    DownloadState.Downloading -> RowAction("cancel", "pause", stringResource(R.string.download_cancel), priority = 1, onClick = { onCancelDownload(audio) })
+                    DownloadState.Complete -> RowAction("delete", "trash", stringResource(R.string.download_delete), priority = 1, onClick = { onDeleteDownload(audio) })
+                    else -> RowAction("download", "download", stringResource(R.string.download_start), priority = 1, onClick = { onDownload(audio) })
+                }
                 ListGroup(items = listOf(audio)) { _, _ ->
                     ListRow(
                         title = audio.title,
                         subtitle = audio.author ?: audio.category?.replaceFirstChar { it.uppercase() },
                         meta = audio.durationSec.takeIf { it > 0 }?.let { formatDuration(it) },
+                        status = status,
                         leading = {
                             PaletteTile(
                                 contentHash = audio.contentHash,
@@ -243,6 +288,7 @@ private fun ChannelBody(
                                 priority = 0,
                                 onClick = { onPlay(index) },
                             ),
+                            downloadAction,
                         ),
                         onClick = { onPlay(index) },
                     )

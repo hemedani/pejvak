@@ -190,3 +190,24 @@ operator panel adds the `status` field and an admin token to the existing act ca
 `./gradlew assembleDebug` with **zero Kotlin warnings** + JVM unit tests green (`testDebugUnitTest`,
 `IconCatalogTest`, contrast contract). Tick each `CHAN-` box + add a `../plans/07-listener-channels.md` §8
 row after EVERY small task; update `android/docs/summary.md`.
+
+**D12 — Live server re-run on port 1400 (supersedes the `:1405` base URL in D11; backend D18 redeploy).**
+The owner redeployed the backend at **`http://46.245.98.207:1400/`** after shipping D18 (atomic uploads +
+deferred byte sweep). The client moves with it: `BuildConfig.LESAN_BASE_URL` is now
+`http://46.245.98.207:1400/lesan`. Everything that derives the endpoint from that constant follows
+automatically — `LesanClient`, `ChannelUploadClient`, and `ChannelRepository.serverOrigin` (so the D11
+`audioUrl` resolution rule now joins `/uploads/...` to `:1400`). **Endpoint-move handling:** bumping the URL
+is exactly the trigger for the one-time re-queue (`SyncRepository.ensureEndpointMigrated`, keyed on the
+stored `syncEndpoint` vs `BuildConfig.LESAN_BASE_URL`) — it flips `synced`→`pending` once so every row
+re-pushes to the new endpoint; safe because `syncLocalData` is idempotent on `clientId`. Cleartext is already
+permitted (`network_security_config`); production should still be https. No contract change — the act surface
+and `{success, body}` / 501-refusal semantics are unchanged.
+
+**D13 — RETRACT D12's endpoint move: the live server is unchanged at `:1405` (owner correction).** The owner
+first reported the redeploy (backend D18) as moving to port 1400, then corrected it — the server is still
+**`http://46.245.98.207:1405/`**. `BuildConfig.LESAN_BASE_URL` is therefore `…:1405/lesan` (the 1400 edit was
+reverted). D12's mechanics (base-URL-as-migration-key, idempotent re-queue, `/uploads` origin derivation) are
+correct in general but described a move that did not happen; this entry supersedes its specifics. **Net mobile
+action for backend D18: none** — D18 (atomic `.part`+rename uploads, deferred byte sweep, early size guard) is
+purely server-side; the `uploadChannelMedia` act's request/response contract and the 501-refusal shape are
+byte-for-byte unchanged, so the client codes against the same surface as D11 pinned.

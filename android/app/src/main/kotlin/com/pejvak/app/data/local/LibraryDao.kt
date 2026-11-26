@@ -18,6 +18,9 @@ interface TrackDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertIgnore(track: TrackEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIgnoreAll(tracks: List<TrackEntity>)
+
     @Query("SELECT * FROM tracks WHERE id = :id")
     suspend fun getById(id: String): TrackEntity?
 

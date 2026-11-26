@@ -379,6 +379,7 @@ class ChannelRemoteDataSource @Inject constructor(
         tags = obj.stringList("tags"),
         audioUrl = obj.string("audioUrl") ?: "",
         durationSec = obj["durationSec"].jsonInt() ?: 0,
+        waveform = obj.floatList("waveform"),
         fileSizeBytes = obj.long("fileSizeBytes") ?: 0L,
         mimeType = obj.string("mimeType"),
         isAudiobook = obj["isAudiobook"].asBoolean() ?: false,
@@ -408,7 +409,7 @@ class ChannelRemoteDataSource @Inject constructor(
 
         val audioProjection: JsonObject = projection(
             "_id", "contentHash", "title", "description", "category", "tags", "audioUrl", "durationSec",
-            "fileSizeBytes", "mimeType", "isAudiobook", "author", "narrator", "artworkUrl", "position",
+            "waveform", "fileSizeBytes", "mimeType", "isAudiobook", "author", "narrator", "artworkUrl", "position",
             "languageCode", "status", "createdAt", "updatedAt",
         )
     }
@@ -434,6 +435,14 @@ private fun JsonElement?.asBoolean(): Boolean? {
 private fun JsonObject.stringList(key: String): List<String> {
     val array = this[key] as? JsonArray ?: return emptyList()
     return array.mapNotNull { it.jsonString() }
+}
+
+private fun JsonObject.floatList(key: String): List<Float> {
+    val array = this[key] as? JsonArray ?: return emptyList()
+    return array.mapNotNull { element ->
+        val primitive = element as? JsonPrimitive ?: return@mapNotNull null
+        if (primitive.isString) null else primitive.content.toFloatOrNull()
+    }
 }
 
 private fun JsonObject.socialList(key: String): List<ChannelSocial> {

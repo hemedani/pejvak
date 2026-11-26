@@ -30,7 +30,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChannelPlaylistEntity::class,
         ChannelAudioEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class PejvakDatabase : RoomDatabase() {
@@ -117,5 +117,17 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         db.execSQL("CREATE INDEX IF NOT EXISTS `idx_channel_audios_channel` ON `channel_audios` (`channel_server_id`)")
         db.execSQL("CREATE INDEX IF NOT EXISTS `idx_channel_audios_playlist` ON `channel_audios` (`playlist_server_id`)")
         db.execSQL("CREATE INDEX IF NOT EXISTS `idx_channel_audios_hash` ON `channel_audios` (`content_hash`)")
+    }
+}
+
+/**
+ * v4 adds the offline-download fields to the channel episode mirror (plan 07 CHAN-U05):
+ * `local_path` is the on-device file once the audio is downloaded for offline play
+ * (`download_state` already existed). Both are device-only mirror state — the download
+ * is not server-owned and never enters `syncLocalData` (prompt D2).
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE channel_audios ADD COLUMN `local_path` TEXT")
     }
 }

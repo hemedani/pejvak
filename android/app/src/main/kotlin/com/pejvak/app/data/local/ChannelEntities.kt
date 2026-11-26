@@ -96,6 +96,7 @@ data class ChannelAudioEntity(
     @ColumnInfo(name = "language_code") val languageCode: String?,
     @ColumnInfo(name = "status") val status: String,
     @ColumnInfo(name = "download_state") val downloadState: String,
+    @ColumnInfo(name = "local_path") val localPath: String?,
     @ColumnInfo(name = "is_mine") val isMine: Boolean,
     @ColumnInfo(name = "cached_at") val cachedAt: Long,
 )

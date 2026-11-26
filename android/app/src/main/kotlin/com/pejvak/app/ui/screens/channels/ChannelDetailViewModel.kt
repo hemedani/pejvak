@@ -4,7 +4,9 @@ import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pejvak.app.data.repository.ChannelOp
 import com.pejvak.app.data.repository.ChannelRepository
+import com.pejvak.app.domain.DownloadState
 import com.pejvak.app.domain.Track
 import com.pejvak.app.domain.channel.Channel
 import com.pejvak.app.domain.channel.ChannelAudio
@@ -20,12 +22,23 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/** Per-episode offline-download UI state, keyed by the episode server id (U05). */
+data class DownloadUi(
+    val state: DownloadState = DownloadState.None,
+    val bytesDone: Long = 0,
+    val bytesTotal: Long = 0,
+) {
+    val progress: Float get() = if (bytesTotal > 0) (bytesDone.toFloat() / bytesTotal).coerceIn(0f, 1f) else 0f
+}
+
 data class ChannelDetailUiState(
     val slug: String = "",
     val channel: Channel? = null,
     val folders: List<ChannelPlaylist> = emptyList(),
     val allAudios: List<ChannelAudio> = emptyList(),
     val folderAudios: Map<String, List<ChannelAudio>> = emptyMap(),
+    val downloads: Map<String, DownloadUi> = emptyMap(),
+    val notice: String? = null,
     val loading: Boolean = true,
     val fromCache: Boolean = false,
     val error: String? = null,
@@ -100,4 +113,61 @@ class ChannelDetailViewModel @Inject constructor(
 
     fun audiosFor(folder: ChannelPlaylist): List<ChannelAudio> =
         _state.value.folderAudios[folder.serverId] ?: _state.value.allAudios.filter { it.playlistServerId == folder.serverId }
+
+    /** Merges the mirror's recorded state with any live in-flight progress (U05). */
+    fun downloadUiFor(audio: ChannelAudio): DownloadUi =
+        _state.value.downloads[audio.serverId] ?: DownloadUi(state = audio.downloadState)
+
+    fun download(audio: ChannelAudio) {
+        val key = audio.serverId
+        _state.value = _state.value.copy(
+            notice = null,
+            downloads = _state.value.downloads + (key to DownloadUi(DownloadState.Downloading)),
+        )
+        viewModelScope.launch {
+            when (val op = repo.downloadEpisode(audio) { p ->
+                _state.value = _state.value.copy(
+                    downloads = _state.value.downloads + (key to DownloadUi(DownloadState.Downloading, p.sent, p.total)),
+                )
+            }) {
+                is ChannelOp.Ok -> applyAudioUpdate(op.value, DownloadUi(DownloadState.Complete, op.value.fileSizeBytes, op.value.fileSizeBytes))
+                is ChannelOp.Failed -> {
+                    _state.value = _state.value.copy(
+                        notice = op.message,
+                        downloads = _state.value.downloads + (key to DownloadUi(DownloadState.Failed)),
+                    )
+                }
+            }
+        }
+    }
+
+    fun cancelDownload(audio: ChannelAudio) {
+        repo.cancelEpisodeDownload(audio)
+        _state.value = _state.value.copy(
+            downloads = _state.value.downloads + (audio.serverId to DownloadUi(DownloadState.Cancelled)),
+        )
+    }
+
+    fun deleteDownload(audio: ChannelAudio) {
+        viewModelScope.launch {
+            when (val op = repo.deleteEpisodeDownload(audio)) {
+                is ChannelOp.Ok -> applyAudioUpdate(op.value, DownloadUi(DownloadState.None))
+                is ChannelOp.Failed -> _state.value = _state.value.copy(notice = op.message)
+            }
+        }
+    }
+
+    /** Writes the updated episode back into every list it appears in so playback sees the local file. */
+    private fun applyAudioUpdate(updated: ChannelAudio, ui: DownloadUi) {
+        val s = _state.value
+        _state.value = s.copy(
+            allAudios = s.allAudios.map { if (it.serverId == updated.serverId) updated else it },
+            folderAudios = s.folderAudios.mapValues { (_, list) -> list.map { if (it.serverId == updated.serverId) updated else it } },
+            downloads = s.downloads + (updated.serverId to ui),
+        )
+    }
+
+    fun dismissNotice() {
+        _state.value = _state.value.copy(notice = null)
+    }
 }

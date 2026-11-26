@@ -343,7 +343,7 @@ class PlaybackEngine(
         currentTrack = track
         durationReported = false
         nextSessionStartSec = 0
-        patch { it.copy(trackId = track.id, title = track.title, artist = track.author ?: "", artworkUrl = track.artworkUrl, contentHash = track.contentHash, positionSec = 0) }
+        patch { it.copy(trackId = track.id, title = track.title, artist = track.author ?: "", artworkUrl = track.artworkUrl, contentHash = track.contentHash, positionSec = 0, durationSec = track.durationSec) }
         command.loadAndPlay(track, 0)
     }
 
@@ -488,6 +488,7 @@ class PlaybackEngine(
                 artworkUrl = track.artworkUrl,
                 contentHash = track.contentHash,
                 positionSec = 0,
+                durationSec = track.durationSec,
                 error = null,
                 phase = PlaybackPhase.Connecting,
                 waiting = PlaybackWait(PlaybackWaitKind.Connecting, clock(), track.origin == com.pejvak.app.domain.Origin.Online),
@@ -501,7 +502,7 @@ class PlaybackEngine(
         currentTrack = track
         val newQueue = queue ?: listOf(track.id)
         val newIndex = if (queue != null) index else 0
-        patch { it.copy(queue = newQueue, queueIndex = newIndex, context = context, trackId = track.id, title = track.title, artist = track.author ?: "", artworkUrl = track.artworkUrl, contentHash = track.contentHash, positionSec = positionSec, error = null) }
+        patch { it.copy(queue = newQueue, queueIndex = newIndex, context = context, trackId = track.id, title = track.title, artist = track.author ?: "", artworkUrl = track.artworkUrl, contentHash = track.contentHash, positionSec = positionSec, durationSec = track.durationSec, error = null) }
         if (context != null) openRun(context, newQueue.size) else closeRun(completed = false, interrupted = true)
         nextSessionStartSec = positionSec
         durationReported = false

@@ -150,4 +150,32 @@ class ChannelModelsTest {
         assertEquals(listOf("a", "b", "c"), parseTagList(" a , b ,\n c, a "))
         assertEquals(emptyList<String>(), parseTagList("   "))
     }
+
+    @Test
+    fun downloadFileNameKeysOnHashWithMimeExtension() {
+        assertEquals("abc123.mp3", channelDownloadFileName("abc123", "audio/mpeg"))
+        assertEquals("abc123.m4a", channelDownloadFileName("abc123", "audio/mp4"))
+        assertEquals("abc123.ogg", channelDownloadFileName("abc123", "audio/ogg"))
+        assertEquals("abc123.mp3", channelDownloadFileName("abc123", null))
+        // Non-alphanumeric hash characters are stripped so the leaf name is filesystem-safe.
+        assertEquals("abcd.mp3", channelDownloadFileName("a-b/c:d", "audio/mpeg"))
+    }
+
+    @Test
+    fun materialisePrefersLocalFileWhenDownloaded() {
+        val audio = ChannelAudio(
+            serverId = "srv-1", channelServerId = "chan-1", contentHash = "deadbeef",
+            title = "Ep", audioUrl = "/uploads/channel/audio/e1.mp3", durationSec = 90, cachedAt = 1000L,
+        )
+        val streamed = channelAudioToTrack(audio, "Chan", "http://h:1405", now = 2000L)
+        assertEquals("http://h:1405/uploads/channel/audio/e1.mp3", streamed.fileUri)
+        org.junit.Assert.assertNull(streamed.downloadPath)
+
+        val offline = channelAudioToTrack(audio, "Chan", "http://h:1405", localFileUri = "file:///data/Channels/deadbeef.mp3", now = 2000L)
+        assertEquals("file:///data/Channels/deadbeef.mp3", offline.fileUri)
+        assertEquals("file:///data/Channels/deadbeef.mp3", offline.downloadPath)
+        assertEquals(com.pejvak.app.domain.Availability.Present, offline.availability)
+        // The stream URL stays on the row so deleting the download falls back to streaming.
+        assertEquals("http://h:1405/uploads/channel/audio/e1.mp3", offline.streamUrl)
+    }
 }

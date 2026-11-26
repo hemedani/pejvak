@@ -3,6 +3,8 @@ package com.pejvak.app.domain
 import kotlin.math.pow
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -106,6 +108,21 @@ class WaveformTest {
         assertEquals(0, sampleWaveformFor("x", 0).size)
         assertEquals(1, sampleWaveformFor("", 1).size)
         assertEquals(12, sampleWaveformFor("x", 12).size)
+    }
+
+    @Test
+    fun wireWaveformResamplesAndClampsToHeights() {
+        val heights = wireWaveform(listOf(0f, 0.5f, 1f, 2f, -1f), buckets = 4)
+        assertNotNull(heights)
+        assertEquals(4, heights!!.size)
+        heights.forEach { assertTrue(it in WAVEFORM_MIN_HEIGHT..1f) }
+        assertEquals(1f, heights.max(), 0.0001f)
+    }
+
+    @Test
+    fun wireWaveformIsNullWhenTheBackendHasNone() {
+        assertNull(wireWaveform(emptyList()))
+        assertNull(wireWaveform(listOf(0.5f), buckets = 0))
     }
 
     @Test

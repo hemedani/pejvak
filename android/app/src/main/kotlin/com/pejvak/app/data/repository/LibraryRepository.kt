@@ -278,6 +278,17 @@ class LibraryRepository @Inject constructor(
         ids.mapNotNull { byId[it] }
     }
 
+    /**
+     * Persists tracks the player is about to queue but which do not exist yet — channel
+     * episodes are built in memory from the channel tables, so without this the engine's
+     * id-based queue, the history track join, and the waveform lookup all miss them.
+     * INSERT IGNORE keeps existing rows (and their aggregates) untouched.
+     */
+    suspend fun materialiseTracks(tracks: List<Track>) = withContext(Dispatchers.IO) {
+        if (tracks.isEmpty()) return@withContext
+        trackDao.insertIgnoreAll(tracks.map { it.toEntity() })
+    }
+
     suspend fun firstPlayable(): Track? = withContext(Dispatchers.IO) {
         trackDao.getAll()
             .firstOrNull { it.file_uri != null && it.availability != Availability.Missing.wire }

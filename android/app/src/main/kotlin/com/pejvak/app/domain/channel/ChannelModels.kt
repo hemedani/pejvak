@@ -1,5 +1,6 @@
 package com.pejvak.app.domain.channel
 
+import com.pejvak.app.domain.Availability
 import com.pejvak.app.domain.Origin
 import com.pejvak.app.domain.SyncStatus
 import com.pejvak.app.domain.Track
@@ -81,6 +82,12 @@ data class ChannelAudio(
     val tags: List<String> = emptyList(),
     val audioUrl: String,
     val durationSec: Int = 0,
+    /**
+     * Server-computed loudness strip (0..1, left→right) for a streamed episode. Empty
+     * when the backend has not generated it yet; the player then falls back to the
+     * seeded sample. See `wireWaveform`.
+     */
+    val waveform: List<Float> = emptyList(),
     val fileSizeBytes: Long = 0,
     val mimeType: String? = null,
     val isAudiobook: Boolean = false,
@@ -91,6 +98,8 @@ data class ChannelAudio(
     val languageCode: String? = null,
     val status: ChannelStatus = ChannelStatus.Active,
     val downloadState: com.pejvak.app.domain.DownloadState = com.pejvak.app.domain.DownloadState.None,
+    /** Absolute local file path once the episode is downloaded for offline play (U05); null otherwise. */
+    val localPath: String? = null,
     val isMine: Boolean = false,
     val cachedAt: Long,
 )
@@ -150,15 +159,19 @@ fun channelAudioToTrack(
     audio: ChannelAudio,
     channelName: String,
     serverOrigin: String,
+    localFileUri: String? = null,
     now: Long = System.currentTimeMillis(),
 ): Track {
     val streamUrl = resolveAudioUrl(audio.audioUrl, serverOrigin)
+    // A downloaded episode plays from its local file (offline); the resolved stream URL
+    // stays on the row so a delete-then-replay falls back to streaming with no new code.
+    val offline = !localFileUri.isNullOrBlank()
     return Track(
         id = audio.contentHash,
         serverId = audio.serverId,
         contentHash = audio.contentHash,
         title = audio.title,
-        fileUri = streamUrl,
+        fileUri = if (offline) localFileUri else streamUrl,
         durationSec = audio.durationSec,
         fileSizeBytes = audio.fileSizeBytes,
         mimeType = audio.mimeType,
@@ -169,17 +182,40 @@ fun channelAudioToTrack(
         syncStatus = SyncStatus.Synced,
         createdAt = audio.cachedAt,
         updatedAt = now,
+        availability = if (offline) Availability.Present else Availability.Missing,
         origin = Origin.Online,
         streamUrl = streamUrl,
         sourceId = "channel",
         externalId = audio.serverId,
         collectionKey = channelContextKey(audio.channelServerId),
         collectionTitle = channelName,
+        downloadPath = if (offline) localFileUri else null,
     )
 }
 
 /** A channel is publicly browsable only when it is `active` (prompt D9/D10). */
 fun channelIsPublic(channel: Channel): Boolean = channel.status == ChannelStatus.Active
+
+/**
+ * The on-device leaf name for a downloaded episode (U05): keyed on `contentHash`
+ * (the identity) so re-downloading the same audio overwrites in place and a rename
+ * on the server never orphans the file. The extension comes from the mime type,
+ * defaulting to `.mp3`. Pure — the directory lives in the data layer.
+ */
+fun channelDownloadFileName(contentHash: String, mimeType: String?): String {
+    val ext = when (mimeType?.lowercase()?.trim()) {
+        "audio/mpeg", "audio/mp3" -> "mp3"
+        "audio/mp4", "audio/m4a", "audio/aac" -> "m4a"
+        "audio/ogg", "application/ogg" -> "ogg"
+        "audio/webm" -> "webm"
+        "audio/flac" -> "flac"
+        "audio/wav", "audio/x-wav", "audio/wave" -> "wav"
+        "audio/aiff", "audio/x-aiff" -> "aiff"
+        else -> "mp3"
+    }
+    val safeHash = contentHash.filter { it.isLetterOrDigit() }.ifBlank { "audio" }
+    return "$safeHash.$ext"
+}
 
 /** A visible, non-empty subtitle line for a channel card: creator · audio count. */
 fun channelSubtitle(channel: Channel): String? =
