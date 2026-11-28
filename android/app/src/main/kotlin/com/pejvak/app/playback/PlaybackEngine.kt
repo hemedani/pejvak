@@ -299,11 +299,16 @@ class PlaybackEngine(
                 if (result.checkpointDue) writeCheckpoint()
                 if (result.isSeek) reportSeek()
             }
-        } else if (wasPlaying) {
+            wasPlaying = true
+        } else if (wasPlaying && !isBuffering) {
+            // A stall is not a pause: a stream that buffers for a moment must keep its
+            // session (and its wall-clock listening total) intact. Only a real pause —
+            // or a finish/stop — finalizes. The position delta after a stall is > 5 s,
+            // so it is treated as a seek and does not inflate the listened time.
             if (active == null) patch { it.copy(phase = PlaybackPhase.Paused) }
             finishSession(completed = false, interrupted = false)
+            wasPlaying = false
         }
-        wasPlaying = playing
         refreshPhase()
     }
 

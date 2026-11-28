@@ -177,6 +177,26 @@ class PlaybackEngineTest {
     }
 
     @Test
+    fun aBufferStallDoesNotSplitOrFinalizeTheSession() = runTest {
+        val (engine, store, _) = setup()
+        val t = track("t1"); store.tracks["t1"] = t
+        engine.loadAndPlay(t, 0)
+        engine.onPlayerProgress(0, 600, playing = true, isBuffering = false, atMs = 1000)
+        engine.onPlayerProgress(3, 600, playing = true, isBuffering = false, atMs = 4000)
+        // A stream stalls: not playing, buffering. The session must survive.
+        engine.onPlayerProgress(3, 600, playing = false, isBuffering = true, atMs = 5000)
+        engine.onPlayerProgress(3, 600, playing = false, isBuffering = true, atMs = 6000)
+        assertEquals("a stall must not split the session", 1, store.sessions.size)
+        assertNull("a stall must not finalize the session", store.sessions.values.first().endedAt)
+        // Resumes, then a real pause finalizes the one session.
+        engine.onPlayerProgress(4, 600, playing = true, isBuffering = false, atMs = 7000)
+        engine.onPlayerProgress(4, 600, playing = false, isBuffering = false, atMs = 8000)
+        assertEquals(1, store.sessions.size)
+        assertNotNull(store.sessions.values.first().endedAt)
+        assertEquals(4, store.sessions.values.first().durationListenedSec)
+    }
+
+    @Test
     fun playbackStartedCallbackFiresOnceWhenARadioSessionBegins() = runTest {
         val (engine, store, _) = setup()
         val radio = track("r1").copy(
