@@ -33,9 +33,11 @@ type ChannelOwnerSnapshot = {
  * Folders, episodes and subscribers hang off the channel, not the account, so
  * they stay exactly where they are.
  *
- * Transferring to the current owner is a no-op (returns the row, writes no
- * audit), and a deleted account is refused because it can never sign in to
- * manage what it was given.
+ * Transferring to the current owner changes nothing and writes no audit, but it
+ * still repairs the reverse array when the channel is missing from it — the
+ * state left by channels created before `createChannel` maintained the relation.
+ * A deleted account is refused because it can never sign in to manage what it
+ * was given.
  */
 export const adminTransferChannelOwnerFn: ActFn = async (body) => {
   const { set, get } = body.details;
@@ -78,10 +80,22 @@ export const adminTransferChannelOwnerFn: ActFn = async (body) => {
     String(previousOwner._id) === String(ownerId);
 
   if (alreadyOwner) {
-    return await channel.findOne({
-      filters: { _id: channelId },
-      projection: get,
-    });
+    // A channel can be owned by the target yet missing from their reverse
+    // array: it may have been created before `createChannel` maintained the
+    // relation, or assigned by a pre-fix transfer. Re-adding the same owner is
+    // idempotent, so repair that state instead of silently returning; nothing
+    // about ownership changed, so no audit is written.
+    const needsRepair = await coreApp.odm.getCollection("user").findOne(
+      { _id: ownerId, "ownedChannels._id": { $ne: channelId } },
+      { projection: { _id: 1 } },
+    );
+
+    if (!needsRepair) {
+      return await channel.findOne({
+        filters: { _id: channelId },
+        projection: get,
+      });
+    }
   }
 
   // Lesan's replace path reads the previous owner's reverse array directly and
@@ -113,21 +127,23 @@ export const adminTransferChannelOwnerFn: ActFn = async (body) => {
     throwError("Channel owner was not changed");
   }
 
-  await recordAudit({
-    action: "channel.transferOwner",
-    targetType: "channel",
-    targetId: String(channelId),
-    summary: `Transferred "${existing.name}" to ${target.username}`,
-    metadata: {
-      channelId: String(channelId),
-      channelName: existing.name,
-      slug: existing.slug,
-      fromOwnerId: previousOwner?._id ? String(previousOwner._id) : null,
-      fromOwnerUsername: previousOwner?.username ?? null,
-      toOwnerId: String(ownerId),
-      toOwnerUsername: target.username,
-    },
-  });
+  if (!alreadyOwner) {
+    await recordAudit({
+      action: "channel.transferOwner",
+      targetType: "channel",
+      targetId: String(channelId),
+      summary: `Transferred "${existing.name}" to ${target.username}`,
+      metadata: {
+        channelId: String(channelId),
+        channelName: existing.name,
+        slug: existing.slug,
+        fromOwnerId: previousOwner?._id ? String(previousOwner._id) : null,
+        fromOwnerUsername: previousOwner?.username ?? null,
+        toOwnerId: String(ownerId),
+        toOwnerUsername: target.username,
+      },
+    });
+  }
 
   return updated;
 };
