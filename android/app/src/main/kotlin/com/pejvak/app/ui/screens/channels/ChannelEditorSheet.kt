@@ -5,6 +5,8 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,7 +23,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
+import com.pejvak.app.domain.channel.CHANNEL_CATEGORIES
 import com.pejvak.app.domain.channel.ChannelSocial
+import com.pejvak.app.domain.channel.categoryLabel
+import com.pejvak.app.domain.online.LANGUAGES
 import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.GlassChip
@@ -29,9 +34,11 @@ import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.InlineNotice
 import com.pejvak.app.ui.components.NoticeTone
 import com.pejvak.app.ui.components.PaletteTile
-import com.pejvak.app.ui.components.field.TagInput
+import com.pejvak.app.ui.components.field.SelectField
+import com.pejvak.app.ui.components.field.SelectOption
 import com.pejvak.app.ui.components.field.TextField
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
+import com.pejvak.app.ui.theme.LocalPejvakTokens
 
 /**
  * The create/edit channel sheet (plan 07 CHAN-C02). A `GlassSheet` form on the app's own
@@ -47,6 +54,8 @@ fun ChannelEditorSheet(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val geo = LocalPejvakGeometry.current
+
+    val languageOptions = LANGUAGES.map { SelectOption(it.code, "${it.nativeName} · ${it.name}", it.code) }
 
     LaunchedEffect(state.saved) {
         if (state.saved) onDismiss()
@@ -99,20 +108,26 @@ fun ChannelEditorSheet(
                 maxLines = 5,
             )
 
-            TagInput(
-                tags = state.draft.categories,
-                onTagsChange = { list -> viewModel.update { it.copy(categories = list) } },
+            CategoryMultiSelect(
                 label = stringResource(R.string.channel_editor_categories),
+                selected = state.draft.categories,
+                error = if (state.categoriesInvalid) stringResource(R.string.channel_editor_categories_required) else null,
+                onToggle = { slug ->
+                    viewModel.update { d ->
+                        d.copy(categories = if (slug in d.categories) d.categories - slug else d.categories + slug)
+                    }
+                },
             )
-            if (state.categoriesInvalid) {
-                Text(text = stringResource(R.string.channel_editor_categories_required), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-            }
 
-            TextField(
-                value = state.draft.languageCode.orEmpty(),
-                onValueChange = { v -> viewModel.update { it.copy(languageCode = v.takeIf { it.isNotBlank() }) } },
+            SelectField(
                 label = stringResource(R.string.channel_editor_language),
+                selected = state.draft.languageCode,
+                options = languageOptions,
+                onSelect = { v -> viewModel.update { it.copy(languageCode = v) } },
                 placeholder = stringResource(R.string.channel_editor_language_placeholder),
+                leadingIcon = "language",
+                sheetTitle = stringResource(R.string.channel_editor_language),
+                rawSelectedLabel = state.draft.languageCode,
             )
 
             // Avatar
@@ -234,5 +249,44 @@ private fun SocialRow(
             onClick = onRemove,
             size = geo.controls.sm,
         )
+    }
+}
+
+/**
+ * A multi-select over the [CHANNEL_CATEGORIES] catalogue (plan 09 follow-up): the creator taps
+ * chips to toggle categories rather than typing them, so the field is a real selector. A saved
+ * channel may already hold a category outside the catalogue — those are kept and shown selected
+ * too, so editing never silently drops one.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CategoryMultiSelect(
+    label: String,
+    selected: List<String>,
+    error: String?,
+    onToggle: (String) -> Unit,
+) {
+    val tokens = LocalPejvakTokens.current
+    val geo = LocalPejvakGeometry.current
+    val options = (CHANNEL_CATEGORIES + selected.filterNot { it in CHANNEL_CATEGORIES }).distinct()
+    Column(verticalArrangement = Arrangement.spacedBy(geo.spacing.xs)) {
+        Text(label, style = MaterialTheme.typography.labelLarge, color = tokens.textSecondary)
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+            verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+        ) {
+            options.forEach { slug ->
+                GlassChip(
+                    label = categoryLabel(slug),
+                    icon = "tag",
+                    selected = slug in selected,
+                    onClick = { onToggle(slug) },
+                )
+            }
+        }
+        if (error != null) {
+            Text(error, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
     }
 }

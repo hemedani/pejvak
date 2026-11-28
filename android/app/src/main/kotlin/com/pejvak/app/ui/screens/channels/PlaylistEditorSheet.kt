@@ -18,10 +18,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.pejvak.app.R
+import com.pejvak.app.domain.channel.CHANNEL_CATEGORIES
 import com.pejvak.app.domain.channel.PlaylistDraft
+import com.pejvak.app.domain.channel.categoryLabel
 import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.GlassSheet
+import com.pejvak.app.ui.components.field.SelectField
+import com.pejvak.app.ui.components.field.SelectOption
 import com.pejvak.app.ui.components.field.TagInput
 import com.pejvak.app.ui.components.field.TextField
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
@@ -36,6 +40,7 @@ fun PlaylistEditorSheet(
 ) {
     val geo = LocalPejvakGeometry.current
     var draft by remember { mutableStateOf(existing ?: PlaylistDraft()) }
+    val categoryOptions = CHANNEL_CATEGORIES.map { SelectOption(it, categoryLabel(it)) }
 
     GlassSheet(
         onDismiss = onDismiss,
@@ -56,10 +61,15 @@ fun PlaylistEditorSheet(
                 label = stringResource(R.string.folder_title),
                 autoFocus = true,
             )
-            TextField(
-                value = draft.category,
-                onValueChange = { v -> draft = draft.copy(category = v) },
+            SelectField(
                 label = stringResource(R.string.folder_category),
+                selected = draft.category.takeIf { it.isNotBlank() },
+                options = categoryOptions,
+                onSelect = { v -> draft = draft.copy(category = v) },
+                placeholder = stringResource(R.string.upload_category_placeholder),
+                leadingIcon = "tag",
+                sheetTitle = stringResource(R.string.folder_category),
+                rawSelectedLabel = draft.category.takeIf { it.isNotBlank() }?.let { categoryLabel(it) },
             )
             TextField(
                 value = draft.description,

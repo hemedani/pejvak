@@ -316,3 +316,35 @@ fun parseTagList(raw: String): List<String> =
         .filter { it.isNotEmpty() }
         .distinct()
 
+/**
+ * The creator-facing category catalogue (plan 09 UX-04d). The server stores `category` /
+ * `categories` as **unvalidated strings** by design (plan 07 D5) — the catalogue lives in the
+ * client, so this is the list offered by the upload/editor select boxes, not a server enum.
+ * Slugs are lowercase snake so a value round-trips; [categoryLabel] renders them for display.
+ * A saved channel/episode whose category is not here still displays via [categoryLabel].
+ */
+val CHANNEL_CATEGORIES: List<String> = listOf(
+    "audiobook",
+    "podcast",
+    "religion",
+    "education",
+    "history",
+    "literature",
+    "science",
+    "technology",
+    "self_development",
+    "children",
+    "language_learning",
+    "interview",
+    "news",
+    "health",
+    "business",
+    "art",
+    "culture",
+    "entertainment",
+)
+
+/** A human label for a category slug: underscores to spaces, first letter capitalised. */
+fun categoryLabel(slug: String): String =
+    slug.replace('_', ' ').trim().replaceFirstChar { it.uppercase() }
+

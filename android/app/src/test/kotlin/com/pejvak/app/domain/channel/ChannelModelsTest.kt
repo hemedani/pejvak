@@ -178,4 +178,30 @@ class ChannelModelsTest {
         // The stream URL stays on the row so deleting the download falls back to streaming.
         assertEquals("http://h:1405/uploads/channel/audio/e1.mp3", offline.streamUrl)
     }
+
+    @Test
+    fun categoryLabelHumanisesSlugs() {
+        // Plan 09 UX-04d: the catalogue stores snake-case slugs; the select box shows a label.
+        assertEquals("Audiobook", categoryLabel("audiobook"))
+        assertEquals("Self development", categoryLabel("self_development"))
+        assertEquals("Language learning", categoryLabel("language_learning"))
+    }
+
+    @Test
+    fun categoryCatalogueIsUniqueAndSlugCased() {
+        // A duplicate slug would fork one category into two rows in the picker.
+        assertEquals(CHANNEL_CATEGORIES.size, CHANNEL_CATEGORIES.distinct().size)
+        assertTrue(CHANNEL_CATEGORIES.all { it.isNotBlank() && !it.contains(' ') && it == it.lowercase() })
+    }
+
+    @Test
+    fun episodeDraftCarriesOrderAndLanguage() {
+        // The upload page now sets these; publishAudio forwards them (position null = server appends).
+        val draft = EpisodeDraft(title = "Ep", category = "podcast", languageCode = "fa", position = 3)
+        assertTrue(draft.isValid)
+        assertEquals("fa", draft.languageCode)
+        assertEquals(3, draft.position)
+        // A blank order stays null so the server appends after the folder's last episode.
+        assertNull(EpisodeDraft(title = "Ep", category = "podcast").position)
+    }
 }

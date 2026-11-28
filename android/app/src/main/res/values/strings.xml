@@ -658,6 +658,14 @@
     <string name="upload_narrator">Narrator</string>
     <string name="upload_audiobook">Mark as audiobook</string>
     <string name="upload_publish">Upload &amp; publish</string>
+    <string name="upload_folder_placeholder">Choose a folder</string>
+    <string name="upload_folder_empty">No episodes yet</string>
+    <string name="upload_order">Order in folder</string>
+    <string name="upload_order_placeholder">After the last episode</string>
+    <string name="upload_category_placeholder">Choose a category</string>
+    <string name="upload_language">Language</string>
+    <string name="upload_language_placeholder">Choose a language</string>
+    <string name="select_none">Nothing selected</string>
     <string name="episode_edit">Edit episode</string>
     <string name="episode_edit_subtitle">Update the text — the audio is unchanged</string>
     <string name="episode_move">Move to folder</string>
