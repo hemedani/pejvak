@@ -189,10 +189,13 @@ interface ContextPlayDao {
     @Query("SELECT * FROM context_plays WHERE deleted_at IS NULL ORDER BY started_at DESC")
     fun observeLive(): Flow<List<ContextPlayEntity>>
 
-    @Query("SELECT * FROM context_plays WHERE sync_status IN ('pending','failed')")
+    // A run is only "pending to sync" once it has ENDED. An open run (`ended_at` null — the one you
+    // are listening to right now) is never pushed by the engine, so counting it inflates the badge
+    // with a phantom item that can never clear (plan 09 follow-up, owner bug: "1 pending" forever).
+    @Query("SELECT * FROM context_plays WHERE ended_at IS NOT NULL AND sync_status IN ('pending','failed')")
     suspend fun getPendingSync(): List<ContextPlayEntity>
 
-    @Query("SELECT * FROM context_plays WHERE sync_status IN ('pending','failed') LIMIT :limit")
+    @Query("SELECT * FROM context_plays WHERE ended_at IS NOT NULL AND sync_status IN ('pending','failed') LIMIT :limit")
     suspend fun getPendingSync(limit: Int): List<ContextPlayEntity>
 
     @Query("SELECT * FROM context_plays")
