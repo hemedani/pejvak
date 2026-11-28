@@ -1,5 +1,5 @@
 import { type ObjectId } from "lesan";
-import { channel, channelAudio, channelPlaylist } from "../../mod.ts";
+import { channel, channelAudio, channelPlaylist, coreApp } from "../../mod.ts";
 import { removeStoredBytes } from "./media.ts";
 
 /**
@@ -40,6 +40,13 @@ export const hardDeleteChannel = async (channelId: ObjectId): Promise<void> => {
   for (const folder of folders) {
     await channelPlaylist.deleteOne({ filter: { _id: folder._id } });
   }
+
+  // Follows are children of the channel. The reverse arrays on `channel`/`user`
+  // are never populated (the join model is the source of truth), so a direct
+  // delete is enough — there is no parent array to rewrite.
+  await coreApp.odm
+    .getCollection("channelSubscription")
+    .deleteMany({ "channel._id": channelId });
 
   await channel.deleteOne({ filter: { _id: channelId } });
 };

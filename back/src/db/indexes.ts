@@ -35,7 +35,7 @@ export const ensureIndexes = async () => {
     // the creator and public-browse reads filter and sort on. Multikey indexes on
     // `categories`/`tags` let a category or tag browse hit an index even though
     // the values are client catalogues the server never enumerates.
-    { collection: "channel", spec: { "user._id": 1 } },
+    { collection: "channel", spec: { "owner._id": 1 } },
     { collection: "channel", spec: { categories: 1 } },
     { collection: "channel", spec: { status: 1, createdAt: -1 } },
     { collection: "channelPlaylist", spec: { "user._id": 1 } },
@@ -47,6 +47,17 @@ export const ensureIndexes = async () => {
     { collection: "channelAudio", spec: { category: 1 } },
     { collection: "channelAudio", spec: { tags: 1 } },
     { collection: "channelAudio", spec: { status: 1, createdAt: -1 } },
+    // Subscription reads: "my channels" (user, newest first) and "who follows
+    // this channel" (channel, newest first). The unique { channel, user } index
+    // is created by the model factory itself.
+    {
+      collection: "channelSubscription",
+      spec: { "user._id": 1, createdAt: -1 },
+    },
+    {
+      collection: "channelSubscription",
+      spec: { "channel._id": 1, createdAt: -1 },
+    },
   ];
 
   for (const { collection, spec } of indexes) {

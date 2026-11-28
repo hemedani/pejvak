@@ -406,7 +406,7 @@ export const channelQuotaOf = async (
 ): Promise<Quota> =>
   quotaOf(
     limits.channels,
-    await channel.countDocument({ filter: { "user._id": userId } }),
+    await channel.countDocument({ filter: { "owner._id": userId } }),
   );
 
 export const channelAudioQuotaOf = async (

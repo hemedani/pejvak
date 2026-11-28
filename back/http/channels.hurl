@@ -412,6 +412,139 @@ HTTP 501
 [Asserts]
 jsonpath "$.success" == false
 
+# ── Subscriptions: a second listener follows the channel ─────────
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "channel",
+  "act": "subscribeChannel",
+  "details": { "set": { "channelId": "{{channelId}}" }, "get": { "subscribed": 1, "subscriberCount": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.subscribed" == true
+jsonpath "$.body.subscriberCount" == 1
+
+# Replaying the follow is idempotent — still one subscriber, not an error.
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "channel",
+  "act": "subscribeChannel",
+  "details": { "set": { "channelId": "{{channelId}}" }, "get": { "subscribed": 1, "subscriberCount": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.subscribed" == true
+jsonpath "$.body.subscriberCount" == 1
+
+# A creator cannot follow their own channel.
+
+POST {{serverAddress}}/lesan
+token: {{creatorToken}}
+{
+  "model": "channel",
+  "act": "subscribeChannel",
+  "details": { "set": { "channelId": "{{channelId}}" }, "get": { "subscribed": 1 } }
+}
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
+
+# The channel page now tells a signed-in reader they follow it.
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "channel",
+  "act": "getChannel",
+  "details": { "set": { "channelId": "{{channelId}}" }, "get": { "_id": 1, "subscriberCount": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.isSubscribed" == true
+jsonpath "$.body.subscriberCount" == 1
+
+# The subscriber's own shelf contains the channel.
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "channel",
+  "act": "getMySubscribedChannels",
+  "details": { "set": { "limit": 50 }, "get": { "_id": 1, "name": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body" isCollection
+jsonpath "$.body[*]._id" includes "{{channelId}}"
+
+# The owner can list who follows; a non-owner cannot.
+
+POST {{serverAddress}}/lesan
+token: {{creatorToken}}
+{
+  "model": "channel",
+  "act": "listChannelSubscribers",
+  "details": { "set": { "channelId": "{{channelId}}" }, "get": { "_id": 1, "username": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.total" == 1
+jsonpath "$.body.rows[0].username" == "intruder-{{unique}}"
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "channel",
+  "act": "listChannelSubscribers",
+  "details": { "set": { "channelId": "{{channelId}}" }, "get": { "_id": 1 } }
+}
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
+
+# An operator may read the subscriber list too.
+
+POST {{serverAddress}}/lesan
+token: {{adminToken}}
+{
+  "model": "channel",
+  "act": "listChannelSubscribers",
+  "details": { "set": { "channelId": "{{channelId}}" }, "get": { "_id": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.total" == 1
+
+# Unfollowing is idempotent and moves the counter back to zero.
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "channel",
+  "act": "unsubscribeChannel",
+  "details": { "set": { "channelId": "{{channelId}}" }, "get": { "subscribed": 1, "subscriberCount": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.subscribed" == false
+jsonpath "$.body.subscriberCount" == 0
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "channel",
+  "act": "unsubscribeChannel",
+  "details": { "set": { "channelId": "{{channelId}}" }, "get": { "subscribed": 1, "subscriberCount": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.subscribed" == false
+jsonpath "$.body.subscriberCount" == 0
+
 # ── Channels quota (CH-ENT3): free tier allows 3 channels ───────
 
 POST {{serverAddress}}/lesan
@@ -547,6 +680,19 @@ HTTP 200
 [Asserts]
 jsonpath "$.body.status" == "active"
 
+# Re-follow so the hard delete has a subscription row to cascade.
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "channel",
+  "act": "subscribeChannel",
+  "details": { "set": { "channelId": "{{channelId}}" }, "get": { "subscribed": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.subscribed" == true
+
 # ── Cleanup: deleteChannel hard-deletes audios → folders → channel ──
 
 POST {{serverAddress}}/lesan
@@ -569,3 +715,17 @@ POST {{serverAddress}}/lesan
 HTTP 501
 [Asserts]
 jsonpath "$.success" == false
+
+# The follow row went with the channel (leaf-first cascade).
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "channel",
+  "act": "getMySubscribedChannels",
+  "details": { "set": { "limit": 50 }, "get": { "_id": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body" isCollection
+jsonpath "$.body" isEmpty

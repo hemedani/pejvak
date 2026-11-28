@@ -1,4 +1,5 @@
 import { ensureIndexes } from "./db/indexes.ts";
+import { migrateChannelOwner } from "./db/migrations.ts";
 import { ensureDefaultPlans } from "./entitlements/defaultPlans.ts";
 import { ensurePlatformSetting } from "./platform/setting.ts";
 
@@ -22,5 +23,7 @@ export {
 export const bootstrap = async () => {
   await ensureDefaultPlans();
   await ensurePlatformSetting();
+  // Data moves run before the indexes so a new index is built on the new field.
+  await migrateChannelOwner();
   await ensureIndexes();
 };

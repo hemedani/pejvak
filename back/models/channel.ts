@@ -78,17 +78,23 @@ export const channel_pure = {
   audioCount: defaulted(number(), 0),
   /** Informational, maintained by the playlist acts. */
   playlistCount: defaulted(number(), 0),
+  /** Informational, maintained by the subscription acts. */
+  subscriberCount: defaulted(number(), 0),
   ...createUpdateAt,
 };
 
 export const channel_relations = {
-  user: {
+  /**
+   * The creator who owns the channel. Named `owner` rather than `user` so a
+   * reader cannot confuse it with a subscriber, who is also a `user`.
+   */
+  owner: {
     schemaName: "user",
     type: "single" as RelationDataType,
     optional: false,
     excludes: user_excludes,
     relatedRelations: {
-      channels: {
+      ownedChannels: {
         type: "multiple" as RelationDataType,
         limit: 20,
         sort: {

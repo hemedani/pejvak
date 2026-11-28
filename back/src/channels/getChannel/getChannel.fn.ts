@@ -3,6 +3,7 @@ import {
   channel,
   channelAudio,
   channelPlaylist,
+  channelSubscription,
   coreApp,
 } from "../../../mod.ts";
 import { throwError } from "@lib";
@@ -36,6 +37,18 @@ export const getChannelFn: ActFn = async (body) => {
 
   const channelId = channelRow!._id as ObjectId;
 
+  // A computed column like `playlists`/`audios`: always returned, never part of
+  // the client's projection. An anonymous reader is never subscribed; a signed-in
+  // one gets the answer for their own row, so the page can draw the follow button.
+  let isSubscribed = false;
+  if (who) {
+    const subscription = await channelSubscription.findOne({
+      filters: { "channel._id": channelId, "user._id": who.userId },
+      projection: { _id: 1 },
+    });
+    isSubscribed = subscription !== null;
+  }
+
   const playlists = await channelPlaylist.aggregation({
     pipeline: [
       { $match: { "channel._id": channelId } },
@@ -57,5 +70,5 @@ export const getChannelFn: ActFn = async (body) => {
     projection: coreApp.schemas.createProjection("channelAudio", "Pure"),
   }).toArray();
 
-  return { ...channelRow, playlists, audios };
+  return { ...channelRow, isSubscribed, playlists, audios };
 };

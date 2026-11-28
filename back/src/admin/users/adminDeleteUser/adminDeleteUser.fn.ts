@@ -1,6 +1,7 @@
 import { type ActFn, ObjectId } from "lesan";
-import { coreApp, user } from "../../../../mod.ts";
+import { channel, coreApp, user } from "../../../../mod.ts";
 import { currentUser, pickByGet, roleOf, throwError } from "@lib";
+import { hardDeleteChannel } from "../../../channels/cascade.ts";
 import { recordAudit } from "../../audit.ts";
 
 /**
@@ -58,6 +59,21 @@ export const adminDeleteUserFn: ActFn = async (body) => {
     throwError("Type the account's email address to confirm the deletion");
   }
 
+  // A listener may own channels, whose folders, episodes and hosted bytes hang
+  // off `channel.owner` rather than `user._id`, so the per-collection loop below
+  // would miss them. `hardDeleteChannel` is the same leaf-first purge
+  // `deleteChannel` uses, including the bytes on disk.
+  const ownedChannels = await channel.aggregation({
+    pipeline: [
+      { $match: { "owner._id": userId } },
+      { $project: { _id: 1 } },
+    ],
+  }).toArray();
+
+  for (const owned of ownedChannels) {
+    await hardDeleteChannel(owned._id as ObjectId);
+  }
+
   const collections = [
     "annotation",
     "playbackSession",
@@ -66,10 +82,11 @@ export const adminDeleteUserFn: ActFn = async (body) => {
     "onlineCollection",
     "aiUsage",
     "subscription",
+    "channelSubscription",
     "track",
   ];
 
-  const purged: Record<string, number> = {};
+  const purged: Record<string, number> = { channel: ownedChannels.length };
 
   for (const collection of collections) {
     const result = await coreApp.odm

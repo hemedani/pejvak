@@ -11,7 +11,7 @@ export const getMyChannelsFn: ActFn = async (body) => {
   } = body.details;
 
   const pipeline: Document[] = [
-    { $match: { "user._id": new ObjectId(user._id) } },
+    { $match: { "owner._id": new ObjectId(user._id) } },
     { $sort: { createdAt: -1 } },
   ];
 

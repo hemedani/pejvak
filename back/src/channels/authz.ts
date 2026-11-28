@@ -16,9 +16,10 @@ import { type MyContext, roleOf, throwError } from "@lib";
  * The invariants this exists to protect, and which a naive
  * `if (isAdmin) skip all checks` would violate:
  *
- * - A **creator** is always scoped to `"user._id": theirId` — they can never
+ * - A **creator** is always scoped to `"<owner>._id": theirId` — they can never
  *   reach another account's row, and can never set `status` (that is a takedown,
- *   not an edit).
+ *   not an edit). `channel` names its creator `owner`; the child models keep
+ *   `user`.
  * - An **operator** (`admin`) may act across tenants and may set `status`, but a
  *   cross-tenant *destructive* call still demands a confirmation token, and every
  *   operator mutation is audited.
@@ -63,10 +64,13 @@ export const actor = (): Actor => {
 export const rowScope = (
   who: Actor,
   id: ObjectId,
-  opts: { write?: boolean } = {},
+  opts: { write?: boolean; ownerField?: string } = {},
 ): Record<string, unknown> => {
   const privileged = opts.write ? who.isAdmin : who.canReadAll;
-  return privileged ? { _id: id } : { _id: id, "user._id": who.userId };
+  const ownerField = opts.ownerField ?? "user";
+  return privileged
+    ? { _id: id }
+    : { _id: id, [`${ownerField}._id`]: who.userId };
 };
 
 /**

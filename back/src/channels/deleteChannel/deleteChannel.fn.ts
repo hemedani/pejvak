@@ -23,12 +23,12 @@ export const deleteChannelFn: ActFn = async (body) => {
   const channelId = new ObjectId(set.channelId);
 
   const channelRow = await channel.findOne({
-    filters: rowScope(who, channelId, { write: true }),
-    projection: { _id: 1, name: 1, "user._id": 1 },
+    filters: rowScope(who, channelId, { write: true, ownerField: "owner" }),
+    projection: { _id: 1, name: 1, "owner._id": 1 },
   });
   if (!channelRow) throwError("Channel not found");
 
-  const isOwner = String(channelRow!.user?._id) === String(user._id);
+  const isOwner = String(channelRow!.owner?._id) === String(user._id);
   if (!isOwner && set.confirmName !== channelRow!.name) {
     throwError("Confirmation name does not match the channel");
   }

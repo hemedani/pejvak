@@ -7,6 +7,7 @@ import {
   channelAudios,
   channelPlaylists,
   channels,
+  channelSubscriptions,
   onlineCollections,
   plans,
   platformSettings,
@@ -41,6 +42,7 @@ export const onlineCollection = onlineCollections();
 export const channel = channels();
 export const channelPlaylist = channelPlaylists();
 export const channelAudio = channelAudios();
+export const channelSubscription = channelSubscriptions();
 export const plan = plans();
 export const subscription = subscriptions();
 export const billingTransaction = billingTransactions();

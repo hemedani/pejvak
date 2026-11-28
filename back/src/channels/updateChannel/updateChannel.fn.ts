@@ -8,7 +8,7 @@ import { actor, rowScope } from "../authz.ts";
  * Patch a channel — one act for creator and operator (prompt D15).
  *
  * The tenant boundary is the *query scope*, not a separate act: a creator is
- * pinned to `"user._id": theirId`, an operator (`admin`) reaches any row. The
+ * pinned to `"owner._id": theirId`, an operator (`admin`) reaches any row. The
  * business rule that makes sharing safe is the `status` gate — flipping
  * `active`/`removed` is a **takedown**, so only an operator may send it and only
  * an operator's change is audited. A creator who tries to set `status` is
@@ -20,7 +20,10 @@ export const updateChannelFn: ActFn = async (body) => {
   const who = actor();
 
   const existing = await channel.findOne({
-    filters: rowScope(who, new ObjectId(set.channelId), { write: true }),
+    filters: rowScope(who, new ObjectId(set.channelId), {
+      write: true,
+      ownerField: "owner",
+    }),
     projection: { _id: 1, status: 1, name: 1 },
   });
   if (!existing) throwError("Channel not found");

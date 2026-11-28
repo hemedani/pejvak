@@ -5,7 +5,7 @@ import { type MyContext, throwError } from "@lib";
 /**
  * Creates a folder inside a channel the caller owns.
  *
- * The channel is verified by ownership in the lookup (`"user._id": userId`), so
+ * The channel is verified by ownership in the lookup (`"owner._id": userId`), so
  * a token can never file a folder into someone else's channel. `sortOrder`
  * defaults to the channel's current folder count, which appends the new folder
  * to the end without a read-modify-write race on an explicit value.
@@ -17,7 +17,7 @@ export const createChannelPlaylistFn: ActFn = async (body) => {
   const channelId = new ObjectId(set.channelId);
 
   const channelRow = await channel.findOne({
-    filters: { _id: channelId, "user._id": userId },
+    filters: { _id: channelId, "owner._id": userId },
     projection: { _id: 1, playlistCount: 1 },
   });
   if (!channelRow) throwError("Channel not found");

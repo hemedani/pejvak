@@ -5,6 +5,7 @@ export * from "./billingTransaction.ts";
 export * from "./channel.ts";
 export * from "./channelAudio.ts";
 export * from "./channelPlaylist.ts";
+export * from "./channelSubscription.ts";
 export * from "./excludes.ts";
 export * from "./onlineCollection.ts";
 export * from "./plan.ts";

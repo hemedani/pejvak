@@ -70,7 +70,7 @@ export const createChannelFn: ActFn = async (body) => {
       updatedAt: now,
     },
     relations: {
-      user: {
+      owner: {
         _ids: userId,
         relatedRelations: {},
       },
