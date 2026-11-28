@@ -1,5 +1,6 @@
 package com.pejvak.app.ui.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,10 +19,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
+import com.pejvak.app.ui.theme.useMotionEnabled
 
 /** Empty state — one of four distinct states (DESING.md §9.6). Never a blank list. */
 @Composable
@@ -132,6 +136,62 @@ fun SkeletonRows(
                         Box(Modifier.fillMaxWidth(0.4f).height(10.dp).clip(CircleShape).background(tokens.glassFill))
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The online-first loading mark (plan 09 UX-05): a caption with the app's own wave drifting
+ * beneath it, drawn from the same `Wave.kt` primitives as the scrubber and the page sweep, so a
+ * server check reads as part of the same sea rather than a generic spinner. Motion-off draws a
+ * still crest. Use it as the top item of a list while a screen fetches from the server.
+ */
+@Composable
+fun SyncWaveLoader(
+    message: String,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = LocalPejvakTokens.current
+    val geo = LocalPejvakGeometry.current
+    val motion = useMotionEnabled()
+    val phase = rememberWavePhase(periodMillis = 3_000)
+    Column(
+        modifier = modifier.fillMaxWidth().padding(vertical = geo.spacing.md),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(geo.spacing.sm),
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.labelLarge,
+            color = tokens.textSecondary,
+        )
+        Canvas(
+            Modifier
+                .fillMaxWidth(0.62f)
+                .height(20.dp),
+        ) {
+            val cy = size.height * 0.5f
+            val amplitude = 3.4.dp.toPx()
+            val wavelength = WAVE_WAVELENGTH_DP.dp.toPx()
+            listOf(
+                Triple(0f, 1f, 0.9f),
+                Triple(6.dp.toPx(), 0.6f, 0.4f),
+            ).forEach { (offset, scale, alpha) ->
+                drawPath(
+                    path = wavePath(
+                        from = 0f,
+                        to = size.width,
+                        cy = cy + offset,
+                        amplitude = amplitude * scale,
+                        wavelength = wavelength,
+                        phase = if (motion) phase else 0.9f,
+                        taper = 26.dp.toPx(),
+                        variation = 0.4f,
+                    ),
+                    color = tokens.accentTeal.copy(alpha = alpha),
+                    style = Stroke(width = 1.7.dp.toPx(), cap = StrokeCap.Round),
+                )
             }
         }
     }

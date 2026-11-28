@@ -76,6 +76,12 @@ data class HistoryUiState(
     val detailRun: ContextPlay? = null,
     val selectionMode: Boolean = false,
     val selected: Set<String> = emptySet(),
+    /** True while the online-first server check runs (plan 09 UX-05). */
+    val syncing: Boolean = false,
+    /** Whether there is a session to pull from; false shows the sign-in affordance. */
+    val signedIn: Boolean = false,
+    /** A non-blocking failure from the last sync; null when the last check was clean. */
+    val syncNotice: String? = null,
 )
 
 @HiltViewModel
@@ -85,6 +91,8 @@ class HistoryViewModel @Inject constructor(
     private val library: LibraryRepository,
     private val settings: SettingsRepository,
     private val launcher: CollectionPlaybackLauncher,
+    private val syncRepository: com.pejvak.app.data.sync.SyncRepository,
+    private val authSession: com.pejvak.app.data.auth.AuthSession,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
     private val _state = MutableStateFlow(HistoryUiState())
@@ -92,6 +100,7 @@ class HistoryViewModel @Inject constructor(
     private var cursor: HistoryCursor? = null
     private var allItems: List<HistoryItem> = emptyList()
     private var deepItems: List<HistoryItem> = emptyList()
+    private var hasResumed = false
 
     init {
         _state.value = _state.value.copy(sort = settings.settings.value.historySort)
@@ -101,7 +110,18 @@ class HistoryViewModel @Inject constructor(
                 applyQuery()
             }
         }
+        // Follow the shared session: keep [signedIn] current and pull the moment a sign-in lands.
+        viewModelScope.launch {
+            authSession.token.collect { token ->
+                val nowSignedIn = token != null
+                val wasSignedIn = _state.value.signedIn
+                _state.value = _state.value.copy(signedIn = nowSignedIn)
+                if (nowSignedIn && !wasSignedIn) syncThenReload()
+            }
+        }
         reload()
+        // Plan 09 UX-05a: online-first — sync the newest server/local item on entry, then reload.
+        syncThenReload()
     }
 
     fun setPanel(panel: HistoryPanel) {
@@ -130,6 +150,45 @@ class HistoryViewModel @Inject constructor(
 
     fun refresh() {
         reload(refreshing = true)
+    }
+
+    /**
+     * Re-reads the store when the listener comes back to the tab. The dock keeps this
+     * ViewModel alive, so `init` only runs once; without this a session written after
+     * the first visit would not appear until a manual refresh.
+     */
+    fun onResume() {
+        if (!hasResumed) { hasResumed = true; return }
+        reload()
+        syncThenReload()
+    }
+
+    /**
+     * Online-first (plan 09 UX-05a): when signed in, push pending rows and pull the server state,
+     * then reload so the newest session appears without a manual refresh. Best-effort and
+     * non-blocking — [SyncRepository.syncAll] never throws; a failure leaves the local view intact
+     * and surfaces as a non-blocking notice. A no-op when signed out (the screen shows the sign-in
+     * affordance) or when a check is already in flight.
+     */
+    private fun syncThenReload() {
+        if (authSession.current() == null || _state.value.syncing) return
+        _state.value = _state.value.copy(syncing = true, syncNotice = null)
+        viewModelScope.launch {
+            try {
+                syncRepository.syncAll()
+            } catch (error: Exception) {
+                _state.value = _state.value.copy(syncNotice = error.message ?: "Could not reach the server.")
+            } finally {
+                _state.value = _state.value.copy(syncing = false)
+            }
+            reload()
+        }
+    }
+
+    fun retrySync() = syncThenReload()
+
+    fun dismissSyncNotice() {
+        _state.value = _state.value.copy(syncNotice = null)
     }
 
     fun loadMore() {

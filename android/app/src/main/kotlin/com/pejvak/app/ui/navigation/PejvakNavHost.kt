@@ -356,6 +356,7 @@ fun PejvakNavHost(
                         HistoryScreen(
                             onOpenAi = { aiSheet = true },
                             onCreateChannel = startCreateChannel,
+                            onOpenAccount = { accountSheet = true },
                             onOpenCollection = { run ->
                                 when (run.contextType) {
                                     com.pejvak.app.domain.ContextType.Folder ->
@@ -375,6 +376,7 @@ fun PejvakNavHost(
                         NotesScreen(
                             onOpenPlayer = { playerOpen = true },
                             onCreateChannel = startCreateChannel,
+                            onOpenAccount = { accountSheet = true },
                         )
                     }
                     composable(Tab.Ai.route) {

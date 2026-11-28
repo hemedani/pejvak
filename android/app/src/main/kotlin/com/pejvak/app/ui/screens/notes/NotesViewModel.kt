@@ -33,6 +33,12 @@ data class NotesUiState(
     val query: String = "",
     val range: DateRange = ANY_DATE,
     val loading: Boolean = true,
+    /** True while the online-first server check runs (plan 09 UX-05). */
+    val syncing: Boolean = false,
+    /** Whether there is a session to pull from; false shows the sign-in affordance. */
+    val signedIn: Boolean = false,
+    /** A non-blocking failure from the last sync; null when the last check was clean. */
+    val syncNotice: String? = null,
 )
 
 /**
@@ -40,12 +46,18 @@ data class NotesUiState(
  * player (a modal over this tab) appears without a manual refresh. Search and the
  * date range are composed in that order: the date filter first, then the search
  * reads what it leaves — "no match" while a range is on means inside the range.
+ *
+ * Online-first (plan 09 UX-05b): on entry/resume, and the moment a session appears, the VM pushes
+ * pending rows and pulls the server so notes created elsewhere surface here without a manual
+ * refresh, while [NotesUiState.syncing] drives the wave loader.
  */
 @HiltViewModel
 class NotesViewModel @Inject constructor(
     private val annotations: AnnotationRepository,
     private val library: LibraryRepository,
     private val launcher: CollectionPlaybackLauncher,
+    private val syncRepository: com.pejvak.app.data.sync.SyncRepository,
+    private val authSession: com.pejvak.app.data.auth.AuthSession,
     @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
@@ -53,8 +65,11 @@ class NotesViewModel @Inject constructor(
     private val loading = MutableStateFlow(true)
     private val query = MutableStateFlow("")
     private val range = MutableStateFlow(ANY_DATE)
+    private val syncing = MutableStateFlow(false)
+    private val signedIn = MutableStateFlow(authSession.current() != null)
+    private val syncNotice = MutableStateFlow<String?>(null)
 
-    val state: StateFlow<NotesUiState> = combine(all, query, range, loading) { notes, q, r, l ->
+    private val core = combine(all, query, range, loading, syncing) { notes, q, r, l, s ->
         val dated = notesInRange(notes, r)
         NotesUiState(
             rows = searchNotes(dated, q),
@@ -63,7 +78,12 @@ class NotesViewModel @Inject constructor(
             query = q,
             range = r,
             loading = l,
+            syncing = s,
         )
+    }
+
+    val state: StateFlow<NotesUiState> = combine(core, signedIn, syncNotice) { base, inSession, notice ->
+        base.copy(signedIn = inSession, syncNotice = notice)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NotesUiState())
 
     private val _selected = MutableStateFlow<NoteWithTrack?>(null)
@@ -82,6 +102,49 @@ class NotesViewModel @Inject constructor(
                     tracks[annotation.trackId]?.let { NoteWithTrack(annotation, it) }
                 }
                 loading.value = false
+            }
+        }
+        // Follow the shared session: when a sign-in lands while this tab is open, pull immediately
+        // (the live observer above surfaces the rows). Also keeps [signedIn] accurate.
+        viewModelScope.launch {
+            authSession.token.collect { token ->
+                val nowSignedIn = token != null
+                val wasSignedIn = signedIn.value
+                signedIn.value = nowSignedIn
+                if (nowSignedIn && !wasSignedIn) onlineSync()
+            }
+        }
+        onlineSync()
+    }
+
+    /** Re-syncs when the listener returns to the tab (the dock keeps this ViewModel alive). */
+    fun onResume() {
+        onlineSync()
+    }
+
+    /** Manual retry from the error notice. */
+    fun retrySync() = onlineSync()
+
+    fun dismissNotice() {
+        syncNotice.value = null
+    }
+
+    /**
+     * Online-first server check (plan 09 UX-05b). Pushes pending rows, then pulls the server so
+     * notes created on another device reach this one. Best-effort: a failure is a non-blocking
+     * notice, never a crash. A no-op when signed out (the screen shows the sign-in affordance).
+     */
+    private fun onlineSync() {
+        if (authSession.current() == null || syncing.value) return
+        syncing.value = true
+        syncNotice.value = null
+        viewModelScope.launch {
+            try {
+                syncRepository.syncAll()
+            } catch (error: Exception) {
+                syncNotice.value = error.message ?: "Could not reach the server."
+            } finally {
+                syncing.value = false
             }
         }
     }

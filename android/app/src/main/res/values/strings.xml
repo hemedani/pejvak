@@ -172,6 +172,11 @@
     <string name="notes_count_of">%1$d of %2$d notes</string>
     <string name="notes_empty_title">No notes yet</string>
     <string name="notes_empty_body">Tap “Note” in the player to capture the moment — it will show up here.</string>
+    <string name="notes_syncing">Checking your notes…</string>
+    <string name="notes_sync_failed">Couldn\'t reach the server</string>
+    <string name="notes_sign_in_title">Notes sync across devices</string>
+    <string name="notes_sign_in_body">Sign in to pull the notes you saved to your account and to back up new ones.</string>
+    <string name="notes_sign_in_action">Sign in to sync</string>
     <string name="notes_no_match_title">No note matches “%1$s”</string>
     <string name="notes_no_match_body">Try another word, the track it was in, or one of its tags.</string>
     <string name="notes_no_match_body_range">Try another word, or widen the date range — Persian variants are matched automatically.</string>
@@ -393,6 +398,11 @@
     <string name="history_range_year">This year</string>
     <string name="history_empty">No listens yet</string>
     <string name="history_empty_body">Play something and every session will be recorded here.</string>
+    <string name="history_syncing">Checking your history…</string>
+    <string name="history_sync_failed">Couldn\'t reach the server</string>
+    <string name="history_sign_in_title">History syncs across devices</string>
+    <string name="history_sign_in_body">Sign in to pull the listening history saved to your account and to back up new sessions.</string>
+    <string name="history_sign_in_action">Sign in to sync</string>
     <string name="history_no_collections">No collections yet</string>
     <string name="history_no_collections_body">A folder or playlist you play through becomes a run here.</string>
     <string name="history_all_listens">All listens</string>

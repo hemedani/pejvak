@@ -48,6 +48,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
 import com.pejvak.app.domain.ContextPlay
@@ -72,6 +74,8 @@ import com.pejvak.app.domain.runProgressRatio
 import com.pejvak.app.domain.shape
 import com.pejvak.app.ui.components.BubbleButton
 import com.pejvak.app.ui.components.EmptyState
+import com.pejvak.app.ui.components.InlineNotice
+import com.pejvak.app.ui.components.NoticeTone
 import com.pejvak.app.ui.components.GlassCard
 import com.pejvak.app.ui.components.row.ActionCluster
 import com.pejvak.app.ui.components.row.AiActionButton
@@ -86,6 +90,7 @@ import com.pejvak.app.ui.components.StatTile
 import com.pejvak.app.ui.components.HeaderSearch
 import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.ScreenFrame
+import com.pejvak.app.ui.components.SyncWaveLoader
 import com.pejvak.app.ui.components.row.ListGroup
 import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.history.DateRangeSheet
@@ -104,10 +109,12 @@ import kotlinx.coroutines.launch
 fun HistoryScreen(
     onOpenAi: () -> Unit,
     onCreateChannel: () -> Unit,
+    onOpenAccount: () -> Unit,
     viewModel: HistoryViewModel = hiltViewModel(),
     onOpenCollection: ((ContextPlay) -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResume() }
     val tokens = LocalPejvakTokens.current
     val geo = LocalPejvakGeometry.current
     val pagerState = rememberPagerState(pageCount = { 2 })
@@ -211,6 +218,9 @@ fun HistoryScreen(
                         onToggleSelected = viewModel::toggleSelected,
                         onDeleteSelected = viewModel::deleteSelected,
                         onOpenAi = onOpenAi,
+                        onOpenAccount = onOpenAccount,
+                        onRetrySync = viewModel::retrySync,
+                        onDismissSyncNotice = viewModel::dismissSyncNotice,
                     )
                 }
             } else {
@@ -348,6 +358,9 @@ private fun HistoryList(
     onToggleSelected: (HistoryStretchEntry) -> Unit,
     onDeleteSelected: () -> Unit,
     onOpenAi: () -> Unit,
+    onOpenAccount: () -> Unit,
+    onRetrySync: () -> Unit,
+    onDismissSyncNotice: () -> Unit,
 ) {
     val geo = LocalPejvakGeometry.current
     val hasData =
@@ -409,15 +422,49 @@ private fun HistoryList(
             }
 
             if (state.tab == HistoryTab.Sessions) {
-                if (state.sections.isEmpty() && !state.loading) {
+                // Plan 09 UX-05: the wave loader while the online-first server check runs, and a
+                // non-blocking retry notice on failure.
+                if (state.syncing) {
+                    item { SyncWaveLoader(message = stringResource(R.string.history_syncing)) }
+                }
+                if (state.syncNotice != null) {
+                    item {
+                        InlineNotice(
+                            message = state.syncNotice,
+                            tone = NoticeTone.Warning,
+                            title = stringResource(R.string.history_sync_failed),
+                            retryLabel = stringResource(R.string.action_retry),
+                            onRetry = onRetrySync,
+                        )
+                    }
+                }
+                if (state.sections.isEmpty() && !state.loading && !state.syncing) {
                     val emptyIdx = order++
                     item {
-                        EmptyState(
-                            icon = "history",
-                            title = stringResource(R.string.history_empty),
-                            body = stringResource(R.string.history_empty_body),
-                            modifier = Modifier.oceanEntrance(emptyIdx, swayDp = 0.dp),
-                        )
+                        if (!state.signedIn) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(geo.spacing.xl),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+                            ) {
+                                EmptyState(
+                                    icon = "history",
+                                    title = stringResource(R.string.history_sign_in_title),
+                                    body = stringResource(R.string.history_sign_in_body),
+                                )
+                                PrimaryButton(
+                                    label = stringResource(R.string.history_sign_in_action),
+                                    onClick = onOpenAccount,
+                                )
+                            }
+                        } else {
+                            EmptyState(
+                                icon = "history",
+                                title = stringResource(R.string.history_empty),
+                                body = stringResource(R.string.history_empty_body),
+                                modifier = Modifier.oceanEntrance(emptyIdx, swayDp = 0.dp),
+                            )
+                        }
                     }
                 }
                 state.sections.forEach { section ->

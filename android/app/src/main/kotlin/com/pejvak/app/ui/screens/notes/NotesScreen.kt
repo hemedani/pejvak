@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
 import com.pejvak.app.domain.NoteWithTrack
@@ -38,9 +41,13 @@ import com.pejvak.app.ui.components.GlassHeader
 import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.HeaderSearch
+import com.pejvak.app.ui.components.InlineNotice
 import com.pejvak.app.ui.components.LocalShellInsets
+import com.pejvak.app.ui.components.NoticeTone
 import com.pejvak.app.ui.components.PejvakIcon
+import com.pejvak.app.ui.components.PrimaryButton
 import com.pejvak.app.ui.components.ScreenFrame
+import com.pejvak.app.ui.components.SyncWaveLoader
 import com.pejvak.app.ui.components.row.ListRow
 import com.pejvak.app.ui.components.SkeletonRows
 import com.pejvak.app.ui.components.notes.AnnotationComposerSheet
@@ -59,6 +66,7 @@ import com.pejvak.app.ui.theme.oceanEntrance
 fun NotesScreen(
     onOpenPlayer: () -> Unit,
     onCreateChannel: () -> Unit,
+    onOpenAccount: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: NotesViewModel = hiltViewModel(),
 ) {
@@ -68,6 +76,10 @@ fun NotesScreen(
     val selected by viewModel.selected.collectAsStateWithLifecycle()
     val trackNotes by viewModel.trackNotes.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    // Plan 09 UX-05b: online-first — pull the newest server notes on every entry, not just the
+    // first composition (the dock keeps this ViewModel across tab switches).
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.onResume() }
 
     var showDate by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<NoteWithTrack?>(null) }
@@ -136,8 +148,25 @@ fun NotesScreen(
                     }
                 }
 
+                // Plan 09 UX-05: an elegant wave loader while the online-first server check runs,
+                // and a non-blocking notice if the last check failed (with a retry).
+                if (state.syncing) {
+                    item { SyncWaveLoader(message = stringResource(R.string.notes_syncing)) }
+                }
+                if (state.syncNotice != null) {
+                    item {
+                        InlineNotice(
+                            message = state.syncNotice!!,
+                            tone = NoticeTone.Warning,
+                            title = stringResource(R.string.notes_sync_failed),
+                            retryLabel = stringResource(R.string.action_retry),
+                            onRetry = viewModel::retrySync,
+                        )
+                    }
+                }
+
                 when {
-                    state.loading -> item { SkeletonRows(count = 4) }
+                    state.loading && !state.syncing -> item { SkeletonRows(count = 4) }
 
                     state.rows.isEmpty() -> item {
                         if (filtering) {
@@ -155,6 +184,24 @@ fun NotesScreen(
                                 },
                                 modifier = Modifier.oceanEntrance(0),
                             )
+                        } else if (!state.signedIn && !state.syncing) {
+                            // The notes live on the server under the account — a signed-out install
+                            // cannot pull them, so explain and offer the way in rather than a dead end.
+                            Column(
+                                modifier = Modifier.fillMaxWidth().padding(geo.spacing.xl),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+                            ) {
+                                EmptyState(
+                                    icon = "notes",
+                                    title = stringResource(R.string.notes_sign_in_title),
+                                    body = stringResource(R.string.notes_sign_in_body),
+                                )
+                                PrimaryButton(
+                                    label = stringResource(R.string.notes_sign_in_action),
+                                    onClick = onOpenAccount,
+                                )
+                            }
                         } else {
                             EmptyState(
                                 icon = "notes",
