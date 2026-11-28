@@ -5,6 +5,7 @@ import { adminGetTimeseriesSetup } from "./analytics/adminGetTimeseries/mod.ts";
 import { adminGetTopTracksSetup } from "./analytics/adminGetTopTracks/mod.ts";
 import { adminListAuditLogsSetup } from "./auditLog/adminListAuditLogs/mod.ts";
 import { adminBackfillChannelWaveformsSetup } from "./channels/adminBackfillChannelWaveforms/mod.ts";
+import { adminTransferChannelOwnerSetup } from "./channels/adminTransferChannelOwner/mod.ts";
 import { adminListPlansSetup } from "./plans/adminListPlans/mod.ts";
 import { adminUpsertPlanSetup } from "./plans/adminUpsertPlan/mod.ts";
 import { adminUpdatePlatformSettingSetup } from "./platform/adminUpdatePlatformSetting/mod.ts";
@@ -36,6 +37,7 @@ import { adminUpdateUserSetup } from "./users/adminUpdateUser/mod.ts";
  * - `adminAuditLog` — the activity feed
  * - `platformSetting` — the global switches
  * - `aiUsage` — AI credit grants
+ * - `channel` — ownership transfer
  * - `channelAudio` — waveform maintenance
  *
  * Read acts use `requireSupport` (admin or support); mutating acts use
@@ -72,4 +74,5 @@ export const adminSetup = () => {
   adminGrantAiCreditsSetup();
 
   adminBackfillChannelWaveformsSetup();
+  adminTransferChannelOwnerSetup();
 };

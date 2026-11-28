@@ -382,11 +382,12 @@ POST {{serverAddress}}/lesan
 {
   "model": "user",
   "act": "register",
-  "details": { "set": { "username": "intruder-{{unique}}", "email": "intruder-{{unique}}@pejvak.app", "password": "password123" }, "get": { "token": 1 } }
+  "details": { "set": { "username": "intruder-{{unique}}", "email": "intruder-{{unique}}@pejvak.app", "password": "password123" }, "get": { "token": 1, "user": { "_id": 1 } } }
 }
 HTTP 200
 [Captures]
 intruderToken: jsonpath "$.body.token"
+intruderId: jsonpath "$.body.user._id"
 
 POST {{serverAddress}}/lesan
 token: {{intruderToken}}
@@ -544,6 +545,97 @@ HTTP 200
 [Asserts]
 jsonpath "$.body.subscribed" == false
 jsonpath "$.body.subscriberCount" == 0
+
+# ── Admin ownership transfer (CH-A06) ───────────────────────────
+
+# A listener cannot reassign a channel, even the one they own.
+
+POST {{serverAddress}}/lesan
+token: {{creatorToken}}
+{
+  "model": "channel",
+  "act": "adminTransferChannelOwner",
+  "details": {
+    "set": { "channelId": "{{channelId}}", "ownerId": "{{intruderId}}" },
+    "get": { "_id": 1 }
+  }
+}
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
+
+# An unknown account is refused.
+
+POST {{serverAddress}}/lesan
+token: {{adminToken}}
+{
+  "model": "channel",
+  "act": "adminTransferChannelOwner",
+  "details": {
+    "set": { "channelId": "{{channelId}}", "ownerId": "000000000000000000000000" },
+    "get": { "_id": 1 }
+  }
+}
+HTTP 501
+[Asserts]
+jsonpath "$.success" == false
+
+# The operator moves the channel to another account.
+
+POST {{serverAddress}}/lesan
+token: {{adminToken}}
+{
+  "model": "channel",
+  "act": "adminTransferChannelOwner",
+  "details": {
+    "set": { "channelId": "{{channelId}}", "ownerId": "{{intruderId}}" },
+    "get": { "_id": 1, "name": 1, "owner": { "_id": 1 } }
+  }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body._id" == "{{channelId}}"
+jsonpath "$.body.owner._id" == "{{intruderId}}"
+
+# The new owner's shelf gained it; the previous owner's shelf is now empty.
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "channel",
+  "act": "getMyChannels",
+  "details": { "set": { "limit": 50 }, "get": { "_id": 1 } }
+}
+HTTP 200
+[Asserts]
+body contains "{{channelId}}"
+
+POST {{serverAddress}}/lesan
+token: {{creatorToken}}
+{
+  "model": "channel",
+  "act": "getMyChannels",
+  "details": { "set": { "limit": 50 }, "get": { "_id": 1 } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body" isEmpty
+
+# Hand it back so the creator still owns the row for the later cleanup.
+
+POST {{serverAddress}}/lesan
+token: {{adminToken}}
+{
+  "model": "channel",
+  "act": "adminTransferChannelOwner",
+  "details": {
+    "set": { "channelId": "{{channelId}}", "ownerId": "{{creatorId}}" },
+    "get": { "_id": 1, "owner": { "_id": 1 } }
+  }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.owner._id" == "{{creatorId}}"
 
 # ── Channels quota (CH-ENT3): free tier allows 3 channels ───────
 
