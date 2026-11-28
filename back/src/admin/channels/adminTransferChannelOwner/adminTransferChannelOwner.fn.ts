@@ -1,5 +1,5 @@
 import { type ActFn, ObjectId } from "lesan";
-import { channel, user } from "../../../../mod.ts";
+import { channel, coreApp, user } from "../../../../mod.ts";
 import { statusOf, throwError } from "@lib";
 import { recordAudit } from "../../audit.ts";
 
@@ -21,11 +21,14 @@ type ChannelOwnerSnapshot = {
  *
  * The embedded `owner` snapshot is replaced with Lesan's `addRelation` and
  * `replace: true`, which re-reads the target account and embeds its pure fields
- * (password excluded). The reverse `ownedChannels` array is deliberately left
- * alone: `createChannel` does not populate it either, and `getMyChannels`
- * resolves a listener's channels by matching `owner._id`, so the array is not a
- * source of truth. (Asking Lesan to rewrite it also fails when the previous
- * owner has no array yet, which is the normal case.)
+ * (password excluded). `relatedRelations: { ownedChannels: true }` also moves the
+ * channel snapshot between the two accounts' reverse arrays.
+ *
+ * Lesan's removal path reads the previous owner's array directly and throws when
+ * the field is absent, which is the normal case for channels created while
+ * `createChannel` passed `relatedRelations: {}`. So a missing (or non-array)
+ * `ownedChannels` is initialized to `[]` first; the filter never matches an
+ * existing array, so real entries are never clobbered.
  *
  * Folders, episodes and subscribers hang off the channel, not the account, so
  * they stay exactly where they are.
@@ -81,12 +84,25 @@ export const adminTransferChannelOwnerFn: ActFn = async (body) => {
     });
   }
 
+  // Lesan's replace path reads the previous owner's reverse array directly and
+  // crashes when the field is absent. Initialize only a missing/non-array value,
+  // so an existing array (and its snapshots) is never overwritten.
+  if (previousOwner?._id) {
+    await coreApp.odm.getCollection("user").updateOne(
+      {
+        _id: previousOwner._id,
+        ownedChannels: { $not: { $type: "array" } },
+      },
+      { $set: { ownedChannels: [] } },
+    );
+  }
+
   const updated = await channel.addRelation({
     filters: { _id: channelId },
     relations: {
       owner: {
         _ids: ownerId,
-        relatedRelations: {},
+        relatedRelations: { ownedChannels: true },
       },
     } as never,
     projection: get,

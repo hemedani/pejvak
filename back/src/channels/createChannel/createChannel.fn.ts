@@ -72,7 +72,7 @@ export const createChannelFn: ActFn = async (body) => {
     relations: {
       owner: {
         _ids: userId,
-        relatedRelations: {},
+        relatedRelations: { ownedChannels: true },
       },
     } as never,
     projection: { _id: 1 },

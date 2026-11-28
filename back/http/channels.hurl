@@ -621,6 +621,31 @@ HTTP 200
 [Asserts]
 jsonpath "$.body" isEmpty
 
+# The reverse relation follows too: the new owner's `ownedChannels` has the
+# channel, the previous owner's does not.
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "user",
+  "act": "getMe",
+  "details": { "set": {}, "get": { "ownedChannels": { "_id": 1 } } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.ownedChannels[*]._id" includes "{{channelId}}"
+
+POST {{serverAddress}}/lesan
+token: {{creatorToken}}
+{
+  "model": "user",
+  "act": "getMe",
+  "details": { "set": {}, "get": { "ownedChannels": { "_id": 1 } } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.ownedChannels" isEmpty
+
 # Hand it back so the creator still owns the row for the later cleanup.
 
 POST {{serverAddress}}/lesan
@@ -636,6 +661,30 @@ token: {{adminToken}}
 HTTP 200
 [Asserts]
 jsonpath "$.body.owner._id" == "{{creatorId}}"
+
+# The reverse arrays swapped back with the channel.
+
+POST {{serverAddress}}/lesan
+token: {{creatorToken}}
+{
+  "model": "user",
+  "act": "getMe",
+  "details": { "set": {}, "get": { "ownedChannels": { "_id": 1 } } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.ownedChannels[*]._id" includes "{{channelId}}"
+
+POST {{serverAddress}}/lesan
+token: {{intruderToken}}
+{
+  "model": "user",
+  "act": "getMe",
+  "details": { "set": {}, "get": { "ownedChannels": { "_id": 1 } } }
+}
+HTTP 200
+[Asserts]
+jsonpath "$.body.ownedChannels" isEmpty
 
 # ── Channels quota (CH-ENT3): free tier allows 3 channels ───────
 
