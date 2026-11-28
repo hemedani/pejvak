@@ -349,6 +349,7 @@ fun PejvakNavHost(
                             onOpenSource = { sourceId -> navController.navigate(sourceRoute(sourceId)) },
                             onOpenLanguage = { code -> navController.navigate(languageRoute(code)) },
                             onOpenChannels = { navController.navigate("channels") },
+                            onOpenChannel = { slug -> navController.navigate(channelRoute(slug)) },
                             onCreateChannel = startCreateChannel,
                         )
                     }
@@ -505,6 +506,9 @@ fun PejvakNavHost(
                         ChannelDetailScreen(
                             onBack = { navController.popBackStack() },
                             onManage = { channelId -> navController.navigate("channelManage/${Uri.encode(channelId)}") },
+                            onUpload = { channelId, playlistId ->
+                                navController.navigate(uploadRoute(channelId, playlistId))
+                            },
                             onEdit = { channel ->
                                 creatorViewModel.startEdit(channel)
                                 channelEditor = true

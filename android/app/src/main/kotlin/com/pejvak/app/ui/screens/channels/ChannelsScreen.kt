@@ -76,16 +76,21 @@ fun ChannelsScreen(
                     placeholder = stringResource(R.string.channels_search_placeholder),
                 ),
                 actions = {
-                    BubbleButton(
-                        icon = ICON_GLYPHS.getValue("person"),
-                        contentDescription = stringResource(R.string.my_channels_title),
-                        onClick = onMyChannels,
-                    )
-                    BubbleButton(
-                        icon = ICON_GLYPHS.getValue("add"),
-                        contentDescription = stringResource(R.string.my_channels_new),
-                        onClick = onCreate,
-                    )
+                    // Plan 09 UX-03: once the listener owns a channel the primary action becomes
+                    // "manage" (→ My channels) instead of "create". Creating more lives inside that.
+                    if (state.hasOwnChannel) {
+                        BubbleButton(
+                            icon = ICON_GLYPHS.getValue("edit"),
+                            contentDescription = stringResource(R.string.my_channels_manage),
+                            onClick = onMyChannels,
+                        )
+                    } else {
+                        BubbleButton(
+                            icon = ICON_GLYPHS.getValue("add"),
+                            contentDescription = stringResource(R.string.my_channels_new),
+                            onClick = onCreate,
+                        )
+                    }
                 },
             )
         },

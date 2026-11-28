@@ -15,6 +15,7 @@ import com.pejvak.app.domain.OnlineCollection
 import com.pejvak.app.domain.channel.Channel
 import com.pejvak.app.domain.channel.ChannelAudio
 import com.pejvak.app.domain.channel.channelContextKey
+import com.pejvak.app.domain.channel.channelIsPublic
 import com.pejvak.app.domain.online.LANGUAGES
 import com.pejvak.app.domain.online.OnlineLanguage
 import com.pejvak.app.domain.online.OnlineSource
@@ -57,6 +58,7 @@ data class DiscoverUiState(
     val sources: List<OnlineSource> = emptyList(),
     val continueRuns: List<ContinueCard> = emptyList(),
     val favorites: List<OnlineCollection> = emptyList(),
+    val channels: List<Channel> = emptyList(),
     val channelEpisodes: List<ChannelEpisodeCard> = emptyList(),
     val downloadStates: Map<String, com.pejvak.app.domain.DownloadState> = emptyMap(),
     val languageSheetOpen: Boolean = false,
@@ -120,6 +122,7 @@ class DiscoverViewModel @Inject constructor(
             }
             combine(base, channels.observeChannels(), channels.observeAudios()) { state, channelRows, audioRows ->
                 state.copy(
+                    channels = browseChannels(channelRows, state.languageCode),
                     channelEpisodes = channelEpisodes(channelRows, audioRows, state.languageCode),
                 )
             }.collect { _state.value = it }
@@ -139,6 +142,16 @@ class DiscoverViewModel @Inject constructor(
     private fun refreshEpisodes(code: String) {
         viewModelScope.launch { channels.refreshDiscoverAudios(code) }
     }
+
+    /** Public channels serving [code], newest cached first — the Discover Browse shelf (plan 09 UX-06). */
+    private fun browseChannels(channelRows: List<Channel>, code: String): List<Channel> =
+        channelRows.asSequence()
+            .filter { channelIsPublic(it) }
+            .filter { it.languageCode == code }
+            .sortedByDescending { it.cachedAt }
+            .distinctBy { it.serverId }
+            .take(20)
+            .toList()
 
     /** Episodes of channels serving [code], newest first, capped so the shelf stays short. */
     private fun channelEpisodes(

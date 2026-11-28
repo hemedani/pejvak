@@ -70,6 +70,7 @@ fun ChannelDetailScreen(
     onBack: () -> Unit,
     onManage: (channelId: String) -> Unit,
     onEdit: (Channel) -> Unit,
+    onUpload: (channelId: String, playlistId: String?) -> Unit,
     viewModel: ChannelDetailViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -118,28 +119,46 @@ fun ChannelDetailScreen(
             )
         },
         subHeader = {
-            if (folderCount > 0) {
+            val owned = state.channel?.takeIf { it.isMine }
+            if (folderCount > 0 || owned != null) {
                 Row(
                     modifier = Modifier
                         .horizontalScroll(rememberScrollState())
                         .padding(horizontal = geo.spacing.lg),
                     horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
                 ) {
-                    GlassChip(
-                        label = stringResource(R.string.channel_folder_all),
-                        selected = pager.currentPage == 0,
-                        frosted = true,
-                        icon = "list",
-                        onClick = { scope.launch { pager.animateScrollToPage(0) } },
-                    )
-                    state.folders.forEachIndexed { index, folder ->
+                    if (folderCount > 0) {
                         GlassChip(
-                            label = folder.title,
-                            selected = pager.currentPage == index + 1,
+                            label = stringResource(R.string.channel_folder_all),
+                            selected = pager.currentPage == 0,
                             frosted = true,
-                            icon = "folder",
-                            count = folder.audioCount.takeIf { it > 0 },
-                            onClick = { scope.launch { pager.animateScrollToPage(index + 1) } },
+                            icon = "list",
+                            onClick = { scope.launch { pager.animateScrollToPage(0) } },
+                        )
+                        state.folders.forEachIndexed { index, folder ->
+                            GlassChip(
+                                label = folder.title,
+                                selected = pager.currentPage == index + 1,
+                                frosted = true,
+                                icon = "folder",
+                                count = folder.audioCount.takeIf { it > 0 },
+                                onClick = { scope.launch { pager.animateScrollToPage(index + 1) } },
+                            )
+                        }
+                    }
+                    // Plan 09 follow-up: an owner gets an "add audio" action beside the folder tabs,
+                    // filing into the folder currently shown (or the first one on the "All" tab).
+                    if (owned != null) {
+                        val targetFolderId = if (pager.currentPage > 0) {
+                            state.folders.getOrNull(pager.currentPage - 1)?.serverId
+                        } else {
+                            state.folders.firstOrNull()?.serverId
+                        }
+                        GlassChip(
+                            label = stringResource(R.string.channel_add_audio),
+                            icon = "cloud_upload",
+                            selected = true,
+                            onClick = { onUpload(owned.serverId, targetFolderId) },
                         )
                     }
                 }

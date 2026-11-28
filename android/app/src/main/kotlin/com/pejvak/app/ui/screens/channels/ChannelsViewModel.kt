@@ -22,6 +22,8 @@ data class ChannelsUiState(
     val refreshing: Boolean = false,
     val offline: Boolean = false,
     val error: String? = null,
+    /** True once the listener owns at least one mirrored channel (plan 09 UX-03). */
+    val hasOwnChannel: Boolean = false,
 )
 
 /**
@@ -50,7 +52,7 @@ class ChannelsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            combine(repo.observeChannels(), category, query, status) { rows, selected, q, s ->
+            combine(repo.observeChannels(), repo.observeMyChannels(), category, query, status) { rows, mine, selected, q, s ->
                 val filtered = rows
                     .filter { channelIsPublic(it) }
                     .filter { selected == null || it.categories.contains(selected) }
@@ -64,10 +66,14 @@ class ChannelsViewModel @Inject constructor(
                     refreshing = s.refreshing,
                     offline = s.offline,
                     error = s.error,
+                    hasOwnChannel = mine.isNotEmpty(),
                 )
             }.collect { _state.value = it }
         }
         refresh()
+        // Plan 09 UX-03: mirror the creator's own channels so the header can offer "manage"
+        // instead of "create". A no-op notice when signed out (refreshMyChannels guards it).
+        viewModelScope.launch { repo.refreshMyChannels() }
     }
 
     fun refresh() {

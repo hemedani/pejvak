@@ -202,6 +202,10 @@ class LibraryViewModel @Inject constructor(
 
     fun setLanguage(code: String) {
         viewModelScope.launch { settings.setLanguage(code) }
+        // Plan 09 UX-02: a language switch must re-pull the directory, not just re-filter the
+        // stale mirror. `listChannels` is not language-scoped server-side, so this refreshes the
+        // newest public channels across languages; the Online shelf then filters to [code].
+        refreshChannels()
     }
 
     fun playTrack(track: Track, queue: List<Track> = listOf(track), index: Int = 0) {

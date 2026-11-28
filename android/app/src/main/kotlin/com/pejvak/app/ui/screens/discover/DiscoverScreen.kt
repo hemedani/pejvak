@@ -17,6 +17,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -26,7 +27,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.pejvak.app.R
 import com.pejvak.app.domain.OnlineCollection
-import com.pejvak.app.domain.formatDuration
+import com.pejvak.app.domain.channel.Channel
+import com.pejvak.app.domain.channel.channelSubtitle
 import com.pejvak.app.domain.online.OnlineSource
 import com.pejvak.app.domain.online.describeDownloadState
 import com.pejvak.app.domain.online.findLanguage
@@ -46,6 +48,7 @@ import com.pejvak.app.ui.theme.LocalPejvakTokens
 import com.pejvak.app.ui.theme.OceanCascade
 import com.pejvak.app.ui.theme.oceanEntrance
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 @Composable
 fun DiscoverScreen(
@@ -53,17 +56,21 @@ fun DiscoverScreen(
     onOpenSource: (String) -> Unit,
     onOpenLanguage: (String) -> Unit,
     onOpenChannels: () -> Unit,
+    onOpenChannel: (String) -> Unit,
     onCreateChannel: () -> Unit,
     viewModel: DiscoverViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val geo = LocalPejvakGeometry.current
+    val scope = rememberCoroutineScope()
     val pager = rememberPagerState(initialPage = state.page) { 3 }
+    // The pager is the single source of truth for the current tab; it just mirrors into the VM for
+    // persistence. The chips animate the pager directly. (A second `LaunchedEffect(state.page)` that
+    // animated back from the VM raced the in-flight scroll — the snapshotFlow fed intermediate pages
+    // back through setPage, which re-triggered the animation and left the page stuck half-turned:
+    // a sliver of the old screen on one side, the new one poking in on the other. Plan 09 follow-up.)
     LaunchedEffect(pager) {
         snapshotFlow { pager.currentPage }.distinctUntilChanged().collect(viewModel::setPage)
-    }
-    LaunchedEffect(state.page) {
-        if (pager.currentPage != state.page) pager.animateScrollToPage(state.page)
     }
 
     ScreenFrame(
@@ -96,7 +103,7 @@ fun DiscoverScreen(
                     selected = state.page == 0,
                     frosted = true,
                     icon = "play",
-                    onClick = { viewModel.setPage(0) },
+                    onClick = { scope.launch { pager.animateScrollToPage(0) } },
                 )
                 GlassChip(
                     label = stringResource(R.string.discover_favorites),
@@ -104,14 +111,14 @@ fun DiscoverScreen(
                     frosted = true,
                     icon = "favorite",
                     count = state.favorites.size.takeIf { it > 0 },
-                    onClick = { viewModel.setPage(1) },
+                    onClick = { scope.launch { pager.animateScrollToPage(1) } },
                 )
                 GlassChip(
                     label = stringResource(R.string.discover_browse),
                     selected = state.page == 2,
                     frosted = true,
                     icon = "discover",
-                    onClick = { viewModel.setPage(2) },
+                    onClick = { scope.launch { pager.animateScrollToPage(2) } },
                 )
             }
         },
@@ -138,8 +145,8 @@ fun DiscoverScreen(
                     onOpenSource = onOpenSource,
                     onOpenLanguage = onOpenLanguage,
                     onOpenChannels = onOpenChannels,
+                    onOpenChannel = onOpenChannel,
                     onOpenLanguageSheet = viewModel::openLanguageSheet,
-                    onPlayEpisode = viewModel::playEpisode,
                 )
             }
         }
@@ -288,12 +295,12 @@ private fun BrowsePage(
     onOpenSource: (String) -> Unit,
     onOpenLanguage: (String) -> Unit,
     onOpenChannels: () -> Unit,
+    onOpenChannel: (String) -> Unit,
     onOpenLanguageSheet: () -> Unit,
-    onPlayEpisode: (ChannelEpisodeCard) -> Unit,
 ) {
     val geo = LocalPejvakGeometry.current
     val tokens = LocalPejvakTokens.current
-    OceanCascade(key = state.sources.isNotEmpty()) {
+    OceanCascade(key = state.sources.isNotEmpty() || state.channels.isNotEmpty()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -320,8 +327,9 @@ private fun BrowsePage(
                     onClick = onOpenLanguageSheet,
                 )
             }
-            // UX-D01: channel episodes sit above the third-party source directory.
-            if (state.channelEpisodes.isNotEmpty()) {
+            // Plan 09 UX-06: the Browse tab lists the *channels* for the selected language —
+            // the creator shelves themselves — above the third-party source directory.
+            if (state.channels.isNotEmpty()) {
                 item {
                     Text(
                         text = stringResource(R.string.discover_channels_ahead),
@@ -332,27 +340,11 @@ private fun BrowsePage(
                 }
                 item {
                     ListGroup(
-                        items = state.channelEpisodes,
+                        items = state.channels,
                         modifier = Modifier.oceanEntrance(2),
                         staggerRows = true,
-                    ) { card, _ ->
-                        ListRow(
-                            title = card.audio.title,
-                            subtitle = listOfNotNull(
-                                card.channelName.takeIf { it.isNotBlank() },
-                                card.audio.author?.takeIf { it.isNotBlank() },
-                            ).joinToString(" · ").ifBlank { null },
-                            meta = card.audio.durationSec.takeIf { it > 0 }?.let { formatDuration(it) },
-                            leading = {
-                                PaletteTile(
-                                    contentHash = card.audio.contentHash,
-                                    label = card.audio.title,
-                                    artworkUrl = card.audio.artworkUrl,
-                                    size = geo.tiles.md,
-                                )
-                            },
-                            onClick = { onPlayEpisode(card) },
-                        )
+                    ) { channel, _ ->
+                        ChannelBrowseRow(channel = channel, onClick = { onOpenChannel(channel.slug) })
                     }
                 }
             }
@@ -394,6 +386,25 @@ private fun BrowsePage(
             }
         }
     }
+}
+
+@Composable
+private fun ChannelBrowseRow(channel: Channel, onClick: () -> Unit) {
+    val geo = LocalPejvakGeometry.current
+    ListRow(
+        title = channel.name,
+        subtitle = channelSubtitle(channel),
+        meta = channel.categories.takeIf { it.isNotEmpty() }?.joinToString(" · ") { it.replaceFirstChar { c -> c.uppercase() } },
+        leading = {
+            PaletteTile(
+                contentHash = channel.slug,
+                label = channel.name,
+                artworkUrl = channel.avatarUrl,
+                size = geo.tiles.md,
+            )
+        },
+        onClick = onClick,
+    )
 }
 
 @Composable

@@ -136,7 +136,18 @@ class ChannelRepository @Inject constructor(
         val now = System.currentTimeMillis()
         try {
             val result = remote.listChannels(category, q, page, limit)
-            val rows = result.rows.map { it.copy(isMine = isMine(it, myId), cachedAt = now) }
+            // When signed out there is no id to match, so a public pull must NOT downgrade the
+            // `isMine` we learned while signed in — otherwise the hub would offer "create" over a
+            // channel the listener owns (plan 09 follow-up, owner bug: '+' instead of manage).
+            val priorMine = if (myId == null) {
+                channels.getAll().filter { it.isMine }.map { it.serverId }.toSet()
+            } else {
+                emptySet()
+            }
+            val rows = result.rows.map { ch ->
+                val mine = if (myId != null) isMine(ch, myId) else ch.serverId in priorMine
+                ch.copy(isMine = mine, cachedAt = now)
+            }
             channels.upsertAll(rows.map { it.toEntity() })
             BrowseResult(result.total, result.page, result.limit)
         } catch (error: Exception) {

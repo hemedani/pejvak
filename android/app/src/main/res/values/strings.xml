@@ -604,11 +604,13 @@
     <string name="channel_taken_down_short">Taken down</string>
     <string name="channel_edit">Edit channel</string>
     <string name="channel_manage">Manage channel</string>
+    <string name="channel_add_audio">Add audio</string>
     <string name="channel_notice_title">Heads up</string>
     <string name="channel_uploading">Uploading…</string>
     <string name="my_channels_title">My channels</string>
     <string name="my_channels_subtitle">Channels you create and manage</string>
     <string name="my_channels_new">New channel</string>
+    <string name="my_channels_manage">Manage channels</string>
     <string name="my_channels_empty">No channels yet</string>
     <string name="my_channels_empty_body">Create a channel to publish your podcasts and audiobooks.</string>
     <string name="channel_editor_create">New channel</string>
