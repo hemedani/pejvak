@@ -17,7 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,10 +57,10 @@ import com.pejvak.app.ui.components.ICON_GLYPHS
 import com.pejvak.app.ui.components.PrimaryButton
 import com.pejvak.app.ui.components.RowDivider
 import com.pejvak.app.ui.components.GlassHeader
+import com.pejvak.app.ui.components.GlassSheet
 import com.pejvak.app.ui.components.LocalShellInsets
 import com.pejvak.app.ui.components.ScreenFrame
 import com.pejvak.app.ui.components.SegmentedControl
-import com.pejvak.app.ui.components.PejvakIcon
 import com.pejvak.app.ui.theme.LocalPejvakGeometry
 import com.pejvak.app.ui.theme.LocalPejvakTokens
 import com.pejvak.app.ui.theme.OceanCascade
@@ -91,29 +91,16 @@ fun SettingsScreen(
         onPauseOrDispose { }
     }
 
+    // Plan 09 UX-07: once the sign-out (and any erase) lands, leave Settings — the non-blocking
+    // auth gate has already flipped the home surface to signed-out via the shared session token.
+    LaunchedEffect(state.signedOut) { if (state.signedOut) onBack() }
+
     if (confirmSignOut) {
-        AlertDialog(
-            onDismissRequest = { confirmSignOut = false },
-            title = {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm),
-                ) {
-                    PejvakIcon("logout", null, tint = tokens.danger, size = geo.icons.md)
-                    Text(stringResource(R.string.settings_sign_out_confirm_title))
-                }
-            },
-            text = { Text(stringResource(R.string.settings_sign_out_confirm_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmSignOut = false
-                    viewModel.logout()
-                }) { Text(stringResource(R.string.settings_sign_out), color = tokens.danger) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmSignOut = false }) {
-                    Text(stringResource(R.string.cancel))
-                }
+        SignOutSheet(
+            busy = state.signingOut,
+            onDismiss = { confirmSignOut = false },
+            onConfirm = { clearData ->
+                viewModel.logout(clearData)
             },
         )
     }
@@ -409,4 +396,78 @@ private fun shareCrash(context: Context, file: File) {
 private fun initialOf(user: com.pejvak.app.data.auth.AuthRepository.AuthUser?): String {
     val name = displayName(user) ?: return "?"
     return name.trim().take(1).uppercase()
+}
+
+/**
+ * The sign-out modal (plan 09 UX-07). A `GlassSheet` that confirms leaving the account and offers
+ * an explicit, default-off "erase everything stored on this device" toggle. The destructive path
+ * is opt-in only — a plain sign-out keeps the device's data for the next sign-in.
+ */
+@Composable
+private fun SignOutSheet(
+    busy: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (clearData: Boolean) -> Unit,
+) {
+    val tokens = LocalPejvakTokens.current
+    val geo = LocalPejvakGeometry.current
+    var clearData by remember { mutableStateOf(false) }
+
+    GlassSheet(
+        onDismiss = onDismiss,
+        title = stringResource(R.string.settings_sign_out_confirm_title),
+        subtitle = stringResource(R.string.settings_sign_out_sheet_body),
+        icon = "logout",
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(bottom = geo.spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(geo.spacing.md),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(geo.spacing.md),
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_sign_out_clear_label),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = tokens.text,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_sign_out_clear_body),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = tokens.textSecondary,
+                    )
+                }
+                Switch(checked = clearData, onCheckedChange = { clearData = it })
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(geo.spacing.sm, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onDismiss, enabled = !busy) {
+                    Text(stringResource(R.string.cancel))
+                }
+                Button(
+                    onClick = { onConfirm(clearData) },
+                    enabled = !busy,
+                    shape = RoundedCornerShape(geo.radius.pill),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = tokens.danger,
+                        contentColor = tokens.onAccent,
+                    ),
+                ) {
+                    Text(
+                        text = stringResource(
+                            if (clearData) R.string.settings_sign_out_clear_action else R.string.settings_sign_out_action,
+                        ),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
+        }
+    }
 }

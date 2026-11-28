@@ -58,6 +58,12 @@
     <string name="settings_signed_in">Signed in</string>
     <string name="settings_sign_out_confirm_title">Sign out?</string>
     <string name="settings_sign_out_confirm_body">Your downloaded audio, history and notes stay on this device. Signing in again restores anything already synced.</string>
+    <string name="settings_sign_out_sheet_body">Sign out of your account on this device. Anything not yet synced stays here until you sign back in.</string>
+    <string name="settings_sign_out_clear_title">Erase this device</string>
+    <string name="settings_sign_out_clear_body">Also delete all local history, notes, library, downloads and cached channels from this device. This cannot be undone.</string>
+    <string name="settings_sign_out_clear_label">Erase everything stored on this device</string>
+    <string name="settings_sign_out_action">Sign out</string>
+    <string name="settings_sign_out_clear_action">Sign out &amp; erase</string>
     <string name="cancel">Cancel</string>
 
     <!-- Import wizard -->

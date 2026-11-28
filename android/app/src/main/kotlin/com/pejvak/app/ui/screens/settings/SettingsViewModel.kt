@@ -30,6 +30,7 @@ class SettingsViewModel @Inject constructor(
     private val syncScheduler: SyncScheduler,
     private val trackDao: TrackDao,
     private val settingsRepository: SettingsRepository,
+    private val localData: com.pejvak.app.data.local.LocalDataStore,
 ) : ViewModel() {
 
     data class UiState(
@@ -41,6 +42,7 @@ class SettingsViewModel @Inject constructor(
         val loading: Boolean = true,
         val syncing: Boolean = false,
         val signingOut: Boolean = false,
+        val signedOut: Boolean = false,
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -99,12 +101,31 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setHapticsEnabled(enabled) }
     }
 
-    fun logout() {
+    /**
+     * Sign out (plan 09 UX-07). Always clears the session, cached identity and sync work. When
+     * [clearData] is set (the sheet's explicit opt-in) it also erases every local table and the
+     * downloaded files — a destructive, never-implied step. The shared `AuthSession` token is the
+     * single source of truth, so the home account surface follows this sign-out automatically.
+     */
+    fun logout(clearData: Boolean = false) {
+        if (_state.value.signingOut) return
         _state.update { it.copy(signingOut = true) }
         viewModelScope.launch {
+            if (clearData) {
+                runCatching { localData.eraseAll() }
+            }
             authRepository.logout()
             syncScheduler.cancelAll()
-            _state.update { it.copy(signingOut = false) }
+            _state.update {
+                it.copy(
+                    signingOut = false,
+                    signedOut = true,
+                    user = null,
+                    pending = SyncRepository.PendingCounts(),
+                    lastSyncAt = null,
+                    storageBytes = 0L,
+                )
+            }
         }
     }
 }
